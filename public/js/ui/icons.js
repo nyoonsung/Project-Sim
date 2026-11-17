@@ -38,3 +38,64 @@ export function itemIcon(it) {
   cache.set(key, cv);
   return cv;
 }
+
+// ── 스킬 아이콘: 스킬 종류(근접·투사체·범위·버프·회복·이동…)로 모양, 이펙트 속성(불·얼음·신성…)으로 색
+const ELEM = [["fire", "#ff8a3a"], ["ice", "#8ae6ff"], ["holy", "#ffe27a"], ["shadow", "#b47aff"], ["nature", "#7ae06a"], ["arcane", "#d08cff"], ["lightning", "#fff05a"], ["explosions", "#ff6a3a"], ["scifi", "#6affe0"], ["weather", "#9ad0ff"]];
+const GRADE_TINT = { 일반: "#d8dde6", 희귀: "#6ab4ff", 영웅: "#d8b0ff", 전설: "#ffbe5a" };
+export function skillColor(sk) {
+  const fx = JSON.stringify(sk.fx ?? {});
+  for (const [k, c] of ELEM) if (fx.includes(`"${k}/`)) return c;
+  return GRADE_TINT[sk.grade] ?? "#d8dde6";
+}
+function kindOf(sk) {
+  const ds = (sk.steps ?? []).map((s) => s.do);
+  if (sk.kind === "passive") return "passive";
+  if (ds.includes("heal")) return "heal";
+  if (ds.includes("dash") || ds.includes("blink")) return "dash";
+  if (ds.includes("shield")) return "shield";
+  if (ds.includes("parry")) return "parry";
+  if (ds.includes("taunt")) return "taunt";
+  if (ds.includes("device")) return "device";
+  if (ds.includes("channel")) return "channel";
+  if (ds.includes("proj") || ds.includes("line")) return sk.anim === "shoot" ? "arrow" : "bolt";
+  if (ds.includes("zone")) return "zone";
+  if (ds.includes("area") || ds.includes("circle")) return "burst";
+  if (ds.includes("melee")) return sk.anim === "thrust" ? "thrust" : "slash";
+  if (ds.includes("buff")) return "buff";
+  return "star";
+}
+const urls = new Map();
+/** 스킬 아이콘 이미지 주소 (버튼용) */
+export function skillIconURL(sk) {
+  if (!urls.has(sk.id)) urls.set(sk.id, skillIcon(sk).toDataURL());
+  return urls.get(sk.id);
+}
+export function skillIcon(sk) {
+  const key = "sk:" + sk.id;
+  if (cache.has(key)) return cache.get(key);
+  const cv = document.createElement("canvas");
+  cv.width = 16; cv.height = 16;
+  const g = cv.getContext("2d");
+  const c = skillColor(sk), ink = "#120e1a", wh = "#ffffff";
+  const line = (pts, col, w = 1) => { for (const [x, y] of pts) P(g, col, x, y, w, w); };
+  switch (kindOf(sk)) {
+    case "slash": for (let k = 0; k < 11; k++) { const a = -0.9 + k * 0.17; const x = Math.round(8 + Math.cos(a) * 6), y = Math.round(9 + Math.sin(a) * 6); P(g, ink, x - 1, y - 1, 3, 3); } for (let k = 0; k < 11; k++) { const a = -0.9 + k * 0.17; P(g, k > 7 ? wh : c, Math.round(8 + Math.cos(a) * 6), Math.round(9 + Math.sin(a) * 6), 2, 2); } break;
+    case "thrust": P(g, ink, 1, 6, 14, 4); P(g, c, 2, 7, 10, 2); P(g, wh, 12, 7, 2, 2); P(g, wh, 14, 7, 1, 2); P(g, c, 3, 5, 2, 6); break;
+    case "arrow": P(g, ink, 1, 6, 14, 4); P(g, "#c89060", 2, 7, 9, 2); P(g, c, 11, 6, 2, 4); P(g, wh, 13, 7, 2, 2); P(g, c, 2, 5, 2, 1); P(g, c, 2, 10, 2, 1); break;
+    case "bolt": P(g, ink, 5, 4, 10, 8); P(g, c, 6, 5, 8, 6); P(g, wh, 9, 6, 4, 4); line([[1, 7], [3, 8], [2, 10], [4, 6]], c); break;
+    case "burst": for (let k = 0; k < 8; k++) { const a = (k / 8) * Math.PI * 2; for (let r = 2; r < 7; r++) P(g, r > 4 ? c : wh, Math.round(8 + Math.cos(a) * r), Math.round(8 + Math.sin(a) * r), 1, 1); } P(g, wh, 7, 7, 2, 2); break;
+    case "zone": for (const r of [6, 3]) for (let k = 0; k < 24; k++) { const a = (k / 24) * Math.PI * 2; P(g, r === 6 ? c : wh, Math.round(8 + Math.cos(a) * r), Math.round(8 + Math.sin(a) * r * 0.7), 1, 1); } break;
+    case "buff": for (const oy of [2, 7]) { line([[3, oy + 5], [4, oy + 4], [5, oy + 3], [6, oy + 2], [7, oy + 1], [8, oy], [9, oy + 1], [10, oy + 2], [11, oy + 3], [12, oy + 4], [13, oy + 5]], ink, 2); line([[4, oy + 4], [5, oy + 3], [6, oy + 2], [7, oy + 1], [8, oy], [9, oy + 1], [10, oy + 2], [11, oy + 3], [12, oy + 4]], oy === 2 ? wh : c, 1); } break;
+    case "heal": P(g, ink, 5, 1, 6, 14); P(g, ink, 1, 5, 14, 6); P(g, c, 6, 2, 4, 12); P(g, c, 2, 6, 12, 4); P(g, wh, 7, 3, 2, 4); break;
+    case "shield": P(g, ink, 2, 1, 12, 10); P(g, ink, 4, 11, 8, 3); P(g, ink, 6, 14, 4, 1); P(g, c, 3, 2, 10, 8); P(g, c, 5, 10, 6, 3); P(g, c, 7, 13, 2, 1); P(g, wh, 4, 3, 3, 3); break;
+    case "dash": for (const ox of [2, 7]) { line([[ox, 3], [ox + 1, 4], [ox + 2, 5], [ox + 3, 6], [ox + 4, 7], [ox + 4, 8], [ox + 3, 9], [ox + 2, 10], [ox + 1, 11], [ox, 12]], ink, 2); line([[ox, 4], [ox + 1, 5], [ox + 2, 6], [ox + 3, 7], [ox + 3, 8], [ox + 2, 9], [ox + 1, 10], [ox, 11]], ox === 7 ? wh : c, 1); } break;
+    case "parry": for (let k = 0; k < 12; k++) { P(g, ink, 1 + k, 1 + k, 3, 3); P(g, ink, 12 - k, 1 + k, 3, 3); } for (let k = 0; k < 12; k++) { P(g, c, 2 + k, 2 + k, 1, 1); P(g, wh, 13 - k, 2 + k, 1, 1); } break;
+    case "taunt": P(g, ink, 6, 1, 4, 10); P(g, ink, 6, 12, 4, 3); P(g, c, 7, 2, 2, 8); P(g, c, 7, 13, 2, 1); break;
+    case "device": P(g, ink, 3, 3, 10, 10); P(g, c, 4, 4, 8, 8); P(g, ink, 6, 6, 4, 4); P(g, wh, 7, 7, 2, 2); for (const [x, y] of [[7, 1], [7, 13], [1, 7], [13, 7]]) P(g, c, x, y, 2, 2); break;
+    case "channel": for (let k = 0; k < 20; k++) { const a = k * 0.55, r = 1 + k * 0.32; P(g, k > 14 ? wh : c, Math.round(8 + Math.cos(a) * r), Math.round(8 + Math.sin(a) * r), 1, 1); } break;
+    case "passive": P(g, ink, 4, 4, 8, 8); P(g, c, 5, 5, 6, 6); P(g, ink, 7, 7, 2, 2); break;
+    default: line([[8, 1], [8, 2], [7, 3], [9, 3], [1, 6], [2, 6], [3, 6], [13, 6], [14, 6], [15, 6]], c); P(g, c, 5, 4, 6, 7); P(g, wh, 7, 6, 2, 2); P(g, c, 3, 11, 2, 3); P(g, c, 11, 11, 2, 3);
+  }
+  cache.set(key, cv);
+  return cv;
+}

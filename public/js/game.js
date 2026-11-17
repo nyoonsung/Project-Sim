@@ -51,6 +51,8 @@ function onMap(m) {
   G.zone = m.floor ? zoneOf(m.floor) : ZONES[0];
   G.map = new TileMap({ ...m, kind: m.kind === "town" ? "town" : m.kind }, G.zone);
   G.map.doorsOpen = m.doorsOpen;
+  G.map.explored.fill(1); // 투기장 한 방이라 지도 전체를 바로 보여 줌
+  G.wave = null;
   G.objects = m.objects;
   G.exitOpen = m.exitOpen;
   G.arena = m.arena;
@@ -128,7 +130,11 @@ function onEvent(e) {
     case "miss": if (ent) floater(ent.rx, ent.ry - 34, "회피", "miss"); break;
     case "gold": if (e.own === G.you) floater(e.x, e.y - 20, `+${e.v}G`, "gold"); break;
     case "fx": R?.fx(e.fx, e.x, e.y, { a: e.a != null ? e.a / 1000 : undefined, pal: e.pal ?? undefined, s: e.s ?? undefined, follow: e.at ?? undefined }); break;
-    case "anim": if (ent) ent.anim = { name: e.a, t0: now(), n: e.n ?? 1 }; break;
+    case "anim": if (ent) {
+      // 내가 방금 미리 보여 준 동작이면 처음부터 다시 그리지 않음
+      if (ent.anim?.local && ent.anim.name === e.a && now() - ent.anim.t0 < 0.45) { ent.anim.local = false; ent.anim.n = e.n ?? 1; }
+      else ent.anim = { name: e.a, t0: now(), n: e.n ?? 1 };
+    } break;
     case "cast": if (ent) { ent.castAng = e.a / 1000; } if (e.id === G.you) G.ui.flashSkill(e.s); break;
     case "casting": if (ent) ent.casting = { s: e.s, t0: now(), d: e.d }; if (e.id === G.you) G.casting = { s: e.s, t0: now(), d: e.d }; break;
     case "cx": if (ent) ent.casting = null; if (e.id === G.you) G.casting = null; break;
@@ -153,6 +159,7 @@ function onEvent(e) {
     case "exit": G.exitOpen = !!e.open; break;
     case "doors": if (G.map) G.map.doorsOpen = !!e.open; break;
     case "obj": G.objects.push(e.o); break;
+    case "wave": G.ui.center(e.n >= e.of ? `마지막 웨이브! (${e.n}/${e.of})` : `웨이브 ${e.n} / ${e.of}`); G.wave = { n: e.n, of: e.of }; break;
     case "warp": G.ui.center("이동 중..."); R?.fx("arcane/portal", G.pred.x, G.pred.y, { s: 0.6 }); break;
     case "shake": G.shake = Math.max(G.shake, e.v); break;
     case "dash": if (e.id === G.you) G.forced = now() + e.d / e.v + 0.1; break;
@@ -234,10 +241,11 @@ export function tryCast(slot, at) {
   const id = G.char?.skills?.[slot];
   const sk = id && SKILLS[id];
   if (!sk || sk.kind === "passive" || G.me?.dead) return false;
-  if (cdLeft(id) > 0.06) return false;
+  const left = cdLeft(id);
+  if (left > 0.3) return false; // 0.3초 안에 풀리면 서버가 기억해 뒀다가 바로 시전(선입력)
   for (const [k, v] of Object.entries(sk.cost ?? {})) if ((G.me?.[k] ?? 0) < v) return false;
   const t = now();
-  if (t - G.lastCastTry < 0.09) return false;
+  if (t - G.lastCastTry < 0.05) return false;
   G.lastCastTry = t;
   const ax = at ? at.x : G.mouse.wx, ay = at ? at.y : G.mouse.wy;
   const msg = { t: "cast", slot, ax: Math.round(ax), ay: Math.round(ay) };
@@ -248,6 +256,13 @@ export function tryCast(slot, at) {
     if (best) msg.tx = best.id;
   }
   send(msg);
+  // 바로 동작 보여 주기 (서버 응답을 기다리지 않음)
+  const ent = G.ents.get(G.you);
+  if (ent && left <= 0.06 && t >= (G.localLock ?? 0) && !sk.cast) {
+    ent.anim = { name: sk.anim ?? "slash", t0: t, n: 1, local: true };
+    G.localLock = t + 0.18;
+    G.ui.flashSkill(id);
+  }
   // 다음 확인 전 중복 전송 방지용 임시 쿨타임
   if (G.me) { G.me.cds = { ...G.me.cds, [id]: Math.max(G.me.cds[id] ?? 0, 150 + (now() - G.meAt) * 1000) }; }
   return true;

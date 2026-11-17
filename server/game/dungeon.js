@@ -1,4 +1,4 @@
-// 층 생성: 방+통로(일반층), 보스 투기장(5·10의 배수층), 안전 구역(전직소), 마을
+// 층 생성: 웨이브 투기장(일반층), 보스 투기장(5·10의 배수층), 안전 구역(전직소), 마을
 import { T, TILE } from "../../shared/constants.js";
 import { rng } from "../../shared/rng.js";
 import { zoneOf, floorKind } from "../../shared/zones.js";
@@ -52,90 +52,6 @@ function addDeco(m, R, zone, n) {
   }
 }
 
-// 방 모양: 기둥 홀·십자방·팔각방·원형방·섬·강과 다리·칸막이·잔해 (통로는 나중에 방 가운데까지 뚫리므로 연결은 항상 보장)
-const SHAPES = ["plain", "pillars", "cross", "octagon", "round", "island", "river", "partition", "rubble", "pool"];
-function shapeRoom(m, r, R, shape) {
-  const [cx, cy] = center(r);
-  const inR = (x, y) => x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h;
-  const nearC = (x, y, d) => Math.abs(x - cx) <= d && Math.abs(y - cy) <= d;
-  switch (shape) {
-    case "pillars":
-      for (let y = r.y + 2; y < r.y + r.h - 2; y += 3) for (let x = r.x + 2; x < r.x + r.w - 2; x += 3) if (!nearC(x, y, 1)) set(m, x, y, T.WALL);
-      break;
-    case "cross": {
-      const tw = Math.max(1, Math.floor(r.w / 3.2)), th = Math.max(1, Math.floor(r.h / 3.2));
-      for (let y = r.y; y < r.y + r.h; y++) for (let x = r.x; x < r.x + r.w; x++) {
-        const inCornerX = x < r.x + tw || x >= r.x + r.w - tw, inCornerY = y < r.y + th || y >= r.y + r.h - th;
-        if (inCornerX && inCornerY) set(m, x, y, T.VOID);
-      }
-      break;
-    }
-    case "octagon": {
-      const c = Math.floor(Math.min(r.w, r.h) / 3);
-      for (let y = r.y; y < r.y + r.h; y++) for (let x = r.x; x < r.x + r.w; x++) {
-        const dx = Math.min(x - r.x, r.x + r.w - 1 - x), dy = Math.min(y - r.y, r.y + r.h - 1 - y);
-        if (dx + dy < c) set(m, x, y, T.VOID);
-      }
-      break;
-    }
-    case "round": {
-      const rx = r.w / 2, ry = r.h / 2;
-      for (let y = r.y; y < r.y + r.h; y++) for (let x = r.x; x < r.x + r.w; x++) {
-        const nx = (x + 0.5 - (r.x + rx)) / rx, ny = (y + 0.5 - (r.y + ry)) / ry;
-        if (nx * nx + ny * ny > 1.02) set(m, x, y, T.VOID);
-      }
-      break;
-    }
-    case "island": {
-      // 가운데 섬을 물(또는 구덩이) 고리가 감쌈
-      const liq = R.chance(0.5) ? T.WATER : T.PIT;
-      const a = Math.max(2, Math.floor(Math.min(r.w, r.h) / 2) - 2);
-      for (let y = r.y + 1; y < r.y + r.h - 1; y++) for (let x = r.x + 1; x < r.x + r.w - 1; x++) {
-        const d = Math.max(Math.abs(x - cx), Math.abs(y - cy));
-        if (d === a || d === a - 1) set(m, x, y, liq);
-      }
-      // 다리 두 개
-      for (const [dx, dy] of R.chance(0.5) ? [[1, 0], [-1, 0]] : [[0, 1], [0, -1]]) for (let k = 0; k <= a; k++) { set(m, cx + dx * k, cy + dy * k, T.FLOOR); set(m, cx + dx * k + dy, cy + dy * k + dx, T.FLOOR); }
-      break;
-    }
-    case "river": {
-      const horiz = r.w < r.h ? false : R.chance(0.6);
-      const liq = R.chance(0.7) ? T.WATER : T.PIT;
-      for (let k = 0; k < (horiz ? r.w : r.h); k++) for (let t = 0; t < 2; t++) {
-        const x = horiz ? r.x + k : cx + t - 1 + (Math.sin(k * 0.7) > 0.6 ? 1 : 0), y = horiz ? cy + t - 1 + (Math.sin(k * 0.7) > 0.6 ? 1 : 0) : r.y + k;
-        if (inR(x, y) && !nearC(x, y, 1)) set(m, x, y, liq);
-      }
-      break;
-    }
-    case "partition": {
-      const vert = r.w >= r.h;
-      const n = vert ? Math.floor(r.w / 5) : Math.floor(r.h / 5);
-      for (let i = 1; i <= n; i++) {
-        const gap = R.int(1, (vert ? r.h : r.w) - 3);
-        for (let k = 1; k < (vert ? r.h : r.w) - 1; k++) {
-          if (k === gap || k === gap + 1) continue;
-          const x = vert ? r.x + Math.round((i * r.w) / (n + 1)) : r.x + k, y = vert ? r.y + k : r.y + Math.round((i * r.h) / (n + 1));
-          if (!nearC(x, y, 1)) set(m, x, y, T.WALL);
-        }
-      }
-      break;
-    }
-    case "rubble":
-      for (let i = 0; i < Math.round((r.w * r.h) / 9); i++) {
-        const x = R.int(r.x + 1, r.x + r.w - 2), y = R.int(r.y + 1, r.y + r.h - 2);
-        if (!nearC(x, y, 1)) set(m, x, y, R.chance(0.75) ? T.WALL : T.PIT);
-      }
-      break;
-    case "pool": {
-      const liq = R.pick([T.WATER, T.PIT, T.WATER]);
-      const pw = R.int(2, Math.max(2, Math.floor(r.w / 3))), ph = R.int(2, Math.max(2, Math.floor(r.h / 3)));
-      const ox = R.chance(0.5) ? r.x + 1 : r.x + r.w - 1 - pw, oy = R.chance(0.5) ? r.y + 1 : r.y + r.h - 1 - ph;
-      carveRect(m, ox, oy, pw, ph, liq);
-      break;
-    }
-  }
-}
-
 /** 시작점에서 걸어서 갈 수 있는 칸 표시 */
 function reachable(m, sx, sy) {
   const ok = new Uint8Array(m.w * m.h);
@@ -153,60 +69,87 @@ function reachable(m, sx, sy) {
   return ok;
 }
 
-/** 일반층: 방 8~15개(모양 10가지), 최소 신장 트리 + 루프 통로 */
+/** 일반층: 큰 투기장 하나. 몬스터는 가장자리 소환 지점에서 웨이브로 몰려온다.
+ *  배치 8가지: 탁 트인 곳·기둥 숲·네 웅덩이·십자 벽·고리 기둥·잔해·강과 다리·모서리 구덩이 */
+const ARENA_STYLES = ["open", "pillars", "pools", "cross", "ring", "rubble", "river", "pits"];
 function normalFloor(floor, seed, party) {
   const R = rng(seed);
   const zone = zoneOf(floor);
-  const W = Math.min(90, 52 + floor), H = Math.min(70, 40 + Math.floor(floor * 0.6));
+  const iw = Math.min(40, 30 + Math.floor(floor / 10)), ih = Math.min(28, 20 + Math.floor(floor / 14));
+  const W = iw + 6, H = ih + 7;
   const m = grid(W, H);
-  const rooms = [];
-  const want = Math.min(15, 8 + Math.floor(floor / 12));
-  for (let tries = 0; tries < 400 && rooms.length < want; tries++) {
-    const w = R.int(9, 17), h = R.int(8, 13);
-    const x = R.int(2, W - w - 3), y = R.int(3, H - h - 3);
-    if (rooms.some((r) => x < r.x + r.w + 3 && x + w + 3 > r.x && y < r.y + r.h + 3 && y + h + 3 > r.y)) continue;
-    rooms.push({ x, y, w, h });
-  }
-  for (const r of rooms) carveRect(m, r.x, r.y, r.w, r.h);
-  // 방 모양 (시작 방은 평범하게)
-  rooms.forEach((r, i) => { r.shape = i === 0 ? "plain" : R.pick(SHAPES); shapeRoom(m, r, R, r.shape); });
-  // MST(프림) 연결
-  const connected = [0], rest = rooms.map((_, i) => i).slice(1);
-  while (rest.length) {
-    let best = null;
-    for (const a of connected) for (const b of rest) {
-      const [ax, ay] = center(rooms[a]), [bx, by] = center(rooms[b]);
-      const d = Math.abs(ax - bx) + Math.abs(ay - by);
-      if (!best || d < best.d) best = { a, b, d };
+  const ax = 3, ay = 4; // 투기장 왼쪽 위
+  carveRect(m, ax, ay, iw, ih);
+  // 모서리를 깎아 팔각형 느낌
+  const cut = 3;
+  for (let j = 0; j < cut; j++) for (let i = 0; i < cut - j; i++) for (const [x, y] of [[ax + i, ay + j], [ax + iw - 1 - i, ay + j], [ax + i, ay + ih - 1 - j], [ax + iw - 1 - i, ay + ih - 1 - j]]) set(m, x, y, T.VOID);
+  const cx = ax + Math.floor(iw / 2), cy = ay + Math.floor(ih / 2);
+  const startX = cx, startY = ay + ih - 3;
+  const keepClear = (x, y) => Math.abs(x - cx) <= 2 && Math.abs(y - cy) <= 2 || Math.abs(x - startX) <= 2 && Math.abs(y - startY) <= 2 || Math.abs(x - cx) <= 1 && y <= ay + 3;
+  const put = (x, y, t) => { if (x > ax && y > ay && x < ax + iw - 1 && y < ay + ih - 1 && !keepClear(x, y)) set(m, x, y, t); };
+  const style = R.pick(ARENA_STYLES);
+  const liq = R.chance(0.6) ? T.WATER : T.PIT;
+  switch (style) {
+    case "pillars":
+      for (let y = ay + 3; y < ay + ih - 3; y += 4) for (let x = ax + 3 + ((y / 4) % 2 ? 2 : 0); x < ax + iw - 3; x += 5) { put(x, y, T.WALL); if (R.chance(0.4)) put(x + 1, y, T.WALL); }
+      break;
+    case "pools":
+      for (const [px, py] of [[0.25, 0.3], [0.75, 0.3], [0.25, 0.7], [0.75, 0.7]]) {
+        const ox = ax + Math.round(iw * px), oy = ay + Math.round(ih * py), rw = R.int(2, 3), rh = R.int(1, 2);
+        for (let y = -rh; y <= rh; y++) for (let x = -rw; x <= rw; x++) if ((x * x) / (rw * rw + 1) + (y * y) / (rh * rh + 1) < 1) put(ox + x, oy + y, liq);
+      }
+      break;
+    case "cross":
+      for (let k = 4; k < Math.min(iw, ih) / 2 - 1; k++) { if (k % 5 === 0) continue; put(cx - k, cy, T.WALL); put(cx + k, cy, T.WALL); put(cx, cy - k, T.WALL); put(cx, cy + k, T.WALL); }
+      break;
+    case "ring": {
+      const rx = iw * 0.3, ry = ih * 0.3;
+      for (let k = 0; k < 16; k++) { const a = (k / 16) * Math.PI * 2; put(Math.round(cx + Math.cos(a) * rx), Math.round(cy + Math.sin(a) * ry), T.WALL); }
+      break;
     }
-    corridor(m, center(rooms[best.a]), center(rooms[best.b]), R, R.chance(0.3) ? 2 : 3);
-    connected.push(best.b);
-    rest.splice(rest.indexOf(best.b), 1);
+    case "rubble":
+      for (let i = 0; i < Math.round((iw * ih) / 22); i++) put(R.int(ax + 2, ax + iw - 3), R.int(ay + 2, ay + ih - 3), R.chance(0.7) ? T.WALL : liq);
+      break;
+    case "river": {
+      const horiz = R.chance(0.5);
+      const n = horiz ? iw : ih;
+      for (let k = 0; k < n; k++) {
+        const w = Math.round(Math.sin(k * 0.5) * 1.2);
+        for (let t = 0; t < 2; t++) {
+          const x = horiz ? ax + k : cx + 4 + w + t, y = horiz ? cy - 4 + w + t : ay + k;
+          const bridge = horiz ? k % Math.floor(iw / 3) < 2 : k % Math.floor(ih / 3) < 2;
+          if (!bridge) put(x, y, liq);
+        }
+      }
+      break;
+    }
+    case "pits":
+      for (const [sx, sy] of [[1, 1], [-1, 1], [1, -1], [-1, -1]]) {
+        const ox = sx > 0 ? ax + 5 : ax + iw - 6, oy = sy > 0 ? ay + 5 : ay + ih - 6;
+        for (let j = 0; j < 3; j++) for (let i = 0; i < 3 - j; i++) put(ox + i * sx, oy + j * sy, liq);
+      }
+      break;
   }
-  for (let i = 0; i < 2; i++) corridor(m, center(R.pick(rooms)), center(R.pick(rooms)), R, 2);
   wallUp(m);
-  // 시작 방 = 0, 출구 = 시작에서 가장 먼 방
-  const [sx, sy] = center(rooms[0]);
-  let far = 1, fd = -1;
-  rooms.forEach((r, i) => { const [cx, cy] = center(r); const d = Math.abs(cx - sx) + Math.abs(cy - sy); if (d > fd) { fd = d; far = i; } });
-  m.start = [px(sx), px(sy)];
-  const [ex, ey] = center(rooms[far]);
-  m.exit = [px(ex), px(ey)];
+  // 갈 수 없는 바닥은 벽으로 (모든 곳이 이어지게)
+  const reach = reachable(m, startX, startY);
+  for (let i = 0; i < m.tiles.length; i++) if ((m.tiles[i] === T.FLOOR || m.tiles[i] === T.DECO) && !reach[i]) m.tiles[i] = T.WALL;
+  m.start = [px(startX), px(startY)];
+  m.exit = [px(cx), px(ay + 1)];
   m.objects.push({ kind: "portal", id: "exit", x: m.exit[0], y: m.exit[1], locked: true });
-  // 몬스터 배치 (걸어서 갈 수 있는 곳에만)
-  const reach = reachable(m, sx, sy);
-  const pool = zone.monsters;
-  rooms.forEach((r, i) => {
-    if (i === 0) return;
-    const n = Math.max(2, Math.round((r.w * r.h) / 29 * (0.8 + floor * 0.004)));
-    for (let k = 0; k < n; k++) {
-      const tx = R.int(r.x + 1, r.x + r.w - 2), ty = R.int(r.y + 1, r.y + r.h - 2);
-      if (get(m, tx, ty) !== T.FLOOR || !reach[ty * W + tx]) continue;
-      m.spawns.push({ id: R.pick(pool), x: px(tx), y: px(ty), elite: R.chance(0.06 + floor * 0.0015) });
-    }
-  });
-  addTorches(m, R, zone);
-  addDeco(m, R, zone, Math.round(W * H / 40));
+  // 소환 지점: 가장자리 근처, 시작점에서 먼 곳
+  const pts = [];
+  for (let y = ay + 1; y < ay + ih - 1; y++) for (let x = ax + 1; x < ax + iw - 1; x++) {
+    if (get(m, x, y) !== T.FLOOR || !reach[y * W + x]) continue;
+    const edge = Math.min(x - ax, ax + iw - 1 - x, y - ay, ay + ih - 1 - y);
+    if (edge <= 3 && Math.hypot(x - startX, y - startY) > 8 && (x + y * 3) % 3 === 0) pts.push([px(x), px(y)]);
+  }
+  const total = Math.min(60, Math.round((24 + floor * 0.3) * (party > 1 ? 1 + (party - 1) * 0.35 : 1)));
+  m.waves = { total, waves: Math.max(3, Math.min(6, 3 + Math.floor(floor / 20))), points: pts, pool: zone.monsters, elite: 0.06 + floor * 0.0015 };
+  m.style = style;
+  m.spawns = [];
+  addTorches(m, R, zone, 5);
+  addDeco(m, R, zone, Math.round(W * H / 45));
   m.objects = m.objects.filter((o) => o.kind !== "deco" || reach[Math.floor(o.y / TILE) * W + Math.floor(o.x / TILE)]);
   m.kind = "normal";
   return m;

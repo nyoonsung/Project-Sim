@@ -37,6 +37,8 @@ export class Room {
     this.createdAt = Date.now();
     if (map.spawns) for (const s of map.spawns) this.spawnMonster(s.id, s.x, s.y, s.elite);
     this.total = this.units.size;
+    // 웨이브 층: 처음엔 비어 있고 몬스터가 가장자리에서 몰려옴
+    if (map.waves) { this.total = map.waves.total; this.wave = { n: 0, spawned: 0, nextAt: 2.5, forceAt: 0 }; }
     if (map.kind === "normal" && this.total === 0) this.exitOpen = true;
     // 마을 훈련 허수아비
     for (const o of map.objects) if (o.kind === "dummy") this.spawnDummy(o.x, o.y);
@@ -167,6 +169,34 @@ export class Room {
   onFrontGuard(u, now) { onFrontGuard(this, u, now); }
   onPlayerHit(u, t, dmg, crit, now, o) { skillOnPlayerHit(this, u, t, dmg, crit, now, o); }
 
+  // ── 웨이브: 남은 몬스터가 적어지거나 22초가 지나면 다음 무리가 가장자리 소환진에서 나타남
+  tickWaves(now) {
+    const W = this.map.waves, st = this.wave;
+    if (!this.players.size || st.spawned >= W.total || now < st.nextAt) return;
+    const per = Math.ceil(W.total / W.waves);
+    let alive = 0;
+    for (const u of this.units.values()) if (u.type === "m" && !u.dead) alive++;
+    if (st.n > 0 && alive > Math.max(2, Math.floor(per * 0.35)) && now < st.forceAt) return;
+    st.n++;
+    const n = Math.min(per, W.total - st.spawned);
+    st.spawned += n;
+    st.nextAt = now + 3;
+    st.forceAt = now + 22;
+    this.ev({ e: "wave", n: st.n, of: W.waves });
+    const players = [...this.players.values()].filter((p) => !p.dead);
+    let pts = W.points.filter(([x, y]) => players.every((p) => Math.hypot(p.x - x, p.y - y) > 220));
+    if (pts.length < 4) pts = W.points;
+    for (let i = pts.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [pts[i], pts[j]] = [pts[j], pts[i]]; }
+    for (let i = 0; i < n; i++) {
+      const [bx, by] = pts[i % pts.length];
+      const x = bx + (Math.random() * 16 - 8), y = by + (Math.random() * 16 - 8);
+      const mid = W.pool[Math.floor(Math.random() * W.pool.length)];
+      const elite = Math.random() < W.elite;
+      this.ev({ e: "fx", fx: "arcane/portal", x: x | 0, y: y | 0, s: 0.45 });
+      this.schedule(0.9 + Math.random() * 0.4, () => this.spawnMonster(mid, x, y, elite, { aggro: true }));
+    }
+  }
+
   // ── 처치
   kill(t, src, now) {
     if (t.dead) return;
@@ -202,7 +232,7 @@ export class Room {
       if (p.mythic?.has("mana_font") && p === killer) p.mp = Math.min(p.maxMp, p.mp + p.maxMp * 0.03);
     }
     if (t.boss) this.onBossDead(t);
-    else if (this.kind === "dungeon" && !this.exitOpen && this.map.kind === "normal" && this.killed >= Math.ceil(this.total * 0.7)) {
+    else if (this.kind === "dungeon" && !this.exitOpen && this.map.kind === "normal" && (this.wave ? this.wave.spawned >= this.total && this.killed >= Math.ceil(this.total * 0.9) : this.killed >= Math.ceil(this.total * 0.7))) {
       this.exitOpen = true;
       this.ev({ e: "exit", open: 1 });
       this.ev({ e: "msg", text: "출구 포탈이 열렸어요!", kind: "info" });
@@ -262,6 +292,7 @@ export class Room {
       for (const t of due) try { t.fn(now); } catch (e) { console.error(e); }
     }
     if (now >= this.flowAt) { this.updateFlow(); this.flowAt = now + 0.5; }
+    if (this.wave) this.tickWaves(now);
     for (const u of this.players.values()) this.tickPlayer(u, now);
     for (const u of [...this.units.values()]) {
       if (u.type === "p" || u.dead) continue;

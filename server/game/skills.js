@@ -42,7 +42,8 @@ export function cancelCast(room, u, why) {
 }
 
 /** 스킬 사용 요청 (서버 검증) */
-export function castSkill(room, u, slot, ax, ay, tx, now) {
+/** 스킬 시전. 쿨타임·연속 시전 대기·짧은 이동기가 0.3초 안에 끝나면 입력을 기억해 뒀다가 끝나는 즉시 시전(선입력) */
+export function castSkill(room, u, slot, ax, ay, tx, now, exp) {
   if (u.dead) return;
   const ch = u.session.char;
   const id = ch.skills[slot];
@@ -50,9 +51,16 @@ export function castSkill(room, u, slot, ax, ay, tx, now) {
   if (!sk || sk.kind === "passive") return;
   if (sk.cls !== "common" && sk.cls !== ch.cls) return;
   if (sk.cls !== "common" && stageOf(ch.cls, ch.level) < unlockStage(sk, CLASS_INFO[ch.cls].ranks.length)) return;
-  if (isHardCC(u) || u.casting || u.channel || u.dash) return;
-  if (now < u.lockUntil && !sk.noGcd) return;
-  if (now < (u.cds.get(id) ?? 0)) return;
+  if (isHardCC(u)) return;
+  const until = exp ?? now + 0.3;
+  // 이동기끼리는 0.8초 안에 이어 쓸 수 없음 (대시 쿨타임을 줄인 대신 순간 연속 이동 제한)
+  const readyAt = Math.max(sk.noGcd ? 0 : u.lockUntil, u.cds.get(id) ?? 0, sk.moveSkill ? u.moveLock ?? 0 : 0);
+  if (u.casting || u.channel || u.dash || now < readyAt) {
+    // 선입력: 곧 쓸 수 있으면 기억해 뒀다가 바로 시전 (마지막 입력이 우선)
+    if (!u.casting && !u.channel && readyAt < until) u.queued = { slot, ax, ay, tx, at: Math.max(readyAt, now), exp: until };
+    return;
+  }
+  u.queued = null;
   if (room.kind === "town" && sk.steps.some((s) => s.do === "device" || s.do === "zone")) return msg(u, "마을에서는 쓸 수 없는 스킬이에요.");
   // 자원
   const cost = sk.cost ?? {};
@@ -66,7 +74,7 @@ export function castSkill(room, u, slot, ax, ay, tx, now) {
   // 쿨타임 (쿨타임 감소 효과는 없음. 기본 공격만 공격 속도 적용)
   const cd = sk.kind === "basic" ? sk.aspd / (u.stats.aspd + buffSum(u, "aspd")) : sk.cd;
   u.cds.set(id, now + cd);
-  u.lockUntil = now + (sk.kind === "basic" ? Math.min(0.22, cd * 0.5) : 0.25 + (sk.recover ?? 0));
+  u.lockUntil = now + (sk.kind === "basic" ? Math.min(0.2, cd * 0.5) : 0.18 + (sk.recover ?? 0));
   for (const [k, v] of Object.entries(cost)) if (k !== "gap") u[k] -= v;
   u.lastAction = now;
   const aim = Math.atan2(ay - u.y, ax - u.x);
@@ -99,7 +107,7 @@ export function castSkill(room, u, slot, ax, ay, tx, now) {
   ctx.combo = u.lastSkill && u.lastSkill !== id && now - u.lastSkillAt < 2.5;
   u.lastSkill = id;
   u.lastSkillAt = now;
-  if (sk.moveSkill) triggerPassive(room, u, "move_skill", now);
+  if (sk.moveSkill) { u.moveLock = now + 0.8; triggerPassive(room, u, "move_skill", now); }
   room.ev({ e: "cast", id: u.id, s: id, a: Math.round(aim * 1000), ct: sk.cast ? 1 : 0 });
   const go = (t) => {
     if (cost.gap) { ctx.gapSpent = u.gap; if (sk.steps.some((s) => s.consumeGap)) u.gap = 0; else u.gap -= cost.gap; }
@@ -651,6 +659,12 @@ export function onPlayerHit(room, u, t, dmg, crit, now, o) {
 
 /** 매 틱 플레이어 스킬 상태 (채널링, 정지 감지, 점혈 감소, 순교자의 각인) */
 export function tickPlayerSkills(room, u, now, inp) {
+  // 선입력된 스킬
+  if (u.queued) {
+    const q = u.queued;
+    if (now > q.exp || u.dead) u.queued = null;
+    else if (now >= q.at) { u.queued = null; castSkill(room, u, q.slot, q.ax, q.ay, q.tx, now, q.exp); }
+  }
   if (u.parry && now > u.parry.until) u.parry = null;
   if (u.frontGuard && now > u.frontGuard.until) u.frontGuard = null;
   if (u.channel) {

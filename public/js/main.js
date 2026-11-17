@@ -187,9 +187,12 @@ function bindInput() {
     if (e.code === "KeyP") toggleWin("party", WIN.openParty);
     if (e.code === "KeyH") toggleWin("help", WIN.openHelp);
     if (e.code === "KeyG") { const o = HUD.interactTarget(); if (o) WIN.openNpc(o); }
+    if (e.code === "KeyM") HUD.toggleBigMap();
     if (e.code === "Tab") e.preventDefault();
   });
   addEventListener("keyup", (e) => G.keys.delete(e.code));
+  $("#minimap").addEventListener("click", () => HUD.toggleBigMap());
+  $("#bigmap").addEventListener("click", () => HUD.toggleBigMap());
   for (const b of document.querySelectorAll("#menu-buttons button")) {
     const map = { char: WIN.openChar, skills: WIN.openSkills, inv: WIN.openInv, party: WIN.openParty, help: WIN.openHelp };
     b.addEventListener("click", () => toggleWin(b.dataset.win, map[b.dataset.win]));

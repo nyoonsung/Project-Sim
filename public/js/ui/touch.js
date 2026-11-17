@@ -7,6 +7,7 @@
 import { G, tryCast, moveDir, nearestEnemy } from "../game.js";
 import { SKILLS } from "/shared/skills.js";
 import { h, $, hideTip } from "./dom.js";
+import { skillIconURL } from "./icons.js";
 
 export const isTouchDevice = () =>
   (typeof matchMedia === "function" && matchMedia("(pointer: coarse)").matches) || (navigator.maxTouchPoints > 0 && "ontouchstart" in window);
@@ -35,7 +36,10 @@ export function touchAimTick() {
     dash.classList.toggle("off", i < 0);
     const left = i >= 0 ? cdLeftOf("c_dash") : 0;
     dash.querySelector(".cdt").textContent = left > 0.3 ? left.toFixed(1) : "";
-    dash.querySelector(".cd").style.transform = `scaleY(${Math.min(1, left / 6)})`;
+    const total = SKILLS.c_dash.cd;
+    dash.style.setProperty("--p", Math.min(1, left / total).toFixed(3));
+    if (dash._cd > 0.15 && left <= 0.02) { dash.classList.remove("ready"); void dash.offsetWidth; dash.classList.add("ready"); }
+    dash._cd = left;
   }
 }
 function cdLeftOf(id) { return G.me?.cds?.[id] ? Math.max(0, G.me.cds[id] / 1000 - (performance.now() / 1000 - G.meAt)) : 0; }
@@ -115,7 +119,7 @@ function skillButtons() {
 
 /** 오른쪽 대시 버튼: 이동 방향(멈춰 있으면 보던 방향)으로 */
 function dashButton(toast) {
-  const btn = h("div", { id: "dash-btn", class: "slot tb" }, h("div", { class: "cd" }), h("span", { class: "nm", text: "대시" }), h("span", { class: "cdt" }));
+  const btn = h("div", { id: "dash-btn", class: "slot tb" }, h("img", { class: "ic", src: skillIconURL(SKILLS.c_dash), alt: "", draggable: "false" }), h("div", { class: "cd" }), h("span", { class: "nm", text: "대시" }), h("span", { class: "cdt" }));
   btn.addEventListener("pointerdown", (e) => {
     e.preventDefault(); e.stopPropagation();
     const i = (G.char?.skills ?? []).indexOf("c_dash");

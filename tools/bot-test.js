@@ -164,8 +164,9 @@ try {
   };
   let killed = 0, tick = 0;
   const skip = new Set(); let tid = null, best = 1e9, since = Date.now(), engaged = 0;
-  const end = Date.now() + 70000;
+  const end = Date.now() + 80000;
   while (Date.now() < end && killed < 3) {
+    for (const e of b1.events) if (e.e === "add" && e.k === "m") monsters.set(e.id, e);
     for (const e of b1.events) if (e.e === "die" || e.e === "del") monsters.delete(e.id);
     const me = b1.pos();
     let target = null, td = 1e9;
