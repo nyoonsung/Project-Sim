@@ -1,5 +1,6 @@
 // 클라이언트 게임 상태: 서버 메시지 반영, 내 캐릭터 이동 예측, 입력 전송
 import { applyInput } from "/shared/move.js";
+import { sfx, onEnemyHit, onEnemyDie, onMeHurt } from "./feel.js";
 import { TICK_DT, PLAYER_RADIUS, SLOT_KEYS, VIEW_W, VIEW_H } from "/shared/constants.js";
 import { SKILLS } from "/shared/skills.js";
 import { zoneOf, ZONES } from "/shared/zones.js";
@@ -101,7 +102,7 @@ function onSnapshot(m) {
 }
 
 function floater(x, y, text, kind) {
-  G.floaters.push({ x: x + (Math.random() * 14 - 7), y, text, kind, t0: now() });
+  G.floaters.push({ x: x + (Math.random() * 14 - 7), y, text, kind, t0: now(), vx: (Math.random() - 0.5) * 30 });
   if (G.floaters.length > 80) G.floaters.shift();
 }
 
@@ -115,6 +116,7 @@ function onEvent(e) {
       if (ent) {
         ent.dead = true; ent.diedAt = now();
         R?.fx(ent.k === "p" ? "spawn/soul-rise" : ent.k === "b" ? "explosions/big-explosion" : "spawn/poof", ent.rx, ent.ry - (ent.k === "p" ? 0 : 8), { s: ent.k === "b" ? 0.7 : ent.k === "p" ? 1 : 0.55 });
+        if (ent.k === "m" || ent.k === "b") onEnemyDie(ent);
         if (ent.k !== "p") setTimeout(() => G.ents.get(e.id)?.dead && G.ents.delete(e.id), 400);
       }
       break;
@@ -122,13 +124,13 @@ function onEvent(e) {
       if (ent) {
         ent.hurtAt = now();
         floater(ent.rx, ent.ry - 34, String(e.v), e.p ? "hurt" : e.c ? "crit" : e.d ? "dot" : e.a ? "absorb" : "dmg");
-        if (e.id === G.you) { G.hurtFlash = 0.35; G.shake = Math.max(G.shake, e.v > (G.me?.mh ?? 999) * 0.15 ? 5 : 2); }
-        if (e.c && !e.p) G.shake = Math.max(G.shake, 1.5);
+        if (e.id === G.you) { G.hurtFlash = 0.35; G.shake = Math.max(G.shake, e.v > (G.me?.mh ?? 999) * 0.15 ? 5 : 2); if (!e.d) onMeHurt(e.v); }
+        else if ((ent.k === "m" || ent.k === "b") && !e.d && !e.a) onEnemyHit(ent, e);
       }
       break;
     case "heal": if (ent) floater(ent.rx, ent.ry - 34, "+" + e.v, "heal"); break;
     case "miss": if (ent) floater(ent.rx, ent.ry - 34, "회피", "miss"); break;
-    case "gold": if (e.own === G.you) floater(e.x, e.y - 20, `+${e.v}G`, "gold"); break;
+    case "gold": if (e.own === G.you) { floater(e.x, e.y - 20, `+${e.v}G`, "gold"); sfx("coin"); } break;
     case "fx": R?.fx(e.fx, e.x, e.y, { a: e.a != null ? e.a / 1000 : undefined, pal: e.pal ?? undefined, s: e.s ?? undefined, follow: e.at ?? undefined }); break;
     case "anim": if (ent) {
       // 내가 방금 미리 보여 준 동작이면 처음부터 다시 그리지 않음
@@ -150,16 +152,16 @@ function onEvent(e) {
     case "stx": if (ent) ent.st.delete(e.s); break;
     case "msg": if (!(e.kind === "self" && e.id !== G.you)) G.ui.toast(e.text, e.kind); break;
     case "notice": G.ui.toast(e.text, "info"); break;
-    case "lvl": if (ent) { R?.fx("ui/level-up", ent.rx, ent.ry, { follow: e.id }); if (e.id === G.you) G.ui.center(`레벨 업! Lv.${e.l}`); } break;
+    case "lvl": if (ent) { R?.fx("ui/level-up", ent.rx, ent.ry, { follow: e.id }); if (e.id === G.you) { G.ui.center(`레벨 업! Lv.${e.l}`); sfx("level"); } } break;
     case "loot": G.loot.set(e.id, { ...e, t0: now() }); break;
     case "lootx": G.loot.delete(e.id); break;
-    case "got": G.ui.gotItem(e.item); break;
+    case "got": G.ui.gotItem(e.item); sfx("item"); break;
     case "boss": G.boss = { id: e.id, name: e.name, mid: e.mid }; G.ui.onBoss(); break;
     case "bossdead": G.boss = null; G.ui.onBoss(); G.ui.center("보스 처치!"); break;
     case "exit": G.exitOpen = !!e.open; break;
     case "doors": if (G.map) G.map.doorsOpen = !!e.open; break;
     case "obj": G.objects.push(e.o); break;
-    case "wave": G.ui.center(e.n >= e.of ? `마지막 웨이브! (${e.n}/${e.of})` : `웨이브 ${e.n} / ${e.of}`); G.wave = { n: e.n, of: e.of }; break;
+    case "wave": sfx("wave"); G.ui.center(e.n >= e.of ? `마지막 웨이브! (${e.n}/${e.of})` : `웨이브 ${e.n} / ${e.of}`); G.wave = { n: e.n, of: e.of }; break;
     case "warp": G.ui.center("이동 중..."); R?.fx("arcane/portal", G.pred.x, G.pred.y, { s: 0.6 }); break;
     case "shake": G.shake = Math.max(G.shake, e.v); break;
     case "dash": if (e.id === G.you) G.forced = now() + e.d / e.v + 0.1; break;
@@ -256,10 +258,12 @@ export function tryCast(slot, at) {
     if (best) msg.tx = best.id;
   }
   send(msg);
+  G.lastCastAt = t;
   // 바로 동작 보여 주기 (서버 응답을 기다리지 않음)
   const ent = G.ents.get(G.you);
   if (ent && left <= 0.06 && t >= (G.localLock ?? 0) && !sk.cast) {
     ent.anim = { name: sk.anim ?? "slash", t0: t, n: 1, local: true };
+    sfx(sk.moveSkill ? "dash" : sk.anim === "shoot" ? "shoot" : sk.anim === "cast" ? "magic" : "swing");
     G.localLock = t + 0.18;
     G.ui.flashSkill(id);
   }

@@ -1,5 +1,14 @@
 // 타일맵 렌더링: 3/4 시점 벽(윗면+앞면), 구역 팔레트, 장식. 512px 덩어리로 미리 그려 둔다.
 import { TILE, T } from "/shared/constants.js";
+import { dtReady, frame } from "./dt2.js";
+
+// 구역별 색 입히기 (0x72 타일: 곱할 색 m + 어두운 부분 밝히기 s)
+const ZONE_TINT = {
+  "이끼 낀 지하묘지": { m: "#c4dab4", s: "#060a04" }, "고블린 굴": { m: "#ecd2ae", s: "#0c0703" }, "독버섯 늪": { m: "#b0d098", s: "#04090a" },
+  "화염 용광로": { m: "#ffb898", s: "#220a02" }, "얼어붙은 성채": { m: "#bcd8ff", s: "#0a1424" }, "폭풍 첨탑": { m: "#c4c4f0", s: "#0a0a1c" },
+  "타락한 성역": { m: "#fff2d0", s: "#16120a" }, "태엽 공장": { m: "#e0d0b0", s: "#0a1216" }, "그림자 심연": { m: "#b49cd4", s: "#08050e" },
+  "혼돈의 왕좌": { m: "#f0a0a0", s: "#160406" },
+};
 
 const CHUNK = 16; // 타일
 const hash = (x, y, s = 0) => { let h = (x * 374761393 + y * 668265263 + s * 2147483647) | 0; h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967296; };
@@ -51,6 +60,7 @@ export class TileMap {
     const below = this.t(x, y + 1), above = this.t(x, y - 1);
     const r = hash(x, y);
     if (this.town) return this.drawTownTile(g, t, x, y, px, py, r, below, above);
+    if (dtReady()) return this.drawTileDT(g, t, x, y, px, py, r, below, above);
     const Z = this.zone;
     const F = Z.floor, Wl = Z.wall;
     if (t === T.VOID) { g.fillStyle = "#08070b"; g.fillRect(px, py, TILE, TILE); return; }
@@ -111,6 +121,57 @@ export class TileMap {
       return;
     }
     if (t === T.DOOR) { g.fillStyle = F[2]; g.fillRect(px, py, TILE, TILE); }
+  }
+
+  /** 0x72 던전 타일로 그리기 (16px 원본을 2배) */
+  drawTileDT(g, t, x, y, px, py, r, below, above) {
+    const tint = ZONE_TINT[this.zone?.name] ?? null;
+    const put = (name, dx = 0, dy = 0) => { const c = frame(name, tint); if (c) g.drawImage(c, px + dx, py + dy, c.width * 2, c.height * 2); };
+    const walk = (tt) => this.walkable(tt) || tt === T.WATER || tt === T.PIT;
+    if (t === T.VOID) { g.fillStyle = "#0b0a0f"; g.fillRect(px, py, TILE, TILE); return; }
+    if (walk(t)) {
+      // 바닥: 대부분 기본 석판, 가끔 금 간 돌
+      const v = hash(x, y, 7);
+      put(v < 0.86 ? "floor_1" : v < 0.9 ? "floor_2" : v < 0.93 ? "floor_3" : v < 0.95 ? "floor_4" : v < 0.97 ? "floor_5" : v < 0.98 ? "floor_6" : v < 0.99 ? "floor_7" : "floor_8");
+      // 벽 아래 그림자
+      if (above === T.WALL) { g.fillStyle = "rgba(0,0,0,0.38)"; g.fillRect(px, py, TILE, 7); g.fillStyle = "rgba(0,0,0,0.16)"; g.fillRect(px, py + 7, TILE, 6); }
+      if (this.t(x - 1, y) === T.WALL) { g.fillStyle = "rgba(0,0,0,0.22)"; g.fillRect(px, py, 5, TILE); }
+      if (t === T.WATER) {
+        const acc = this.zone.accent ?? "#4a8ad0";
+        g.fillStyle = "rgba(20,50,90,0.78)"; g.fillRect(px, py, TILE, TILE);
+        g.fillStyle = shade(acc, 0.5); g.globalAlpha = 0.25; g.fillRect(px, py, TILE, TILE); g.globalAlpha = 1;
+        if (this.t(x, y - 1) !== T.WATER) { g.fillStyle = "rgba(0,0,0,0.45)"; g.fillRect(px, py, TILE, 4); }
+        g.fillStyle = "rgba(170,220,255,0.55)";
+        for (let k = 0; k < 3; k++) { const wx = px + 3 + Math.floor(hash(x, y, k) * 20), wy = py + 7 + k * 8; g.fillRect(wx, wy, 7, 1); g.fillRect(wx + 2, wy - 1, 3, 1); }
+      }
+      if (t === T.PIT) {
+        put("hole");
+        g.fillStyle = "rgba(0,0,0,0.55)"; g.fillRect(px, py + 8, TILE, TILE - 8);
+      }
+      return;
+    }
+    if (t === T.WALL) {
+      const left = this.t(x - 1, y), right = this.t(x + 1, y);
+      if (walk(below)) {
+        // 앞면 벽돌 (가끔 구멍·이끼·깃발)
+        put(r < 0.04 ? "wall_hole_1" : r < 0.07 ? "wall_hole_2" : "wall_mid");
+        if (r > 0.94 && walk(this.t(x, y + 1))) put(["wall_banner_red", "wall_banner_blue", "wall_banner_green", "wall_banner_yellow"][Math.floor(hash(x, y, 3) * 4)]);
+        else if (r > 0.9) put("wall_goo");
+        // 위가 바닥이면 홀로 선 기둥: 윗면을 위 칸에 걸쳐 그림
+        if (walk(above)) put("wall_top_mid", 0, -TILE);
+        else if (this.t(x, y - 1) === T.WALL) { /* 위 칸이 윗면을 그림 */ }
+        g.fillStyle = "rgba(0,0,0,0.25)"; g.fillRect(px, py + TILE - 3, TILE, 3);
+        return;
+      }
+      if (this.t(x, y + 1) === T.WALL && walk(this.t(x, y + 2))) { put("wall_top_mid"); return; }
+      // 옆벽 / 아래쪽 벽 윗면
+      if (walk(above)) { put("wall_top_mid"); g.fillStyle = "rgba(0,0,0,0.3)"; g.fillRect(px, py + TILE - 6, TILE, 6); return; }
+      if (walk(right) || walk(this.t(x + 1, y + 1)) || walk(this.t(x + 1, y - 1))) { g.fillStyle = "#0b0a0f"; g.fillRect(px, py, TILE, TILE); put("wall_side_mid_left"); return; }
+      if (walk(left) || walk(this.t(x - 1, y + 1)) || walk(this.t(x - 1, y - 1))) { g.fillStyle = "#0b0a0f"; g.fillRect(px, py, TILE, TILE); put("wall_side_mid_right"); return; }
+      g.fillStyle = "#0b0a0f"; g.fillRect(px, py, TILE, TILE);
+      return;
+    }
+    if (t === T.DOOR) put("floor_ladder");
   }
 
   drawTownTile(g, t, x, y, px, py, r, below, above) {

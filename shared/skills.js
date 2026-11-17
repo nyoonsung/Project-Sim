@@ -10,10 +10,10 @@ const add = (cls, list) => list.forEach((s) => S.push({ cls, ...s }));
 
 // ─────────────────────────── 모험가 공용 스킬 ───────────────────────────
 add("common", [
-  { id: "c_thrust", name: "찌르기", grade: "일반", kind: "active", cd: 1, cost: { mp: 2 }, aim: "dir", anim: "thrust",
-    desc: "빠르게 한 지점을 공격하는 기본 단일 공격.", limit: "낮은 자원 비용으로 사용 가능한 기본기. 직업 주력기보다 피해량은 낮다.",
-    fx: { hit: "impacts/hit-spark" }, steps: [{ do: "melee", range: 44, arc: 40, pow: 0.75, max: 1 }] },
-  { id: "c_slash", name: "베기", grade: "일반", kind: "active", cd: 1.5, cost: { mp: 3 }, aim: "dir", anim: "slash",
+  { id: "c_thrust", name: "찌르기", grade: "일반", kind: "basic", aspd: 0.65, aim: "dir", anim: "thrust",
+    desc: "빠르게 한 지점을 공격하는 기본 단일 공격.", limit: "자원 없이 계속 쓸 수 있는 기본 공격. 직업 주력기보다 피해량은 낮다.",
+    fx: { hit: "impacts/hit-spark" }, steps: [{ do: "melee", range: 46, arc: 40, pow: 0.65, max: 1 }] },
+  { id: "c_slash", name: "베기", grade: "일반", kind: "active", cd: 2, cost: { mp: 2 }, aim: "dir", anim: "slash",
     desc: "전방을 가로질러 공격하는 기본 근접 기술.", limit: "찌르기보다 범위가 넓은 대신 단일 대상 피해가 낮다.",
     fx: { swing: "melee/sword-slash", hit: "impacts/hit-spark" }, steps: [{ do: "melee", range: 46, arc: 120, pow: 0.6 }] },
   { id: "c_dash", name: "대시", grade: "일반", kind: "active", cd: 3.5, aim: "dir", anim: "dash", moveSkill: true,
@@ -258,9 +258,9 @@ add("rogue", [
 
 // ─────────────────────────── 5. 마법사 ───────────────────────────
 add("mage", [
-  { id: "ma_arcane", name: "비전 투사", grade: "일반", kind: "basic", aspd: 1.2, cost: { mp: 1 }, aim: "dir", anim: "cast",
+  { id: "ma_arcane", name: "비전 투사", grade: "일반", kind: "basic", aspd: 0.85, cost: { mp: 1 }, aim: "dir", anim: "cast",
     desc: "낮은 마나 비용의 기본 주문. 대상과 아주 가까운 적에게 소량의 비전 피해.", limit: "짧은 시전, 광역 피해 제한.",
-    fx: { proj: "arcane/arcane-orb", scale: 0.6, hit: "arcane/mana-burst" }, steps: [{ do: "proj", speed: 380, range: 300, pow: 1.1, radius: 7, explode: { radius: 28, pow: 0.35, max: 3 } }] },
+    fx: { proj: "arcane/arcane-orb", scale: 0.6, hit: "arcane/mana-burst" }, steps: [{ do: "proj", speed: 420, range: 300, pow: 0.9, radius: 7, explode: { radius: 28, pow: 0.3, max: 3 } }] },
   { id: "ma_frostseal", name: "서리 봉인", grade: "일반", kind: "active", cd: 10, cost: { mp: 14 }, aim: "point", range: 260, anim: "cast",
     desc: "지정 지점에 냉기 문양을 두어 적을 감속한다.", limit: "적별 1회, 보스 감속은 매우 짧음.",
     fx: { area: "ice/frost-nova" }, steps: [{ do: "area", radius: 64, pow: 0.9, telegraph: 0.25, status: { type: "slow", dur: 3, v: 0.5 }, freezeChance: 0.25 }] },
@@ -298,10 +298,10 @@ add("mage", [
 
 // ─────────────────────────── 6. 성직자 ───────────────────────────
 add("priest", [
-  { id: "pr_bolt", name: "백광탄", grade: "일반", kind: "basic", aspd: 1.2, aim: "dir", anim: "cast",
+  { id: "pr_bolt", name: "백광탄", grade: "일반", kind: "basic", aspd: 0.85, aim: "dir", anim: "cast",
     desc: "적 하나에 빛 피해를 주는 기본 공격 및 성광 수급기.", limit: "딜러 기본 공격보다 낮은 피해. 성광 획득 초당 상한.",
     fx: { proj: "projectiles/plasma-shot", palette: ["#201808", "#806018", "#d0a830", "#ffe080", "#fff8d0", "#ffffff"], hit: "holy/smite", hitScale: 0.4 },
-    steps: [{ do: "proj", speed: 420, range: 300, pow: 0.8, radius: 7, gainOnHit: { holy: 8 } }] },
+    steps: [{ do: "proj", speed: 460, range: 300, pow: 0.72, radius: 7, gainOnHit: { holy: 6 } }] },
   { id: "pr_answer", name: "성가의 응답", grade: "일반", kind: "active", cd: 6, cost: { holy: 15, mp: 6 }, aim: "ally", range: 260, anim: "cast",
     desc: "아군 한 명을 즉시 치유하고, 체력이 낮다면(40% 이하) 짧은 지속 회복을 추가한다.", limit: "성광 비용, 지속 회복은 중첩되지 않는다.",
     fx: { self: "holy/heal" }, steps: [{ do: "heal", target: "ally", pow: 1.6, lowHot: { pow: 0.25, dur: 4, interval: 1 } }] },

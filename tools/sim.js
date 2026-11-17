@@ -26,7 +26,7 @@ function makeChar(cls, L, gearRarity = "희귀") {
   }
   if (cls === "adventurer") c.equip.weapon.type = "club";
   const av = availableSkills(c);
-  const basic = av.find((s) => s.kind === "basic");
+  const basic = av.find((s) => s.kind === "basic" && s.cls === cls) ?? av.find((s) => s.kind === "basic");
   const order = { 전설: 0, 영웅: 1, 희귀: 2, 일반: 3 };
   const act = av.filter((s) => s.cls !== "common" && !["basic", "passive"].includes(s.kind) && !s.exclusive && !s.moveSkill && !["sw_block", "fi_counter", "fi_imun", "sm_rivet"].includes(s.id)).sort((x, y) => order[x.grade] - order[y.grade]);
   const pas = av.filter((s) => s.kind === "passive");
@@ -63,7 +63,7 @@ export function simulate(cls, L, F, { maxT = 300, rarity = "희귀", log = false
     const n = path[Math.min(2, path.length - 1)]; return [(n % M.w) * TILE + 16, ((n / M.w) | 0) * TILE + 16];
   };
   let seq = 0, lastHp = u.hp, bossSeen = false;
-  const total = [...room.units.values()].filter((x) => x.team === "m").length;
+  const total = room.wave ? room.total : [...room.units.values()].filter((x) => x.team === "m").length;
   while (t < maxT) {
     // 행동
     const enemies = [...room.units.values()].filter((m) => m.team === "m" && !m.dead && !m.dummy);
@@ -92,7 +92,7 @@ export function simulate(cls, L, F, { maxT = 300, rarity = "희귀", log = false
     if (u.dead) break;
     if (room.bossId) bossSeen = true;
     if (kind !== "normal" && bossSeen && ![...room.units.values()].some((x) => x.boss)) break;
-    if (kind === "normal" && room.killed >= total) break;
+    if (kind === "normal" && (room.exitOpen || room.killed >= total)) break;
   }
   const boss = room.bossId ? room.units.get(room.bossId) : null;
   const bossDead = bossSeen && !boss;

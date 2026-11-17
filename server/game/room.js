@@ -176,7 +176,8 @@ export class Room {
     const per = Math.ceil(W.total / W.waves);
     let alive = 0;
     for (const u of this.units.values()) if (u.type === "m" && !u.dead) alive++;
-    if (st.n > 0 && alive > Math.max(2, Math.floor(per * 0.35)) && now < st.forceAt) return;
+    // 다음 웨이브: 남은 적이 35% 이하이거나, 22초가 지났고 70% 이하일 때 (웨이브가 겹겹이 쌓이지 않게)
+    if (st.n > 0 && alive > Math.max(2, Math.floor(per * 0.35)) && (now < st.forceAt || alive > per * 0.7)) return;
     st.n++;
     const n = Math.min(per, W.total - st.spawned);
     st.spawned += n;

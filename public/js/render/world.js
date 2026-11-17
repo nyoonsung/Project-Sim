@@ -1,12 +1,14 @@
 // 월드 렌더러: 타일 → 바닥 표시(예고·구역) → y정렬 유닛/오브젝트 → 투사체 → 이펙트 → 조명 → 날씨 → 머리 위 UI
 import { G, localStep, moveDir } from "../game.js";
+import { tickFeel, drawParts, hitOffset } from "../feel.js";
+import { dtLookFor, drawDT } from "./looks.js";
 import { VIEW_W, VIEW_H, TILE } from "/shared/constants.js";
 import { MONSTERS, BOSSES, ZONES } from "/shared/zones.js";
 import { SKILLS } from "/shared/skills.js";
 import { CLASS_INFO } from "/shared/classes.js";
 import { RARITY_COLOR } from "/shared/items.js";
 import { sprite, playerLook, ANIM_TIME, POSES } from "./sprites.js";
-import { FxLayer, loadFx, preloadFx, baked_, bakedFrame, orient } from "./fx.js";
+import { FxLayer, loadFx, preloadFx, baked_, bakedFrame, orient, prebake } from "./fx.js";
 
 const now = () => performance.now() / 1000;
 const GROUND_FX = new Set(["holy/heal-aoe", "nature/toxic-puddle", "nature/poison-cloud", "arcane/rune-circle", "arcane/magic-circle-cast", "shadow/hex-sigil", "fire/fire-ring", "nature/quake", "impacts/ground-slam", "scifi/laser-grid", "nature/root-snare", "holy/sunburst", "shadow/black-hole", "arcane/portal", "fire/campfire", "shadow/shadow-flames"]);
@@ -29,6 +31,7 @@ export class Renderer {
     this.front = new FxLayer(VIEW_W, VIEW_H);
     this.ground = new FxLayer(VIEW_W, VIEW_H);
     this.weather = new FxLayer(320, 180);
+    this.weather.every = 2; // 날씨는 배경이라 30fps로 충분
     this.light = new OffscreenCanvas(VIEW_W / 2, VIEW_H / 2);
     this.lctx = this.light.getContext("2d");
     this.zoneFx = new Map();
@@ -49,6 +52,7 @@ export class Renderer {
     }
     for (const id of G.char?.skills ?? []) { const s = SKILLS[id]; if (s?.fx) ids.push(...Object.values(s.fx).filter((v) => typeof v === "string")); }
     preloadFx(ids).then(() => {
+      prebake(ids.filter((id) => id && !id.startsWith("weather/")));
       if (G.kind !== "town" && z.weather) { const m = this.weather; m.clear(); loadFx(z.weather).then((mod) => mod && m.spawn(z.weather, mod.meta.origin[0], mod.meta.origin[1])); }
       if (G.kind === "town") loadFx("weather/fireflies").then((mod) => mod && this.weather.spawn("weather/fireflies", mod.meta.origin[0], mod.meta.origin[1]));
     });
@@ -82,6 +86,7 @@ export class Renderer {
     if (!G.map) { ctx.fillStyle = "#000"; ctx.fillRect(0, 0, VIEW_W, VIEW_H); return; }
     // 위치: 나는 매 프레임 즉시 이동, 다른 유닛은 보간
     localStep(dt);
+    tickFeel(dt);
     const rt = t - 0.1;
     for (const e of G.ents.values()) {
       if (e.id === G.you) { e.rx = G.local.x; e.ry = G.local.y; continue; }
@@ -103,7 +108,7 @@ export class Renderer {
     G.cam.y = Math.round(mh <= VIEW_H ? (mh - VIEW_H) / 2 : Math.max(0, Math.min(mh - VIEW_H, ty)));
     let sx = 0, sy = 0;
     if (G.shake > 0) { sx = (Math.random() - 0.5) * G.shake * 2; sy = (Math.random() - 0.5) * G.shake * 2; G.shake = Math.max(0, G.shake - dt * 18); }
-    const cx = Math.round(G.cam.x + sx), cy = Math.round(G.cam.y + sy);
+    const cx = Math.round(G.cam.x + sx + (G.camKick?.x ?? 0)), cy = Math.round(G.cam.y + sy + (G.camKick?.y ?? 0));
     if (me) G.map.reveal(me.rx, me.ry);
 
     this.front.update(dt, G.ents);
@@ -241,7 +246,7 @@ export class Renderer {
         const b = baked_("arcane/portal", pal);
         const f = bakedFrame(b, t);
         if (f) { ctx.globalAlpha = locked ? 0.25 : 1; const s = 0.55; ctx.drawImage(f, Math.round(x - b.ox * s), Math.round(y - b.oy * s), Math.round(b.w * s), Math.round(b.h * s)); ctx.globalAlpha = 1; }
-        if (o.label || locked) this.label(ctx, locked ? "출구 (몬스터 70% 처치 시 열림)" : o.label, x, y - 44, locked ? "#888" : "#ffe08a");
+        if (o.label || locked) this.label(ctx, locked ? "출구 (웨이브를 모두 물리치면 열림)" : o.label, x, y - 44, locked ? "#888" : "#ffe08a");
         break;
       }
       case "npc": {
@@ -304,9 +309,10 @@ export class Renderer {
   }
 
   drawEnt(ctx, e, cx, cy, t) {
-    const x = Math.round(e.rx - cx), y = Math.round(e.ry - cy);
+    const ho = e.k === "m" || e.k === "b" ? hitOffset(e, t) : null;
+    const x = Math.round(e.rx - cx + (ho?.ox ?? 0)), y = Math.round(e.ry - cy + (ho?.oy ?? 0));
     const info = e.info ?? {};
-    const hurt = e.hurtAt && t - e.hurtAt < 0.09;
+    const hurt = (e.hurtAt && t - e.hurtAt < 0.09) || (e.dieFlash && t - e.dieFlash < 0.12);
     const dying = e.dead && e.k !== "p";
     if (dying) ctx.globalAlpha = Math.max(0, 1 - (t - e.diedAt) / 0.4);
     if (e.k === "d") { this.drawDevice(ctx, e, x, y, t); ctx.globalAlpha = 1; return; }
@@ -344,8 +350,24 @@ export class Renderer {
     // 그림자
     const r = e.k === "b" ? 22 : critter ? 9 * scale : 10;
     if (!(critter?.critter && MONSTERS[info.m]?.fly) || true) this.shadow(ctx, x, y, r);
+    const L = dtLookFor(e);
+    if (L) {
+      // 0x72 스프라이트 (몸 + 손에 든 무기)
+      let ap = null;
+      if (e.anim) {
+        const d = (ANIM_TIME[e.anim.name] ?? 0.3) * Math.max(1, e.anim.n > 2 ? e.anim.n / 2 : 1);
+        const p = (t - e.anim.t0) / d;
+        if (p >= 0 && p < 1) ap = { name: e.anim.name, p };
+      }
+      ctx.save();
+      if (ho && (ho.sx !== 1 || ho.sy !== 1)) { ctx.translate(x, y); ctx.scale(ho.sx, ho.sy); ctx.translate(-x, -y); }
+      if (e.dead && e.k === "p") { ctx.globalAlpha = 0.55; ctx.translate(x, y); ctx.rotate(-Math.PI / 2); ctx.translate(-x - 4, -y - 6); }
+      drawDT(ctx, e, L, x, y, { moving: !!moving, hurt: !!hurt, flip, aim: a, anim: ap, t, glow: info.el ? 0.16 + Math.sin(t * 6) * 0.08 : 0 });
+      ctx.restore();
+    } else {
     ctx.save();
     ctx.translate(x, y);
+    if (ho && (ho.sx !== 1 || ho.sy !== 1)) ctx.scale(ho.sx, ho.sy);
     if (flip) ctx.scale(-1, 1);
     if (e.dead && e.k === "p") { ctx.globalAlpha = 0.55; ctx.rotate(-Math.PI / 2); ctx.translate(-4, -6); }
     if (e.st?.has("freeze") || e.st?.has("stun") && false) { /* 상태 이펙트가 따로 그려짐 */ }
@@ -364,6 +386,7 @@ export class Renderer {
       if (info.el) { ctx.globalAlpha = 0.25 + Math.sin(t * 6) * 0.1; ctx.drawImage(this.whiteOf(s), -s.ox, -s.oy); }
     }
     ctx.restore();
+    }
     ctx.globalAlpha = 1;
     // 보호막 테두리
     if (e.fl & 4) { ctx.strokeStyle = "rgba(200,230,255,0.6)"; ctx.beginPath(); ctx.ellipse(x, y - 18, 16, 24, 0, 0, Math.PI * 2); ctx.stroke(); }
@@ -481,6 +504,7 @@ export class Renderer {
   }
 
   drawOverhead(ctx, cx, cy, t) {
+    drawParts(ctx, cx, cy);
     for (const e of G.ents.values()) {
       if (e.k === "d" || e.dead && e.k !== "p") continue;
       const info = e.info ?? {};
@@ -529,11 +553,19 @@ export class Renderer {
         dmg: ["#ffffff", "12px Galmuri11"], crit: ["#ffcf3a", "bold 16px Galmuri11"], hurt: ["#ff5a5a", "12px Galmuri11"], heal: ["#6aff8a", "12px Galmuri11"],
         dot: ["#c8a0ff", "10px Galmuri9"], absorb: ["#c8e0ff", "10px Galmuri9"], miss: ["#aaaaaa", "10px Galmuri9"], gold: ["#ffd35a", "10px Galmuri9"], status: ["#ffb0ff", "12px Galmuri11"],
       }[f.kind] ?? ["#fff", "12px Galmuri11"];
-      const scale = f.kind === "crit" && age < 0.12 ? 1.3 : 1;
-      ctx.font = scale > 1 ? "bold 20px Galmuri11" : style[1];
-      ctx.textAlign = "center";
-      ctx.fillStyle = "#000"; ctx.fillText(f.text, x + 1, y + 1);
-      ctx.fillStyle = style[0]; ctx.fillText(f.text, x, y);
+      // 튀어나왔다가 자리 잡는 숫자 (치명타는 더 크게)
+      const crit = f.kind === "crit";
+      const pop = age < 0.12 ? 1 + (1 - age / 0.12) * (crit ? 0.9 : 0.5) : 1;
+      ctx.save();
+      ctx.translate(x + (f.vx ?? 0) * age, y);
+      ctx.scale(pop, pop);
+      ctx.font = crit ? "bold 17px Galmuri11" : style[1];
+      ctx.textAlign = "center"; ctx.textBaseline = "middle";
+      ctx.lineJoin = "round"; ctx.lineWidth = crit ? 4 : 3; ctx.strokeStyle = crit ? "#3a1a00" : "#000";
+      const text = crit ? f.text + "!" : f.text;
+      ctx.strokeText(text, 0, 0);
+      ctx.fillStyle = style[0]; ctx.fillText(text, 0, 0);
+      ctx.restore();
       ctx.globalAlpha = 1;
       return true;
     });

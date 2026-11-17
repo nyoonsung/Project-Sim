@@ -23,7 +23,7 @@ export function buildHud() {
   });
   const pots = $("#potions");
   pots.replaceChildren(...["hp_potion", "mp_potion", "antidote"].map((id, i) => {
-    const el = h("div", { class: "slot", onclick: () => send({ t: "use", item: id }) }, h("span", { class: "key", text: String(i + 1) }), h("div", { class: "cd" }), h("span", { class: "nm" }), h("span", { class: "cdt" }));
+    const el = h("div", { class: "slot", onclick: () => { send({ t: "use", item: id }); G.ui.sfx?.("potion"); } }, h("span", { class: "key", text: String(i + 1) }), h("div", { class: "cd" }), h("span", { class: "nm" }), h("span", { class: "cdt" }));
     el.dataset.item = id;
     el.classList.add("pot-" + i);
     tipOn(el, () => [h("div", { class: "tt-name", text: ITEMS[id].name }), h("div", { text: ITEMS[id].desc }), h("div", { class: "tt-sub", text: `재사용 대기 ${ITEMS[id].cd}초 · 마을 상인에게서 구입` })]);
@@ -48,7 +48,8 @@ export function updateSkillbar() {
     if (sk && sk.kind !== "passive") {
       const left = cdLeft(id);
       const total = sk.kind === "basic" ? sk.aspd : sk.cd;
-      const frac = Math.min(1, left / (total || 1));
+      // 기본 공격은 쿨타임 표시 없음 (공격 속도만큼 자동 반복)
+      const frac = sk.kind === "basic" ? 0 : Math.min(1, left / (total || 1));
       cd.style.transform = `scaleY(${frac})`;
       el.style.setProperty("--p", frac.toFixed(3));
       // 쿨타임이 끝나는 순간 반짝

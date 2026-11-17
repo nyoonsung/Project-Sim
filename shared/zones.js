@@ -166,10 +166,12 @@ export function floorKind(floor) {
   return "normal";
 }
 /** 층 배율: 플레이어 성장 곡선(레벨≈층)에 맞춘 전역 곡선 */
+// 60층까지는 기존 곡선, 그 뒤로는 완만하게 (후반 벽 완화)
+const bend = (base, late, f) => f <= 60 ? Math.pow(base, f - 1) : Math.pow(base, 59) * Math.pow(late, f - 60);
 export function floorScale(floor) {
   return {
-    hp: Math.pow(1.05, floor - 1),
-    dmg: Math.pow(1.04, floor - 1),
+    hp: bend(1.05, 1.04, floor),
+    dmg: bend(1.04, 1.027, floor),
     xp: Math.pow(1.045, floor - 1),
     gold: Math.pow(1.04, floor - 1),
     level: floor,

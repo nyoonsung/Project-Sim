@@ -1,6 +1,9 @@
 // 시작점: 로그인 → 게임 연결 → 입력·렌더 루프
 import { G, onMessage, inputTick, tryCast, updateMouseWorld, send } from "./game.js";
 import { isTouchDevice, setupTouch, touchAimTick } from "./ui/touch.js";
+import { unlockAudio, toggleSound, soundOn, sfx } from "./feel.js";
+import { loadDT2, frame } from "./render/dt2.js";
+import { dtLookFor, drawDT } from "./render/looks.js";
 if (isTouchDevice()) document.body.classList.add("touch");
 import { Net } from "./net.js";
 import { Renderer } from "./render/world.js";
@@ -18,25 +21,34 @@ async function api(path, body) {
   return { ok: r.ok, status: r.status, j: await r.json().catch(() => ({})) };
 }
 function loginArt() {
+  // 로그인 화면: 7직업이 던전 바닥 위에서 번갈아 공격 (게임과 같은 그림)
   const cv = $("#login-art"), g = cv.getContext("2d");
   g.imageSmoothingEnabled = false;
-  let t0 = performance.now();
-  const classes = ["sword", "fist", "archer", "rogue", "mage", "priest", "smith"];
-  const loop = () => {
-    if ($("#login").classList.contains("hidden")) return;
-    const t = (performance.now() - t0) / 1000;
-    g.fillStyle = "#0e0c14"; g.fillRect(0, 0, 320, 120);
-    g.fillStyle = "#1c1828"; g.fillRect(0, 96, 320, 24);
-    for (let x = 0; x < 320; x += 16) { g.fillStyle = x % 32 ? "#221e30" : "#191524"; g.fillRect(x, 96, 16, 24); }
-    classes.forEach((c, i) => {
-      const { look, key } = playerLook(c, null, null);
-      const anim = Math.floor(t + i * 0.7) % 4 === 0 ? (c === "archer" ? "shoot" : c === "mage" || c === "priest" ? "cast" : c === "fist" ? "punch" : "slash") : "idle";
-      const s = sprite({ ...look, weapon: CLASS_INFO[c].look.weapon }, key + ":art", anim, Math.floor(t * (anim === "idle" ? 2 : 6)) % 3, 0.3);
-      g.drawImage(s.canvas, 24 + i * 44 - s.ox, 102 - s.oy);
-    });
-    requestAnimationFrame(loop);
-  };
-  loop();
+  const t0 = performance.now();
+  const classes = [["sword", "sword"], ["fist", "knuckle"], ["archer", "bow"], ["rogue", "dagger"], ["mage", "staff"], ["priest", "mace"], ["smith", "hammer"]];
+  const ATT = { sword: "slash", fist: "punch", archer: "shoot", rogue: "stab", mage: "cast", priest: "cast", smith: "smash" };
+  loadDT2().then(() => {
+    const loop = () => {
+      if ($("#login").classList.contains("hidden")) return;
+      const t = (performance.now() - t0) / 1000;
+      g.fillStyle = "#0b0a0f"; g.fillRect(0, 0, 320, 120);
+      for (let x = 0; x < 320; x += 16) for (let y = 64; y < 120; y += 16) { const c = frame((x * 7 + y * 3) % 11 === 0 ? "floor_2" : "floor_1"); if (c) g.drawImage(c, x, y); }
+      for (let x = 0; x < 320; x += 16) { const c = frame("wall_mid"), top = frame("wall_top_mid"); if (c) g.drawImage(c, x, 48); if (top) g.drawImage(top, x, 32); }
+      g.fillStyle = "rgba(0,0,0,0.35)"; g.fillRect(0, 64, 320, 8);
+      classes.forEach(([c, w], i) => {
+        const e = { id: i + 1, info: { c, w, o: null }, k: "p" };
+        const L = dtLookFor(e);
+        if (!L) return;
+        L.scale = 1.6;
+        const cyc = (t + i * 0.45) % 2.4, p = cyc / 0.4;
+        const anim = p < 1 ? { name: ATT[c], p } : null;
+        g.fillStyle = "rgba(0,0,0,0.35)"; g.beginPath(); g.ellipse(26 + i * 44, 104, 9, 3, 0, 0, Math.PI * 2); g.fill();
+        drawDT(g, e, L, 26 + i * 44, 104, { moving: false, hurt: false, flip: false, aim: 0, anim, t });
+      });
+      requestAnimationFrame(loop);
+    };
+    loop();
+  }).catch(() => {});
 }
 
 async function boot() {
@@ -101,6 +113,7 @@ const ui = {
   onBoss: HUD.updateBoss,
   noRes() {},
   flashSkill: HUD.flashSkill,
+  sfx,
   blockingWindow: () => false,
   async logout() { if (!globalThis.__LOCAL_NET) await api("/api/logout"); location.reload(); },
 };
@@ -125,7 +138,7 @@ async function startGame() {
   if (isTouchDevice()) setupTouch({ openNpc: WIN.openNpc, interactTarget: HUD.interactTarget, toast: (t) => HUD.toast(t, "info") });
   resize();
   addEventListener("resize", resize);
-  await document.fonts.load("12px Galmuri11").catch(() => {});
+  await Promise.all([loadDT2().catch((e) => console.warn("아틀라스 로드 실패", e)), document.fonts.load("12px Galmuri11").catch(() => {})]);
   await document.fonts.load("10px Galmuri9").catch(() => {});
   const NetClass = globalThis.__LOCAL_NET ?? Net;
   G.net = new NetClass(onMessage, (e) => {
@@ -178,9 +191,9 @@ function bindInput() {
     if (e.repeat && !SLOT[e.code]) return;
     G.keys.add(e.code);
     if (SLOT[e.code] != null) { tryCast(SLOT[e.code]); e.preventDefault(); }
-    if (e.code === "Digit1") send({ t: "use", item: "hp_potion" });
-    if (e.code === "Digit2") send({ t: "use", item: "mp_potion" });
-    if (e.code === "Digit3") send({ t: "use", item: "antidote" });
+    if (e.code === "Digit1") { send({ t: "use", item: "hp_potion" }); sfx("potion"); }
+    if (e.code === "Digit2") { send({ t: "use", item: "mp_potion" }); sfx("potion"); }
+    if (e.code === "Digit3") { send({ t: "use", item: "antidote" }); sfx("potion"); }
     if (e.code === "KeyC") toggleWin("char", WIN.openChar);
     if (e.code === "KeyK") toggleWin("skills", WIN.openSkills);
     if (e.code === "KeyI") toggleWin("inv", WIN.openInv);
@@ -191,9 +204,16 @@ function bindInput() {
     if (e.code === "Tab") e.preventDefault();
   });
   addEventListener("keyup", (e) => G.keys.delete(e.code));
+  // 소리: 브라우저 정책상 처음 누를 때 켜짐
+  const unlock = () => unlockAudio();
+  addEventListener("pointerdown", unlock); addEventListener("keydown", unlock);
+  const sb = $("#sound-btn");
+  const paintSound = () => { sb.textContent = G.touch ? (soundOn() ? "🔊" : "🔇") : soundOn() ? "소리 켜짐" : "소리 꺼짐"; };
+  paintSound();
+  sb.addEventListener("click", () => { unlockAudio(); toggleSound(); paintSound(); sfx("click"); });
   $("#minimap").addEventListener("click", () => HUD.toggleBigMap());
   $("#bigmap").addEventListener("click", () => HUD.toggleBigMap());
-  for (const b of document.querySelectorAll("#menu-buttons button")) {
+  for (const b of document.querySelectorAll("#menu-buttons button[data-win]")) {
     const map = { char: WIN.openChar, skills: WIN.openSkills, inv: WIN.openInv, party: WIN.openParty, help: WIN.openHelp };
     b.addEventListener("click", () => toggleWin(b.dataset.win, map[b.dataset.win]));
   }

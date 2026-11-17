@@ -69,6 +69,28 @@ export function bakedFrame(b, t) {
   return b.frames[i];
 }
 
+// 한가할 때 이펙트 굽기 (한 번에 하나, 첫 사용 뒤)
+const bakedReady = new Map(), bakeQueue = new Map();
+let baking = false;
+function scheduleBake(id, pal, key) {
+  if (bakedReady.has(key) || bakeQueue.has(key)) return;
+  bakeQueue.set(key, [id, pal]);
+  pump();
+}
+function pump() {
+  if (baking || !bakeQueue.size) return;
+  baking = true;
+  const idle = globalThis.requestIdleCallback ?? ((f) => setTimeout(f, 30));
+  idle(() => {
+    const [key, [id, pal]] = bakeQueue.entries().next().value;
+    bakeQueue.delete(key);
+    try { const b = baked_(id, pal, 20); if (b) bakedReady.set(key, b); } catch (e) { console.warn("bake", id, e); bakedReady.set(key, null); }
+    baking = false;
+    pump();
+  });
+}
+export function prebake(ids) { for (const id of ids) if (id && mods.get(id)) scheduleBake(id, null, id + "|"); }
+
 // ── 실시간 이펙트 레이어 (카메라 크기 프레임 하나에 모아 그림)
 export class FxLayer {
   constructor(w, h) {
@@ -79,12 +101,25 @@ export class FxLayer {
     this.ctx = this.canvas.getContext("2d");
     this.list = [];
     this.scaled = [];
+    this.bk = []; // 구운 프레임으로 재생하는 이펙트 (가장 가벼움)
+    this.every = 1; this.n = 0; this.acc = 0; // every=2면 2프레임에 한 번만 계산 (날씨 등 배경)
   }
   /** id 이펙트를 월드 좌표 (x, y)에. o: { a(방향), pal, s(배율), follow(유닛 id), life } */
   spawn(id, x, y, o = {}) {
     const mod = mods.get(id);
     if (!mod) { loadFx(id).then((m) => m && this.spawn(id, x, y, o)); return; }
     const { flip, angle } = orient(o.a);
+    // 최적화: 이미 구워 둔 이펙트는 이미지로 재생 (매 프레임 계산 없음). 처음 쓰는 이펙트는 이번엔 실시간, 한가할 때 굽기
+    const bkey = id + "|" + (o.pal ? o.pal.join(",") : "");
+    const b = id.startsWith("weather/") ? null : bakedReady.get(bkey);
+    if (b) {
+      const now = performance.now() / 1000;
+      const e = { b, t0: now, x, y, s: o.s ?? 1, flip, angle, follow: o.follow ?? null, dy: o.dy ?? 0, until: o.life ? now + o.life : null };
+      this.bk.push(e);
+      if (this.bk.length > 220) this.bk.shift();
+      return e;
+    }
+    if (!id.startsWith("weather/")) scheduleBake(id, o.pal ?? null, bkey);
     const opts = { x, y, flip, angle, seed: (Math.random() * 1e6) | 0 };
     if (o.pal) opts.palette = o.pal;
     const inst = createFx(mod, opts);
@@ -103,6 +138,7 @@ export class FxLayer {
     return e;
   }
   update(dt, ents) {
+    if (this.every > 1) { this.acc += dt; if (this.n % this.every) return; dt = this.acc; this.acc = 0; }
     const now = performance.now() / 1000;
     const step = (arr) => arr.filter((e) => {
       if (e.follow != null) {
@@ -115,8 +151,30 @@ export class FxLayer {
     });
     this.list = step(this.list);
     this.scaled = step(this.scaled);
+    this.bk = this.bk.filter((e) => {
+      if (e.follow != null) { const u = ents.get(e.follow); if (u) { e.x = u.rx; e.y = u.ry + e.dy; } }
+      const age = now - e.t0;
+      if (e.until && now > e.until) return false;
+      return e.b.loop ? true : age < e.b.frames.length / e.b.fps;
+    });
   }
   render(ctx, camX, camY) {
+    if (this.every > 1 && this.n++ % this.every && this.list.length && !this.scaled.length && !this.bk.length) { ctx.drawImage(this.canvas, 0, 0); return; }
+    const now = performance.now() / 1000;
+    for (const e of this.bk) {
+      const f = bakedFrame(e.b, now - e.t0);
+      if (!f) continue;
+      const x = e.x - camX, y = e.y - camY;
+      if (x < -200 || y < -200 || x > this.w + 200 || y > this.h + 200) continue;
+      if (!e.angle && !e.flip && e.s === 1) { ctx.drawImage(f, Math.round(x - e.b.ox), Math.round(y - e.b.oy)); continue; }
+      ctx.save();
+      ctx.translate(Math.round(x), Math.round(y));
+      if (e.angle) ctx.rotate(e.angle);
+      if (e.flip) ctx.scale(-1, 1);
+      if (e.s !== 1) ctx.scale(e.s, e.s);
+      ctx.drawImage(f, -e.b.ox, -e.b.oy);
+      ctx.restore();
+    }
     if (this.list.length) {
       const f = this.frame;
       f.ox = Math.floor(camX); f.oy = Math.floor(camY);
@@ -135,5 +193,5 @@ export class FxLayer {
       ctx.drawImage(e.cv, Math.round(e.wx - camX - e.ox * s), Math.round(e.wy - camY - e.oy * s), e.cv.width * s, e.cv.height * s);
     }
   }
-  clear() { this.list = []; this.scaled = []; }
+  clear() { this.list = []; this.scaled = []; this.bk = []; }
 }
