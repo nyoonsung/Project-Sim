@@ -66,7 +66,7 @@ const TABS = {
   },
   async security() {
     const { list } = await api("/api/gm/security");
-    const KIND = { admin_login: "관리자 로그인", admin_key_fail: "관리자 키 틀림", login_fail: "로그인 실패", login_banned: "차단 계정 로그인", register: "가입", csrf_block: "다른 출처 요청 차단", ws_reject: "웹소켓 거부", ws_flood: "메시지 폭주", ws_bad_frame: "비정상 프레임", ws_bad_json: "잘못된 JSON", ws_bad_msg: "잘못된 메시지", ws_bad_schema: "형식 위반 메시지", ws_kick_abuse: "악용으로 연결 차단", gm_denied: "관리자 아닌 접근", password_change: "비밀번호 변경" };
+    const KIND = { admin_login: "관리자 로그인", admin_key_fail: "관리자 비밀번호 틀림", admin_setup: "관리자 비밀번호 설정", admin_password: "관리자 비밀번호 변경", login_fail: "로그인 실패", login_banned: "차단 계정 로그인", register: "가입", csrf_block: "다른 출처 요청 차단", ws_reject: "웹소켓 거부", ws_flood: "메시지 폭주", ws_bad_frame: "비정상 프레임", ws_bad_json: "잘못된 JSON", ws_bad_msg: "잘못된 메시지", ws_bad_schema: "형식 위반 메시지", ws_kick_abuse: "악용으로 연결 차단", gm_denied: "관리자 아닌 접근", password_change: "비밀번호 변경" };
     return [h("table", { class: "tbl" }, h("tr", {}, ...["시간", "종류", "계정", "IP", "내용"].map((t) => h("th", { text: t }))),
       ...list.map((a) => h("tr", {}, h("td", { text: fmtT(a.at) }), h("td", { text: KIND[a.kind] ?? a.kind }), h("td", { text: a.username ?? "-" }), h("td", { class: "mono", text: a.ip ?? "" }), h("td", { class: "mono", text: a.detail ?? "" }))))];
   },
@@ -149,26 +149,42 @@ async function render() {
 }
 
 async function boot() {
-  const tryKey = async (key) => {
-    const r = await fetch("/api/admin/login", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ key }), credentials: "same-origin" });
+  const post = async (path, body) => {
+    const r = await fetch(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body), credentials: "same-origin" });
     const j = await r.json().catch(() => ({}));
     return r.ok ? null : j.error ?? "실패했어요.";
   };
-  // 서버 창의 주소(#key=...)로 들어오면 자동 로그인, 주소창에서 키는 바로 지움
+  // 내 컴퓨터 서버 창의 주소(#key=...)로 들어오면 자동 로그인, 주소창에서 키는 바로 지움
   const m = location.hash.match(/key=([A-Za-z0-9_-]+)/);
-  if (m) { history.replaceState(null, "", "/gm"); await tryKey(m[1]); }
-  const ok = await fetch("/api/admin/me", { credentials: "same-origin" }).then((r) => r.ok).catch(() => false);
-  if (!ok) {
+  if (m) { history.replaceState(null, "", "/gm"); await post("/api/admin/login", { key: m[1] }); }
+  const st = await fetch("/api/admin/me", { credentials: "same-origin" }).then((r) => r.json()).catch(() => ({}));
+  if (!st.admin) {
     $("#gm-login").classList.remove("hidden");
+    if (st.setup) {
+      $("#gm-note").textContent = "처음이에요! 이 서버의 관리자 비밀번호를 정해 주세요. (8자 이상, 영문+숫자) 이 비밀번호를 아는 사람만 관리자 페이지에 들어올 수 있어요.";
+      $("#gm-key").placeholder = "새 관리자 비밀번호";
+      $("#gm-key").autocomplete = "new-password";
+      $("#gm-key2").classList.remove("hidden");
+      $("#gm-key2").required = true;
+      $("#gm-go").textContent = "관리자 비밀번호 정하기";
+    }
     $("#gm-form").addEventListener("submit", async (e) => {
       e.preventDefault();
-      const err = await tryKey($("#gm-key").value);
+      const pw = $("#gm-key").value;
+      if (st.setup && pw !== $("#gm-key2").value) { $("#gm-msg").textContent = "두 비밀번호가 달라요."; return; }
+      const err = st.setup ? await post("/api/admin/setup", { password: pw }) : await post("/api/admin/login", { key: pw });
       if (err) $("#gm-msg").textContent = err; else location.reload();
     });
     return;
   }
-  $("#gm-who").textContent = "서버 주인";
-  $("#gm-out").addEventListener("click", async () => { await fetch("/api/admin/logout", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" }); location.reload(); });
+  $("#gm-who").textContent = "관리자";
+  $("#gm-out").addEventListener("click", async () => { await post("/api/admin/logout", {}); location.reload(); });
+  $("#gm-pw").addEventListener("click", async () => {
+    const next = prompt("새 관리자 비밀번호 (8자 이상, 영문+숫자)");
+    if (!next) return;
+    const err = await post("/api/admin/password", { next });
+    alert(err ?? "관리자 비밀번호를 바꿨어요.");
+  });
   for (const b of document.querySelectorAll("nav button")) b.addEventListener("click", () => { tab = b.dataset.tab; render(); });
   render();
 }

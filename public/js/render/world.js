@@ -1,5 +1,5 @@
 // 월드 렌더러: 타일 → 바닥 표시(예고·구역) → y정렬 유닛/오브젝트 → 투사체 → 이펙트 → 조명 → 날씨 → 머리 위 UI
-import { G } from "../game.js";
+import { G, localStep, moveDir } from "../game.js";
 import { VIEW_W, VIEW_H, TILE } from "/shared/constants.js";
 import { MONSTERS, BOSSES, ZONES } from "/shared/zones.js";
 import { SKILLS } from "/shared/skills.js";
@@ -80,15 +80,11 @@ export class Renderer {
     this.fps = this.fps * 0.95 + (1 / Math.max(dt, 1e-3)) * 0.05;
     const ctx = this.ctx;
     if (!G.map) { ctx.fillStyle = "#000"; ctx.fillRect(0, 0, VIEW_W, VIEW_H); return; }
-    // 위치 보간
+    // 위치: 나는 매 프레임 즉시 이동, 다른 유닛은 보간
+    localStep(dt);
     const rt = t - 0.1;
     for (const e of G.ents.values()) {
-      if (e.id === G.you) {
-        const k = Math.min(1, (t - G.pred.at) / 0.05);
-        e.rx = G.pred.px + (G.pred.x - G.pred.px) * k;
-        e.ry = G.pred.py + (G.pred.y - G.pred.py) * k;
-        continue;
-      }
+      if (e.id === G.you) { e.rx = G.local.x; e.ry = G.local.y; continue; }
       const b = e.buf;
       if (b.length >= 2 && rt >= b[0][0]) {
         let i = b.length - 2;
@@ -100,12 +96,11 @@ export class Renderer {
     }
     // 카메라
     const me = G.ents.get(G.you);
-    const tx = (me?.rx ?? G.pred.x) - VIEW_W / 2, ty = (me?.ry ?? G.pred.y) - VIEW_H / 2 - 10;
-    G.cam.x += (tx - G.cam.x) * Math.min(1, dt * 10);
-    G.cam.y += (ty - G.cam.y) * Math.min(1, dt * 10);
-    if (Math.abs(tx - G.cam.x) > 300 || Math.abs(ty - G.cam.y) > 300) { G.cam.x = tx; G.cam.y = ty; }
-    G.cam.x = Math.max(-64, Math.min(G.map.w * TILE - VIEW_W + 64, G.cam.x));
-    G.cam.y = Math.max(-64, Math.min(G.map.h * TILE - VIEW_H + 64, G.cam.y));
+    // 카메라: 캐릭터에 고정 (지도 밖은 안 보이게)
+    const mw = G.map.w * TILE, mh = G.map.h * TILE;
+    const tx = (me?.rx ?? G.local.x) - VIEW_W / 2, ty = (me?.ry ?? G.local.y) - VIEW_H / 2 - 10;
+    G.cam.x = Math.round(mw <= VIEW_W ? (mw - VIEW_W) / 2 : Math.max(0, Math.min(mw - VIEW_W, tx)));
+    G.cam.y = Math.round(mh <= VIEW_H ? (mh - VIEW_H) / 2 : Math.max(0, Math.min(mh - VIEW_H, ty)));
     let sx = 0, sy = 0;
     if (G.shake > 0) { sx = (Math.random() - 0.5) * G.shake * 2; sy = (Math.random() - 0.5) * G.shake * 2; G.shake = Math.max(0, G.shake - dt * 18); }
     const cx = Math.round(G.cam.x + sx), cy = Math.round(G.cam.y + sy);
@@ -330,7 +325,8 @@ export class Renderer {
     }
     // 애니메이션
     let anim = "idle", frame = Math.floor(t * 2 + e.id) % 2;
-    const moving = e.movedAt && t - e.movedAt < 0.15 || (e.id === G.you && G.pending.length && G.pending[G.pending.length - 1] && (Math.abs(G.pending[G.pending.length - 1].mx) + Math.abs(G.pending[G.pending.length - 1].my)) > 0 && !(e.fl & 10));
+    const mine = e.id === G.you;
+    const moving = mine ? (() => { const [mx, my] = moveDir(); return (mx || my) && !(e.fl & 10) && !G.me?.dead; })() : e.movedAt && t - e.movedAt < 0.15;
     if (e.anim && t - e.anim.t0 < (ANIM_TIME[e.anim.name] ?? 0.3) * Math.max(1, e.anim.n > 2 ? e.anim.n / 2 : 1)) {
       anim = POSES[e.anim.name] ? e.anim.name : "slash";
       const dur = (ANIM_TIME[anim] ?? 0.3) * Math.max(1, e.anim.n > 2 ? e.anim.n / 2 : 1);
@@ -340,8 +336,8 @@ export class Renderer {
     else if (e.fl & 64 || (e.parryUntil && t < e.parryUntil)) { anim = "guard"; frame = 0; }
     else if (moving) { anim = "walk"; frame = Math.floor(t * 9 + e.id) % 4; }
     if (hurt && anim === "idle") anim = "hurt";
-    // 방향
-    const a = e.facing ?? 0;
+    // 방향 (나는 마우스 쪽을 바로 봄)
+    const a = mine && !e.anim?.lock ? Math.atan2(G.mouse.wy - (e.ry - 16), G.mouse.wx - e.rx) : e.facing ?? 0;
     const flip = Math.cos(a) < 0;
     const sn = Math.sin(a);
     const yaw = sn > 0.6 ? 0.6 : sn < -0.6 ? -0.6 : 0;

@@ -52,7 +52,108 @@ function addDeco(m, R, zone, n) {
   }
 }
 
-/** 일반층: 방 8~14개, 최소 신장 트리 + 루프 통로 */
+// 방 모양: 기둥 홀·십자방·팔각방·원형방·섬·강과 다리·칸막이·잔해 (통로는 나중에 방 가운데까지 뚫리므로 연결은 항상 보장)
+const SHAPES = ["plain", "pillars", "cross", "octagon", "round", "island", "river", "partition", "rubble", "pool"];
+function shapeRoom(m, r, R, shape) {
+  const [cx, cy] = center(r);
+  const inR = (x, y) => x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h;
+  const nearC = (x, y, d) => Math.abs(x - cx) <= d && Math.abs(y - cy) <= d;
+  switch (shape) {
+    case "pillars":
+      for (let y = r.y + 2; y < r.y + r.h - 2; y += 3) for (let x = r.x + 2; x < r.x + r.w - 2; x += 3) if (!nearC(x, y, 1)) set(m, x, y, T.WALL);
+      break;
+    case "cross": {
+      const tw = Math.max(1, Math.floor(r.w / 3.2)), th = Math.max(1, Math.floor(r.h / 3.2));
+      for (let y = r.y; y < r.y + r.h; y++) for (let x = r.x; x < r.x + r.w; x++) {
+        const inCornerX = x < r.x + tw || x >= r.x + r.w - tw, inCornerY = y < r.y + th || y >= r.y + r.h - th;
+        if (inCornerX && inCornerY) set(m, x, y, T.VOID);
+      }
+      break;
+    }
+    case "octagon": {
+      const c = Math.floor(Math.min(r.w, r.h) / 3);
+      for (let y = r.y; y < r.y + r.h; y++) for (let x = r.x; x < r.x + r.w; x++) {
+        const dx = Math.min(x - r.x, r.x + r.w - 1 - x), dy = Math.min(y - r.y, r.y + r.h - 1 - y);
+        if (dx + dy < c) set(m, x, y, T.VOID);
+      }
+      break;
+    }
+    case "round": {
+      const rx = r.w / 2, ry = r.h / 2;
+      for (let y = r.y; y < r.y + r.h; y++) for (let x = r.x; x < r.x + r.w; x++) {
+        const nx = (x + 0.5 - (r.x + rx)) / rx, ny = (y + 0.5 - (r.y + ry)) / ry;
+        if (nx * nx + ny * ny > 1.02) set(m, x, y, T.VOID);
+      }
+      break;
+    }
+    case "island": {
+      // 가운데 섬을 물(또는 구덩이) 고리가 감쌈
+      const liq = R.chance(0.5) ? T.WATER : T.PIT;
+      const a = Math.max(2, Math.floor(Math.min(r.w, r.h) / 2) - 2);
+      for (let y = r.y + 1; y < r.y + r.h - 1; y++) for (let x = r.x + 1; x < r.x + r.w - 1; x++) {
+        const d = Math.max(Math.abs(x - cx), Math.abs(y - cy));
+        if (d === a || d === a - 1) set(m, x, y, liq);
+      }
+      // 다리 두 개
+      for (const [dx, dy] of R.chance(0.5) ? [[1, 0], [-1, 0]] : [[0, 1], [0, -1]]) for (let k = 0; k <= a; k++) { set(m, cx + dx * k, cy + dy * k, T.FLOOR); set(m, cx + dx * k + dy, cy + dy * k + dx, T.FLOOR); }
+      break;
+    }
+    case "river": {
+      const horiz = r.w < r.h ? false : R.chance(0.6);
+      const liq = R.chance(0.7) ? T.WATER : T.PIT;
+      for (let k = 0; k < (horiz ? r.w : r.h); k++) for (let t = 0; t < 2; t++) {
+        const x = horiz ? r.x + k : cx + t - 1 + (Math.sin(k * 0.7) > 0.6 ? 1 : 0), y = horiz ? cy + t - 1 + (Math.sin(k * 0.7) > 0.6 ? 1 : 0) : r.y + k;
+        if (inR(x, y) && !nearC(x, y, 1)) set(m, x, y, liq);
+      }
+      break;
+    }
+    case "partition": {
+      const vert = r.w >= r.h;
+      const n = vert ? Math.floor(r.w / 5) : Math.floor(r.h / 5);
+      for (let i = 1; i <= n; i++) {
+        const gap = R.int(1, (vert ? r.h : r.w) - 3);
+        for (let k = 1; k < (vert ? r.h : r.w) - 1; k++) {
+          if (k === gap || k === gap + 1) continue;
+          const x = vert ? r.x + Math.round((i * r.w) / (n + 1)) : r.x + k, y = vert ? r.y + k : r.y + Math.round((i * r.h) / (n + 1));
+          if (!nearC(x, y, 1)) set(m, x, y, T.WALL);
+        }
+      }
+      break;
+    }
+    case "rubble":
+      for (let i = 0; i < Math.round((r.w * r.h) / 9); i++) {
+        const x = R.int(r.x + 1, r.x + r.w - 2), y = R.int(r.y + 1, r.y + r.h - 2);
+        if (!nearC(x, y, 1)) set(m, x, y, R.chance(0.75) ? T.WALL : T.PIT);
+      }
+      break;
+    case "pool": {
+      const liq = R.pick([T.WATER, T.PIT, T.WATER]);
+      const pw = R.int(2, Math.max(2, Math.floor(r.w / 3))), ph = R.int(2, Math.max(2, Math.floor(r.h / 3)));
+      const ox = R.chance(0.5) ? r.x + 1 : r.x + r.w - 1 - pw, oy = R.chance(0.5) ? r.y + 1 : r.y + r.h - 1 - ph;
+      carveRect(m, ox, oy, pw, ph, liq);
+      break;
+    }
+  }
+}
+
+/** 시작점에서 걸어서 갈 수 있는 칸 표시 */
+function reachable(m, sx, sy) {
+  const ok = new Uint8Array(m.w * m.h);
+  const walk = (t) => t === T.FLOOR || t === T.DECO || t === T.DOOR;
+  const q = [sy * m.w + sx];
+  ok[q[0]] = 1;
+  while (q.length) {
+    const i = q.pop(), x = i % m.w, y = (i / m.w) | 0;
+    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      const nx = x + dx, ny = y + dy, j = ny * m.w + nx;
+      if (nx < 0 || ny < 0 || nx >= m.w || ny >= m.h || ok[j] || !walk(m.tiles[j])) continue;
+      ok[j] = 1; q.push(j);
+    }
+  }
+  return ok;
+}
+
+/** 일반층: 방 8~15개(모양 10가지), 최소 신장 트리 + 루프 통로 */
 function normalFloor(floor, seed, party) {
   const R = rng(seed);
   const zone = zoneOf(floor);
@@ -61,12 +162,14 @@ function normalFloor(floor, seed, party) {
   const rooms = [];
   const want = Math.min(15, 8 + Math.floor(floor / 12));
   for (let tries = 0; tries < 400 && rooms.length < want; tries++) {
-    const w = R.int(8, 15), h = R.int(7, 12);
+    const w = R.int(9, 17), h = R.int(8, 13);
     const x = R.int(2, W - w - 3), y = R.int(3, H - h - 3);
     if (rooms.some((r) => x < r.x + r.w + 3 && x + w + 3 > r.x && y < r.y + r.h + 3 && y + h + 3 > r.y)) continue;
     rooms.push({ x, y, w, h });
   }
   for (const r of rooms) carveRect(m, r.x, r.y, r.w, r.h);
+  // 방 모양 (시작 방은 평범하게)
+  rooms.forEach((r, i) => { r.shape = i === 0 ? "plain" : R.pick(SHAPES); shapeRoom(m, r, R, r.shape); });
   // MST(프림) 연결
   const connected = [0], rest = rooms.map((_, i) => i).slice(1);
   while (rest.length) {
@@ -81,15 +184,6 @@ function normalFloor(floor, seed, party) {
     rest.splice(rest.indexOf(best.b), 1);
   }
   for (let i = 0; i < 2; i++) corridor(m, center(R.pick(rooms)), center(R.pick(rooms)), R, 2);
-  // 방 안 장애물 (물·구덩이·기둥)
-  for (const r of rooms.slice(1)) {
-    if (r.w >= 11 && r.h >= 9 && R.chance(0.45)) {
-      const kind = R.pick([T.WATER, T.PIT, T.WALL]);
-      const cw = R.int(2, 3), chh = R.int(2, 3);
-      carveRect(m, r.x + Math.floor(r.w / 2) - 1, r.y + Math.floor(r.h / 2) - 1, cw, chh, kind);
-    }
-    if (R.chance(0.35)) for (const [cx, cy] of [[r.x + 2, r.y + 2], [r.x + r.w - 3, r.y + 2], [r.x + 2, r.y + r.h - 3], [r.x + r.w - 3, r.y + r.h - 3]]) set(m, cx, cy, T.WALL);
-  }
   wallUp(m);
   // 시작 방 = 0, 출구 = 시작에서 가장 먼 방
   const [sx, sy] = center(rooms[0]);
@@ -99,19 +193,21 @@ function normalFloor(floor, seed, party) {
   const [ex, ey] = center(rooms[far]);
   m.exit = [px(ex), px(ey)];
   m.objects.push({ kind: "portal", id: "exit", x: m.exit[0], y: m.exit[1], locked: true });
-  // 몬스터 배치
+  // 몬스터 배치 (걸어서 갈 수 있는 곳에만)
+  const reach = reachable(m, sx, sy);
   const pool = zone.monsters;
   rooms.forEach((r, i) => {
     if (i === 0) return;
     const n = Math.max(2, Math.round((r.w * r.h) / 26 * (0.8 + floor * 0.004)));
     for (let k = 0; k < n; k++) {
       const tx = R.int(r.x + 1, r.x + r.w - 2), ty = R.int(r.y + 1, r.y + r.h - 2);
-      if (get(m, tx, ty) !== T.FLOOR) continue;
+      if (get(m, tx, ty) !== T.FLOOR || !reach[ty * W + tx]) continue;
       m.spawns.push({ id: R.pick(pool), x: px(tx), y: px(ty), elite: R.chance(0.06 + floor * 0.0015) });
     }
   });
   addTorches(m, R, zone);
   addDeco(m, R, zone, Math.round(W * H / 40));
+  m.objects = m.objects.filter((o) => o.kind !== "deco" || reach[Math.floor(o.y / TILE) * W + Math.floor(o.x / TILE)]);
   m.kind = "normal";
   return m;
 }

@@ -12,12 +12,16 @@
     "dev": "node --disable-warning=ExperimentalWarning --watch server/main.js",
     "test": "node --disable-warning=ExperimentalWarning tools/bot-test.js",
     "build:demo": "node demo/build.mjs",
-    "new-admin-key": "node tools/new-admin-key.js"
+    "new-admin-key": "node tools/new-admin-key.js",
+    "build:cf": "node tools/build-cf.mjs",
+    "dev:cf": "node tools/build-cf.mjs && wrangler dev",
+    "deploy": "node tools/build-cf.mjs && wrangler deploy"
   },
   "dependencies": {
     "ws": "^8.18.0"
   },
   "devDependencies": {
-    "esbuild": "^0.25.12"
+    "esbuild": "^0.25.12",
+    "wrangler": "^4.163.0"
   }
 }

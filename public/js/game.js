@@ -11,7 +11,7 @@ export const G = {
   you: 0, map: null, room: null, kind: "town", floor: 0, zone: null, zoneName: "", objects: [], exitOpen: false, arena: null,
   ents: new Map(), projectiles: new Map(), tels: new Map(), zones: new Map(), loot: new Map(), beams: [],
   floaters: [], party: [], boss: null, shake: 0, hurtFlash: 0,
-  pred: { x: 0, y: 0, px: 0, py: 0, at: 0 }, pending: [], seq: 0, forced: 0,
+  pred: { x: 0, y: 0, px: 0, py: 0, at: 0 }, local: { x: 0, y: 0 }, pending: [], seq: 0, forced: 0,
   keys: new Set(), mouse: { x: 0, y: 0, down: [false, false, false], wx: 0, wy: 0 }, cam: { x: 0, y: 0 },
   lastCastTry: 0, typing: false, casting: null,
 };
@@ -39,7 +39,7 @@ export function onMessage(m) {
     case "announce": G.ui.announce(m.text); break;
     case "kick": G.ui.kicked(m.why); break;
     case "enh": G.ui.onEnhance(m); break;
-    case "tp": G.pred.x = G.pred.px = m.x; G.pred.y = G.pred.py = m.y; G.pending.length = 0; break;
+    case "tp": G.pred.x = G.pred.px = G.local.x = m.x; G.pred.y = G.pred.py = G.local.y = m.y; G.pending.length = 0; break;
   }
 }
 
@@ -54,7 +54,7 @@ function onMap(m) {
   G.arena = m.arena;
   G.ents.clear(); G.projectiles.clear(); G.tels.clear(); G.zones.clear(); G.loot.clear(); G.beams = []; G.floaters = [];
   G.boss = null;
-  G.pred.x = G.pred.px = m.start[0]; G.pred.y = G.pred.py = m.start[1];
+  G.pred.x = G.pred.px = G.local.x = m.start[0]; G.pred.y = G.pred.py = G.local.y = m.start[1];
   G.pending.length = 0;
   G.renderer?.onMap();
   G.ui.onMap(m);
@@ -92,9 +92,7 @@ function onSnapshot(m) {
     const spd = G.me?.spd ?? 120;
     if (t < G.forced) { G.pred.x = x; G.pred.y = y; return; }
     for (const p of G.pending) if (!p.frozen) [x, y] = applyInput(G.map, x, y, p.mx, p.my, spd, TICK_DT, PLAYER_RADIUS);
-    const ex = x - G.pred.x, ey = y - G.pred.y;
-    if (Math.hypot(ex, ey) > 48) { G.pred.x = x; G.pred.y = y; G.pred.px = x; G.pred.py = y; }
-    else { G.pred.x += ex * 0.35; G.pred.y += ey * 0.35; }
+    G.pred.x = x; G.pred.y = y;
   }
 }
 
@@ -166,8 +164,7 @@ function onEvent(e) {
 }
 
 // ── 입력 → 서버 (20Hz) + 내 이동 예측
-export function inputTick() {
-  if (!G.map || !G.net) return;
+export function moveDir() {
   let mx = 0, my = 0;
   if (!G.typing) {
     if (G.keys.has("KeyW") || G.keys.has("ArrowUp")) my -= 1;
@@ -177,11 +174,33 @@ export function inputTick() {
   }
   const l = Math.hypot(mx, my);
   if (l > 1) { mx /= l; my /= l; }
+  return [mx, my];
+}
+function isFrozen() {
+  const me = G.ents.get(G.you);
+  return !!(me && (me.fl & (2 | 8))) || !!G.me?.dead || now() < G.forced;
+}
+
+/** 매 프레임: 내 캐릭터를 키 입력대로 바로 움직임 (지연 없음).
+ *  서버 확정 위치(pred)와 어긋나면 눈에 안 띄게 조금씩 맞추고, 크게 어긋나면(순간이동 등) 바로 맞춤 */
+export function localStep(dt) {
+  if (!G.map) return;
+  const L = G.local, A = G.pred;
+  if (isFrozen()) { const k = Math.min(1, dt * 20); L.x += (A.x - L.x) * k; L.y += (A.y - L.y) * k; return; }
+  const [mx, my] = moveDir();
+  if (mx || my) [L.x, L.y] = applyInput(G.map, L.x, L.y, mx, my, G.me?.spd ?? 120, dt, PLAYER_RADIUS);
+  const ex = A.x - L.x, ey = A.y - L.y, d = Math.hypot(ex, ey);
+  if (d > 48) { L.x = A.x; L.y = A.y; }
+  else if (d > 0.5) { const k = Math.min(1, dt * ((mx || my) ? 4 : d < 8 ? 1.5 : 8)); [L.x, L.y] = [L.x + ex * k, L.y + ey * k]; }
+}
+
+export function inputTick() {
+  if (!G.map || !G.net) return;
+  const [mx, my] = moveDir();
   const s = ++G.seq;
   const ax = Math.round(G.mouse.wx), ay = Math.round(G.mouse.wy);
   send({ t: "in", s, mx: +mx.toFixed(3), my: +my.toFixed(3), ax, ay });
-  const me = G.ents.get(G.you);
-  const frozen = !!(me && (me.fl & (2 | 8))) || G.me?.dead || now() < G.forced;
+  const frozen = isFrozen();
   G.pending.push({ s, mx, my, frozen });
   if (G.pending.length > 40) G.pending.shift();
   G.pred.px = G.pred.x; G.pred.py = G.pred.y; G.pred.at = now();

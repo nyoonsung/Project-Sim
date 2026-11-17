@@ -5,3 +5,6 @@ data/
 *.db-shm
 .DS_Store
 demo/dist/
+cf-dist/
+.wrangler/
+.dev.vars

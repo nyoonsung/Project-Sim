@@ -2,7 +2,7 @@
 import { CONFIG } from "./config.js";
 import { Q, secLog } from "./db.js";
 import { login, register, parseCookies, sessionCookie, sessionUser, destroySession, hashPassword, validatePassword } from "./auth.js";
-import { isAdmin, adminLogin, adminLogout } from "./admin.js";
+import { isAdmin, adminLogin, adminLogout, adminStatus, adminSetup, adminChangePassword } from "./admin.js";
 import { handleGm } from "./gm.js";
 
 export const reply = (status, body, headers = {}) => ({ status, body, headers });
@@ -65,9 +65,11 @@ export async function handleApi(req) {
       return reply(200, { ok: true }, cookie(""));
     }
     // 관리자 (서버 주인)
-    if (path === "/api/admin/login" && method === "POST") { const b = await req.readJson(); return adminLogin(req, b.key); }
+    if (path === "/api/admin/setup" && method === "POST") { const b = await req.readJson(); return await adminSetup(req, b.password); }
+    if (path === "/api/admin/login" && method === "POST") { const b = await req.readJson(); return await adminLogin(req, b.key); }
+    if (path === "/api/admin/password" && method === "POST") { const b = await req.readJson(); return await adminChangePassword(req, b.next); }
     if (path === "/api/admin/logout" && method === "POST") return adminLogout(req);
-    if (path === "/api/admin/me" && method === "GET") return reply(isAdmin(req) ? 200 : 401, { admin: isAdmin(req) });
+    if (path === "/api/admin/me" && method === "GET") return adminStatus(req);
     if (path === "/api/ranking" && method === "GET") return reply(200, { list: Q.ranking.all() });
     if (path.startsWith("/api/gm/")) return await handleGm(req, null, path, { readJson: () => req.readJson(), send: (_res, s, b, h) => reply(s, b, h), isAdmin, ip, url: req.url });
     return reply(404, { error: "없는 API예요." });

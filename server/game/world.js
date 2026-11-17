@@ -486,7 +486,7 @@ export class World {
   gmKick(userId, why) {
     const s = this.sessions.get(userId);
     if (!s) return false;
-    s.send({ t: "kick", why: why || "GM에 의해 연결이 끊겼어요." });
+    s.send({ t: "kick", why: why || "관리자에 의해 연결이 끊겼어요." });
     setTimeout(() => s.conn.close(4002, "kicked"), 100);
     return true;
   }
@@ -502,7 +502,7 @@ export class World {
       refreshStats(s.unit);
       this.sendChar(s);
       this.save(s);
-      s.notice("GM이 캐릭터 정보를 수정했어요.");
+      s.notice("관리자가 캐릭터 정보를 수정했어요.");
       return true;
     }
     const row = Q.charByUser.get(userId);
@@ -520,13 +520,13 @@ export class World {
     if (!s) return false;
     const group = this.groupOf(s).filter((g) => g === s || g.unit.room === s.unit.room);
     this.moveGroup(group, floor, "dungeon");
-    s.notice(`GM이 ${floor}층으로 이동시켰어요.`);
+    s.notice(`관리자가 ${floor}층으로 이동시켰어요.`);
     return true;
   }
   gmTeleportTown(userId) {
     const s = this.sessions.get(userId);
     if (!s) return false;
-    this.toTown(s, "GM이 마을로 이동시켰어요.");
+    this.toTown(s, "관리자가 마을로 이동시켰어요.");
     return true;
   }
   stats() {

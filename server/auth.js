@@ -1,12 +1,12 @@
 // 계정·세션 보안 (Web Crypto)
-//  - 비밀번호: PBKDF2-SHA256 21만 회 + 무작위 소금
+//  - 비밀번호: PBKDF2-SHA256 10만 회(Cloudflare 상한) + 무작위 소금
 //  - 세션: 무작위 토큰, DB에는 SHA-256 해시만 저장
 //  - 로그인·가입 시도 제한
 import { Q, secLog } from "./db.js";
 import { CONFIG } from "./config.js";
 
 const subtle = globalThis.crypto.subtle;
-const ITER = 210000;
+const ITER = 100000;
 export const USERNAME_RE = /^[A-Za-z0-9가-힣_]{2,12}$/;
 
 const b64 = (u8) => btoa(String.fromCharCode(...u8));
@@ -86,7 +86,7 @@ export async function login(username, password, ip) {
   DUMMY ??= await hashPassword("dummy-password-0");
   const ok = (await verifyPassword(password, u ? u.pass_hash : DUMMY)) && !!u;
   if (!ok) {
-    hit("ip:" + ip, 20, 600e3, 600e3);
+    hit("ip:" + ip, 60, 600e3, 300e3);
     hit("u:" + username.toLowerCase(), 8, 600e3, 300e3);
     secLog("login_fail", { username: username.slice(0, 24), ip, userId: u?.id ?? null });
     return { error: "아이디 또는 비밀번호가 맞지 않아요." };
@@ -106,9 +106,17 @@ export async function register(username, password, ip) {
   const pwErr = validatePassword(password);
   if (pwErr) return { error: pwErr };
   if (locked("reg:" + ip)) return { error: "가입 시도가 너무 많아요. 잠시 뒤에 다시 시도해 주세요.", status: 429 };
-  hit("reg:" + ip, 5, 3600e3, 3600e3);
-  if (Q.userByName.get(username)) return { error: "이미 있는 아이디예요." };
-  const id = Q.createUser.run(username, await hashPassword(password), "player", Date.now()).lastInsertRowid;
+  hit("reg:" + ip, 30, 3600e3, 3600e3); // 학교처럼 한 IP에서 여러 명이 가입해도 되도록 넉넉하게
+  const old = Q.userByName.get(username);
+  let id;
+  if (old && !old.pass_hash) {
+    // 예전(구글 로그인) 계정은 비밀번호가 없음 → 처음 이 아이디로 가입하는 사람이 비밀번호를 정함
+    Q.setPass.run(await hashPassword(password), old.id);
+    id = old.id;
+  } else {
+    if (old) return { error: "이미 있는 아이디예요." };
+    id = Q.createUser.run(username, await hashPassword(password), "player", Date.now()).lastInsertRowid;
+  }
   secLog("register", { userId: Number(id), username, ip });
   const u = Q.userById.get(Number(id));
   return { user: u, token: await createSession(u.id, ip) };

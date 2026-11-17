@@ -38,11 +38,14 @@ CREATE TABLE IF NOT EXISTS security_log (
 CREATE TABLE IF NOT EXISTS item_log (
   id INTEGER PRIMARY KEY AUTOINCREMENT, at INTEGER NOT NULL, user_id INTEGER NOT NULL, kind TEXT NOT NULL, detail TEXT
 );
+CREATE TABLE IF NOT EXISTS meta (k TEXT PRIMARY KEY, v TEXT);
 CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id);
 CREATE INDEX IF NOT EXISTS idx_sec_at ON security_log(at);
 CREATE INDEX IF NOT EXISTS idx_item_user ON item_log(user_id, at)`;
 
 const SQL = {
+  metaGet: "SELECT v FROM meta WHERE k = ?",
+  metaSet: "INSERT INTO meta (k, v) VALUES (?, ?) ON CONFLICT(k) DO UPDATE SET v = excluded.v",
   userByName: "SELECT * FROM users WHERE username = ?",
   userById: "SELECT * FROM users WHERE id = ?",
   userByGoogle: "SELECT * FROM users WHERE google_sub = ?",
