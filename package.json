@@ -11,12 +11,17 @@
     "start": "node --disable-warning=ExperimentalWarning server/main.js",
     "dev": "node --disable-warning=ExperimentalWarning --watch server/main.js",
     "create-gm": "node --disable-warning=ExperimentalWarning tools/create-gm.js",
-    "test": "node --disable-warning=ExperimentalWarning tools/bot-test.js"
+    "test": "node --disable-warning=ExperimentalWarning tools/bot-test.js",
+    "build:cf": "node tools/build-cf.mjs",
+    "dev:cf": "node tools/build-cf.mjs && wrangler dev",
+    "deploy": "node tools/build-cf.mjs && wrangler deploy",
+    "build:demo": "node demo/build.mjs"
   },
   "dependencies": {
     "ws": "^8.18.0"
   },
   "devDependencies": {
-    "esbuild": "^0.25.12"
+    "esbuild": "^0.25.12",
+    "wrangler": "^4.163.0"
   }
 }

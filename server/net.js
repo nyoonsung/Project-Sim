@@ -1,15 +1,18 @@
-// 웹소켓 연결: 메시지 형식 검증, 초당 메시지 제한, 위반 기록 후 차단
+// 웹소켓 연결: 메시지 형식 검증, 초당 메시지 제한, 위반 기록 후 차단 (플랫폼 공용)
+//   sock 어댑터: { onMessage(fn(text|null, size)), onClose(fn), send(text), close(code, why), isOpen() }
 import { secLog } from "./db.js";
 import { World } from "./game/world.js";
 
-export const world = new World();
+/** 게임 월드 (처음 쓸 때 생성: Cloudflare는 전역 범위에서 타이머를 못 씀) */
+export let world = null;
+export function initWorld() { world ??= new World(); return world; }
 
 const isNum = (v, lo, hi) => typeof v === "number" && Number.isFinite(v) && v >= lo && v <= hi;
 const isInt = (v, lo, hi) => Number.isInteger(v) && v >= lo && v <= hi;
 const isStr = (v, max) => typeof v === "string" && v.length <= max;
 const isId = (v) => typeof v === "string" && /^[a-z0-9_]{1,24}$/.test(v);
 
-// 메시지 종류별 검증기: 통과하면 true
+// 메시지 종류별 검증기
 const SCHEMA = {
   in: (m) => isInt(m.s, 0, 2 ** 31) && isNum(m.mx, -1, 1) && isNum(m.my, -1, 1) && isNum(m.ax, -1e5, 1e5) && isNum(m.ay, -1e5, 1e5),
   cast: (m) => isInt(m.slot, 0, 7) && isNum(m.ax, -1e5, 1e5) && isNum(m.ay, -1e5, 1e5) && (m.tx === undefined || isInt(m.tx, 0, 2 ** 31)),
@@ -33,12 +36,12 @@ const SCHEMA = {
   dummy: (m) => ["reset"].includes(m.op),
 };
 
-export function attachSocket(ws, user, ip) {
+export function attachSocket(sock, user, ip) {
+  const w = initWorld();
   const conn = {
-    ws, user, ip,
-    tokens: 60, last: Date.now(), strikes: 0,
-    send(obj) { if (ws.readyState === 1) ws.send(typeof obj === "string" ? obj : JSON.stringify(obj)); },
-    close(code = 4000, why = "") { try { ws.close(code, why); } catch {} },
+    user, ip, tokens: 60, last: Date.now(), strikes: 0,
+    send(obj) { if (sock.isOpen()) { try { sock.send(typeof obj === "string" ? obj : JSON.stringify(obj)); } catch {} } },
+    close(code = 4000, why = "") { try { sock.close(code, why); } catch {} },
   };
   const strike = (kind, detail) => {
     conn.strikes++;
@@ -48,26 +51,21 @@ export function attachSocket(ws, user, ip) {
       conn.close(4008, "abuse");
     }
   };
-  ws.on("message", (data, isBinary) => {
+  sock.onMessage((text, size) => {
     // 토큰 버킷: 초당 40개, 최대 60개 몰아서
     const now = Date.now();
     conn.tokens = Math.min(60, conn.tokens + ((now - conn.last) / 1000) * 40);
     conn.last = now;
     if (conn.tokens < 1) return strike("ws_flood", { n: Math.round(conn.tokens) });
     conn.tokens -= 1;
-    if (isBinary || data.length > 2048) return strike("ws_bad_frame", { len: data.length });
+    if (text == null || size > 2048) return strike("ws_bad_frame", { len: size });
     let m;
-    try { m = JSON.parse(data.toString("utf8")); } catch { return strike("ws_bad_json"); }
+    try { m = JSON.parse(text); } catch { return strike("ws_bad_json"); }
     if (!m || typeof m !== "object" || Array.isArray(m) || typeof m.t !== "string") return strike("ws_bad_msg");
     const check = SCHEMA[m.t];
     if (!check || !check(m)) return strike("ws_bad_schema", { t: String(m.t).slice(0, 16) });
-    try {
-      world.onMessage(conn, m);
-    } catch (e) {
-      console.error("message error", e);
-    }
+    try { w.onMessage(conn, m); } catch (e) { console.error("message error", e); }
   });
-  ws.on("close", () => world.onClose(conn));
-  ws.on("error", () => {});
-  world.onOpen(conn);
+  sock.onClose(() => w.onClose(conn));
+  w.onOpen(conn);
 }

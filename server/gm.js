@@ -10,7 +10,7 @@ import { secureRandom } from "./game/secure.js";
 const int = (v, lo, hi) => Number.isInteger(v) && v >= lo && v <= hi;
 
 export async function handleGm(req, res, path, { readJson, send, currentUser, ip, url }) {
-  const gm = currentUser(req);
+  const gm = await currentUser(req);
   if (!gm || gm.role !== "gm") {
     secLog("gm_denied", { userId: gm?.id ?? null, username: gm?.username ?? null, ip, detail: { path } });
     return send(res, 403, { error: "GM 권한이 필요해요." });
@@ -28,14 +28,14 @@ export async function handleGm(req, res, path, { readJson, send, currentUser, ip
   if (path === "/api/gm/audit" && req.method === "GET") return send(res, 200, { list: Q.auditList.all(200) });
   if (path === "/api/gm/security" && req.method === "GET") return send(res, 200, { list: Q.secList.all(300) });
   if (path === "/api/gm/announce" && req.method === "POST") {
-    const b = await readJson(req);
+    const b = await readJson();
     const text = typeof b.text === "string" ? b.text.replace(/[<>]/g, "").trim().slice(0, 200) : "";
     world.gmAnnounce(text || null);
     audit("announce", null, { text });
     return send(res, 200, { ok: true });
   }
   if (path === "/api/gm/broadcast" && req.method === "POST") {
-    const b = await readJson(req);
+    const b = await readJson();
     const text = typeof b.text === "string" ? b.text.replace(/[<>]/g, "").trim().slice(0, 200) : "";
     if (!text) return send(res, 400, { error: "내용이 비었어요." });
     world.broadcastSys(`[GM] ${text}`, "gm");
@@ -61,7 +61,7 @@ export async function handleGm(req, res, path, { readJson, send, currentUser, ip
     });
   }
   if (req.method !== "POST") return send(res, 405, { error: "method" });
-  const b = await readJson(req);
+  const b = await readJson();
   // 다른 GM을 건드리는 위험 작업은 막음 (자기 자신 강등 포함)
   const protectedTarget = target.role === "gm" && target.id !== gm.id;
 
@@ -162,7 +162,7 @@ export async function handleGm(req, res, path, { readJson, send, currentUser, ip
       if (protectedTarget) return send(res, 403, { error: "다른 GM의 비밀번호는 바꿀 수 없어요." });
       const err = validatePassword(b.password);
       if (err) return send(res, 400, { error: err });
-      Q.setPass.run(hashPassword(b.password), id);
+      Q.setPass.run(await hashPassword(b.password), id);
       Q.deleteUserSessions.run(id);
       world.gmKick(id, "비밀번호가 재설정됐어요. 다시 로그인해 주세요.");
       audit("reset_password", target, null);

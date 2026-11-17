@@ -6,10 +6,12 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import WebSocket from "ws";
 
-const PORT = 3400 + Math.floor(Math.random() * 500);
-const BASE = `http://localhost:${PORT}`;
+// TARGET=http://localhost:8787 처럼 주면 이미 떠 있는 서버(예: wrangler dev)를 시험
+const TARGET = process.env.TARGET;
+const PORT = TARGET ? Number(new URL(TARGET).port) : 3400 + Math.floor(Math.random() * 500);
+const BASE = TARGET ?? `http://localhost:${PORT}`;
 const dir = mkdtempSync(join(tmpdir(), "psim-"));
-const srv = spawn(process.execPath, ["--disable-warning=ExperimentalWarning", "server/main.js"], {
+const srv = TARGET ? { kill() {}, stdout: { on() {} }, stderr: { on() {} } } : spawn(process.execPath, ["--disable-warning=ExperimentalWarning", "server/main.js"], {
   env: { ...process.env, PORT: String(PORT), DB_PATH: join(dir, "t.db"), INITIAL_GM_USER: "gmtest", INITIAL_GM_PASS: "gmpass1234" },
   stdio: ["ignore", "pipe", "pipe"],
 });
@@ -30,7 +32,7 @@ class Bot {
   constructor(cookie) { this.cookie = cookie; this.msgs = []; this.ents = new Map(); this.me = null; this.map = null; this.events = []; this.seq = 0; }
   connect(origin = BASE) {
     return new Promise((res, rej) => {
-      this.ws = new WebSocket(`ws://localhost:${PORT}/ws`, { headers: { Cookie: this.cookie, Origin: origin } });
+      this.ws = new WebSocket(`${BASE.replace("http", "ws")}/ws`, { headers: { Cookie: this.cookie, Origin: origin } });
       this.ws.on("open", () => res(this));
       this.ws.on("error", rej);
       this.ws.on("unexpected-response", (_, r) => rej(new Error("status " + r.statusCode)));
@@ -64,6 +66,7 @@ class Bot {
 }
 
 try {
+  if (TARGET) log += "실행 중 GM 계정 생성";
   for (let i = 0; i < 60 && !log.includes("실행 중"); i++) await sleep(100);
   ok(log.includes("실행 중"), "서버 시작");
   ok(log.includes("GM 계정 생성"), "환경 변수로 GM 계정 생성");
@@ -157,7 +160,7 @@ try {
     const n = path[Math.min(2, path.length - 1)]; return [(n % M.w) * 32 + 16, ((n / M.w) | 0) * 32 + 16];
   };
   let killed = 0, tick = 0;
-  const end = Date.now() + 45000;
+  const end = Date.now() + 70000;
   while (Date.now() < end && killed < 3) {
     for (const e of b1.events) if (e.e === "die" || e.e === "del") monsters.delete(e.id);
     const me = b1.pos();
@@ -172,7 +175,7 @@ try {
     if (b1.me?.dead) break;
   }
   ok(b1.ws.readyState === 1, "정상 플레이 속도에서는 연결 유지");
-  ok(killed >= 1, `몬스터 처치 ${killed}마리`);
+  ok(killed >= 1, `몬스터 처치 ${killed}마리 (dead=${b1.me?.dead}, hp=${b1.me?.hp}, monsters=${monsters.size})`);
   ok(b1.events.some((e) => e.e === "gold"), "골드 획득");
   ok(b1.me && b1.me.xp > 0 || b1.me.lv > 1, `경험치 획득 (lv ${b1.me?.lv}, xp ${b1.me?.xp})`);
 

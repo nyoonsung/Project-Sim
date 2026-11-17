@@ -1,0 +1,24 @@
+# Cloudflare Workers 배포 설정 (무료 플랜: SQLite Durable Object)
+name = "project-sim"
+main = "worker/index.js"
+compatibility_date = "2026-11-01"
+compatibility_flags = ["nodejs_compat"]
+
+[build]
+command = "node tools/build-cf.mjs"
+
+[assets]
+directory = "./cf-dist"
+binding = "ASSETS"
+run_worker_first = ["/api/*", "/ws"]
+
+[[durable_objects.bindings]]
+name = "GAME"
+class_name = "GameServer"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["GameServer"]
+
+[observability]
+enabled = true

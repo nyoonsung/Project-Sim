@@ -536,6 +536,6 @@ export class World {
       age: Math.round((Date.now() - r.createdAt) / 1000),
     }));
     const avg = this.tickTimes.reduce((a, b) => a + b, 0) / Math.max(1, this.tickTimes.length);
-    return { online: this.sessions.size, rooms, tickMs: +avg.toFixed(2), uptime: Math.round((Date.now() - this.startedAt) / 1000), mem: Math.round(process.memoryUsage().rss / 1048576), announcement: this.announcement };
+    return { online: this.sessions.size, rooms, tickMs: +avg.toFixed(2), uptime: Math.round((Date.now() - this.startedAt) / 1000), mem: typeof process !== "undefined" && process.memoryUsage ? Math.round(process.memoryUsage().rss / 1048576) : null, announcement: this.announcement };
   }
 }

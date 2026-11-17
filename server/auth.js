@@ -1,25 +1,39 @@
-// 계정·세션 보안: scrypt 해시, 무작위 세션 토큰(해시만 저장), 로그인 시도 제한
-import { scryptSync, randomBytes, timingSafeEqual, createHash } from "node:crypto";
+// 계정·세션 보안 (Node·Cloudflare 공용, Web Crypto)
+//  - 비밀번호: PBKDF2-SHA256 21만 회 + 무작위 소금
+//  - 세션: 무작위 토큰, DB에는 SHA-256 해시만 저장
+//  - 로그인·가입 시도 제한
 import { Q, secLog } from "./db.js";
 import { CONFIG } from "./config.js";
 
-const SCRYPT = { N: 16384, r: 8, p: 1, maxmem: 64 * 1024 * 1024 };
+const subtle = globalThis.crypto.subtle;
+const ITER = 210000;
 export const USERNAME_RE = /^[A-Za-z0-9가-힣_]{2,12}$/;
 
-export function hashPassword(pw) {
-  const salt = randomBytes(16);
-  const key = scryptSync(pw, salt, 32, SCRYPT);
-  return `scrypt$${salt.toString("base64")}$${key.toString("base64")}`;
+const b64 = (u8) => btoa(String.fromCharCode(...u8));
+const unb64 = (s) => Uint8Array.from(atob(s), (c) => c.charCodeAt(0));
+const rand = (n) => globalThis.crypto.getRandomValues(new Uint8Array(n));
+const enc = new TextEncoder();
+
+async function pbkdf2(pw, salt, iter) {
+  const key = await subtle.importKey("raw", enc.encode(pw), "PBKDF2", false, ["deriveBits"]);
+  return new Uint8Array(await subtle.deriveBits({ name: "PBKDF2", hash: "SHA-256", salt, iterations: iter }, key, 256));
 }
-export function verifyPassword(pw, stored) {
-  const [alg, s, k] = String(stored).split("$");
-  if (alg !== "scrypt" || !s || !k) return false;
-  const key = scryptSync(pw, Buffer.from(s, "base64"), 32, SCRYPT);
-  const want = Buffer.from(k, "base64");
-  return key.length === want.length && timingSafeEqual(key, want);
+function same(a, b) {
+  if (a.length !== b.length) return false;
+  let d = 0;
+  for (let i = 0; i < a.length; i++) d |= a[i] ^ b[i];
+  return d === 0;
 }
-// 존재하지 않는 계정도 같은 시간이 걸리도록 (계정 존재 여부 노출 방지)
-const DUMMY = hashPassword(randomBytes(12).toString("hex"));
+export async function hashPassword(pw) {
+  const salt = rand(16);
+  return `pbkdf2$${ITER}$${b64(salt)}$${b64(await pbkdf2(pw, salt, ITER))}`;
+}
+export async function verifyPassword(pw, stored) {
+  const [alg, it, s, k] = String(stored).split("$");
+  if (alg !== "pbkdf2" || !s || !k) return false;
+  return same(await pbkdf2(pw, unb64(s), Number(it) || ITER), unb64(k));
+}
+let DUMMY = null; // 없는 계정도 같은 시간이 걸리도록
 
 export function validatePassword(pw) {
   if (typeof pw !== "string" || pw.length < 8 || pw.length > 72) return "비밀번호는 8~72자여야 해요.";
@@ -27,28 +41,29 @@ export function validatePassword(pw) {
   return null;
 }
 
-const sha256 = (s) => createHash("sha256").update(s).digest("hex");
+async function sha256(s) {
+  return [...new Uint8Array(await subtle.digest("SHA-256", enc.encode(s)))].map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+const tokenOf = () => b64(rand(32)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 
-export function createSession(userId, ip) {
-  const token = randomBytes(32).toString("base64url");
+export async function createSession(userId, ip) {
+  const token = tokenOf();
   const now = Date.now();
-  Q.createSession.run(sha256(token), userId, now, now + CONFIG.sessionDays * 864e5, ip ?? null);
+  Q.createSession.run(await sha256(token), userId, now, now + CONFIG.sessionDays * 864e5, ip ?? null);
   return token;
 }
-export function sessionUser(token) {
+export async function sessionUser(token) {
   if (typeof token !== "string" || token.length < 20 || token.length > 100) return null;
-  const s = Q.sessionByHash.get(sha256(token), Date.now());
+  const s = Q.sessionByHash.get(await sha256(token), Date.now());
   if (!s) return null;
-  const u = Q.userById.get(s.user_id);
-  if (!u) return null;
-  return u;
+  return Q.userById.get(s.user_id) ?? null;
 }
-export function destroySession(token) {
-  if (typeof token === "string") Q.deleteSession.run(sha256(token));
+export async function destroySession(token) {
+  if (typeof token === "string" && token) Q.deleteSession.run(await sha256(token));
 }
 
-// ── 로그인 시도 제한: IP당·계정당 (메모리)
-const attempts = new Map(); // key -> { n, until, first }
+// ── 시도 제한 (메모리)
+const attempts = new Map();
 function hit(key, limit, windowMs, lockMs) {
   const now = Date.now();
   let a = attempts.get(key);
@@ -56,22 +71,20 @@ function hit(key, limit, windowMs, lockMs) {
   a.n++;
   if (a.n >= limit) a.until = now + lockMs;
   attempts.set(key, a);
+  if (attempts.size > 5000) for (const [k, v] of attempts) if (now - v.first > 3600e3 && v.until < now) attempts.delete(k);
 }
 function locked(key) {
   const a = attempts.get(key);
   return a && a.until > Date.now() ? Math.ceil((a.until - Date.now()) / 1000) : 0;
 }
-setInterval(() => {
-  const now = Date.now();
-  for (const [k, a] of attempts) if (now - a.first > 3600e3 && a.until < now) attempts.delete(k);
-}, 600e3).unref();
 
-export function login(username, password, ip) {
-  if (typeof username !== "string" || typeof password !== "string" || password.length > 200) return { error: "잘못된 요청이에요." };
+export async function login(username, password, ip) {
+  if (typeof username !== "string" || typeof password !== "string" || password.length > 200 || username.length > 24) return { error: "잘못된 요청이에요." };
   const lockIp = locked("ip:" + ip), lockUser = locked("u:" + username.toLowerCase());
   if (lockIp || lockUser) return { error: `로그인 시도가 너무 많아요. ${Math.max(lockIp, lockUser)}초 뒤에 다시 시도해 주세요.`, status: 429 };
   const u = Q.userByName.get(username);
-  const ok = verifyPassword(password, u ? u.pass_hash : DUMMY) && !!u;
+  DUMMY ??= await hashPassword("dummy-password-0");
+  const ok = (await verifyPassword(password, u ? u.pass_hash : DUMMY)) && !!u;
   if (!ok) {
     hit("ip:" + ip, 20, 600e3, 600e3);
     hit("u:" + username.toLowerCase(), 8, 600e3, 300e3);
@@ -84,10 +97,10 @@ export function login(username, password, ip) {
   }
   attempts.delete("u:" + username.toLowerCase());
   Q.touchLogin.run(Date.now(), ip ?? null, u.id);
-  return { user: u, token: createSession(u.id, ip) };
+  return { user: u, token: await createSession(u.id, ip) };
 }
 
-export function register(username, password, ip) {
+export async function register(username, password, ip) {
   if (!CONFIG.registrationOpen) return { error: "지금은 가입을 받지 않아요.", status: 403 };
   if (typeof username !== "string" || !USERNAME_RE.test(username)) return { error: "아이디는 2~12자, 한글·영문·숫자·_ 만 쓸 수 있어요." };
   const pwErr = validatePassword(password);
@@ -95,20 +108,19 @@ export function register(username, password, ip) {
   if (locked("reg:" + ip)) return { error: "가입 시도가 너무 많아요. 잠시 뒤에 다시 시도해 주세요.", status: 429 };
   hit("reg:" + ip, 5, 3600e3, 3600e3);
   if (Q.userByName.get(username)) return { error: "이미 있는 아이디예요." };
-  const info = Q.createUser.run(username, hashPassword(password), "player", Date.now());
-  secLog("register", { userId: Number(info.lastInsertRowid), username, ip });
-  const u = Q.userById.get(Number(info.lastInsertRowid));
-  return { user: u, token: createSession(u.id, ip) };
+  const id = Q.createUser.run(username, await hashPassword(password), "player", Date.now()).lastInsertRowid;
+  secLog("register", { userId: Number(id), username, ip });
+  const u = Q.userById.get(Number(id));
+  return { user: u, token: await createSession(u.id, ip) };
 }
 
-/** 쿠키 파싱 */
 export function parseCookies(header) {
   const out = {};
   for (const part of String(header ?? "").split(";")) {
     const i = part.indexOf("=");
     if (i < 0) continue;
     const k = part.slice(0, i).trim(), v = part.slice(i + 1).trim();
-    if (k && !(k in out)) out[k] = decodeURIComponent(v);
+    if (k && !(k in out)) { try { out[k] = decodeURIComponent(v); } catch { out[k] = v; } }
   }
   return out;
 }

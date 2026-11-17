@@ -48,16 +48,26 @@ $env:INITIAL_GM_USER="관리자아이디"; $env:INITIAL_GM_PASS="비밀번호123
 `node demo/build.mjs` → `demo/dist/` 에 서버 없이 브라우저만으로 돌아가는 혼자 플레이 버전이 만들어져요.
 같은 게임 엔진을 브라우저 안에서 돌리고, 저장은 그 브라우저(localStorage)에 해요. 파티·GM·해킹 방지는 실제 서버 버전에서만 동작해요.
 
-## 서버 배포 (GitHub Pages로는 안 됨)
+## 서버 배포 — Cloudflare (무료, 데이터 유지)
 
-GitHub Pages는 정적 파일만 올리는 곳이라 이 게임 서버를 돌릴 수 없습니다. 코드는 GitHub에 두고, 서버는 Node.js를 돌릴 수 있는 호스팅에 올려야 합니다.
+GitHub Pages는 정적 파일만 올리는 곳이라 서버를 못 돌려요. 이 게임은 **Cloudflare Workers + Durable Object(SQLite)** 로 올려요.
+무료 플랜에서 카드 없이 동작하고, 서버가 쉬어도 데이터(계정·캐릭터)는 지워지지 않아요. 게임 서버 하나(Durable Object)가 모든 판정을 해요.
 
-**Render 예시** (`render.yaml` 포함)
-1. render.com 가입 → New → Blueprint → 이 GitHub 저장소 선택
-2. 환경 변수 `INITIAL_GM_USER`, `INITIAL_GM_PASS` 입력
-3. 배포가 끝나면 `https://<이름>.onrender.com` 에서 접속
+1. dash.cloudflare.com 가입 (무료)
+2. **Workers & Pages → Create → Import a repository** → GitHub 연결 → `Project-Sim` 선택 → Deploy
+   (빌드·배포 명령은 `wrangler.toml`에 들어 있어요: 빌드 `node tools/build-cf.mjs`, 배포 `npx wrangler deploy`)
+3. 만들어진 Worker의 **Settings → Variables and Secrets** 에서 비밀(Secret)로 `INITIAL_GM_USER`, `INITIAL_GM_PASS` 추가 → 다시 배포
+4. `https://project-sim.<내 계정>.workers.dev` 에서 접속, `/gm` 이 GM 패널
 
-⚠ 저장 데이터(SQLite 파일)는 `DB_PATH` 위치에 저장됩니다. Render 무료 플랜은 디스크가 재배포 때마다 초기화되므로, 계정·캐릭터를 계속 보존하려면 **영구 디스크가 있는 유료 플랜**(render.yaml의 disk 설정)이나 영구 저장소가 있는 다른 호스팅이 필요합니다.
+명령줄로 하려면: `npx wrangler login` → `npm run deploy` → `npx wrangler secret put INITIAL_GM_PASS`
+
+내 컴퓨터에서 Cloudflare 환경 그대로 시험: `npm run dev:cf` (http://localhost:8787)
+
+무료 한도(매일 0시 UTC 초기화): Durable Object 요청 하루 10만 건(웹소켓 수신 메시지는 20개당 1건), 실행 시간 등. 친구 몇 명이 노는 정도는 넉넉해요. 한도를 넘기면 그날은 접속이 실패해요.
+
+### 다른 호스팅 (Node)
+
+`npm start` 로 어디서든 돌릴 수 있어요. 단, 저장 파일(`DB_PATH`)이 유지되는 곳이어야 해요 (Render 무료 플랜은 잠들 때 파일이 지워져서 안 맞아요).
 
 환경 변수
 
