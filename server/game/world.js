@@ -1,0 +1,541 @@
+// 월드: 접속자, 파티, 방(마을·던전), 저장, 상점·강화·전직 등 서버 명령
+import { Q, secLog, itemLog } from "../db.js";
+import { TICK_RATE, ITEMS, MAX_PARTY, SKILL_SLOTS } from "../../shared/constants.js";
+import { CLASS_INFO, STATS } from "../../shared/classes.js";
+import { SKILLS } from "../../shared/skills.js";
+import { canEquip, enhanceOdds, enhanceCost, sellPrice, MAX_ENH, SLOTS, CLASS_GEAR, baseStats, itemName } from "../../shared/items.js";
+import { floorKind } from "../../shared/zones.js";
+import { Room } from "./room.js";
+import { makeFloor, makeTown, safeZone } from "./dungeon.js";
+import { newCharacter, sanitizeChar, makePlayerUnit, refreshStats, availableSkills, INV_SIZE } from "./player.js";
+import { secureRandom } from "./secure.js";
+import { moveMul } from "./combat.js";
+
+let roomSeq = 1;
+const filterChat = (s) => s.replace(/[\u0000-\u001f\u007f<>]/g, "").replace(/\s+/g, " ").trim().slice(0, 120);
+
+export class World {
+  constructor() {
+    this.sessions = new Map(); // userId → session
+    this.rooms = new Map();
+    this.parties = new Map();
+    this.town = this.addRoom(new Room(this, { id: "town", kind: "town", floor: 0, map: makeTown() }));
+    this.announcement = null;
+    this.startedAt = Date.now();
+    this.tickTimes = [];
+    setInterval(() => this.tick(), 1000 / TICK_RATE);
+    setInterval(() => this.saveAll(), 30_000).unref();
+  }
+  addRoom(r) { this.rooms.set(r.id, r); return r; }
+
+  tick() {
+    const t0 = performance.now();
+    for (const r of this.rooms.values()) {
+      try { r.tick(); r.flush(); } catch (e) { console.error("room tick", r.id, e); }
+    }
+    for (const r of [...this.rooms.values()]) if (r !== this.town && r.players.size === 0 && Date.now() - r.createdAt > 5000) this.rooms.delete(r.id);
+    const dt = performance.now() - t0;
+    this.tickTimes.push(dt);
+    if (this.tickTimes.length > 100) this.tickTimes.shift();
+  }
+
+  // ── 접속
+  onOpen(conn) {
+    const u = conn.user;
+    const old = this.sessions.get(u.id);
+    if (old) { old.conn.send({ t: "kick", why: "다른 곳에서 접속해서 연결이 끊겼어요." }); old.conn.close(4001, "dup"); this.onClose(old.conn); }
+    const row = Q.charByUser.get(u.id);
+    let char;
+    try { char = row ? sanitizeChar(JSON.parse(row.data), u.username) : newCharacter(u.username); } catch { char = newCharacter(u.username); }
+    const s = {
+      userId: u.id, name: u.username, role: u.role, conn, char, ip: conn.ip, joinedAt: Date.now(), partyId: null, invites: new Set(),
+      mutedUntil: u.muted_until, dirty: true, meDirty: true, potionCd: {},
+      send: (o) => conn.send(o),
+      notice: (text) => conn.send({ t: "ev", list: [{ e: "notice", text }] }),
+      sendMe: () => this.sendMe(s),
+    };
+    this.sessions.set(u.id, s);
+    s.unit = makePlayerUnit(s);
+    s.send({ t: "hello", name: u.username, role: u.role, char: this.publicChar(s), announce: this.announcement, serverTime: Date.now() });
+    this.town.addPlayer(s.unit);
+    this.save(s);
+    this.broadcastSys(`${u.username}님이 접속했어요.`, "join");
+  }
+  onClose(conn) {
+    const s = this.sessions.get(conn.user.id);
+    if (!s || s.conn !== conn) return;
+    this.leaveParty(s, true);
+    s.unit.room?.removePlayer(s.unit);
+    s.char.playtime += Math.round((Date.now() - s.joinedAt) / 1000);
+    s.joinedAt = Date.now();
+    this.save(s);
+    this.sessions.delete(s.userId);
+  }
+  save(s) {
+    try { Q.saveChar.run(s.userId, JSON.stringify(s.char), s.char.level, s.char.cls, s.char.best, Date.now()); s.dirty = false; } catch (e) { console.error("save", e); }
+  }
+  saveAll() { for (const s of this.sessions.values()) { s.char.playtime += Math.round((Date.now() - s.joinedAt) / 1000); s.joinedAt = Date.now(); this.save(s); } }
+
+  publicChar(s) {
+    const c = s.char;
+    return { name: c.name, level: c.level, xp: c.xp, cls: c.cls, stats: c.stats, unspent: c.unspent, skills: c.skills, equip: c.equip, inv: c.inv, cons: c.cons, gold: c.gold, best: c.best, checkpoint: c.checkpoint, cleared: c.cleared, kills: c.kills, deaths: c.deaths };
+  }
+  sendChar(s) { s.send({ t: "char", char: this.publicChar(s) }); }
+  sendMe(s) {
+    const u = s.unit;
+    const now = u.room?.now ?? 0;
+    const cds = {};
+    for (const [id, at] of u.cds) if (at > now) cds[id] = Math.round((at - now) * 1000);
+    const buffs = [];
+    for (const [id, b] of u.buffs) buffs.push([id, Math.round((b.until - now) * 10) / 10, b.n ?? 0]);
+    const st = [];
+    for (const [id, x] of u.status) st.push([id, Math.round((x.until - now) * 10) / 10]);
+    s.send({ t: "me", hp: Math.ceil(u.hp), mh: u.maxHp, mp: Math.floor(u.mp), mm: u.maxMp, ki: Math.floor(u.ki), holy: Math.floor(u.holy), parts: u.parts, gap: u.gap,
+      sh: u.shield ? Math.round(u.shield.amt) : 0, cds, buffs, st, lv: s.char.level, xp: s.char.xp, gold: s.char.gold, stance: u.stance, acu: u.acupoint ?? 0,
+      dead: u.dead ? 1 : 0, cons: s.char.cons, spd: Math.round(u.stats.move * moveMul(u) * (u.guarding && now < u.guarding ? 0.35 : 1) * 10) / 10, pcd: Object.fromEntries(Object.entries(s.potionCd).map(([k, v]) => [k, Math.max(0, Math.round((v - Date.now())))])) });
+  }
+
+  broadcastSys(text, kind = "sys") {
+    for (const s of this.sessions.values()) s.send({ t: "chat", from: "", text, kind });
+  }
+
+  // ── 메시지 처리
+  onMessage(conn, m) {
+    const s = this.sessions.get(conn.user.id);
+    if (!s || s.conn !== conn) return;
+    const u = s.unit, room = u.room;
+    switch (m.t) {
+      case "in": if (room) room.pushInput(u, m); break;
+      case "cast": if (room) room.cast(u, m); break;
+      case "use": this.usePotion(s, m.item); break;
+      case "chat": this.chat(s, m.text); break;
+      case "party": this.partyOp(s, m.op, m.name); break;
+      case "enter": this.enterDungeon(s, m.floor); break;
+      case "town": if (room && room !== this.town) this.toTown(s, "마을로 돌아왔어요."); break;
+      case "skills": this.setSkills(s, m.list); break;
+      case "stat": this.addStat(s, m.key, m.n); break;
+      case "resetStats": this.resetStats(s); break;
+      case "class": this.changeClass(s, m.cls); break;
+      case "buy": this.buy(s, m.item, m.n); break;
+      case "equip": this.equip(s, m.uid); break;
+      case "unequip": this.unequip(s, m.slot); break;
+      case "sell": this.sell(s, m.uid); break;
+      case "enhance": this.enhance(s, m.uid); break;
+      case "lock": { const it = s.char.inv.find((i) => i.uid === m.uid) ?? Object.values(s.char.equip).find((i) => i?.uid === m.uid); if (it) { it.locked = !it.locked; this.sendChar(s); } break; }
+      case "ping": s.send({ t: "pong", c: m.c, s: Date.now() }); break;
+      case "dummy": break;
+    }
+  }
+
+  nearNpc(s, id, dist = 90) {
+    const u = s.unit, r = u.room;
+    if (!r) return false;
+    return r.map.objects.some((o) => o.kind === "npc" && o.id === id && Math.hypot(o.x - u.x, o.y - u.y) < dist);
+  }
+  inSafe(s) { return !!s.unit.room?.map.safe; }
+
+  chat(s, text) {
+    if (s.mutedUntil > Date.now()) return s.notice(`채팅 금지 상태예요. (${new Date(s.mutedUntil).toLocaleString("ko-KR")}까지)`);
+    const now = Date.now();
+    s.chatTimes = (s.chatTimes ?? []).filter((t) => now - t < 10_000);
+    if (s.chatTimes.length >= 6) return s.notice("채팅을 너무 빨리 보내고 있어요.");
+    s.chatTimes.push(now);
+    const clean = filterChat(text);
+    if (!clean) return;
+    if (clean.startsWith("/p ") && s.partyId) {
+      const p = this.parties.get(s.partyId);
+      for (const id of p.members) this.sessions.get(id)?.send({ t: "chat", from: s.name, text: clean.slice(3), kind: "party", gm: s.role === "gm" ? 1 : 0 });
+      return;
+    }
+    const room = s.unit.room;
+    for (const o of this.sessions.values()) if (o.unit.room === room) o.send({ t: "chat", from: s.name, text: clean, kind: "say", gm: s.role === "gm" ? 1 : 0 });
+  }
+
+  // ── 파티
+  partyOf(s) { return s.partyId ? this.parties.get(s.partyId) : null; }
+  sendParty(p) {
+    const members = [...p.members].map((id) => { const o = this.sessions.get(id); return o ? { name: o.name, cls: o.char.cls, lv: o.char.level, leader: id === p.leader ? 1 : 0, cp: o.char.checkpoint } : null; }).filter(Boolean);
+    for (const id of p.members) this.sessions.get(id)?.send({ t: "party", members });
+  }
+  partyOp(s, op, name) {
+    const p = this.partyOf(s);
+    if (op === "invite") {
+      const o = [...this.sessions.values()].find((x) => x.name.toLowerCase() === String(name ?? "").toLowerCase());
+      if (!o || o === s) return s.notice("그 플레이어를 찾을 수 없어요.");
+      if (o.partyId) return s.notice("이미 다른 파티에 있어요.");
+      if (p && p.members.size >= MAX_PARTY) return s.notice("파티는 최대 4명이에요.");
+      if (s.unit.room !== this.town || o.unit.room !== this.town) return s.notice("파티 초대는 마을에서만 할 수 있어요.");
+      if (p && p.leader !== s.userId) return s.notice("파티장만 초대할 수 있어요.");
+      o.invites.add(s.userId);
+      o.send({ t: "invite", from: s.name });
+      s.notice(`${o.name}님에게 파티 초대를 보냈어요.`);
+    } else if (op === "accept" || op === "decline") {
+      const from = [...this.sessions.values()].find((x) => x.name.toLowerCase() === String(name ?? "").toLowerCase());
+      if (!from || !s.invites.has(from.userId)) return;
+      s.invites.delete(from.userId);
+      if (op === "decline") return from.notice(`${s.name}님이 초대를 거절했어요.`);
+      if (s.partyId) return s.notice("이미 파티에 있어요.");
+      if (s.unit.room !== this.town || from.unit.room !== this.town) return s.notice("마을에서만 파티에 들어갈 수 있어요.");
+      let party = this.partyOf(from);
+      if (!party) { party = { id: "p" + roomSeq++, leader: from.userId, members: new Set([from.userId]) }; this.parties.set(party.id, party); from.partyId = party.id; }
+      if (party.members.size >= MAX_PARTY) return s.notice("파티가 가득 찼어요.");
+      party.members.add(s.userId);
+      s.partyId = party.id;
+      this.sendParty(party);
+    } else if (op === "leave") this.leaveParty(s);
+    else if (op === "kick" && p && p.leader === s.userId) {
+      const o = [...p.members].map((id) => this.sessions.get(id)).find((x) => x?.name === name);
+      if (o && o !== s) { this.leaveParty(o); o.notice("파티에서 추방됐어요."); }
+    } else if (op === "promote" && p && p.leader === s.userId) {
+      const o = [...p.members].map((id) => this.sessions.get(id)).find((x) => x?.name === name);
+      if (o) { p.leader = o.userId; this.sendParty(p); }
+    }
+  }
+  leaveParty(s, disconnect = false) {
+    const p = this.partyOf(s);
+    if (!p) return;
+    p.members.delete(s.userId);
+    s.partyId = null;
+    s.send({ t: "party", members: [] });
+    if (p.leader === s.userId) p.leader = [...p.members][0];
+    if (p.members.size <= 1) {
+      for (const id of p.members) { const o = this.sessions.get(id); if (o) { o.partyId = null; o.send({ t: "party", members: [] }); } }
+      this.parties.delete(p.id);
+    } else this.sendParty(p);
+    // 던전 안에서 파티를 떠나면 마을로
+    if (!disconnect && s.unit.room && s.unit.room !== this.town) this.toTown(s, "파티를 떠나 마을로 돌아왔어요.");
+  }
+
+  // ── 던전 이동
+  groupOf(s) {
+    const p = this.partyOf(s);
+    return p ? [...p.members].map((id) => this.sessions.get(id)).filter(Boolean) : [s];
+  }
+  enterDungeon(s, floor) {
+    if (s.unit.room !== this.town) return s.notice("던전은 마을에서 들어갈 수 있어요.");
+    const p = this.partyOf(s);
+    if (p && p.leader !== s.userId) return s.notice("파티장만 던전 입장을 할 수 있어요.");
+    const group = this.groupOf(s);
+    const maxCp = Math.min(...group.map((g) => g.char.checkpoint));
+    if (floor !== 1 && (floor > maxCp || (floor - 1) % 10 !== 0)) return s.notice(`시작할 수 있는 층은 1층 또는 열린 체크포인트(최대 ${maxCp}층)예요.`);
+    if (group.some((g) => g.unit.room !== this.town)) return s.notice("파티원 모두 마을에 있어야 해요.");
+    this.moveGroup(group, floor, "dungeon");
+  }
+  moveGroup(group, floor, kind) {
+    const seed = (secureRandom() * 2 ** 31) | 0;
+    const map = kind === "safe" ? safeZone(floor) : makeFloor(floor, seed, group.length);
+    const room = this.addRoom(new Room(this, { id: "r" + roomSeq++, kind, floor, map, partyId: group[0].partyId, partySize: group.length }));
+    for (const g of group) {
+      const u = g.unit;
+      u.room?.removePlayer(u);
+      if (u.dead) { u.dead = false; u.hp = Math.round(u.maxHp * 0.5); }
+      u.status.clear();
+      u.buffs.clear();
+      u.shield = null;
+      if (u.cls !== "sword" && u.cls !== "fist") u.ki = 0;
+      room.addPlayer(u);
+    }
+    if (kind === "dungeon") {
+      const k = floorKind(floor);
+      room.ev({ e: "msg", text: `${floor}층 ${k === "boss" ? "— 주요 보스" : k === "mid" ? "— 중간보스" : ""}`, kind: "floor" });
+    }
+    return room;
+  }
+  usePortal(room, id) {
+    const group = [...room.players.values()].map((p) => p.session);
+    if (!group.length) return;
+    if (id === "exit" || id === "next") {
+      const f = room.floor + 1;
+      for (const g of group) if (g.char.best < room.floor) g.char.best = room.floor;
+      this.moveGroup(group, f, "dungeon");
+    } else if (id === "safe") {
+      this.moveGroup(group, room.floor, "safe");
+    } else if (id === "victory") {
+      for (const g of group) {
+        if (!g.char.cleared) this.broadcastSys(`🏆 ${g.name}님이 던전 100층을 정복했어요!`, "legend");
+        g.char.cleared = true;
+        this.toTown(g, "던전의 왕을 쓰러뜨렸어요! 축하해요!");
+      }
+    }
+  }
+  onBossCleared(room, isMain) {
+    for (const p of room.players.values()) {
+      const c = p.session.char;
+      if (c.best < room.floor) c.best = room.floor;
+      if (isMain && room.floor < 100) c.checkpoint = Math.max(c.checkpoint, room.floor + 1);
+      this.save(p.session);
+      this.sendChar(p.session);
+    }
+  }
+  partyFailed(room) {
+    for (const p of [...room.players.values()]) this.toTown(p.session, "패배했어요. 마을에서 정비하고 다시 도전해요.");
+  }
+  toTown(s, text) {
+    const u = s.unit;
+    u.room?.removePlayer(u);
+    if (u.dead) u.dead = false;
+    u.hp = Math.max(u.hp, Math.round(u.maxHp * 0.6));
+    u.status.clear(); u.buffs.clear(); u.shield = null;
+    this.town.addPlayer(u);
+    if (text) s.notice(text);
+    this.save(s);
+  }
+
+  // ── 성장: 스탯·스킬·전직
+  addStat(s, key, n) {
+    const c = s.char;
+    if (!CLASS_INFO[c.cls].stats.includes(key) || !STATS[key]) return;
+    n = Math.min(n, c.unspent);
+    if (n <= 0) return;
+    c.stats[key] = (c.stats[key] ?? 0) + n;
+    c.unspent -= n;
+    refreshStats(s.unit);
+    this.sendChar(s);
+  }
+  resetStats(s) {
+    // 스탯 재분배는 기획서상 전직 때 1회. 그 외에는 골드를 받고 마을에서만 허용
+    const c = s.char;
+    if (s.unit.room !== this.town) return s.notice("스탯 초기화는 마을 훈련 교관에게서만 할 수 있어요.");
+    if (!this.nearNpc(s, "trainer")) return s.notice("훈련 교관 근처에서 해 주세요.");
+    const cost = 200 + c.level * 40;
+    if (c.gold < cost) return s.notice(`골드가 부족해요. (${cost}G 필요)`);
+    c.gold -= cost;
+    c.unspent += Object.values(c.stats).reduce((a, b) => a + b, 0);
+    c.stats = {};
+    refreshStats(s.unit);
+    this.sendChar(s);
+    s.notice(`스탯을 초기화했어요. (-${cost}G)`);
+  }
+  setSkills(s, list) {
+    if (!this.inSafe(s)) return s.notice("스킬 교체는 마을이나 안전 구역에서만 할 수 있어요.");
+    const avail = new Set(availableSkills(s.char).map((x) => x.id));
+    const seen = new Set();
+    const out = [];
+    for (const id of list.slice(0, SKILL_SLOTS)) {
+      if (id && avail.has(id) && !seen.has(id)) {
+        const sk = SKILLS[id];
+        if (sk.exclusive && seen.has(sk.exclusive)) { s.notice(`${sk.name}은(는) ${SKILLS[sk.exclusive].name}과(와) 같이 장착할 수 없어요.`); out.push(null); continue; }
+        seen.add(id); out.push(id);
+      } else out.push(null);
+    }
+    s.char.skills = out;
+    refreshStats(s.unit);
+    this.sendChar(s);
+  }
+  changeClass(s, cls) {
+    const c = s.char;
+    if (!CLASS_INFO[cls] || cls === "adventurer") return;
+    if (c.cls !== "adventurer") return s.notice("이미 전직을 마쳐 직업이 고정됐어요. 전직 기능은 잠겨 있어요.");
+    if (s.unit.room?.kind !== "safe" || !this.nearNpc(s, "class_master", 110)) return s.notice("전직은 안전 구역의 전직소에서만 할 수 있어요.");
+    // 첫 전직: 투자한 포인트 전부 미사용으로 반환, 직업 전용 능력치 열림 (1회)
+    c.unspent += Object.values(c.stats).reduce((a, b) => a + b, 0);
+    c.stats = {};
+    c.cls = cls;
+    c.skills = c.skills.map((id) => (id && SKILLS[id]?.cls === "common" ? id : null));
+    // 기본 공격을 첫 칸에
+    const basic = Object.values(SKILLS).find((k) => k.cls === cls && k.kind === "basic");
+    if (basic) { c.skills = c.skills.filter((id) => id !== "c_thrust"); c.skills.unshift(basic.id); c.skills = c.skills.slice(0, 8); while (c.skills.length < 8) c.skills.push(null); }
+    s.unit.ki = 0; s.unit.holy = 0; s.unit.parts = 0; s.unit.gap = 0;
+    // 새 직업이 쓸 수 없는 장비는 가방으로, 직업 기본 무기 지급
+    for (const slot of ["weapon", "offhand"]) {
+      const it = c.equip[slot];
+      if (it && !canEquip(it, cls)) { if (c.inv.length < INV_SIZE) c.inv.push(it); c.equip[slot] = null; }
+    }
+    if (!c.equip.weapon) {
+      const wt = CLASS_GEAR[cls].w[0];
+      c.equip.weapon = { uid: c.nextUid++, slot: "weapon", type: wt, variant: 0, rarity: "일반", ilvl: c.level, enh: 0, base: baseStats("weapon", wt, c.level, 0), opts: [], name: "" };
+      c.equip.weapon.name = "수련생의 " + itemName(c.equip.weapon).split(" ").slice(1).join(" ");
+    }
+    if (!c.equip.offhand && CLASS_GEAR[cls].o[0] !== "shield") {
+      const ot = CLASS_GEAR[cls].o[0];
+      c.equip.offhand = { uid: c.nextUid++, slot: "offhand", type: ot, variant: 0, rarity: "일반", ilvl: c.level, enh: 0, base: baseStats("offhand", ot, c.level, 0), opts: [], name: "" };
+      c.equip.offhand.name = "수련생의 " + itemName(c.equip.offhand).split(" ").slice(1).join(" ");
+    }
+    refreshStats(s.unit);
+    s.unit.hp = s.unit.maxHp;
+    this.sendChar(s);
+    s.unit.room.ev({ e: "fx", fx: "ui/level-up", x: s.unit.x | 0, y: s.unit.y | 0, at: s.unit.id });
+    s.unit.room.ev({ e: "add", ...s.unit.room.describe(s.unit) });
+    this.broadcastSys(`${s.name}님이 ${CLASS_INFO[cls].name}(으)로 전직했어요!`, "rank");
+    itemLog(s.userId, "class_change", { cls });
+    this.save(s);
+  }
+
+  // ── 소모품·상점
+  usePotion(s, id) {
+    const it = ITEMS[id];
+    const u = s.unit;
+    if (!it || u.dead || !u.room) return;
+    if ((s.char.cons[id] ?? 0) <= 0) return s.notice(`${it.name}이(가) 없어요.`);
+    if ((s.potionCd[id] ?? 0) > Date.now()) return;
+    s.potionCd[id] = Date.now() + it.cd * 1000;
+    s.char.cons[id]--;
+    const r = u.room;
+    if (id === "hp_potion") { u.hp = Math.min(u.maxHp, u.hp + u.maxHp * 0.35); r.ev({ e: "heal", id: u.id, v: Math.round(u.maxHp * 0.35) }); }
+    if (id === "mp_potion") u.mp = Math.min(u.maxMp, u.mp + u.maxMp * 0.4);
+    if (id === "antidote") for (const k of ["poison", "burn", "bleed"]) u.status.delete(k);
+    r.ev({ e: "fx", fx: "pickups/collect-burst", x: u.x | 0, y: u.y | 0, s: 0.5 });
+    s.meDirty = true;
+  }
+  buy(s, id, n) {
+    const it = ITEMS[id];
+    if (!it) return;
+    if (!this.nearNpc(s, "shop")) return s.notice("상인 근처에서 살 수 있어요.");
+    const have = s.char.cons[id] ?? 0;
+    n = Math.min(n, it.max - have);
+    if (n <= 0) return s.notice(`${it.name}은(는) 최대 ${it.max}개까지 가질 수 있어요.`);
+    const cost = it.price * n;
+    if (s.char.gold < cost) return s.notice("골드가 부족해요.");
+    s.char.gold -= cost;
+    s.char.cons[id] = have + n;
+    this.sendChar(s);
+    s.notice(`${it.name} ${n}개를 샀어요. (-${cost}G)`);
+  }
+  pickup(u, item) {
+    const s = u.session, c = s.char;
+    if (item.cons) {
+      c.cons[item.cons] = Math.min(ITEMS[item.cons].max, (c.cons[item.cons] ?? 0) + item.n);
+      s.meDirty = true;
+      return true;
+    }
+    if (c.inv.length >= INV_SIZE) {
+      if (!s.fullWarned || Date.now() - s.fullWarned > 8000) { s.fullWarned = Date.now(); s.notice("가방이 가득 찼어요! 마을에서 팔거나 정리해 주세요."); }
+      return false;
+    }
+    const it = { ...item, uid: c.nextUid++ };
+    c.inv.push(it);
+    if (["전설", "신화"].includes(it.rarity)) itemLog(s.userId, "drop", { name: it.name, rarity: it.rarity, ilvl: it.ilvl });
+    s.send({ t: "ev", list: [{ e: "got", item: it }] });
+    this.sendChar(s);
+    s.dirty = true;
+    return true;
+  }
+  equip(s, uid) {
+    const c = s.char;
+    const i = c.inv.findIndex((x) => x.uid === uid);
+    if (i < 0) return;
+    const it = c.inv[i];
+    if (!canEquip(it, c.cls)) return s.notice("지금 직업으로는 장착할 수 없는 장비예요.");
+    if (s.unit.room && !s.unit.room.map.safe && s.unit.lastHurt && s.unit.room.now - s.unit.lastHurt < 5) return s.notice("전투 중에는 장비를 바꿀 수 없어요.");
+    c.inv.splice(i, 1);
+    const old = c.equip[it.slot];
+    c.equip[it.slot] = it;
+    if (old) c.inv.push(old);
+    refreshStats(s.unit);
+    s.unit.room?.ev({ e: "add", ...s.unit.room.describe(s.unit) });
+    this.sendChar(s);
+  }
+  unequip(s, slot) {
+    const c = s.char;
+    if (!c.equip[slot]) return;
+    if (c.inv.length >= INV_SIZE) return s.notice("가방이 가득 찼어요.");
+    c.inv.push(c.equip[slot]);
+    c.equip[slot] = null;
+    refreshStats(s.unit);
+    s.unit.room?.ev({ e: "add", ...s.unit.room.describe(s.unit) });
+    this.sendChar(s);
+  }
+  sell(s, uid) {
+    const c = s.char;
+    if (!this.nearNpc(s, "shop")) return s.notice("상인 근처에서 팔 수 있어요.");
+    const i = c.inv.findIndex((x) => x.uid === uid);
+    if (i < 0) return;
+    if (c.inv[i].locked) return s.notice("잠긴 아이템은 팔 수 없어요.");
+    const it = c.inv.splice(i, 1)[0];
+    const g = sellPrice(it);
+    c.gold += g;
+    if (["전설", "신화"].includes(it.rarity) || it.enh >= 10) itemLog(s.userId, "sell", { name: it.name, rarity: it.rarity, enh: it.enh, gold: g });
+    this.sendChar(s);
+    s.notice(`${it.name}을(를) ${g}G에 팔았어요.`);
+  }
+  // 강화: 성공 (99-n)%, 파괴 1%, 나머지 실패. 서버 보안 난수로 판정
+  enhance(s, uid) {
+    const c = s.char;
+    if (!this.nearNpc(s, "smithy")) return s.notice("대장장이 브론 근처에서 강화할 수 있어요.");
+    let where = "inv";
+    let it = c.inv.find((x) => x.uid === uid);
+    if (!it) { it = Object.values(c.equip).find((x) => x?.uid === uid); where = "equip"; }
+    if (!it) return;
+    if (it.enh >= MAX_ENH) return s.notice("이미 최대 강화(+99)예요.");
+    const cost = enhanceCost(it);
+    if (c.gold < cost) return s.notice(`골드가 부족해요. (${cost}G 필요)`);
+    c.gold -= cost;
+    const odds = enhanceOdds(it.enh);
+    const r = secureRandom();
+    let result;
+    if (r < odds.destroy) {
+      result = "destroy";
+      if (where === "inv") c.inv = c.inv.filter((x) => x !== it);
+      else for (const k of SLOTS) if (c.equip[k] === it) c.equip[k] = null;
+      refreshStats(s.unit);
+      s.unit.room?.ev({ e: "add", ...s.unit.room.describe(s.unit) });
+    } else if (r < odds.destroy + odds.success) {
+      result = "success";
+      it.enh++;
+      if (where === "equip") refreshStats(s.unit);
+    } else result = "fail";
+    itemLog(s.userId, "enhance", { name: it.name, rarity: it.rarity, from: result === "success" ? it.enh - 1 : it.enh, result, cost });
+    if (result === "success" && it.enh >= 20) this.broadcastSys(`${s.name}님이 [${it.name}] +${it.enh} 강화에 성공했어요!`, "legend");
+    s.send({ t: "enh", result, uid, enh: it.enh, name: it.name, cost });
+    this.sendChar(s);
+    this.save(s);
+  }
+
+  // ── GM 도구
+  gmFind(userId) { return this.sessions.get(userId) ?? null; }
+  gmKick(userId, why) {
+    const s = this.sessions.get(userId);
+    if (!s) return false;
+    s.send({ t: "kick", why: why || "GM에 의해 연결이 끊겼어요." });
+    setTimeout(() => s.conn.close(4002, "kicked"), 100);
+    return true;
+  }
+  gmAnnounce(text) {
+    this.announcement = text ? { text, at: Date.now() } : null;
+    for (const s of this.sessions.values()) s.send({ t: "announce", text });
+  }
+  gmApplyChar(userId, fn) {
+    const s = this.sessions.get(userId);
+    if (s) {
+      fn(s.char);
+      s.char = sanitizeChar(s.char, s.name);
+      refreshStats(s.unit);
+      this.sendChar(s);
+      this.save(s);
+      s.notice("GM이 캐릭터 정보를 수정했어요.");
+      return true;
+    }
+    const row = Q.charByUser.get(userId);
+    const u = Q.userById.get(userId);
+    if (!u) return false;
+    let c;
+    try { c = row ? JSON.parse(row.data) : newCharacter(u.username); } catch { c = newCharacter(u.username); }
+    fn(c);
+    c = sanitizeChar(c, u.username);
+    Q.saveChar.run(userId, JSON.stringify(c), c.level, c.cls, c.best, Date.now());
+    return true;
+  }
+  gmWarp(userId, floor) {
+    const s = this.sessions.get(userId);
+    if (!s) return false;
+    const group = this.groupOf(s).filter((g) => g === s || g.unit.room === s.unit.room);
+    this.moveGroup(group, floor, "dungeon");
+    s.notice(`GM이 ${floor}층으로 이동시켰어요.`);
+    return true;
+  }
+  gmTeleportTown(userId) {
+    const s = this.sessions.get(userId);
+    if (!s) return false;
+    this.toTown(s, "GM이 마을로 이동시켰어요.");
+    return true;
+  }
+  stats() {
+    const rooms = [...this.rooms.values()].map((r) => ({
+      id: r.id, kind: r.kind, floor: r.floor, players: [...r.players.values()].map((p) => ({ name: p.name, cls: p.cls, lv: p.level, hp: Math.round(p.hp), mh: p.maxHp, dead: p.dead })),
+      monsters: [...r.units.values()].filter((u) => u.team === "m" && !u.dummy).length, boss: r.bossId ? r.units.get(r.bossId)?.name ?? "처치됨" : null,
+      age: Math.round((Date.now() - r.createdAt) / 1000),
+    }));
+    const avg = this.tickTimes.reduce((a, b) => a + b, 0) / Math.max(1, this.tickTimes.length);
+    return { online: this.sessions.size, rooms, tickMs: +avg.toFixed(2), uptime: Math.round((Date.now() - this.startedAt) / 1000), mem: Math.round(process.memoryUsage().rss / 1048576), announcement: this.announcement };
+  }
+}

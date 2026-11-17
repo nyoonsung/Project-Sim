@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Project-Sim — 던전 RPG</title>
+  <link rel="stylesheet" href="/css/game.css" />
+</head>
+<body>
+  <!-- 로그인 -->
+  <section id="login" class="screen">
+    <div class="login-card">
+      <h1 class="logo">PROJECT<span>·</span>SIM</h1>
+      <p class="tagline">100층 던전을 정복하라</p>
+      <canvas id="login-art" width="320" height="120"></canvas>
+      <form id="login-form" autocomplete="on">
+        <input id="lf-user" name="username" placeholder="아이디 (2~12자)" maxlength="12" autocomplete="username" required />
+        <input id="lf-pass" name="password" type="password" placeholder="비밀번호 (8자 이상, 영문+숫자)" maxlength="72" autocomplete="current-password" required />
+        <div class="row">
+          <button type="submit" id="lf-login" class="btn primary">로그인</button>
+          <button type="button" id="lf-register" class="btn">회원가입</button>
+        </div>
+        <p id="lf-msg" class="msg" role="alert"></p>
+      </form>
+    </div>
+  </section>
+
+  <!-- 게임 -->
+  <section id="game" class="screen hidden">
+    <canvas id="view" width="640" height="360"></canvas>
+    <div id="ui">
+      <div id="topbar">
+        <div id="zone-label"></div>
+        <div id="announce" class="hidden"></div>
+      </div>
+      <div id="bossbar" class="hidden"><div class="bname"></div><div class="bbar"><div class="bfill"></div><div class="bgro"></div></div></div>
+      <canvas id="minimap" width="180" height="140"></canvas>
+      <div id="party-frames"></div>
+      <div id="toasts"></div>
+      <div id="center-msg"></div>
+      <div id="hud">
+        <div id="orbs">
+          <div class="bar hp"><div class="fill"></div><div class="shield"></div><span></span></div>
+          <div class="bar mp"><div class="fill"></div><span></span></div>
+          <div class="bar res hidden"><div class="fill"></div><span></span></div>
+          <div class="bar xp"><div class="fill"></div><span></span></div>
+        </div>
+        <div id="skillbar"></div>
+        <div id="potions"></div>
+        <div id="buffs"></div>
+      </div>
+      <div id="chat">
+        <div id="chat-log"></div>
+        <input id="chat-input" maxlength="120" placeholder="Enter로 채팅 ( /p 파티 채팅 )" />
+      </div>
+      <div id="menu-buttons">
+        <button data-win="char" title="캐릭터 (C)">캐릭터 <kbd>C</kbd></button>
+        <button data-win="skills" title="스킬 (K)">스킬 <kbd>K</kbd></button>
+        <button data-win="inv" title="가방 (I)">가방 <kbd>I</kbd></button>
+        <button data-win="party" title="파티 (P)">파티 <kbd>P</kbd></button>
+        <button data-win="help" title="도움말 (H)">도움말 <kbd>H</kbd></button>
+      </div>
+      <div id="interact-hint" class="hidden"></div>
+      <div id="windows"></div>
+      <div id="tooltip" class="hidden"></div>
+      <div id="dead-overlay" class="hidden"><div>쓰러졌어요</div><small>파티가 다음 층으로 이동하면 부활해요. 전멸하면 마을로 돌아가요.</small></div>
+    </div>
+  </section>
+  <script type="module" src="/js/main.js"></script>
+</body>
+</html>

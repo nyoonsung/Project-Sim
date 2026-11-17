@@ -1,0 +1,59 @@
+// 서버와 클라이언트가 함께 쓰는 상수. (브라우저에서는 /shared/constants.js 로 불러옴)
+
+export const TILE = 32;               // 타일 한 칸 = 32px (캐릭터 24x38 리그와 비율을 맞춤)
+export const TICK_RATE = 20;          // 서버 시뮬레이션 초당 횟수
+export const TICK_DT = 1 / TICK_RATE;
+export const VIEW_W = 640;            // 내부 렌더 해상도
+export const VIEW_H = 360;
+
+export const MAX_LEVEL = 150;
+export const MAX_FLOOR = 100;
+export const MAX_PARTY = 4;
+export const SKILL_SLOTS = 8;         // 전체 장착 칸 (종류 구분 없음)
+export const STAT_POINTS_PER_LEVEL = 3;
+
+// 타일 종류
+export const T = {
+  VOID: 0,      // 바깥(검은 공간)
+  FLOOR: 1,
+  WALL: 2,
+  DOOR: 3,      // 보스방 입구 등 (열리면 FLOOR처럼 통과)
+  WATER: 4,     // 통과 불가, 투사체는 통과
+  PIT: 5,       // 통과 불가, 투사체는 통과
+  DECO: 6,      // 바닥 장식(통과 가능)
+  GRASS: 7,     // 마을 잔디
+  PATH: 8,      // 마을 길
+  PLAZA: 9,     // 마을 광장 돌바닥
+};
+export const SOLID = new Set([T.VOID, T.WALL, T.WATER, T.PIT]);
+export const BLOCKS_SHOT = new Set([T.VOID, T.WALL]);
+
+// 플레이어 몸 판정 반지름(px)
+export const PLAYER_RADIUS = 9;
+export const BASE_MOVE_SPEED = 120;   // px/s
+
+// 치명타 규칙 (기획서 4장 표 그대로)
+export const CRIT = {
+  BASE_CHANCE: 0.05,
+  PER_POINT: 0.0025,
+  CHANCE_CAP: 0.5,
+  BASE_DAMAGE: 1.5,
+  DAMAGE_CAP: 2.0,
+};
+
+// 스킬 등급 (약한 것 → 강한 것)
+export const GRADES = ["일반", "희귀", "영웅", "전설"];
+export const GRADE_COLOR = { 일반: "#c9d1d9", 희귀: "#58a6ff", 영웅: "#d2a8ff", 전설: "#ffb347" };
+
+// 키 배치: 장착 칸 1~8
+export const SLOT_KEYS = ["LMB", "RMB", "Q", "E", "R", "F", "SHIFT", "V"];
+
+// 소모품
+export const ITEMS = {
+  hp_potion: { name: "체력 물약", desc: "최대 체력의 35%를 즉시 회복한다.", price: 30, cd: 15, max: 20 },
+  antidote: { name: "해독제", desc: "중독·화상·출혈을 해제한다.", price: 20, cd: 10, max: 10 },
+  mp_potion: { name: "마나 물약", desc: "최대 MP의 40%를 즉시 회복한다.", price: 25, cd: 15, max: 20 },
+};
+
+// 직업 id
+export const CLASSES = ["adventurer", "sword", "fist", "archer", "rogue", "mage", "priest", "smith"];

@@ -1,0 +1,110 @@
+// 캐릭터 데이터(저장용)와 플레이어 유닛(접속 중)
+import { deriveStats } from "../../shared/stats.js";
+import { CLASS_INFO, xpToNext, stageOf } from "../../shared/classes.js";
+import { SKILLS, unlockStage } from "../../shared/skills.js";
+import { MAX_LEVEL, STAT_POINTS_PER_LEVEL, PLAYER_RADIUS, ITEMS } from "../../shared/constants.js";
+import { starterGear } from "../../shared/items.js";
+
+export const INV_SIZE = 40;
+
+export function newCharacter(name) {
+  const g = starterGear();
+  return {
+    v: 1, name, level: 1, xp: 0, cls: "adventurer", stats: {}, unspent: 0,
+    skills: ["c_thrust", "c_slash", null, null, null, null, "c_dash", "c_firstaid"],
+    equip: { weapon: { uid: 1, ...g.weapon }, offhand: { uid: 2, ...g.offhand }, helmet: null, armor: null, trinket: null },
+    inv: [], nextUid: 3, cons: { hp_potion: 5, antidote: 2, mp_potion: 2 }, gold: 100,
+    best: 0, checkpoint: 1, cleared: false, kills: 0, deaths: 0, playtime: 0, created: Date.now(),
+  };
+}
+
+/** 저장 데이터 정리(이상한 값이 들어와도 안전하게) */
+export function sanitizeChar(c, name) {
+  const d = newCharacter(name);
+  if (!c || typeof c !== "object") return d;
+  const out = { ...d, ...c, name };
+  if (!CLASS_INFO[out.cls]) out.cls = "adventurer";
+  out.level = Math.max(1, Math.min(MAX_LEVEL, out.level | 0));
+  if (!Array.isArray(out.skills) || out.skills.length !== 8) out.skills = d.skills;
+  if (!Array.isArray(out.inv)) out.inv = [];
+  out.cons = { ...d.cons, ...(out.cons ?? {}) };
+  out.equip = { ...d.equip, ...(out.equip ?? {}) };
+  return out;
+}
+
+/** 이 캐릭터가 지금 쓸 수 있는 스킬 */
+export function availableSkills(ch) {
+  const stage = stageOf(ch.cls, ch.level);
+  const n = CLASS_INFO[ch.cls].ranks.length;
+  return Object.values(SKILLS).filter((s) => s.cls === "common" || (s.cls === ch.cls && stage >= unlockStage(s, n)));
+}
+
+let nextUnitId = 1;
+export const newUnitId = () => nextUnitId++;
+
+export function makePlayerUnit(session) {
+  const ch = session.char;
+  const u = {
+    id: newUnitId(), team: "p", type: "p", session, userId: session.userId, name: ch.name,
+    x: 0, y: 0, r: PLAYER_RADIUS, facing: 0, dead: false,
+    status: new Map(), buffs: new Map(), shield: null,
+    cds: new Map(), lockUntil: 0, casting: null, channel: null, dash: null, parry: null,
+    inputs: [], lastInput: { mx: 0, my: 0, ax: 0, ay: 0 }, lastSeq: 0, idleSince: 0, missed: 0,
+    ki: 0, holy: 0, parts: 0, gap: 0, stance: "검술", stanceShift: false,
+    icd: new Map(), devices: [], lastSkill: null, lastSkillAt: 0, acupoint: 0, kiWindow: { t: 0, n: 0 },
+    anim: { name: "idle", t: 0, dur: 0 },
+  };
+  refreshStats(u);
+  u.hp = u.maxHp;
+  u.mp = u.maxMp;
+  return u;
+}
+
+export function refreshStats(u) {
+  const ch = u.session.char;
+  const s = deriveStats(ch);
+  u.stats = s;
+  u.level = ch.level;
+  u.cls = ch.cls;
+  const hpRatio = u.maxHp ? u.hp / u.maxHp : 1;
+  u.maxHp = s.maxHp;
+  u.maxMp = s.maxMp;
+  u.def = s.def;
+  u.res = s.res;
+  if (u.hp != null) u.hp = Math.min(u.maxHp, Math.max(u.dead ? 0 : 1, Math.round(u.maxHp * hpRatio)));
+  if (u.mp != null) u.mp = Math.min(u.maxMp, u.mp);
+  u.mythicBerserk = s.mythic.includes("berserk");
+  u.mythicIron = s.mythic.includes("iron_will");
+  u.mythic = new Set(s.mythic);
+}
+
+/** 경험치 획득 → 레벨업 (레벨업마다 스탯 3점) */
+export function gainXp(room, u, amount) {
+  const ch = u.session.char;
+  if (ch.level >= MAX_LEVEL) return;
+  ch.xp += Math.round(amount);
+  let leveled = false;
+  while (ch.level < MAX_LEVEL && ch.xp >= xpToNext(ch.level)) {
+    ch.xp -= xpToNext(ch.level);
+    ch.level++;
+    ch.unspent += STAT_POINTS_PER_LEVEL;
+    leveled = true;
+    const prevStage = stageOf(ch.cls, ch.level - 1), stage = stageOf(ch.cls, ch.level);
+    if (stage > prevStage) {
+      room.ev({ e: "msg", text: `${ch.name}님이 ${CLASS_INFO[ch.cls].ranks[stage]}(으)로 성장했어요!`, kind: "rank" });
+      u.session.notice(`성장 단계 상승: ${CLASS_INFO[ch.cls].ranks[stage]} — 새 스킬을 확인해 보세요.`);
+    }
+  }
+  if (leveled) {
+    refreshStats(u);
+    u.hp = u.maxHp;
+    u.mp = u.maxMp;
+    room.ev({ e: "lvl", id: u.id, l: ch.level });
+    u.session.dirty = true;
+  }
+  u.session.meDirty = true;
+}
+
+export function consumableCap(id) {
+  return ITEMS[id]?.max ?? 0;
+}
