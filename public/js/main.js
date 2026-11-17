@@ -6,6 +6,7 @@ import { loadDT2, frame } from "./render/dt2.js";
 import { dtLookFor, drawDT } from "./render/looks.js";
 if (isTouchDevice()) document.body.classList.add("touch");
 import { Net } from "./net.js";
+import { watchUpdates, onTown, autoReconnect } from "./update.js";
 import { Renderer } from "./render/world.js";
 import { $, h, closeAll, openWins, toggleWin, refreshWin, isOpen, closeWin } from "./ui/dom.js";
 import * as HUD from "./ui/hud.js";
@@ -149,9 +150,12 @@ async function startGame() {
     $("#lf-msg").textContent = G.kickedWhy ?? (e.code === 1006 ? "서버와 연결이 끊겼어요." : "연결이 끊겼어요.");
     const b = h("button", { class: "btn primary", onclick: () => location.reload() }, "다시 접속");
     $(".login-card").append(b);
+    // 쫓겨난 게 아니면(업데이트 배포·잠깐 끊김) 서버가 살아나는 대로 자동 재접속 = 새 버전 적용
+    if (!G.kickedWhy) autoReconnect((t) => ($("#lf-msg").textContent = t));
   });
   try { await G.net.connect(); } catch { $("#lf-msg").textContent = "접속하지 못했어요."; return; }
   bindInput();
+  watchUpdates({ inTown: () => G.kind === "town", show: (t) => HUD.center(t), notice: (t) => HUD.toast(t, "legend") });
   setInterval(inputTick, 50);
   setInterval(() => { HUD.drawMinimap(); HUD.updateParty(); HUD.updateInteract(); }, 200);
   const loop = () => {

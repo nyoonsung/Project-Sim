@@ -9,6 +9,12 @@ rmSync(out, { recursive: true, force: true });
 mkdirSync(out, { recursive: true });
 cpSync(join(root, "public"), out, { recursive: true });
 cpSync(join(root, "shared"), join(out, "shared"), { recursive: true });
+// 버전 표시: 배포마다 달라져서 접속 중인 사람에게 자동 업데이트를 알림
+let ver = process.env.WORKERS_CI_COMMIT_SHA || "";
+if (!ver) try { ver = (await import("node:child_process")).execSync("git rev-parse --short HEAD", { cwd: root }).toString().trim(); } catch {}
+if (!ver) ver = String(Date.now());
+ver = ver.slice(0, 12) + "-" + Date.now().toString(36);
+writeFileSync(join(out, "js", "version.js"), `// 자동 생성\nexport const VERSION = "${ver}";\n`);
 writeFileSync(join(out, "_headers"), `/*
   Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'
   X-Content-Type-Options: nosniff

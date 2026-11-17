@@ -1,5 +1,6 @@
 // 클라이언트 게임 상태: 서버 메시지 반영, 내 캐릭터 이동 예측, 입력 전송
 import { applyInput } from "/shared/move.js";
+import { onTown } from "./update.js";
 import { sfx, onEnemyHit, onEnemyDie, onMeHurt } from "./feel.js";
 import { TICK_DT, PLAYER_RADIUS, SLOT_KEYS, VIEW_W, VIEW_H } from "/shared/constants.js";
 import { SKILLS } from "/shared/skills.js";
@@ -48,6 +49,7 @@ export function onMessage(m) {
 
 function onMap(m) {
   G.room = m.room; G.kind = m.map?.kind ?? m.kind; G.floor = m.floor; G.you = m.you;
+  if (G.kind === "town") onTown((t) => G.ui?.center(t));
   G.mapKind = m.kind === "town" ? "town" : m.kind === "safe" ? "safe" : m.kind;
   G.zone = m.floor ? zoneOf(m.floor) : ZONES[0];
   G.map = new TileMap({ ...m, kind: m.kind === "town" ? "town" : m.kind }, G.zone);
