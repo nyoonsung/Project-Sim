@@ -12,7 +12,7 @@ const PORT = TARGET ? Number(new URL(TARGET).port) : 3400 + Math.floor(Math.rand
 const BASE = TARGET ?? `http://localhost:${PORT}`;
 const dir = mkdtempSync(join(tmpdir(), "psim-"));
 const srv = TARGET ? { kill() {}, stdout: { on() {} }, stderr: { on() {} } } : spawn(process.execPath, ["--disable-warning=ExperimentalWarning", "server/main.js"], {
-  env: { ...process.env, PORT: String(PORT), DB_PATH: join(dir, "t.db"), INITIAL_GM_USER: "gmtest", INITIAL_GM_PASS: "gmpass1234" },
+  env: { ...process.env, PORT: String(PORT), DB_PATH: join(dir, "t.db"), DEV_LOGIN: "1", GOOGLE_CLIENT_ID: "test-client.apps.googleusercontent.com", GOOGLE_CLIENT_SECRET: "test-secret" },
   stdio: ["ignore", "pipe", "pipe"],
 });
 let log = "";
@@ -66,23 +66,28 @@ class Bot {
 }
 
 try {
-  if (TARGET) log += "실행 중 GM 계정 생성";
+  if (TARGET) log += "서버 실행 중";
   for (let i = 0; i < 60 && !log.includes("서버 실행 중"); i++) await sleep(100);
   ok(log.includes("서버 실행 중"), "서버 시작");
-  ok(log.includes("GM 계정 생성"), "환경 변수로 GM 계정 생성");
 
   // ── 가입·로그인 보안
-  let r = await api("/api/register", { username: "a", password: "x" });
-  ok(r.status === 400, "짧은 아이디/약한 비번 거부");
-  r = await api("/api/register", { username: "봇하나", password: "password1" }, null, "http://evil.example");
-  ok(r.status === 403, "다른 출처의 가입 요청 차단(CSRF)");
-  r = await api("/api/register", { username: "봇하나", password: "password1" });
-  ok(r.status === 200 && r.cookie.startsWith("sid="), "가입 + 세션 쿠키");
+  let r = await api("/api/dev-login", { username: "a" });
+  ok(r.status === 400, "잘못된 닉네임 거부");
+  r = await api("/api/dev-login", { username: "봇하나" }, null, "http://evil.example");
+  ok(r.status === 403, "다른 출처의 로그인 요청 차단(CSRF)");
+  r = await api("/api/dev-login", { username: "봇하나" });
+  ok(r.status === 200 && r.cookie.startsWith("sid="), "로그인 + 세션 쿠키");
   const c1 = r.cookie;
-  r = await api("/api/register", { username: "봇둘", password: "password2" });
+  r = await api("/api/dev-login", { username: "봇둘" });
   const c2 = r.cookie;
-  r = await api("/api/login", { username: "봇하나", password: "wrongpass1" });
-  ok(r.status === 401, "틀린 비밀번호 거부");
+  // 구글 로그인 흐름: 시작하면 구글로 보내고 state 쿠키를 심는다, 위조된 콜백은 거부
+  const g = await fetch(BASE + "/api/auth/google", { redirect: "manual" });
+  const loc = g.headers.get("location") ?? "";
+  ok(g.status === 302 && loc.startsWith("https://accounts.google.com/") && loc.includes("code_challenge=") && /oauth_state=/.test(g.headers.get("set-cookie") ?? ""), "구글 로그인 시작 (PKCE·state)");
+  const cb = await fetch(BASE + "/api/auth/google/callback?state=forged&code=x", { redirect: "manual" });
+  ok(cb.status === 302 && (cb.headers.get("location") ?? "").includes("error=state"), "위조된 구글 콜백 거부");
+  r = await api("/api/auth/signup", { name: "가짜가입" });
+  ok(r.status === 400, "구글 인증 없이 가입 불가");
   r = await api("/api/gm/overview", null, c1);
   ok(r.status === 403, "일반 유저 GM API 차단");
 
@@ -180,7 +185,7 @@ try {
   ok(b1.me && b1.me.xp > 0 || b1.me.lv > 1, `경험치 획득 (lv ${b1.me?.lv}, xp ${b1.me?.xp})`);
 
   // ── GM API
-  r = await api("/api/login", { username: "gmtest", password: "gmpass1234" });
+  r = await api("/api/dev-login", { username: "gmtest", gm: true });
   const gmc = r.cookie;
   r = await api("/api/gm/overview", null, gmc);
   ok(r.status === 200 && r.j.online === 2, `GM 개요 (접속 ${r.j.online})`);

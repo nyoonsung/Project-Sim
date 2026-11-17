@@ -13,12 +13,16 @@
       <h1 class="logo">ABYSS<span>·</span>RUN</h1>
       <p class="tagline">100층 던전을 정복하라</p>
       <canvas id="login-art" width="320" height="120"></canvas>
-      <form id="login-form" autocomplete="on">
-        <input id="lf-user" name="username" placeholder="아이디 (2~12자)" maxlength="12" autocomplete="username" required />
-        <input id="lf-pass" name="password" type="password" placeholder="비밀번호 (8자 이상, 영문+숫자)" maxlength="72" autocomplete="current-password" required />
-        <div class="row">
-          <button type="submit" id="lf-login" class="btn primary">로그인</button>
-          <button type="button" id="lf-register" class="btn">회원가입</button>
+      <form id="login-form" autocomplete="off">
+        <a id="google-btn" class="btn google hidden" href="/api/auth/google"><span class="g">G</span> Google 계정으로 로그인</a>
+        <div id="nick-box" class="hidden">
+          <p id="nick-note" class="note">처음 오셨네요! 게임에서 쓸 닉네임을 정해 주세요.</p>
+          <input id="lf-user" name="nickname" placeholder="닉네임 (2~12자, 한글·영문·숫자·_)" maxlength="12" autocomplete="off" />
+          <button type="submit" id="lf-login" class="btn primary">시작하기</button>
+        </div>
+        <div id="dev-box" class="hidden">
+          <input id="dev-user" placeholder="테스트 닉네임" maxlength="12" />
+          <button type="button" id="dev-login" class="btn">테스트 로그인</button>
         </div>
         <p id="lf-msg" class="msg" role="alert"></p>
       </form>

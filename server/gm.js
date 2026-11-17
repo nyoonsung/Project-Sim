@@ -1,7 +1,6 @@
 // GM API: 모든 요청은 서버에서 GM 권한을 확인하고, 모든 변경은 감사 기록에 남긴다
 import { Q, secLog } from "./db.js";
 import { world } from "./net.js";
-import { hashPassword, validatePassword } from "./auth.js";
 import { rollItem, RARITIES, SLOTS, canEquip } from "../shared/items.js";
 import { CLASS_INFO } from "../shared/classes.js";
 import { MAX_LEVEL, ITEMS } from "../shared/constants.js";
@@ -55,7 +54,7 @@ export async function handleGm(req, res, path, { readJson, send, currentUser, ip
     let char = null;
     try { char = s ? s.char : row ? JSON.parse(row.data) : null; } catch {}
     return send(res, 200, {
-      user: { id: target.id, username: target.username, role: target.role, created_at: target.created_at, last_login: target.last_login, last_ip: target.last_ip, banned_until: target.banned_until, ban_reason: target.ban_reason, muted_until: target.muted_until },
+      user: { id: target.id, username: target.username, email: target.email ?? null, role: target.role, created_at: target.created_at, last_login: target.last_login, last_ip: target.last_ip, banned_until: target.banned_until, ban_reason: target.ban_reason, muted_until: target.muted_until },
       online: !!s, room: s ? { kind: s.unit.room?.kind, floor: s.unit.room?.floor, hp: Math.round(s.unit.hp), mh: s.unit.maxHp } : null,
       char, security: Q.secByUser.all(id, 50), items: Q.itemLogByUser.all(id, 50),
     });
@@ -156,16 +155,6 @@ export async function handleGm(req, res, path, { readJson, send, currentUser, ip
       Q.deleteUserSessions.run(id);
       world.gmKick(id, "권한이 바뀌어 다시 로그인해야 해요.");
       audit("role", target, { role: b.role });
-      return send(res, 200, { ok: true });
-    }
-    case "reset-password": {
-      if (protectedTarget) return send(res, 403, { error: "다른 GM의 비밀번호는 바꿀 수 없어요." });
-      const err = validatePassword(b.password);
-      if (err) return send(res, 400, { error: err });
-      Q.setPass.run(await hashPassword(b.password), id);
-      Q.deleteUserSessions.run(id);
-      world.gmKick(id, "비밀번호가 재설정됐어요. 다시 로그인해 주세요.");
-      audit("reset_password", target, null);
       return send(res, 200, { ok: true });
     }
   }

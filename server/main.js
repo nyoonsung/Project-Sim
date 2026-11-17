@@ -69,6 +69,7 @@ const server = http.createServer(async (req, res) => {
   const r = toReq(req);
   if (r.path.startsWith("/api/")) {
     const out = await handleApi(r);
+    if (out.body == null) { res.writeHead(out.status, { "Cache-Control": "no-store", ...out.headers }); return res.end(); }
     res.writeHead(out.status, { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store", ...out.headers });
     return res.end(JSON.stringify(out.body));
   }

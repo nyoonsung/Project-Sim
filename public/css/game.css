@@ -145,3 +145,10 @@ kbd { font-family: "GalmuriMono11", monospace; font-size: 10px; padding: 0 3px; 
 input.txt { padding: 5px 8px; background: #0e0c14; border: 1px solid var(--line2); outline: none; }
 .flexrow { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
 .invite { position: absolute; top: 120px; right: 10px; padding: 10px; background: var(--panel); border: 2px solid var(--gold); }
+
+.btn.google { display: flex; align-items: center; justify-content: center; gap: 10px; padding: 11px 12px; background: #fff; color: #1f1f1f; border-color: #dadce0; text-decoration: none; font-weight: bold; }
+.btn.google:hover { border-color: #8a6af0; }
+.btn.google .g { display: grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: conic-gradient(#ea4335 0 25%, #fbbc05 0 50%, #34a853 0 75%, #4285f4 0); color: #fff; font-size: 13px; }
+#nick-box input, #dev-box input { width: 100%; padding: 10px 12px; margin-bottom: 8px; background: #0e0c14; border: 2px solid var(--line); outline: none; }
+#nick-box .btn, #dev-box .btn { width: 100%; }
+#dev-box { margin-top: 10px; }

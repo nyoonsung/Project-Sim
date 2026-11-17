@@ -10,7 +10,7 @@ const lower = (headers) => { const o = {}; for (const [k, v] of headers) o[k.toL
 export class GameServer extends DurableObject {
   constructor(ctx, env) {
     super(ctx, env);
-    applyEnv({ INITIAL_GM_USER: env.INITIAL_GM_USER, INITIAL_GM_PASS: env.INITIAL_GM_PASS, ALLOWED_ORIGINS: env.ALLOWED_ORIGINS, REGISTRATION_OPEN: env.REGISTRATION_OPEN, MAX_CONN_PER_IP: env.MAX_CONN_PER_IP, NODE_ENV: "production" });
+    applyEnv({ GOOGLE_CLIENT_ID: env.GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET: env.GOOGLE_CLIENT_SECRET, INITIAL_GM_EMAIL: env.INITIAL_GM_EMAIL, PUBLIC_URL: env.PUBLIC_URL, DEV_LOGIN: env.DEV_LOGIN, ALLOWED_ORIGINS: env.ALLOWED_ORIGINS, REGISTRATION_OPEN: env.REGISTRATION_OPEN, MAX_CONN_PER_IP: env.MAX_CONN_PER_IP, NODE_ENV: "production" });
     initDb(doSqlDriver(ctx.storage.sql));
     this.ready = ctx.blockConcurrencyWhile(() => ensureInitialGm());
     this.conn = new Map();
@@ -61,7 +61,11 @@ export class GameServer extends DurableObject {
       // 오래된 세션·보안 기록 정리 (가끔)
       if (Math.random() < 0.01) { Q.purgeSessions.run(Date.now()); Q.trimSec.run(Date.now() - 30 * 864e5); }
       const out = await handleApi(req);
-      return new Response(JSON.stringify(out.body), { status: out.status, headers: { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store", ...out.headers } });
+      const h = new Headers({ "Cache-Control": "no-store" });
+      for (const [k, v] of Object.entries(out.headers ?? {})) for (const x of [].concat(v)) h.append(k, x);
+      if (out.body == null) return new Response(null, { status: out.status, headers: h });
+      h.set("Content-Type", "application/json; charset=utf-8");
+      return new Response(JSON.stringify(out.body), { status: out.status, headers: h });
     }
     return new Response("not found", { status: 404 });
   }

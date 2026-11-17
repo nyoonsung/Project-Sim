@@ -45,6 +45,10 @@ CREATE INDEX IF NOT EXISTS idx_item_user ON item_log(user_id, at)`;
 const SQL = {
   userByName: "SELECT * FROM users WHERE username = ?",
   userById: "SELECT * FROM users WHERE id = ?",
+  userByGoogle: "SELECT * FROM users WHERE google_sub = ?",
+  userByEmail: "SELECT * FROM users WHERE email = ?",
+  createGoogleUser: "INSERT INTO users (username, google_sub, email, pass_hash, role, created_at) VALUES (?, ?, ?, '', ?, ?)",
+  setEmail: "UPDATE users SET email = ? WHERE id = ?",
   createUser: "INSERT INTO users (username, pass_hash, role, created_at) VALUES (?, ?, ?, ?)",
   setRole: "UPDATE users SET role = ? WHERE id = ?",
   setPass: "UPDATE users SET pass_hash = ? WHERE id = ?",
@@ -67,7 +71,7 @@ const SQL = {
   secByUser: "SELECT * FROM security_log WHERE user_id = ? ORDER BY id DESC LIMIT ?",
   itemLog: "INSERT INTO item_log (at, user_id, kind, detail) VALUES (?, ?, ?, ?)",
   itemLogByUser: "SELECT * FROM item_log WHERE user_id = ? ORDER BY id DESC LIMIT ?",
-  playerList: `SELECT u.id, u.username, u.role, u.created_at, u.last_login, u.last_ip, u.banned_until, u.ban_reason, u.muted_until, c.level, c.cls, c.best_floor
+  playerList: `SELECT u.id, u.username, u.email, u.role, u.created_at, u.last_login, u.last_ip, u.banned_until, u.ban_reason, u.muted_until, c.level, c.cls, c.best_floor
                FROM users u LEFT JOIN characters c ON c.user_id = u.id WHERE u.username LIKE ? ORDER BY u.id DESC LIMIT ? OFFSET ?`,
   ranking: `SELECT u.username, c.level, c.cls, c.best_floor FROM characters c JOIN users u ON u.id = c.user_id
             WHERE u.role = 'player' ORDER BY c.best_floor DESC, c.level DESC LIMIT 20`,
@@ -79,6 +83,9 @@ export const Q = {};
 
 export function initDb(driver) {
   for (const stmt of SCHEMA.split(";").map((s) => s.trim()).filter(Boolean)) driver.exec(stmt);
+  // 구글 로그인용 열 (예전 DB에도 추가)
+  for (const col of ["google_sub TEXT", "email TEXT"]) { try { driver.exec(`ALTER TABLE users ADD COLUMN ${col}`); } catch {} }
+  driver.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_users_google ON users(google_sub)");
   for (const [k, sql] of Object.entries(SQL)) Q[k] = driver.prepare(sql);
 }
 

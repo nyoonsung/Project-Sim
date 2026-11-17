@@ -19,19 +19,19 @@ Node.js **22.13 이상**이 필요합니다 (내장 SQLite 사용, 별도 DB 설
 
 ```bash
 npm install
-INITIAL_GM_USER=관리자아이디 INITIAL_GM_PASS=비밀번호123 npm start
+DEV_LOGIN=1 npm start   # 내 컴퓨터 시험용: 구글 없이 닉네임만으로 로그인
 ```
 
 Windows PowerShell:
 
 ```powershell
 npm install
-$env:INITIAL_GM_USER="관리자아이디"; $env:INITIAL_GM_PASS="비밀번호123"; npm start
+$env:DEV_LOGIN="1"; npm start
 ```
 
 - 게임: http://localhost:3000
 - GM 패널: http://localhost:3000/gm (또는 게임 안 도움말(H) → GM 패널 열기)
-- `INITIAL_GM_*`는 처음 한 번만 필요합니다. 나중에 GM을 추가하려면 `npm run create-gm -- 아이디 비밀번호`
+- 로컬에서 GM 지정: 먼저 접속해 닉네임을 만든 뒤 `npm run create-gm -- 닉네임`
 
 ## 조작
 
@@ -58,10 +58,20 @@ GitHub Pages는 정적 파일만 올리는 곳이라 서버를 못 돌려요. �
 1. dash.cloudflare.com 가입 (무료)
 2. **Workers & Pages → Create → Import a repository** → GitHub 연결 → `Project-Sim` 선택 → Deploy
    (빌드·배포 명령은 `wrangler.toml`에 들어 있어요: 빌드 `node tools/build-cf.mjs`, 배포 `npx wrangler deploy`)
-3. 만들어진 Worker의 **Settings → Variables and Secrets** 에서 비밀(Secret)로 `INITIAL_GM_USER`, `INITIAL_GM_PASS` 추가 → 다시 배포
-4. `https://abyss-run.<내 계정>.workers.dev` 에서 접속, `/gm` 이 GM 패널
+3. 구글 로그인 준비 (아래 "구글 로그인 설정")
+4. Worker의 **Settings → Variables and Secrets** 에 Secret으로 `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `INITIAL_GM_EMAIL`(GM이 될 구글 이메일) 추가 → 다시 배포
+5. `https://abyss-run.<내 계정>.workers.dev` 에서 접속, `/gm` 이 GM 패널
 
-명령줄로 하려면: `npx wrangler login` → `npm run deploy` → `npx wrangler secret put INITIAL_GM_PASS`
+### 구글 로그인 설정 (Google Cloud Console)
+
+1. console.cloud.google.com → 새 프로젝트
+2. **Google 인증 플랫폼(OAuth 동의 화면)** → 시작하기 → 앱 이름·지원 이메일, 대상 **외부** → 만들기 → **대상**에서 **앱 게시**(테스트 상태면 등록한 사용자만 로그인 가능)
+3. **클라이언트 → 클라이언트 만들기 → 웹 애플리케이션** → 승인된 리디렉션 URI: `https://abyss-run.<내 계정>.workers.dev/api/auth/google/callback`
+4. 나온 클라이언트 ID·보안 비밀을 Cloudflare Secret `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` 에 넣기
+
+비밀번호는 저장하지 않아요. 처음 로그인할 때 게임 닉네임을 정하고, 구글 계정 고유번호로 계정을 찾아요. `INITIAL_GM_EMAIL`과 같은 이메일의 구글 계정이 GM이에요(그 외에는 GM 패널의 "GM 지정"으로만).
+
+명령줄로 하려면: `npx wrangler login` → `npm run deploy` → `npx wrangler secret put GOOGLE_CLIENT_SECRET`
 
 내 컴퓨터에서 Cloudflare 환경 그대로 시험: `npm run dev:cf` (http://localhost:8787)
 
@@ -77,7 +87,10 @@ GitHub Pages는 정적 파일만 올리는 곳이라 서버를 못 돌려요. �
 |---|---|
 | `PORT` | 포트 (기본 3000) |
 | `DB_PATH` | DB 파일 경로 (기본 `data/game.db`) |
-| `INITIAL_GM_USER` / `INITIAL_GM_PASS` | 첫 실행 때 GM 계정 생성 |
+| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | 구글 로그인 |
+| `INITIAL_GM_EMAIL` | 이 이메일의 구글 계정이 GM |
+| `PUBLIC_URL` | 구글 리디렉션 주소의 기준 (기본: 접속한 주소) |
+| `DEV_LOGIN=1` | 테스트 전용 로그인(구글 없이). 실서버에서는 켜지 말 것 |
 | `SECURE_COOKIES=1` | https 배포 시 (NODE_ENV=production이면 자동) |
 | `TRUST_PROXY=1` | 프록시 뒤에서 실제 IP 기록 (Render는 자동) |
 | `ALLOWED_ORIGINS` | 추가로 허용할 출처(쉼표 구분) |
@@ -85,8 +98,7 @@ GitHub Pages는 정적 파일만 올리는 곳이라 서버를 못 돌려요. �
 
 ## 보안 설계
 
-- 비밀번호 scrypt 해시, 세션 토큰은 해시만 DB에 저장, 쿠키 `HttpOnly; SameSite=Strict`(+https면 `Secure`)
-- 로그인 시도 제한(IP·계정별 잠금), 가입 시도 제한, 계정 존재 여부가 드러나지 않는 응답 시간
+- 구글 로그인(OAuth 2.0 인가 코드 + PKCE + state), 비밀번호를 저장하지 않음. 세션 토큰은 해시만 DB에 저장, 쿠키 `HttpOnly; SameSite=Strict`(+https면 `Secure`)
 - 모든 POST와 웹소켓은 같은 출처(Origin)만 허용 → CSRF·웹소켓 하이재킹 차단
 - CSP(인라인 스크립트 금지), 화면에 사용자 글자는 항상 textContent로 넣어 XSS 차단
 - 웹소켓: 메시지 크기 4KB 제한, 메시지 종류별 형식·범위 검증, 초당 40개 제한, 위반 누적 시 연결 차단, IP당 연결 수 제한, 중복 접속 시 이전 연결 종료
