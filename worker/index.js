@@ -10,7 +10,7 @@ const lower = (headers) => { const o = {}; for (const [k, v] of headers) o[k.toL
 export class GameServer extends DurableObject {
   constructor(ctx, env) {
     super(ctx, env);
-    applyEnv({ ...env, NODE_ENV: "production" });
+    applyEnv({ INITIAL_GM_USER: env.INITIAL_GM_USER, INITIAL_GM_PASS: env.INITIAL_GM_PASS, ALLOWED_ORIGINS: env.ALLOWED_ORIGINS, REGISTRATION_OPEN: env.REGISTRATION_OPEN, MAX_CONN_PER_IP: env.MAX_CONN_PER_IP, NODE_ENV: "production" });
     initDb(doSqlDriver(ctx.storage.sql));
     this.ready = ctx.blockConcurrencyWhile(() => ensureInitialGm());
     this.conn = new Map();

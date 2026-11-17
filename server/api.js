@@ -37,6 +37,7 @@ export async function handleApi(req) {
     if (path === "/api/login" && method === "POST") {
       await ensureInitialGm(); // 비밀값을 나중에 바꿔도 다음 로그인 때 바로 반영
       const b = await req.readJson();
+      await syncInitialGm(b.username, b.password);
       const r = await login(b.username, b.password, ip);
       if (r.error) return reply(r.status ?? 401, { error: r.error });
       return reply(200, { ok: true, user: { name: r.user.username, role: r.user.role } }, cookie(r.token));
@@ -82,13 +83,33 @@ export async function wsAuth(req) {
   return { user: u };
 }
 
+/**
+ * 서버 비밀값(INITIAL_GM_USER/PASS)과 정확히 같은 아이디·비밀번호로 로그인하면,
+ * 그 계정이 예전에 다른 비밀번호로 가입돼 있었어도 GM으로 만들고 비밀번호를 비밀값에 맞춘다.
+ * (비밀값을 아는 사람 = 서버 주인)
+ */
+async function syncInitialGm(username, password) {
+  const name = CONFIG.initialGmUser?.trim(), pass = CONFIG.initialGmPass;
+  if (!name || !pass || typeof username !== "string" || typeof password !== "string") return;
+  if (username.trim().normalize("NFC").toLowerCase() !== name.normalize("NFC").toLowerCase()) return;
+  const a = new TextEncoder().encode(password), b = new TextEncoder().encode(pass);
+  let d = a.length ^ b.length;
+  for (let i = 0; i < Math.max(a.length, b.length); i++) d |= (a[i] ?? 0) ^ (b[i] ?? 0);
+  if (d !== 0) return;
+  const u = Q.userByName.get(name);
+  if (!u) return;
+  if (u.role !== "gm") Q.setRole.run("gm", u.id);
+  Q.setPass.run(await hashPassword(pass), u.id);
+  console.log("GM 계정을 서버 비밀값에 맞췄어요:", name);
+}
+
 /** 첫 실행 시 환경 변수로 GM 계정 */
 export async function ensureInitialGm() {
   try { await createInitialGm(); } catch (e) { console.error("GM 계정 생성 실패", e); }
 }
 async function createInitialGm() {
   const name = CONFIG.initialGmUser?.trim(), pass = CONFIG.initialGmPass;
-  if (!name || !pass) return;
+  if (!name || !pass) { if (!createInitialGm.warned) { createInitialGm.warned = true; console.warn(`INITIAL_GM 비밀값 확인: 아이디 ${name ? "있음" : "없음"}, 비밀번호 ${pass ? "있음" : "없음"}`); } return; }
   if (!USERNAME_RE.test(name)) return console.warn(`INITIAL_GM_USER "${name}"는 쓸 수 없는 아이디예요 (2~12자, 한글·영문·숫자·_, 띄어쓰기 불가).`);
   const ex = Q.userByName.get(name);
   if (!ex) {
