@@ -28,12 +28,14 @@ export async function handleApi(req) {
     }
     const cookie = (t) => ({ "Set-Cookie": sessionCookie(t, t ? CONFIG.sessionDays * 86400 : 0) });
     if (path === "/api/register" && method === "POST") {
+      await ensureInitialGm();
       const b = await req.readJson();
       const r = await register(b.username, b.password, ip);
       if (r.error) return reply(r.status ?? 400, { error: r.error });
       return reply(200, { ok: true, user: { name: r.user.username, role: r.user.role } }, cookie(r.token));
     }
     if (path === "/api/login" && method === "POST") {
+      await ensureInitialGm(); // 비밀값을 나중에 바꿔도 다음 로그인 때 바로 반영
       const b = await req.readJson();
       const r = await login(b.username, b.password, ip);
       if (r.error) return reply(r.status ?? 401, { error: r.error });
@@ -90,7 +92,7 @@ async function createInitialGm() {
   if (!USERNAME_RE.test(name)) return console.warn(`INITIAL_GM_USER "${name}"는 쓸 수 없는 아이디예요 (2~12자, 한글·영문·숫자·_, 띄어쓰기 불가).`);
   const ex = Q.userByName.get(name);
   if (!ex) {
-    if (validatePassword(pass)) return console.warn("INITIAL_GM_PASS가 약해서 GM 계정을 만들지 않았어요 (8자 이상, 영문+숫자).");
+    if (validatePassword(pass)) return console.warn("INITIAL_GM_PASS가 약해서 GM 계정을 만들지 않았어요 (8~72자, 영문과 숫자 모두 포함).");
     Q.createUser.run(name, await hashPassword(pass), "gm", Date.now());
     console.log(`GM 계정 생성: ${name}`);
   } else if (ex.role !== "gm") Q.setRole.run("gm", ex.id);
