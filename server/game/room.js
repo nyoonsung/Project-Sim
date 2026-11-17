@@ -198,6 +198,29 @@ export class Room {
     }
   }
 
+  // ── 가시 함정: 두 무리가 번갈아 2.8초마다 (0.6초 경고 → 0.5초 솟음). 솟을 때 위에 있으면 최대 체력 6% 피해(한 번)
+  tickTraps(now) {
+    const PERIOD = 2.8, WARN = 0.6, UP = 0.5;
+    for (const ph of [0, 1]) {
+      const c = (now + ph * PERIOD / 2) % PERIOD;
+      const st = c < WARN ? 1 : c < WARN + UP ? 2 : 0;
+      this.trapState ??= [0, 0];
+      if (st !== this.trapState[ph]) { this.trapState[ph] = st; this.ev({ e: "spk", p: ph, s: st }); if (st === 2) this.trapHit = new Set(); }
+      if (st !== 2) continue;
+      for (const tr of this.map.traps) {
+        if (tr.phase !== ph) continue;
+        for (const u of this.players.values()) {
+          if (u.dead || u.invuln || this.trapHit.has(u.id)) continue;
+          const tx = Math.floor(u.x / TILE), ty = Math.floor(u.y / TILE);
+          if (!tr.cells.some(([x, y]) => x === tx && y === ty)) continue;
+          this.trapHit.add(u.id);
+          dealDamage(this, null, u, { fixed: Math.max(1, u.maxHp * 0.06), dot: true }, now);
+          this.ev({ e: "trap", id: u.id });
+        }
+      }
+    }
+  }
+
   // ── 처치
   kill(t, src, now) {
     if (t.dead) return;
@@ -294,6 +317,7 @@ export class Room {
     }
     if (now >= this.flowAt) { this.updateFlow(); this.flowAt = now + 0.5; }
     if (this.wave) this.tickWaves(now);
+    if (this.map.traps?.length) this.tickTraps(now);
     for (const u of this.players.values()) this.tickPlayer(u, now);
     for (const u of [...this.units.values()]) {
       if (u.type === "p" || u.dead) continue;

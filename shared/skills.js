@@ -16,7 +16,7 @@ add("common", [
   { id: "c_slash", name: "베기", grade: "일반", kind: "active", cd: 2, cost: { mp: 2 }, aim: "dir", anim: "slash",
     desc: "전방을 가로질러 공격하는 기본 근접 기술.", limit: "찌르기보다 범위가 넓은 대신 단일 대상 피해가 낮다.",
     fx: { swing: "melee/sword-slash", hit: "impacts/hit-spark" }, steps: [{ do: "melee", range: 46, arc: 120, pow: 0.6 }] },
-  { id: "c_dash", name: "대시", grade: "일반", kind: "active", cd: 3.5, aim: "dir", anim: "dash", moveSkill: true,
+  { id: "c_dash", name: "대시", grade: "일반", kind: "active", cd: 3, aim: "dir", anim: "dash", moveSkill: true, noGcd: true,
     desc: "짧은 거리를 빠르게 이동하는 기본 기동기.", limit: "기본 무적은 없다. 직업 고유 이동기와 중첩 연속 사용을 제한한다.",
     fx: { self: "spawn/poof" }, steps: [{ do: "dash", dist: 96, speed: 520 }] },
   { id: "c_firstaid", name: "응급처치", grade: "일반", kind: "active", cd: 30, aim: "self", anim: "cast", cast: 0.4,

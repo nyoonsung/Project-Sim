@@ -2,6 +2,9 @@
 import { G, localStep, moveDir } from "../game.js";
 import { tickFeel, drawParts, hitOffset } from "../feel.js";
 import { dtLookFor, drawDT } from "./looks.js";
+import { drawTownObject, drawStrings, spawnFolk, tickFolk, folkList, drawFolk, drawTownNpc } from "./townart.js";
+import { beginGlows, addGlow, drawGlows, forEachGlow } from "./glow.js";
+import { drawDungeonObject } from "./dungeonart.js";
 import { VIEW_W, VIEW_H, TILE } from "/shared/constants.js";
 import { MONSTERS, BOSSES, ZONES } from "/shared/zones.js";
 import { SKILLS } from "/shared/skills.js";
@@ -41,6 +44,7 @@ export class Renderer {
   }
 
   onMap() {
+    spawnFolk();
     this.front.clear(); this.ground.clear(); this.weather.clear(); this.zoneFx.clear();
     const z = G.zone;
     const ids = ["arcane/portal", "fire/torch", "fire/campfire", "water/fountain", "fire/candle", "impacts/hit-spark", "impacts/hit-flash", "spawn/poof", "ui/level-up", "spawn/soul-rise", "status/stunned", "status/burning", "status/poisoned", "status/frozen", "status/slowed", "pickups/loot-beam"];
@@ -54,7 +58,6 @@ export class Renderer {
     preloadFx(ids).then(() => {
       prebake(ids.filter((id) => id && !id.startsWith("weather/")));
       if (G.kind !== "town" && z.weather) { const m = this.weather; m.clear(); loadFx(z.weather).then((mod) => mod && m.spawn(z.weather, mod.meta.origin[0], mod.meta.origin[1])); }
-      if (G.kind === "town") loadFx("weather/fireflies").then((mod) => mod && this.weather.spawn("weather/fireflies", mod.meta.origin[0], mod.meta.origin[1]));
     });
   }
 
@@ -111,6 +114,8 @@ export class Renderer {
     const cx = Math.round(G.cam.x + sx + (G.camKick?.x ?? 0)), cy = Math.round(G.cam.y + sy + (G.camKick?.y ?? 0));
     if (me) G.map.reveal(me.rx, me.ry);
 
+    beginGlows();
+    if (G.kind === "town") tickFolk(dt);
     this.front.update(dt, G.ents);
     this.ground.update(dt, G.ents);
     this.weather.update(dt, G.ents);
@@ -126,7 +131,9 @@ export class Renderer {
     this.drawProjectiles(ctx, cx, cy, t);
     this.drawBeams(ctx, cx, cy, t);
     this.front.render(ctx, cx, cy);
+    if (G.kind === "town") drawStrings(ctx, cx, cy, t);
     this.drawLighting(ctx, cx, cy, t);
+    drawGlows(ctx, cx, cy, VIEW_W, VIEW_H);
     if (this.weather.list.length) {
       const wc = this.wctx ?? (this.wctx = this.mkWeatherCtx());
       wc.clearRect(0, 0, 320, 180);
@@ -218,17 +225,27 @@ export class Renderer {
   drawSorted(ctx, cx, cy, t) {
     const list = [];
     const inView = (x, y, m = 80) => x - cx > -m && y - cy > -m && x - cx < VIEW_W + m && y - cy < VIEW_H + m * 1.5;
-    for (const o of G.objects) if (inView(o.x, o.y, 120)) list.push({ y: o.kind === "torch" ? o.y - 20 : o.y, o });
+    for (const o of G.objects) if (inView(o.x, o.y, 160)) list.push({ y: o.flatY ?? (o.kind === "torch" ? o.y - 20 : o.flat ? o.y - 14 : o.y), o });
     for (const e of G.ents.values()) if (inView(e.rx, e.ry)) list.push({ y: e.ry, e });
+    if (G.kind === "town") for (const f of folkList()) if (inView(f.x, f.y)) list.push({ y: f.y, f });
     list.sort((a, b) => a.y - b.y);
     for (const it of list) {
       if (it.o) this.drawObject(ctx, it.o, cx, cy, t);
+      else if (it.f) drawFolk(ctx, it.f, cx, cy, t);
       else this.drawEnt(ctx, it.e, cx, cy, t);
     }
   }
 
   drawObject(ctx, o, cx, cy, t) {
     const x = Math.round(o.x - cx), y = Math.round(o.y - cy);
+    if (G.kind === "town" && drawTownObject(ctx, o, x, y, t)) return;
+    if (G.kind !== "town" && drawDungeonObject(ctx, o, x, y, t)) return;
+    if (o.kind === "npc" && G.kind === "town" && drawTownNpc(ctx, o, x, y, t)) {
+      this.label(ctx, o.name, x, y - 40, "#9ef0a0");
+      const near = G.ents.get(G.you);
+      if (near && Math.hypot(near.rx - o.x, near.ry - o.y) < 70) this.label(ctx, G.touch ? "눌러서 대화" : "[G] 대화", x, y - 50, "#ffd35a");
+      return;
+    }
     switch (o.kind) {
       case "torch": case "campfire": case "fountain": case "lamp": {
         const b = baked_(o.fx ?? (o.kind === "campfire" ? "fire/campfire" : o.kind === "fountain" ? "water/fountain" : "fire/torch"));
@@ -238,6 +255,8 @@ export class Renderer {
           if (o.kind === "lamp") { ctx.fillStyle = "#3a2a1a"; ctx.fillRect(x - 1, y - 18, 3, 20); }
           ctx.drawImage(f, Math.round(x - b.ox * s), Math.round(y - b.oy * s - (o.kind === "lamp" ? 18 : 0)), Math.round(b.w * s), Math.round(b.h * s));
         }
+        // 불빛 색 번짐
+        if (o.kind === "torch" || o.kind === "campfire" || o.kind === "lamp") addGlow(o.x, o.y - 18, o.kind === "campfire" ? 130 : 95, G.zone?.torchColor ?? "#ff9a3a", (o.kind === "campfire" ? 0.45 : 0.35) * (0.9 + Math.sin(t * 11 + o.x) * 0.1));
         break;
       }
       case "portal": {
@@ -245,6 +264,7 @@ export class Renderer {
         const pal = o.color === "town" ? ["#062010", "#0e4a1e", "#1f8a34", "#4fd060", "#b0ff9a", "#f0fff0"] : o.id === "safe" || o.id === "victory" ? ["#201808", "#806018", "#d0a830", "#ffe080", "#fff8d0", "#ffffff"] : null;
         const b = baked_("arcane/portal", pal);
         const f = bakedFrame(b, t);
+        if (!locked) addGlow(o.x, o.y - 20, 120, pal ? (o.color === "town" ? "#6aff7a" : "#ffd35a") : "#b07aff", 0.5);
         if (f) { ctx.globalAlpha = locked ? 0.25 : 1; const s = 0.55; ctx.drawImage(f, Math.round(x - b.ox * s), Math.round(y - b.oy * s), Math.round(b.w * s), Math.round(b.h * s)); ctx.globalAlpha = 1; }
         if (o.label || locked) this.label(ctx, locked ? "출구 (웨이브를 모두 물리치면 열림)" : o.label, x, y - 44, locked ? "#888" : "#ffe08a");
         break;
@@ -466,8 +486,8 @@ export class Renderer {
   }
 
   drawLighting(ctx, cx, cy, t) {
-    if (G.kind === "town") return;
-    const z = G.zone;
+    const town = G.kind === "town";
+    const z = town ? { ambient: 0.4, light: 110 } : G.zone;
     const L = this.lctx, W = VIEW_W / 2, H = VIEW_H / 2;
     L.globalCompositeOperation = "source-over";
     L.clearRect(0, 0, W, H);
@@ -489,6 +509,8 @@ export class Renderer {
     for (const p of G.projectiles.values()) { const d = (t - p.t0) * p.v; hole(p.x + Math.cos(p.a) * d - cx, p.y + Math.sin(p.a) * d - cy, 60, 0.6); }
     for (const e of G.ents.values()) if (e.k === "b") hole(e.rx - cx, e.ry - cy - 20, 160, 0.7);
     for (const l of G.loot.values()) hole(l.x - cx, l.y - cy, 30, 0.5);
+    // 색 빛이 있는 곳도 밝게
+    forEachGlow((x, y, r, c, a) => { const sx = x - cx, sy = y - cy; if (sx > -r && sy > -r && sx < VIEW_W + r && sy < VIEW_H + r) hole(sx, sy, r * 1.3, Math.min(1, a * 1.6)); });
     ctx.imageSmoothingEnabled = true;
     ctx.drawImage(this.light, 0, 0, VIEW_W, VIEW_H);
     ctx.imageSmoothingEnabled = false;

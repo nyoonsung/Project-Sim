@@ -22,8 +22,8 @@ export function touchAimTick() {
   const [mx, my] = moveDir();
   if (Math.hypot(mx, my) > 0.2) { const l = Math.hypot(mx, my); lastDir = [mx / l, my / l]; }
   const t = nearestEnemy();
-  if (t) { G.mouse.wx = t.rx; G.mouse.wy = t.ry - 12; }
-  else { G.mouse.wx = me.rx + lastDir[0] * 80; G.mouse.wy = me.ry - 16 + lastDir[1] * 80; }
+  if (t) { G.mouse.wx = t.rx; G.mouse.wy = t.ry; }
+  else { G.mouse.wx = me.rx + lastDir[0] * 80; G.mouse.wy = me.ry + lastDir[1] * 80; }
   // 대시가 들어 있는 칸은 원호에서 숨김(오른쪽 대시 버튼으로 사용), 자동 사용 표시
   const skills = G.char?.skills ?? [];
   [...$("#skillbar").children].forEach((el, i) => {
@@ -131,7 +131,7 @@ function dashButton(toast) {
     const l = Math.hypot(dx, dy) || 1;
     btn.classList.add("down");
     setTimeout(() => btn.classList.remove("down"), 150);
-    tryCast(i, { x: me.rx + (dx / l) * 120, y: me.ry - 16 + (dy / l) * 120 });
+    tryCast(i, { x: me.rx + (dx / l) * 120, y: me.ry + (dy / l) * 120 });
   });
   return btn;
 }

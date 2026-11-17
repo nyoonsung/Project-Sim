@@ -52,14 +52,20 @@ export function castSkill(room, u, slot, ax, ay, tx, now, exp) {
   if (sk.cls !== "common" && sk.cls !== ch.cls) return;
   if (sk.cls !== "common" && stageOf(ch.cls, ch.level) < unlockStage(sk, CLASS_INFO[ch.cls].ranks.length)) return;
   if (isHardCC(u)) return;
+  // 이동기는 시전 중이어도 바로 나감 (시전 취소)
+  if (sk.moveSkill && u.casting && !u.channel && now >= (u.cds.get(id) ?? 0) && now >= (u.moveLock ?? 0)) cancelCast(room, u);
   const until = exp ?? now + 0.3;
   // 이동기끼리는 0.8초 안에 이어 쓸 수 없음 (대시 쿨타임을 줄인 대신 순간 연속 이동 제한)
   const readyAt = Math.max(sk.noGcd ? 0 : u.lockUntil, u.cds.get(id) ?? 0, sk.moveSkill ? u.moveLock ?? 0 : 0);
   if (u.casting || u.channel || u.dash || now < readyAt) {
     // 선입력: 곧 쓸 수 있으면 기억해 뒀다가 바로 시전 (마지막 입력이 우선)
-    if (!u.casting && !u.channel && readyAt < until) u.queued = { slot, ax, ay, tx, at: Math.max(readyAt, now), exp: until };
+    // 기다리는 스킬이 있으면 기본 공격이 덮어쓰지 못함 (누르고 있는 평타 때문에 스킬이 씹히던 문제)
+    const q = u.queued, qBasic = q && SKILLS[ch.skills[q.slot]]?.kind === "basic";
+    if (!u.casting && !u.channel && readyAt < until && (!q || sk.kind !== "basic" || qBasic)) u.queued = { slot, ax, ay, tx, at: Math.max(readyAt, now), exp: until };
     return;
   }
+  // 기다리는 스킬이 있는데 기본 공격이 먼저 들어오면 스킬 차례를 지킴
+  if (sk.kind === "basic" && u.queued && SKILLS[ch.skills[u.queued.slot]]?.kind !== "basic" && now <= u.queued.exp) return;
   u.queued = null;
   if (room.kind === "town" && sk.steps.some((s) => s.do === "device" || s.do === "zone")) return msg(u, "마을에서는 쓸 수 없는 스킬이에요.");
   // 자원
@@ -107,7 +113,7 @@ export function castSkill(room, u, slot, ax, ay, tx, now, exp) {
   ctx.combo = u.lastSkill && u.lastSkill !== id && now - u.lastSkillAt < 2.5;
   u.lastSkill = id;
   u.lastSkillAt = now;
-  if (sk.moveSkill) { u.moveLock = now + 0.8; triggerPassive(room, u, "move_skill", now); }
+  if (sk.moveSkill) { u.moveLock = now + 0.6; triggerPassive(room, u, "move_skill", now); }
   room.ev({ e: "cast", id: u.id, s: id, a: Math.round(aim * 1000), ct: sk.cast ? 1 : 0 });
   const go = (t) => {
     if (cost.gap) { ctx.gapSpent = u.gap; if (sk.steps.some((s) => s.consumeGap)) u.gap = 0; else u.gap -= cost.gap; }

@@ -12,7 +12,7 @@
 - 장비 5부위, 등급 일반·희귀·영웅·전설·신화(0.5%), **쿨타임 감소 효과 없음**
 - 강화 +99까지: +n→+n+1 성공 (99−n)%, 파괴 항상 1%
 - 관리자 페이지(`/gm`): 서버 현황, 플레이어 검색·수정·아이템 지급/회수·킥·차단·채금·층 이동·임시 비밀번호 발급, 공지, 관리 기록, 보안 로그
-- 그래픽: 캐릭터·몬스터·타일 [0x72 DungeonTileset II](https://0x72.itch.io/dungeontileset-ii)(CC0, 구역·직업별 색 입힘), 이펙트 [pixelfx](https://github.com/patch-gg/pixelfx)(MIT), [Galmuri](https://github.com/quiple/galmuri)(OFL) 픽셀 폰트
+- 그래픽: 캐릭터·몬스터·타일 [0x72 DungeonTileset II](https://0x72.itch.io/dungeontileset-ii)(CC0, 구역·직업별 색 입힘), 마을·주민·수정 [Ninja Adventure](https://pixel-boy.itch.io/ninja-adventure-asset-pack)(CC0), 이펙트 [pixelfx](https://github.com/patch-gg/pixelfx)(MIT), [Galmuri](https://github.com/quiple/galmuri)(OFL) 픽셀 폰트
 - 타격감: 히트스톱(공격자·대상 함께), 흰색 번쩍임·찌그러짐, 밀림, 불꽃 입자, 카메라 반동, 효과음(Web Audio 합성), 휴대폰 진동
 
 ## 관리자
@@ -110,5 +110,7 @@ LV=0.85 RARITY=일반 node tools/sim.js sword 10 20 50 100   # 밸런스 시뮬�
 ## 라이선스·출처
 
 - 캐릭터·몬스터·타일: 0x72 DungeonTileset II — CC0 (`public/assets/DT2-LICENSE.md`)
+- 마을 건물·주민·동물·수정: Ninja Adventure (Pixel-Boy & AAA) — CC0 (`public/assets/TOWN-LICENSE.md`)
+- 던전 지형: 돌기둥·벽 분수·룬 마법진·수정·구역별 바닥 무늬, 3층부터 가시 함정(2.8초 주기, 경고 후 최대 HP 6%)
 - 이펙트·캐릭터 리그: pixelfx — MIT (`public/vendor/pixelfx/LICENSE`, `NOTICE.md`)
 - 폰트: Galmuri — SIL Open Font License (`public/fonts/OFL-Galmuri.md`)

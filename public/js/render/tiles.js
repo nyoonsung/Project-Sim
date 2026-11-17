@@ -24,6 +24,25 @@ const TOWN = {
   water: ["#3a78c0", "#4a8ad0", "#2a5ea0"],
 };
 
+// 광장 돌바닥: 엇갈려 깐 긴 사암 판석(32x16), 판마다 조금씩 다른 색 + 윗면 빛·아랫면 그늘 + 가끔 금
+const COB = ["#cdb08a", "#c6a882", "#d2b690", "#c0a07a", "#cbad86", "#d6bb94"];
+function cobble(g, x, y, px, py) {
+  g.fillStyle = "#94765a"; g.fillRect(px, py, TILE, TILE);
+  for (let j = 0; j < 2; j++) {
+    const row = y * 2 + j, off = row % 2 ? 16 : 0;
+    for (let k = -1; k < 2; k++) {
+      const sx = px + k * 32 + off, x0 = Math.max(px, sx + 1), x1 = Math.min(px + TILE, sx + 32);
+      if (x1 <= x0) continue;
+      const v = hash(Math.floor((x * 32 + k * 32 + off) / 32) + 99, row, 6);
+      const sy = py + j * 16;
+      g.fillStyle = COB[Math.floor(v * COB.length)]; g.fillRect(x0, sy + 1, x1 - x0, 15);
+      g.fillStyle = "rgba(255,244,220,0.3)"; g.fillRect(x0, sy + 1, x1 - x0, 1);
+      g.fillStyle = "rgba(80,56,32,0.2)"; g.fillRect(x0, sy + 15, x1 - x0, 1);
+      if (v > 0.88 && x1 - x0 > 12) { g.fillStyle = "rgba(80,56,32,0.3)"; for (let q = 0; q < 7; q++) g.fillRect(x0 + 3 + q, sy + 6 + Math.round(Math.sin(q * 1.3) * 2), 1, 1); }
+    }
+  }
+}
+
 export class TileMap {
   constructor(map, zone) {
     this.map = map;
@@ -175,46 +194,41 @@ export class TileMap {
   }
 
   drawTownTile(g, t, x, y, px, py, r, below, above) {
+    // 마을 땅: 풀(밝은 연두) · 흙길 · 돌 광장(0x72 석판에 따뜻한 색) · 물. 건물 밑 벽칸은 주변 땅으로 칠한다(그림이 덮음)
     const P = TOWN;
-    if (t === T.GRASS || t === T.VOID) {
-      g.fillStyle = P.grass[0]; g.fillRect(px, py, TILE, TILE);
-      for (let k = 0; k < 10; k++) { const a = hash(x, y, k); g.fillStyle = P.grass[1 + (k % 3)]; g.fillRect(px + Math.floor(hash(x, y, k + 9) * 31), py + Math.floor(a * 31), 1, a < 0.3 ? 2 : 1); }
-    } else if (t === T.PATH) {
-      g.fillStyle = P.path[0]; g.fillRect(px, py, TILE, TILE);
-      for (let k = 0; k < 8; k++) { g.fillStyle = P.path[1 + (k % 3)]; g.fillRect(px + Math.floor(hash(x, y, k + 3) * 30), py + Math.floor(hash(x, y, k + 13) * 30), 2, 1); }
-    } else if (t === T.PLAZA) {
-      g.fillStyle = P.plaza[3]; g.fillRect(px, py, TILE, TILE);
-      const v = hash(x, y, 2);
-      g.fillStyle = v < 0.3 ? P.plaza[1] : v < 0.7 ? P.plaza[0] : P.plaza[2];
-      g.fillRect(px + 1, py + 1, 15, 15); g.fillRect(px + 17, py + 1, 14, 15); g.fillRect(px + 1, py + 17, 15, 14); g.fillRect(px + 17, py + 17, 14, 14);
-    } else if (t === T.WATER) {
-      g.fillStyle = P.water[2]; g.fillRect(px, py, TILE, TILE);
-      g.fillStyle = P.water[0]; g.fillRect(px + 1, py + 1, TILE - 2, TILE - 2);
-      g.fillStyle = P.water[1]; for (let k = 0; k < 3; k++) g.fillRect(px + 3 + Math.floor(hash(x, y, k) * 20), py + 5 + k * 9, 7, 1);
-      if (above !== T.WATER) { g.fillStyle = "#3c6a2c"; g.fillRect(px, py, TILE, 3); }
-    } else if (t === T.WALL) {
+    const put = (name, tint = null) => { const c = frame(name, tint); if (c) { g.drawImage(c, px, py, TILE, TILE); return true; } return false; };
+    const ground = (tt) => {
+      if (tt === T.PLAZA) { cobble(g, x, y, px, py); return; }
+      if (tt === T.PATH) { if (!put("t:dirt" + Math.floor(hash(x, y, 4) * 4))) { g.fillStyle = P.path[0]; g.fillRect(px, py, TILE, TILE); } return; }
+      const v = hash(x, y, 9);
+      if (!put("t:g" + (v < 0.7 ? 0 : 1 + Math.floor(hash(x, y, 2) * 4)))) { g.fillStyle = P.grass[0]; g.fillRect(px, py, TILE, TILE); }
+    };
+    if (t === T.WALL) {
       const outer = x === 0 || y <= 1 || x === this.w - 1 || y === this.h - 1;
-      const face = below !== T.WALL;
-      if (outer) {
-        g.fillStyle = face ? P.outer[0] : P.outer[1]; g.fillRect(px, py, TILE, TILE);
-        if (face) for (let row = 0; row < 4; row++) { g.fillStyle = P.outer[1]; g.fillRect(px, py + row * 8 + 7, TILE, 1); g.fillStyle = P.outer[2]; g.fillRect(px + (row % 2 ? 4 : 12), py + row * 8 + 1, 10, 2); }
-        else { g.fillStyle = P.outer[2]; g.fillRect(px, py + TILE - 3, TILE, 3); }
-        return;
-      }
-      if (face) {
-        // 집 벽 (회벽 + 목재 기둥 + 창문)
-        g.fillStyle = P.wallFace[0]; g.fillRect(px, py, TILE, TILE);
-        g.fillStyle = "#7a5230"; g.fillRect(px, py, 3, TILE); g.fillRect(px, py, TILE, 3);
-        if (hash(x, y, 7) < 0.45) { g.fillStyle = "#5a3a20"; g.fillRect(px + 9, py + 8, 14, 12); g.fillStyle = "#ffd98a"; g.fillRect(px + 11, py + 10, 10, 8); g.fillStyle = "#5a3a20"; g.fillRect(px + 15, py + 10, 2, 8); g.fillRect(px + 11, py + 13, 10, 1); }
-        else if (hash(x, y, 8) < 0.25) { g.fillStyle = "#5a3a20"; g.fillRect(px + 8, py + 6, 16, 26); g.fillStyle = "#8a5a30"; g.fillRect(px + 10, py + 8, 12, 24); g.fillStyle = "#e0b040"; g.fillRect(px + 19, py + 20, 2, 2); }
-        g.fillStyle = "rgba(0,0,0,0.25)"; g.fillRect(px, py + TILE - 3, TILE, 3);
-      } else {
-        // 지붕 기와
-        g.fillStyle = P.wallTop[1]; g.fillRect(px, py, TILE, TILE);
-        for (let row = 0; row < 4; row++) for (let k = 0; k < 4; k++) { g.fillStyle = (row + k) % 2 ? P.wallTop[0] : P.wallTop[2]; g.fillRect(px + k * 8 + (row % 2 ? 4 : 0), py + row * 8, 7, 6); }
-        if (this.t(x, y + 1) === T.WALL && this.t(x, y + 2) !== T.WALL) { g.fillStyle = "#5a2418"; g.fillRect(px, py + TILE - 3, TILE, 3); }
-      }
-    } else { g.fillStyle = P.grass[0]; g.fillRect(px, py, TILE, TILE); }
+      if (outer) { if (!put("t:gd" + (hash(x, y, 3) < 0.7 ? 0 : 1))) { g.fillStyle = "#2a4a22"; g.fillRect(px, py, TILE, TILE); } g.fillStyle = "rgba(0,0,0,0.25)"; g.fillRect(px, py, TILE, TILE); return; }
+      // 건물·나무 밑: 이웃 땅과 같게
+      const n = [this.t(x, y + 1), this.t(x - 1, y), this.t(x + 1, y), this.t(x, y - 1)];
+      ground(n.includes(T.PLAZA) ? T.PLAZA : n.includes(T.PATH) ? T.PATH : T.GRASS);
+      return;
+    }
+    if (t === T.WATER) {
+      g.fillStyle = "#2a6aa0"; g.fillRect(px, py, TILE, TILE);
+      g.fillStyle = "#3a86c0"; g.fillRect(px + 1, py + 1, TILE - 2, TILE - 2);
+      g.fillStyle = "#8ad0ff"; for (let k = 0; k < 3; k++) g.fillRect(px + 3 + Math.floor(hash(x, y, k) * 20), py + 6 + k * 9, 7, 1);
+      if (above !== T.WATER) { g.fillStyle = "#5a8a2a"; g.fillRect(px, py, TILE, 4); g.fillStyle = "#2a5a7a"; g.fillRect(px, py + 4, TILE, 2); }
+      if (this.t(x - 1, y) !== T.WATER) { g.fillStyle = "#5a8a2a"; g.fillRect(px, py, 3, TILE); }
+      if (this.t(x + 1, y) !== T.WATER) { g.fillStyle = "#5a8a2a"; g.fillRect(px + TILE - 3, py, 3, TILE); }
+      return;
+    }
+    ground(t);
+    // 광장 가장자리 테두리돌
+    if (t === T.PLAZA) {
+      g.fillStyle = "rgba(60,40,24,0.55)";
+      if (this.t(x, y - 1) !== T.PLAZA && this.t(x, y - 1) !== T.WALL) g.fillRect(px, py, TILE, 3);
+      if (this.t(x, y + 1) !== T.PLAZA && this.t(x, y + 1) !== T.WALL) g.fillRect(px, py + TILE - 3, TILE, 3);
+      if (this.t(x - 1, y) !== T.PLAZA && this.t(x - 1, y) !== T.WALL) g.fillRect(px, py, 3, TILE);
+      if (this.t(x + 1, y) !== T.PLAZA && this.t(x + 1, y) !== T.WALL) g.fillRect(px + TILE - 3, py, 3, TILE);
+    }
   }
 
   drawDeco(g, d, x, y) {

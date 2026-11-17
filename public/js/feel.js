@@ -119,7 +119,7 @@ export function onEnemyHit(ent, e) {
   sparks(ent.rx, ent.ry - 14, dir, e.c ? 14 : heavy ? 9 : 6, e.c ? ["#fff6c0", "#ffd35a", "#ff9a30"] : ["#ffffff", "#ffe8b0", "#ffb070"], e.c ? 170 : 130);
   if (mine) {
     // 공격하는 쪽도 함께 멈춤 (둘 다 멈춰야 '맞았다'로 읽힘)
-    if (me.anim && t - me.anim.t0 < 0.5) me.anim.t0 += stop;
+    if (me.anim && !me.anim.stopped && t - me.anim.t0 < 0.5) { me.anim.t0 += stop; me.anim.stopped = true; }
     G.camKick.x += Math.cos(dir) * (e.c ? 3 : 1.5); G.camKick.y += Math.sin(dir) * (e.c ? 3 : 1.5);
     if (e.c) { G.shake = Math.max(G.shake, 2.5); vibrate(18); sfx("crit"); }
     else sfx("hit", heavy ? 1.3 : 1);

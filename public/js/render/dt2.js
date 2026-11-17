@@ -1,14 +1,22 @@
-// 0x72 DungeonTileset II (CC0) 아틀라스: 한 장(dt2.png)을 불러와 프레임을 잘라 쓰고,
-// 색 입히기(곱하기 + 밝히기)와 흰색 번쩍임 버전을 미리 만들어 캐시한다 (매 프레임 재계산 없음).
+// 스프라이트 아틀라스: 던전(0x72 DungeonTileset II, CC0) + 마을("t:" 접두어, Ninja Adventure, CC0)
+// 프레임을 잘라 쓰고, 색 입히기(곱하기 + 밝히기)와 흰색 번쩍임 버전을 미리 만들어 캐시한다 (매 프레임 재계산 없음).
 let IMG = null, POS = null;
 const cache = new Map();
 
-export async function loadDT2() {
-  if (IMG) return;
+async function loadSheet(png, json, prefix) {
   const img = new Image();
-  img.src = "/assets/dt2.png";
-  const [pos] = await Promise.all([fetch("/assets/dt2.json").then((r) => r.json()), img.decode()]);
-  IMG = img; POS = pos;
+  img.src = png;
+  const [pos] = await Promise.all([fetch(json).then((r) => r.json()), img.decode()]);
+  for (const [k, v] of Object.entries(pos)) POS[prefix + k] = [...v, img];
+}
+let loading = null;
+export function loadDT2() {
+  if (!loading) loading = (async () => {
+    POS = {};
+    await Promise.all([loadSheet("/assets/dt2.png", "/assets/dt2.json", ""), loadSheet("/assets/town.png", "/assets/town.json", "t:")]);
+    IMG = true;
+  })();
+  return loading;
 }
 export const dtReady = () => !!IMG;
 export const has = (name) => !!POS?.[name];
@@ -36,12 +44,12 @@ export function frame(name, tint = null, white = false) {
   if (c) return c;
   const p = POS?.[name];
   if (!p) return null;
-  const [x, y, w, h] = p;
+  const [x, y, w, h, img] = p;
   c = document.createElement("canvas");
   c.width = w; c.height = h;
   const g = c.getContext("2d");
   g.imageSmoothingEnabled = false;
-  g.drawImage(IMG, x, y, w, h, 0, 0, w, h);
+  g.drawImage(img, x, y, w, h, 0, 0, w, h);
   if (white) {
     g.globalCompositeOperation = "source-in";
     g.fillStyle = "#fff"; g.fillRect(0, 0, w, h);

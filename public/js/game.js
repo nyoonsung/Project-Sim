@@ -161,6 +161,8 @@ function onEvent(e) {
     case "exit": G.exitOpen = !!e.open; break;
     case "doors": if (G.map) G.map.doorsOpen = !!e.open; break;
     case "obj": G.objects.push(e.o); break;
+    case "spk": (G.spikes ??= [0, 0])[e.p] = e.s; break;
+    case "trap": if (e.id === G.you) { const me = G.ents.get(G.you); if (me) floater(me.rx, me.ry - 40, "가시 함정!", "hurt"); } break;
     case "wave": sfx("wave"); G.ui.center(e.n >= e.of ? `마지막 웨이브! (${e.n}/${e.of})` : `웨이브 ${e.n} / ${e.of}`); G.wave = { n: e.n, of: e.of }; break;
     case "warp": G.ui.center("이동 중..."); R?.fx("arcane/portal", G.pred.x, G.pred.y, { s: 0.6 }); break;
     case "shake": G.shake = Math.max(G.shake, e.v); break;
@@ -198,6 +200,10 @@ function isFrozen() {
 export function localStep(dt) {
   if (!G.map) return;
   const L = G.local, A = G.pred;
+  // 대시: 누르는 즉시 내 화면에서 먼저 이동 (서버 위치는 뒤따라 맞춤)
+  const D = G.localDash, tn = now();
+  if (D && tn < D.until) { [L.x, L.y] = applyInput(G.map, L.x, L.y, D.dx, D.dy, D.speed, Math.min(dt, D.until - tn + dt), PLAYER_RADIUS); return; }
+  if (D && tn < D.until + 0.45 && isFrozen()) return; // 서버 대시가 끝날 때까지 기다렸다가 맞춤
   if (isFrozen()) { const k = Math.min(1, dt * 20); L.x += (A.x - L.x) * k; L.y += (A.y - L.y) * k; return; }
   const [mx, my] = moveDir();
   if (mx || my) [L.x, L.y] = applyInput(G.map, L.x, L.y, mx, my, G.me?.spd ?? 120, dt, PLAYER_RADIUS);
@@ -235,6 +241,7 @@ function held(slotKey) {
   return G.keys.has(KEYCODE[slotKey]);
 }
 function tryHeldCasts() {
+  if (now() < (G.holdPauseUntil ?? 0)) return; // 방금 다른 스킬을 눌렀으면 그 스킬이 먼저
   if (G.typing || G.ui.blockingWindow()) return;
   SLOT_KEYS.forEach((k, i) => { if (held(k)) tryCast(i); });
 }
@@ -259,6 +266,18 @@ export function tryCast(slot, at) {
   }
   send(msg);
   G.lastCastAt = t;
+  if (sk.kind !== "basic" && !at) G.holdPauseUntil = t + 0.35;
+  // 대시류(이동기): 내 화면에서 바로 출발
+  const dashStep = sk.moveSkill && (sk.steps ?? []).find((st) => st.do === "dash");
+  if (dashStep && left <= 0.06 && t >= (G.localDash?.until ?? 0) + 0.2 && !isFrozen()) {
+    const me = G.ents.get(G.you);
+    if (me) {
+      let dx = ax - G.local.x, dy = ay - G.local.y; // 서버와 같은 기준(발밑)
+      const l = Math.hypot(dx, dy) || 1;
+      dx /= l; dy /= l;
+      G.localDash = { dx, dy, speed: dashStep.speed ?? 520, until: t + (dashStep.dist ?? 96) / (dashStep.speed ?? 520) };
+    }
+  }
   // 바로 동작 보여 주기 (서버 응답을 기다리지 않음)
   const ent = G.ents.get(G.you);
   if (ent && left <= 0.06 && t >= (G.localLock ?? 0) && !sk.cast) {
@@ -319,10 +338,10 @@ function autoTick() {
       if (best) at = { x: best.x, y: best.y - 16, tx: sk.aim === "ally" ? best.id : undefined };
     } else if (sk.aim === "self") {
       const t = nearestEnemy(170);
-      if (t) at = { x: t.rx, y: t.ry - 12 };
+      if (t) at = { x: t.rx, y: t.ry };
     } else {
       const t = nearestEnemy(reachOf(sk));
-      if (t) at = { x: t.rx, y: t.ry - 12 };
+      if (t) at = { x: t.rx, y: t.ry };
     }
     if (at && tryCast(i, at)) return; // 한 틱에 하나
   }

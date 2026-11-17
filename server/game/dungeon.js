@@ -52,6 +52,62 @@ function addDeco(m, R, zone, n) {
   }
 }
 
+// ── 던전 꾸미기 (지형지물): 기둥, 벽 분수, 빛나는 수정, 룬 마법진, 구역별 바닥(용암 균열·서리·산성 웅덩이·공허 안개),
+//    벽가 상자·통·해골, 그리고 실제로 찌르는 가시 함정. 길을 막는 건 벽 옆 칸에만 놓아 이동 경로는 그대로.
+const FLOOR_FX = { "화염 용광로": "lava", "혼돈의 왕좌": "lava", "얼어붙은 성채": "frost", "독버섯 늪": "acid", "이끼 낀 지하묘지": "moss", "그림자 심연": "void", "폭풍 첨탑": "spark", "타락한 성역": "holy", "태엽 공장": "gear", "고블린 굴": "moss" };
+function decorate(m, R, zone, { cx, cy, traps = 0, start } = {}) {
+  const O = m.objects;
+  const isF = (x, y) => get(m, x, y) === T.FLOOR;
+  const nearWall = (x, y) => [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dy]) => get(m, x + dx, y + dy) === T.WALL);
+  const busy = new Set();
+  const take = (x, y) => { const k = x + "," + y; if (busy.has(k)) return false; busy.add(k); return true; };
+  // 홀로 선 기둥(위·아래가 바닥인 벽칸) → 돌기둥 그림
+  for (let y = 1; y < m.h - 1; y++) for (let x = 1; x < m.w - 1; x++)
+    if (get(m, x, y) === T.WALL && isF(x, y + 1) && isF(x, y - 1)) O.push({ kind: "column", x: px(x), y: y * TILE + TILE });
+  // 벽 분수 (위쪽 벽 앞면)
+  const red = ["화염 용광로", "혼돈의 왕좌", "타락한 성역"].includes(zone.name);
+  let fountains = 0;
+  for (let y = 2; y < m.h - 2 && fountains < 3; y++) for (let x = 2; x < m.w - 2 && fountains < 3; x++) {
+    if (get(m, x, y) === T.WALL && get(m, x, y - 1) === T.WALL && isF(x, y + 1) && isF(x - 1, y + 1) && isF(x + 1, y + 1) && (x * 7 + y) % 9 === 0 && R.chance(0.5) && take(x, y + 1)) {
+      O.push({ kind: "wfount", x: px(x), y: y * TILE + TILE, c: red ? "red" : "blue" });
+      fountains++;
+    }
+  }
+  // 룬 마법진 (가운데)
+  if (cx != null) O.push({ kind: "circle", x: cx, y: cy, c: zone.accent ?? "#8a6aff", flatY: -999 });
+  // 빛나는 수정·벽가 소품
+  const props = ["crate", "crate", "skull", "chest", "flask_big_red", "flask_big_blue", "flask_big_green", "skull", "crate"];
+  let crystals = 0, nprops = 0;
+  for (let i = 0; i < 900 && (crystals < 8 || nprops < 14); i++) {
+    const x = R.int(2, m.w - 3), y = R.int(2, m.h - 3);
+    if (!isF(x, y) || !nearWall(x, y) || (start && Math.hypot(px(x) - start[0], px(y) - start[1]) < 90) || !take(x, y)) continue;
+    if (crystals < 8 && R.chance(0.45)) { O.push({ kind: "crystal", x: px(x) + R.int(-6, 6), y: px(y) + 10, c: zone.accent ?? "#7ae0ff", v: R.int(0, 3), flip: R.chance(0.5) }); crystals++; }
+    else if (nprops < 14) { O.push({ kind: "dprop", s: R.pick(props), x: px(x) + R.int(-6, 6), y: px(y) + 12 }); nprops++; }
+  }
+  // 구역별 바닥 무늬
+  const fx = FLOOR_FX[zone.name];
+  if (fx) for (let i = 0, n = 0; i < 400 && n < 18; i++) {
+    const x = R.int(2, m.w - 3), y = R.int(2, m.h - 3);
+    if (!isF(x, y) || !take(x, y)) continue;
+    O.push({ kind: "floorfx", t: fx, x: px(x) + R.int(-8, 8), y: px(y) + R.int(-8, 8), v: R.int(0, 999), c: zone.accent, flatY: -990 });
+    n++;
+  }
+  // 가시 함정 (2~3칸짜리 무리, 시작점·출구에서 멀리)
+  m.traps = [];
+  for (let i = 0, g = 0; i < 600 && g < traps; i++) {
+    const x = R.int(3, m.w - 4), y = R.int(3, m.h - 4);
+    if (!isF(x, y) || nearWall(x, y) || (start && Math.hypot(px(x) - start[0], px(y) - start[1]) < 160)) continue;
+    if (m.exit && Math.hypot(px(x) - m.exit[0], px(y) - m.exit[1]) < 120) continue;
+    const horiz = R.chance(0.5), len = R.int(2, 3), cells = [];
+    for (let k = 0; k < len; k++) { const tx = x + (horiz ? k : 0), ty = y + (horiz ? 0 : k); if (isF(tx, ty) && !busy.has(tx + "," + ty)) cells.push([tx, ty]); }
+    if (cells.length < 2) continue;
+    for (const [tx, ty] of cells) busy.add(tx + "," + ty);
+    m.traps.push({ cells, phase: g % 2 });
+    g++;
+  }
+  for (const tr of m.traps) for (const [tx, ty] of tr.cells) O.push({ kind: "spikes", x: px(tx), y: px(ty) + 16, phase: tr.phase, flatY: -995 });
+}
+
 /** 시작점에서 걸어서 갈 수 있는 칸 표시 */
 function reachable(m, sx, sy) {
   const ok = new Uint8Array(m.w * m.h);
@@ -151,6 +207,7 @@ function normalFloor(floor, seed, party) {
   addTorches(m, R, zone, 5);
   addDeco(m, R, zone, Math.round(W * H / 45));
   m.objects = m.objects.filter((o) => o.kind !== "deco" || reach[Math.floor(o.y / TILE) * W + Math.floor(o.x / TILE)]);
+  decorate(m, R, zone, { cx: px(cx), cy: px(cy), traps: floor < 3 ? 0 : Math.min(6, 2 + Math.floor(floor / 15)), start: m.start });
   m.kind = "normal";
   return m;
 }
@@ -181,6 +238,7 @@ function bossFloor(floor, seed) {
   m.boss = kind === "boss" ? zone.boss : zone.mid;
   addTorches(m, R, zone, 5);
   addDeco(m, R, zone, 20);
+  decorate(m, R, zone, { cx: px(mid), cy: px(ay + Math.floor(AH / 2)), traps: 0, start: m.start });
   m.objects.push({ kind: "sign", x: px(mid + 3), y: px(ry + 1), text: kind === "boss" ? "주요 보스의 방" : "중간보스의 방" });
   m.kind = kind;
   return m;
@@ -210,46 +268,110 @@ export function makeFloor(floor, seed, party = 1) {
   return kind === "normal" ? normalFloor(floor, seed, party) : bossFloor(floor, seed);
 }
 
-/** 마을: 따뜻하고 밝은 색감의 허브 */
+/** 마을: 아담한 저녁 마을. 가운데 분수 광장, 위쪽 던전 관문, 둘레에 상점·대장간·여관·훈련장·집·풍차·연못.
+ *  건물은 그림(prop)으로 그리고, 아래쪽 2줄만 벽으로 막아 뒤로 지나가면 지붕에 가려진다. */
 export function makeTown() {
-  const W = 56, H = 40;
+  const W = 40, H = 30;
   const m = grid(W, H, T.GRASS);
   const R = rng(4242);
-  // 외곽 벽(성벽)
+  const P = (tx) => tx * TILE; // 칸 → px (칸 왼쪽 위)
+  // 둘레(숲으로 그림)
   for (let x = 0; x < W; x++) { set(m, x, 0, T.WALL); set(m, x, 1, T.WALL); set(m, x, H - 1, T.WALL); }
   for (let y = 0; y < H; y++) { set(m, 0, y, T.WALL); set(m, W - 1, y, T.WALL); }
-  // 광장과 길
-  carveRect(m, 20, 14, 16, 12, T.PLAZA);
-  carveRect(m, 26, 2, 4, 12, T.PATH);
-  carveRect(m, 26, 26, 4, 13, T.PATH);
-  carveRect(m, 1, 18, 19, 4, T.PATH);
-  carveRect(m, 36, 18, 19, 4, T.PATH);
-  // 건물 (벽 덩어리)
-  const houses = [[4, 5, 9, 7], [40, 5, 10, 7], [4, 27, 9, 7], [40, 27, 10, 7], [14, 4, 7, 5], [33, 4, 6, 5]];
-  for (const [x, y, w, h] of houses) carveRect(m, x, y, w, h, T.WALL);
-  // 연못
-  carveRect(m, 14, 30, 6, 4, T.WATER);
-  m.start = [px(28), px(22)];
-  m.objects.push(
-    { kind: "fountain", fx: "water/fountain", x: px(28), y: px(19) },
-    { kind: "npc", id: "gate", name: "던전 관문지기", x: px(28), y: px(4) },
-    { kind: "portal", id: "dungeon", x: px(28), y: px(3), label: "던전 입구", color: "dungeon" },
-    { kind: "npc", id: "shop", name: "잡화 상인 미라", x: px(8), y: px(13) },
-    { kind: "npc", id: "smithy", name: "대장장이 브론", x: px(45), y: px(13) },
-    { kind: "campfire", fx: "fire/campfire", x: px(45), y: px(15) },
-    { kind: "npc", id: "trainer", name: "훈련 교관", x: px(8), y: px(25) },
-    { kind: "dummy", id: "dummy", x: px(12), y: px(24) },
-    { kind: "npc", id: "board", name: "모험가 게시판", x: px(33), y: px(15) },
-  );
-  for (let i = 0; i < 46; i++) {
-    const x = R.int(2, W - 3), y = R.int(3, H - 3);
-    if (get(m, x, y) === T.GRASS && get(m, x, y + 1) === T.GRASS && Math.abs(x - 28) > 3) m.objects.push({ kind: "tree", x: px(x), y: px(y) + 8, v: R.int(0, 2) });
+  // 광장·길
+  carveRect(m, 13, 12, 14, 9, T.PLAZA);
+  carveRect(m, 15, 2, 10, 5, T.PLAZA);
+  carveRect(m, 18, 7, 4, 5, T.PATH);
+  carveRect(m, 18, 22, 4, 7, T.PATH);
+  carveRect(m, 1, 15, 12, 3, T.PATH);
+  carveRect(m, 27, 15, 12, 3, T.PATH);
+  carveRect(m, 18, 21, 4, 1, T.PATH);
+  // 연못 (왼쪽 아래)
+  carveRect(m, 2, 25, 6, 3, T.WATER); carveRect(m, 3, 24, 4, 1, T.WATER);
+  const objs = m.objects;
+  // 건물: s=그림, tx·ty=왼쪽 위 칸, w·h=칸 수 → 아래 2줄 막음
+  const bld = (s, tx, ty, w, h, extra = {}) => {
+    for (let y = ty + h - 2; y < ty + h; y++) for (let x = tx; x < tx + w; x++) set(m, x, y, T.WALL);
+    objs.push({ kind: "prop", s, x: P(tx) + (w * TILE) / 2, y: P(ty + h), ...extra });
+  };
+  bld("h_food", 6, 8, 3, 3, { sign: { text: "잡화점", color: "#ffd35a" }, win: "#ffcf7a" });
+  bld("h_red", 30, 8, 4, 3, { sign: { text: "대장간", color: "#ff7a4a" }, win: "#ff9a5a" });
+  bld("lodge", 31, 20, 4, 7, { sign: { text: "여관", color: "#ff8ad8" }, win: "#ffd08a" });
+  bld("h_green", 4, 20, 4, 3, { sign: { text: "훈련장", color: "#7af0a0" }, win: "#c8ffb0" });
+  bld("h_orange", 10, 4, 4, 3, { win: "#ffcf7a" });
+  bld("h_beige", 26, 4, 4, 3, { win: "#ffe0a0" });
+  bld("h_round", 2, 4, 3, 3, { mill: true, win: "#ffcf7a" });
+  bld("h_tall", 35, 4, 3, 3, { win: "#ffd8a0" });
+  bld("h_orange2", 12, 24, 4, 3, { win: "#ffcf7a" });
+  bld("lodge2", 24, 23, 4, 5, { win: "#ffd08a" });
+  // 던전 관문: 돌 아치 + 양쪽 수호상 + 깃발
+  set(m, 18, 3, T.WALL); set(m, 18, 4, T.WALL); set(m, 21, 3, T.WALL); set(m, 21, 4, T.WALL);
+  objs.push({ kind: "prop", s: "arch", x: P(20), y: P(5), glow: "#b07aff" });
+  objs.push({ kind: "portal", id: "dungeon", x: P(20), y: P(4) + 12, label: "던전 입구", color: "dungeon" });
+  for (const tx of [15, 23]) { bld("statue", tx, 2, 2, 2); objs[objs.length - 1].glow = "#9a7aff"; }
+  for (const tx of [17, 22]) objs.push({ kind: "flag", c: tx === 17 ? "flag_red" : "flag_blue", x: P(tx) + 16, y: P(7) });
+  objs.push({ kind: "npc", id: "gate", name: "던전 관문지기", x: P(17) + 16, y: P(6) + 8 });
+  // 분수 (광장 가운데, 둘레 돌)
+  set(m, 19, 16, T.WALL); set(m, 20, 16, T.WALL);
+  objs.push({ kind: "fountain", fx: "water/fountain", x: P(20), y: P(17) - 4 });
+  // NPC
+  objs.push({ kind: "npc", id: "shop", name: "잡화 상인 미라", x: P(7) + 16, y: P(12) + 4 });
+  objs.push({ kind: "npc", id: "smithy", name: "대장장이 브론", x: P(31) + 16, y: P(12) + 4 });
+  objs.push({ kind: "campfire", fx: "fire/campfire", x: P(34) + 16, y: P(12) });
+  objs.push({ kind: "npc", id: "trainer", name: "훈련 교관", x: P(8) + 16, y: P(23) + 16 });
+  objs.push({ kind: "dummy", id: "dummy", x: P(10) + 16, y: P(22) + 8 });
+  objs.push({ kind: "npc", id: "board", name: "모험가 게시판", x: P(25) + 16, y: P(14) });
+  // 시장 노점 (광장 아래쪽)
+  for (const [tx, goods, win] of [[14, ["bread", "jars", "redjar"], "#ff6ac8"], [23, ["crates", "box", "pack"], "#6ad8ff"]]) {
+    set(m, tx, 19, T.WALL); set(m, tx + 1, 19, T.WALL); set(m, tx + 2, 19, T.WALL);
+    objs.push({ kind: "stall", x: P(tx) + 48, y: P(20), goods, win });
   }
-  for (let i = 0; i < 60; i++) {
-    const x = R.int(2, W - 3), y = R.int(3, H - 3);
-    if (get(m, x, y) === T.GRASS) m.objects.push({ kind: "deco", deco: R.pick(["flower", "flower", "grasstuft", "rock"]), x: px(x) + R.int(-10, 10), y: px(y) + R.int(-10, 10), v: R.int(0, 3) });
+  // 광장 꾸미기: 분수 둘레 모자이크, 벤치, 꽃 화분
+  objs.push({ kind: "mosaic", x: P(20), y: P(16) + 8, flatY: -999 });
+  for (const [tx, ty] of [[16, 13], [23, 13]]) objs.push({ kind: "bench", x: P(tx) + 16, y: P(ty) + 26 });
+  for (const [tx, ty] of [[14, 13], [25, 17], [14, 17]]) { set(m, tx, ty, T.WALL); objs.push({ kind: "planter", s: R.pick(["bush0", "bush1", "bush4"]), f: R.pick(["flower0", "flower1", "flower2", "flower3"]), x: P(tx) + 16, y: P(ty) + 28 }); }
+  // 소품
+  for (const [s, tx, ty] of [["crate", 9, 10], ["jars", 9, 11], ["crate", 29, 10], ["box", 34, 9], ["chest", 35, 11], ["cauldron", 33, 12], ["scarecrow", 11, 21], ["redjar", 30, 26], ["bucket", 8, 25], ["crates", 36, 13], ["jar", 11, 13], ["box", 28, 19], ["jars", 12, 19], ["crate", 29, 21]]) {
+    if (get(m, tx, ty) === T.WALL) continue;
+    objs.push({ kind: "prop", s, x: P(tx) + 16, y: P(ty) + 24, small: true });
   }
-  for (const [x, y] of [[21, 15], [34, 15], [21, 24], [34, 24]]) m.objects.push({ kind: "lamp", fx: "fire/candle", x: px(x), y: px(y) });
+  objs.push({ kind: "watermill", x: P(8) + 8, y: P(27) + 8 });
+  // 연못: 물결·연잎
+  for (const [tx, ty] of [[3, 25], [5, 26], [6, 25], [4, 27]]) objs.push({ kind: "ripple", x: P(tx) + 16, y: P(ty) + 20, flatY: -998 });
+  // 줄 전구 (기둥 꼭대기 좌표들을 차례로 잇는다)
+  const pole = (tx, ty) => [P(tx) + 16, P(ty) + 16];
+  objs.push({ kind: "lights", pts: [pole(13, 12), pole(17, 12)] });
+  objs.push({ kind: "lights", pts: [pole(22, 12), pole(26, 12)] });
+  objs.push({ kind: "lights", pts: [pole(13, 20), pole(13, 15)] });
+  objs.push({ kind: "lights", pts: [pole(26, 20), pole(26, 15)] });
+  objs.push({ kind: "lights", pts: [pole(17, 7), pole(17, 11)] });
+  objs.push({ kind: "lights", pts: [pole(22, 7), pole(22, 11)] });
+  objs.push({ kind: "lights", pts: [pole(2, 14), pole(6, 14), pole(10, 14)] });
+  objs.push({ kind: "lights", pts: [pole(29, 14), pole(33, 14), pole(37, 14)] });
+  for (const [tx, ty] of [[13, 12], [17, 12], [22, 12], [26, 12], [13, 20], [26, 20], [13, 15], [26, 15], [17, 7], [17, 11], [22, 7], [22, 11], [2, 14], [6, 14], [10, 14], [29, 14], [33, 14], [37, 14]])
+    objs.push({ kind: "lamp", x: P(tx) + 16, y: P(ty) + 30, post: true });
+  // 숲 테두리 + 나무·꽃 (빈 풀밭에만)
+  const free = (tx, ty, r = 0) => { for (let y = ty - r; y <= ty + r; y++) for (let x = tx - r; x <= tx + r; x++) if (get(m, x, y) !== T.GRASS) return false; return true; };
+  const groves = ["grove_green", "grove_pine", "grove_lime", "grove_pink"];
+  for (let x = 1; x < W - 1; x += 3) objs.push({ kind: "prop", s: R.pick(groves), x: P(x) + 16, y: P(2) - 4, border: true });
+  for (let x = 1; x < W - 1; x += 3) objs.push({ kind: "prop", s: R.pick(groves), x: P(x) + 16, y: P(H) + 12, border: true });
+  for (let y = 3; y < H - 1; y += 2) { objs.push({ kind: "prop", s: R.pick(["tree_pine", "tree_round", "tree_green_s"]), x: 14, y: P(y) + 24, border: true }); objs.push({ kind: "prop", s: R.pick(["tree_pine", "tree_round", "tree_pink_s"]), x: P(W) - 14, y: P(y) + 24, border: true }); }
+  const trees = ["tree_pink", "tree_green", "tree_orange", "tree_pink", "tree_white"];
+  let n = 0;
+  for (let i = 0; i < 400 && n < 14; i++) {
+    const tx = R.int(2, W - 3), ty = R.int(3, H - 3);
+    if (!free(tx, ty, 1) || !free(tx, ty + 1, 0)) continue;
+    if (objs.some((o) => Math.hypot(o.x - P(tx), o.y - P(ty)) < 70)) continue;
+    objs.push({ kind: "prop", s: R.pick(trees), x: P(tx) + 16, y: P(ty) + 30 });
+    set(m, tx, ty, T.WALL); // 나무 밑동은 못 지나감
+    n++;
+  }
+  for (let i = 0; i < 90; i++) {
+    const tx = R.int(1, W - 2), ty = R.int(2, H - 2);
+    if (get(m, tx, ty) !== T.GRASS) continue;
+    objs.push({ kind: "prop", s: R.pick(["bush0", "bush1", "bush2", "bush3", "bush4", "bush5", "flower0", "flower1", "flower2", "flower3", "flower0", "flower2"]), x: P(tx) + R.int(4, 28), y: P(ty) + R.int(16, 30), small: true, flat: true });
+  }
+  m.start = [P(20) + 16, P(19) + 16];
   m.kind = "town";
   m.safe = true;
   return m;
