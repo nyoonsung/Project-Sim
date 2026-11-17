@@ -109,6 +109,7 @@ const ui = {
   onEnhance(m) { WIN.onEnhance(m); HUD.toast(m.result === "success" ? `강화 성공! ${m.name} +${m.enh}` : m.result === "fail" ? `강화 실패 (${m.name} +${m.enh} 유지)` : `${m.name}이(가) 파괴됐어요…`, m.result === "success" ? "rank" : m.result === "destroy" ? "death" : "info"); },
   toast: HUD.toast,
   center: HUD.center,
+  showVote: HUD.showVote,
   gotItem(it) { HUD.toast(`획득: ${it.name} [${it.rarity}]`, it.rarity === "신화" ? "mythic" : it.rarity === "전설" ? "legend" : "info"); },
   onBoss: HUD.updateBoss,
   noRes() {},
@@ -188,6 +189,7 @@ function bindInput() {
     if (G.typing || e.target.tagName === "INPUT") return;
     if (e.code === "Enter") { chat.focus(); e.preventDefault(); return; }
     if (e.code === "Escape") { const w = openWins(); if (w.length) closeWin(w[w.length - 1]); return; }
+    if ((e.code === "KeyY" || e.code === "KeyN") && document.querySelector("#vote .vb")) { send({ t: "vote", ok: e.code === "KeyY" }); return; }
     if (e.repeat && !SLOT[e.code]) return;
     G.keys.add(e.code);
     if (SLOT[e.code] != null) { tryCast(SLOT[e.code]); e.preventDefault(); }

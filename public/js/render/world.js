@@ -266,7 +266,7 @@ export class Renderer {
         const f = bakedFrame(b, t);
         if (!locked) addGlow(o.x, o.y - 20, 120, pal ? (o.color === "town" ? "#6aff7a" : "#ffd35a") : "#b07aff", 0.5);
         if (f) { ctx.globalAlpha = locked ? 0.25 : 1; const s = 0.55; ctx.drawImage(f, Math.round(x - b.ox * s), Math.round(y - b.oy * s), Math.round(b.w * s), Math.round(b.h * s)); ctx.globalAlpha = 1; }
-        if (o.label || locked) this.label(ctx, locked ? "출구 (웨이브를 모두 물리치면 열림)" : o.label, x, y - 44, locked ? "#888" : "#ffe08a");
+        if (o.label || locked) this.label(ctx, locked ? "출구 (몬스터를 모두 처치하면 열림)" : o.label, x, y - 44, locked ? "#888" : "#ffe08a");
         break;
       }
       case "npc": {

@@ -16,7 +16,7 @@ export class Net {
       this.onMsg(m);
     };
     this.ws.onclose = (e) => this.onClose(e);
-    this.ws.onopen = () => { this.pinger = setInterval(() => this.send({ t: "ping", c: performance.now() }), 3000); };
+    this.ws.onopen = () => { this.pinger = setInterval(() => this.send({ t: "ping", c: performance.now() }), 5000); };
     return new Promise((res) => this.ws.addEventListener("open", res, { once: true }));
   }
   send(o) { if (this.ws?.readyState === 1) this.ws.send(JSON.stringify(o)); }

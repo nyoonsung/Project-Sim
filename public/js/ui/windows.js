@@ -313,12 +313,17 @@ export function openGate() {
     const cp = Math.min(G.char.checkpoint, ...G.party.map((m) => m.cp ?? 1));
     const floors = [1];
     for (let f = 11; f <= cp; f += 10) floors.push(f);
+    const best = Math.min(G.char.best ?? 0, ...G.party.map((m) => m.best ?? 0));
+    const bosses = [];
+    for (let f = 5; f <= Math.min(100, best); f += 5) bosses.push(f);
     return [
       h("div", { class: "note", text: G.party.length ? `파티 ${G.party.length}명 · 파티장 ${leaderName}` : "혼자 입장해요. (파티는 P)" }),
       h("h4", { text: "시작 층" }),
       h("div", { class: "floors" }, ...floors.map((f) => h("button", { class: "btn small primary", disabled: !isLeader, onclick: () => { send({ t: "enter", floor: f }); closeWin("gate"); } }, `${f}층`))),
+      bosses.length ? h("h4", { text: "보스 재도전" }) : null,
+      bosses.length ? h("div", { class: "floors" }, ...bosses.map((f) => h("button", { class: "btn small" + (f % 10 === 0 ? " boss" : ""), disabled: !isLeader, title: f % 10 === 0 ? "주요 보스" : "중간보스", onclick: () => { send({ t: "enter", floor: f }); closeWin("gate"); } }, `${f}층 ${f % 10 === 0 ? "보스" : "중보"}`))) : null,
       !isLeader ? h("div", { class: "note", text: "파티장만 입장할 수 있어요." }) : null,
-      h("div", { class: "note", text: "10층 보스를 쓰러뜨리면 다음 체크포인트가 열려요. 파티는 모든 파티원이 열어 둔 층까지만 고를 수 있어요." }),
+      h("div", { class: "note", text: "10층 보스를 쓰러뜨리면 다음 체크포인트가 열려요. 한 번 깬 보스층은 언제든 다시 도전할 수 있어요. 파티는 모든 파티원이 열어 둔 층·깬 보스층만 고를 수 있어요." }),
     ];
   }, { w: 360 });
 }

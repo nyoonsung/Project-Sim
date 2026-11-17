@@ -299,3 +299,12 @@ body.touch #menu-buttons button:active { transform: scale(0.92); filter: brightn
 /* 조이스틱 */
 body.touch #joy-base { background: radial-gradient(circle, #ffffff08 0%, #ffffff14 60%, #ffffff26 100%); border: 2px solid #ffffff55; box-shadow: 0 0 0 2px #0006, 0 0 16px #0006; }
 body.touch #joy-knob { background: radial-gradient(circle at 40% 35%, #ffffffcc, #b8b0d8aa 60%, #6a6088aa); border: 2px solid #fff; box-shadow: 0 2px 8px #000a; }
+
+/* 파티 이동 투표 */
+#vote { position: absolute; left: 50%; top: 18%; transform: translateX(-50%); z-index: 30; pointer-events: auto; background: linear-gradient(#211a33f0, #120e1cf0); border: 2px solid #ffd35a; border-radius: 10px; padding: 10px 16px; text-align: center; box-shadow: 0 0 0 2px #000c, 0 8px 24px #000a, 0 0 20px #ffd35a44; min-width: 240px; }
+#vote .vt { color: #ffe08a; font-size: 13px; margin-bottom: 4px; text-shadow: 1px 1px 0 #000; }
+#vote .vs { color: #cfc6e6; font-size: 11px; margin: 2px 0; }
+#vote .vb { display: flex; gap: 8px; justify-content: center; margin-top: 6px; }
+#vote .vb .btn { min-width: 84px; }
+body.touch #vote { top: 14%; }
+.floors .btn.boss { border-color: #ff8a4a; color: #ffb88a; }

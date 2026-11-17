@@ -74,7 +74,7 @@ export function refreshWin(id) {
   if (!win) return;
   const body = win.querySelector(".body");
   const st = body.scrollTop;
-  body.replaceChildren(...[].concat(win._build()));
+  body.replaceChildren(...[].concat(win._build()).filter((x) => x != null && x !== false));
   body.scrollTop = st;
 }
 export function closeWin(id) { const w = wins.get(id); if (w) { w.remove(); wins.delete(id); hideTip(); } }

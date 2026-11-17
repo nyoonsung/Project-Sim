@@ -19,26 +19,40 @@ export class World {
   constructor() {
     this.sessions = new Map(); // userId → session
     this.rooms = new Map();
+    this.clock = 0; // 월드 시계(초): 모든 방이 공유
     this.parties = new Map();
     this.town = this.addRoom(new Room(this, { id: "town", kind: "town", floor: 0, map: makeTown() }));
     this.announcement = null;
     this.startedAt = Date.now();
     this.tickTimes = [];
     // 고정 시간 간격: 타이머가 늦게 깨어나도 실제 시간만큼 틱을 따라잡아 게임 속도·입력 처리 속도가 흔들리지 않게
+    this.loop = null;
+    this.startLoop();
+  }
+  /** 고정 간격 루프. 접속자가 없으면 1분 뒤 멈춰서 Cloudflare가 서버를 잠재울 수 있게 함 */
+  startLoop() {
+    if (this.loop) return;
     const STEP = 1000 / TICK_RATE;
-    let last = performance.now(), acc = 0;
-    setInterval(() => {
+    let last = performance.now(), acc = 0, saveAt = Date.now() + 30_000;
+    this.emptySince = 0;
+    const id = setInterval(() => {
       const n = performance.now();
       acc += n - last; last = n;
       if (acc > STEP * 5) acc = STEP * 2; // 너무 밀리면(일시 정지 등) 버림
       while (acc >= STEP) { this.tick(); acc -= STEP; }
+      if (Date.now() >= saveAt) { saveAt = Date.now() + 30_000; this.saveAll(); }
+      if (this.sessions.size) this.emptySince = 0;
+      else if (!this.emptySince) this.emptySince = Date.now();
+      else if (Date.now() - this.emptySince > 60_000) { clearInterval(id); this.loop = null; }
     }, STEP / 2);
-    setInterval(() => this.saveAll(), 30_000).unref?.();
+    id.unref?.();
+    this.loop = id;
   }
   addRoom(r) { this.rooms.set(r.id, r); return r; }
 
   tick() {
     const t0 = performance.now();
+    this.clock = (this.clock ?? 0) + 1 / TICK_RATE;
     for (const r of this.rooms.values()) {
       try { r.tick(); r.flush(); } catch (e) { console.error("room tick", r.id, e); }
     }
@@ -64,6 +78,7 @@ export class World {
       sendMe: () => this.sendMe(s),
     };
     this.sessions.set(u.id, s);
+    this.startLoop();
     s.unit = makePlayerUnit(s);
     s.send({ t: "hello", name: u.username, char: this.publicChar(s), announce: this.announcement, serverTime: Date.now() });
     this.town.addPlayer(s.unit);
@@ -83,13 +98,20 @@ export class World {
   save(s) {
     try { Q.saveChar.run(s.userId, JSON.stringify(s.char), s.char.level, s.char.cls, s.char.best, Date.now()); s.dirty = false; } catch (e) { console.error("save", e); }
   }
-  saveAll() { for (const s of this.sessions.values()) { s.char.playtime += Math.round((Date.now() - s.joinedAt) / 1000); s.joinedAt = Date.now(); this.save(s); } }
+  saveAll() {
+    const t = Date.now();
+    for (const s of this.sessions.values()) {
+      s.char.playtime += Math.round((t - s.joinedAt) / 1000); s.joinedAt = t;
+      const key = `${s.char.level}|${s.char.xp}|${s.char.gold}|${s.char.best}|${s.char.kills}|${s.char.deaths}|${JSON.stringify(s.char.cons)}|${s.char.inv?.length}`;
+      if (s.dirty || key !== s.saveKey || t - (s.savedAt ?? 0) > 300_000) { this.save(s); s.saveKey = key; s.savedAt = t; }
+    }
+  }
 
   publicChar(s) {
     const c = s.char;
     return { name: c.name, level: c.level, xp: c.xp, cls: c.cls, stats: c.stats, unspent: c.unspent, skills: c.skills, equip: c.equip, inv: c.inv, cons: c.cons, gold: c.gold, best: c.best, checkpoint: c.checkpoint, cleared: c.cleared, kills: c.kills, deaths: c.deaths };
   }
-  sendChar(s) { s.send({ t: "char", char: this.publicChar(s) }); }
+  sendChar(s) { s.dirty = true; s.send({ t: "char", char: this.publicChar(s) }); }
   sendMe(s) {
     const u = s.unit;
     const now = u.room?.now ?? 0;
@@ -99,9 +121,16 @@ export class World {
     for (const [id, b] of u.buffs) buffs.push([id, Math.round((b.until - now) * 10) / 10, b.n ?? 0]);
     const st = [];
     for (const [id, x] of u.status) st.push([id, Math.round((x.until - now) * 10) / 10]);
-    s.send({ t: "me", hp: Math.ceil(u.hp), mh: u.maxHp, mp: Math.floor(u.mp), mm: u.maxMp, ki: Math.floor(u.ki), holy: Math.floor(u.holy), parts: u.parts, gap: u.gap,
+    const o = { t: "me", hp: Math.ceil(u.hp), mh: u.maxHp, mp: Math.floor(u.mp), mm: u.maxMp, ki: Math.floor(u.ki), holy: Math.floor(u.holy), parts: u.parts, gap: u.gap,
       sh: u.shield ? Math.round(u.shield.amt) : 0, cds, buffs, st, lv: s.char.level, xp: s.char.xp, gold: s.char.gold, stance: u.stance, acu: u.acupoint ?? 0,
-      dead: u.dead ? 1 : 0, cons: s.char.cons, spd: Math.round(u.stats.move * moveMul(u) * (u.guarding && now < u.guarding ? 0.35 : 1) * 10) / 10, pcd: Object.fromEntries(Object.entries(s.potionCd).map(([k, v]) => [k, Math.max(0, Math.round((v - Date.now())))])) });
+      dead: u.dead ? 1 : 0, cons: s.char.cons, spd: Math.round(u.stats.move * moveMul(u) * (u.guarding && now < u.guarding ? 0.35 : 1) * 10) / 10, pcd: Object.fromEntries(Object.entries(s.potionCd).map(([k, v]) => [k, Math.max(0, Math.round((v - Date.now())))])) };
+    // 바뀐 게 없으면 보내지 않음 (최대 1초에 한 번은 보냄)
+    const key = JSON.stringify([o.hp, o.mh, o.mp, o.mm, o.ki, o.holy, o.parts, o.gap, o.sh, o.lv, o.xp, o.gold, o.stance, o.acu, o.dead, o.cons, o.spd,
+      Object.entries(o.cds).map(([k, v]) => [k, Math.round(now * 10 + v / 100)]), buffs.map((b) => [b[0], Math.round((now + b[1]) * 10), b[2]]), st.map((x) => [x[0], Math.round((now + x[1]) * 10)]), Object.keys(o.pcd).filter((k) => o.pcd[k] > 0)]);
+    const tn = Date.now();
+    if (key === s.meKey && tn - (s.meAt ?? 0) < 1000) return;
+    s.meKey = key; s.meAt = tn;
+    s.send(o);
   }
 
   broadcastSys(text, kind = "sys") {
@@ -114,8 +143,13 @@ export class World {
     if (!s || s.conn !== conn) return;
     const u = s.unit, room = u.room;
     switch (m.t) {
-      case "in": if (room) room.pushInput(u, m); break;
+      case "in":
+        if (!room) break;
+        if (m.b) { for (const e of m.b) if (e[0] > (u.inputs.at(-1)?.s ?? u.lastSeq)) room.pushInput(u, { s: e[0], mx: e[1], my: e[2], ax: e[3], ay: e[4] }); }
+        else room.pushInput(u, m);
+        break;
       case "cast": if (room) room.cast(u, m); break;
+      case "vote": if (room) room.voteCast(u, m.ok); break;
       case "use": this.usePotion(s, m.item); break;
       case "chat": this.chat(s, m.text); break;
       case "party": this.partyOp(s, m.op, m.name); break;
@@ -164,7 +198,7 @@ export class World {
   // ── 파티
   partyOf(s) { return s.partyId ? this.parties.get(s.partyId) : null; }
   sendParty(p) {
-    const members = [...p.members].map((id) => { const o = this.sessions.get(id); return o ? { name: o.name, cls: o.char.cls, lv: o.char.level, leader: id === p.leader ? 1 : 0, cp: o.char.checkpoint } : null; }).filter(Boolean);
+    const members = [...p.members].map((id) => { const o = this.sessions.get(id); return o ? { name: o.name, cls: o.char.cls, lv: o.char.level, leader: id === p.leader ? 1 : 0, cp: o.char.checkpoint, best: o.char.best } : null; }).filter(Boolean);
     for (const id of p.members) this.sessions.get(id)?.send({ t: "party", members });
   }
   partyOp(s, op, name) {
@@ -227,7 +261,9 @@ export class World {
     if (p && p.leader !== s.userId) return s.notice("파티장만 던전 입장을 할 수 있어요.");
     const group = this.groupOf(s);
     const maxCp = Math.min(...group.map((g) => g.char.checkpoint));
-    if (floor !== 1 && (floor > maxCp || (floor - 1) % 10 !== 0)) return s.notice(`시작할 수 있는 층은 1층 또는 열린 체크포인트(최대 ${maxCp}층)예요.`);
+    // 한 번 깬 보스층(주요·중간)은 문지기에게서 다시 도전 가능 (파티원 모두 깬 층만)
+    const bossAgain = floorKind(floor) !== "normal" && group.every((g) => g.char.best >= floor);
+    if (floor !== 1 && !bossAgain && (floor > maxCp || (floor - 1) % 10 !== 0)) return s.notice(`시작할 수 있는 층은 1층, 열린 체크포인트(최대 ${maxCp}층), 또는 모두 깬 보스층이에요.`);
     if (group.some((g) => g.unit.room !== this.town)) return s.notice("파티원 모두 마을에 있어야 해요.");
     this.moveGroup(group, floor, "dungeon");
   }

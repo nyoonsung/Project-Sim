@@ -23,7 +23,8 @@ export class Room {
     this.timers = [];
     this.loot = new Map();
     this.events = [];
-    this.now = 0;
+    // 모든 방이 같은 월드 시계를 씀: 방을 옮겨도 쿨타임·공격 잠금 같은 '끝나는 시각'이 그대로 맞음
+    this.now = world.clock ?? 0;
     this.tickN = 0;
     this.flow = new Map();
     this.flowAt = 0;
@@ -38,7 +39,7 @@ export class Room {
     if (map.spawns) for (const s of map.spawns) this.spawnMonster(s.id, s.x, s.y, s.elite);
     this.total = this.units.size;
     // 웨이브 층: 처음엔 비어 있고 몬스터가 가장자리에서 몰려옴
-    if (map.waves) { this.total = map.waves.total; this.wave = { n: 0, spawned: 0, nextAt: 2.5, forceAt: 0 }; }
+    if (map.waves) { this.total = map.waves.total; this.wave = { n: 0, spawned: 0, nextAt: this.now + 2.5, forceAt: 0 }; }
     if (map.kind === "normal" && this.total === 0) this.exitOpen = true;
     // 마을 훈련 허수아비
     for (const o of map.objects) if (o.kind === "dummy") this.spawnDummy(o.x, o.y);
@@ -46,6 +47,7 @@ export class Room {
 
   // ── 이벤트
   ev(e) { this.events.push(e); }
+  aliveMonsters() { let n = 0; for (const u of this.units.values()) if (u.type === "m" && !u.dead && !u.dummy && u.team === "m") n++; return n + this.timers.filter((t) => t.spawn).length; }
   schedule(delay, fn) { this.timers.push({ at: this.now + delay, fn }); }
 
   // ── 유닛 생성
@@ -200,6 +202,59 @@ export class Room {
       const elite = Math.random() < W.elite;
       this.ev({ e: "fx", fx: "arcane/portal", x: x | 0, y: y | 0, s: 0.45 });
       this.schedule(0.9 + Math.random() * 0.4, () => this.spawnMonster(mid, x, y, elite, { aggro: true }));
+      this.timers[this.timers.length - 1].spawn = true;
+    }
+  }
+
+  rescueStragglers() {
+    const ps = [...this.players.values()].filter((p) => !p.dead);
+    if (!ps.length) return;
+    const left = [...this.units.values()].filter((u) => u.type === "m" && !u.dead && !u.dummy && u.team === "m");
+    if (left.length > 4) return;
+    let moved = 0;
+    for (const m of left) {
+      if (ps.some((p) => Math.hypot(p.x - m.x, p.y - m.y) < 330)) continue;
+      moved++;
+      const p = ps[Math.floor(Math.random() * ps.length)];
+      const pts = this.map.waves.points.filter(([x, y]) => { const d = Math.hypot(x - p.x, y - p.y); return d > 120 && d < 320; });
+      const [x, y] = pts.length ? pts[Math.floor(Math.random() * pts.length)] : this.map.start;
+      this.ev({ e: "fx", fx: "arcane/portal", x: x | 0, y: y | 0, s: 0.45 });
+      m.x = x; m.y = y; m.aggro = true; m.threat?.set(p.id, (m.threat.get(p.id) ?? 0) + 1);
+    }
+    if (moved) this.ev({ e: "msg", text: `남은 몬스터 ${left.length}마리가 가까이 다가와요!`, kind: "info" });
+  }
+
+  // ── 파티 이동 투표: 파티원 전원이 동의해야 다음 층으로
+  startVote(o, by, now) {
+    if (this.vote || now < (this.voteCooldown ?? 0)) return;
+    this.vote = { id: o.id, yes: new Set([by.id]), until: now + 30, label: o.label ?? "다음 층" };
+    this.ev({ e: "vote", id: o.id, by: by.name, label: this.vote.label, yes: [...this.vote.yes], need: this.players.size });
+    this.checkVote(now);
+  }
+  voteCast(u, ok) {
+    const v = this.vote;
+    if (!v || !this.players.has(u.id)) return;
+    if (!ok) { this.endVote(`${u.name}님이 거절했어요.`); return; }
+    v.yes.add(u.id);
+    this.ev({ e: "vote", id: v.id, label: v.label, yes: [...v.yes], need: this.players.size });
+    this.checkVote(this.now);
+  }
+  endVote(why) {
+    this.vote = null;
+    this.voteCooldown = this.now + 3;
+    this.ev({ e: "vote", end: 1, why });
+  }
+  checkVote(now) {
+    const v = this.vote;
+    if (!v) return;
+    for (const id of [...v.yes]) if (!this.players.has(id)) v.yes.delete(id);
+    if (now > v.until) return this.endVote("시간이 지나 투표가 취소됐어요.");
+    if ([...this.players.keys()].every((id) => v.yes.has(id))) {
+      this.vote = null;
+      this.ev({ e: "vote", end: 1, ok: 1 });
+      this.transition = { at: now + 2, id: v.id };
+      this.ev({ e: "msg", text: "모두 동의! 2초 뒤 파티 전체가 이동해요...", kind: "info" });
+      this.ev({ e: "warp", d: 2 });
     }
   }
 
@@ -261,7 +316,7 @@ export class Room {
       if (p.mythic?.has("mana_font") && p === killer) p.mp = Math.min(p.maxMp, p.mp + p.maxMp * 0.03);
     }
     if (t.boss) this.onBossDead(t);
-    else if (this.kind === "dungeon" && !this.exitOpen && this.map.kind === "normal" && (this.wave ? this.wave.spawned >= this.total && this.killed >= Math.ceil(this.total * 0.9) : this.killed >= Math.ceil(this.total * 0.7))) {
+    else if (this.kind === "dungeon" && !this.exitOpen && this.map.kind === "normal" && (this.wave ? this.wave.spawned >= this.total : true) && this.aliveMonsters() === 0) {
       this.exitOpen = true;
       this.ev({ e: "exit", open: 1 });
       this.ev({ e: "msg", text: "출구 포탈이 열렸어요!", kind: "info" });
@@ -312,7 +367,7 @@ export class Room {
 
   // ── 매 틱
   tick() {
-    const now = (this.now += TICK_DT);
+    const now = (this.now = this.world.clock ?? this.now + TICK_DT);
     this.tickN++;
     // 예약 실행
     if (this.timers.length) {
@@ -322,6 +377,7 @@ export class Room {
     }
     if (now >= this.flowAt) { this.updateFlow(); this.flowAt = now + 0.5; }
     if (this.wave) this.tickWaves(now);
+    if (this.wave && this.wave.spawned >= this.total && !this.exitOpen && now >= (this.rescueAt ?? 0)) { this.rescueAt = now + 8; this.rescueStragglers(); }
     if (this.map.traps?.length) this.tickTraps(now);
     for (const u of this.players.values()) this.tickPlayer(u, now);
     for (const u of [...this.units.values()]) {
@@ -661,17 +717,29 @@ export class Room {
       if (now >= this.transition.at) { const t = this.transition; this.transition = null; this.world.usePortal(this, t.id); }
       return;
     }
+    if (this.vote) this.checkVote(now);
+    if (this.transition) return;
+    const onTown = new Set();
     for (const o of this.map.objects) {
       if (o.kind !== "portal") continue;
       if (o.id === "exit" && !this.exitOpen) continue;
-      if (alive.some((p) => Math.hypot(p.x - o.x, p.y - o.y) < 22)) {
-        if (o.id === "town") { for (const p of alive) if (Math.hypot(p.x - o.x, p.y - o.y) < 22) this.world.toTown(p.session, "포탈을 타고 마을로 돌아왔어요."); continue; }
-        this.transition = { at: now + 2, id: o.id };
-        this.ev({ e: "msg", text: "2초 뒤 파티 전체가 이동해요...", kind: "info" });
-        this.ev({ e: "warp", d: 2 });
-        break;
+      const on = alive.filter((p) => Math.hypot(p.x - o.x, p.y - o.y) < 22);
+      if (!on.length) continue;
+      if (o.id === "town") {
+        for (const p of on) {
+          onTown.add(p);
+          if (p.townAt == null) { p.townAt = now; p.session.send({ t: "ev", list: [{ e: "msg", text: "잠시 서 있으면 마을로 돌아가요.", kind: "info" }] }); }
+          else if (now - p.townAt >= 1.5) { p.townAt = null; this.world.toTown(p.session, "포탈을 타고 마을로 돌아왔어요."); }
+        }
+        continue;
       }
+      if (this.players.size > 1) { this.startVote(o, on[0], now); continue; }
+      this.transition = { at: now + 2, id: o.id };
+      this.ev({ e: "msg", text: "2초 뒤 다음 곳으로 이동해요...", kind: "info" });
+      this.ev({ e: "warp", d: 2 });
+      break;
     }
+    for (const p of this.players.values()) if (!onTown.has(p)) p.townAt = null;
   }
 
   // ── 스냅샷 전송
@@ -695,10 +763,16 @@ export class Room {
     for (const p of this.players.values()) {
       const s = p.session;
       if (evs) s.send(`{"t":"ev","list":${evs}}`);
+      // 플레이어마다 '마지막으로 보낸 상태'를 기억해서 바뀐 유닛만 보냄 (2초마다 전체)
+      if (s.sentRoom !== this) { s.sentRoom = this; s.sent = new Map(); }
+      const sent = s.sent, full = (this.tickN + p.id) % 40 === 0;
       const near = [];
       for (const [u, str] of parts) {
-        if (u === p || u.type === "p" || u.type === "b" || Math.abs(u.x - p.x) < VIEW + 100 && Math.abs(u.y - p.y) < VIEW) near.push(str);
+        if (u === p || u.type === "p" || u.type === "b" || Math.abs(u.x - p.x) < VIEW + 100 && Math.abs(u.y - p.y) < VIEW) {
+          if (full || sent.get(u.id) !== str) { near.push(str); sent.set(u.id, str); }
+        } else if (sent.has(u.id)) sent.delete(u.id);
       }
+      if (full) for (const id of sent.keys()) if (!this.units.has(id)) sent.delete(id);
       s.send(`{"t":"s","k":${this.tickN},"a":${p.lastSeq},"e":[${near.join(",")}]}`);
       if (s.meDirty || this.tickN % 4 === 0) { s.sendMe(); s.meDirty = false; }
     }

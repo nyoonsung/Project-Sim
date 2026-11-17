@@ -84,6 +84,8 @@ function onSnapshot(m) {
     const e = G.ents.get(id);
     if (!e) continue;
     const moved = Math.hypot(x - e.x, y - e.y) > 0.5;
+    // 한동안 안 바뀌어 안 왔던 유닛: 직전 위치를 한 틱 전에 찍어 두어 출발이 부드럽게
+    if (e.buf.length && t - e.buf[e.buf.length - 1][0] > 0.12) e.buf.push([t - 0.05, e.x, e.y]);
     e.x = x; e.y = y; e.facing = f / 100; e.hp = hp / 1000; e.fl = fl;
     e.buf.push([t, x, y]);
     if (e.buf.length > 12) e.buf.shift();
@@ -161,6 +163,7 @@ function onEvent(e) {
     case "boss": G.boss = { id: e.id, name: e.name, mid: e.mid }; G.ui.onBoss(); break;
     case "bossdead": G.boss = null; G.ui.onBoss(); G.ui.center("보스 처치!"); break;
     case "exit": G.exitOpen = !!e.open; break;
+    case "vote": G.ui.showVote?.(e); if (!e.end && !e.yes.includes(G.you)) sfx("wave"); break;
     case "doors": if (G.map) G.map.doorsOpen = !!e.open; break;
     case "obj": G.objects.push(e.o); break;
     case "spk": (G.spikes ??= [0, 0])[e.p] = e.s; break;
@@ -227,22 +230,38 @@ export function localStep(dt) {
 export function inputTick() {
   if (!G.map || !G.net) return;
   let [mx, my] = moveDir();
-  const s = ++G.seq;
   const ax = Math.round(G.mouse.wx), ay = Math.round(G.mouse.wy);
   // 내 화면에서 대시 중이면 이동 입력은 0 (서버도 대시 중엔 걷지 않음 → 두 위치가 그대로 일치)
-  const D = G.localDash, dashing = D && now() < D.until;
-  if (dashing) { mx = 0; my = 0; D.seqEnd = s; }
-  send({ t: "in", s, mx: +mx.toFixed(3), my: +my.toFixed(3), ax, ay });
-  const frozen = isFrozen() || dashing;
-  G.pending.push({ s, mx, my, frozen });
-  if (G.pending.length > 40) G.pending.shift();
-  G.pred.px = G.pred.x; G.pred.py = G.pred.y; G.pred.at = now();
-  if (!frozen) [G.pred.x, G.pred.y] = applyInput(G.map, G.pred.x, G.pred.y, mx, my, G.me?.spd ?? 120, TICK_DT, PLAYER_RADIUS);
+  const D = G.localDash, tn = now(), dashing = D && tn < D.until;
+  if (dashing) { mx = 0; my = 0; }
+  // 가만히 서 있으면 입력을 보내지 않음 (서버는 입력이 없으면 정지로 처리) → 보내는 메시지 수 대폭 감소
+  //  단, 멈춘 직후 한 번·조준이 크게 바뀔 때(최대 초당 4번)·대시 확인 중에는 보냄
+  const still = !mx && !my, aimMoved = Math.abs(ax - (G.lastAx ?? ax)) + Math.abs(ay - (G.lastAy ?? ay)) > 12;
+  const needed = !still || !G.wasStill || (D && !D.done) || (aimMoved && tn - (G.lastAimSend ?? 0) > 0.25);
+  G.wasStill = still;
+  if (needed) {
+    const s = ++G.seq;
+    if (dashing) D.seqEnd = s;
+    G.lastAx = ax; G.lastAy = ay; if (aimMoved) G.lastAimSend = tn;
+    (G.outBatch ??= []).push([s, +mx.toFixed(3), +my.toFixed(3), ax, ay]);
+    // 두 틱씩 묶어서 전송 (멈출 때·대시 중엔 바로)
+    if (G.outBatch.length >= 2 || still || dashing) flushInputs();
+    const frozen = isFrozen() || dashing;
+    G.pending.push({ s, mx, my, frozen });
+    if (G.pending.length > 40) G.pending.shift();
+    G.pred.px = G.pred.x; G.pred.py = G.pred.y; G.pred.at = tn;
+    if (!frozen) [G.pred.x, G.pred.y] = applyInput(G.map, G.pred.x, G.pred.y, mx, my, G.me?.spd ?? 120, TICK_DT, PLAYER_RADIUS);
+  }
   // 누르고 있는 스킬 키 반복 + 자동 사용 스킬
   tryHeldCasts();
   autoTick();
 }
-
+/** 묶어 둔 이동 입력을 바로 전송 (스킬 쓰기 직전에도 호출: 서버가 같은 위치에서 시전하도록) */
+export function flushInputs() {
+  if (!G.outBatch?.length) return;
+  send({ t: "in", b: G.outBatch });
+  G.outBatch = [];
+}
 export function cdLeft(id) {
   if (!G.me?.cds?.[id]) return 0;
   return Math.max(0, G.me.cds[id] / 1000 - (now() - G.meAt));
@@ -272,6 +291,7 @@ export function tryCast(slot, at) {
   if (t - G.lastCastTry < 0.05) return false;
   G.lastCastTry = t;
   const ax = at ? at.x : G.mouse.wx, ay = at ? at.y : G.mouse.wy;
+  flushInputs();
   const msg = { t: "cast", slot, ax: Math.round(ax), ay: Math.round(ay), s: G.seq };
   if (at?.tx) msg.tx = at.tx;
   else if (sk.aim === "ally") {

@@ -80,7 +80,7 @@ function decorate(m, R, zone, { cx, cy, traps = 0, start } = {}) {
   let crystals = 0, nprops = 0;
   for (let i = 0; i < 900 && (crystals < 8 || nprops < 14); i++) {
     const x = R.int(2, m.w - 3), y = R.int(2, m.h - 3);
-    if (!isF(x, y) || !nearWall(x, y) || (start && Math.hypot(px(x) - start[0], px(y) - start[1]) < 90) || !take(x, y)) continue;
+    if (!isF(x, y) || !nearWall(x, y) || (start && Math.hypot(px(x) - start[0], px(y) - start[1]) < 140) || !take(x, y)) continue;
     if (crystals < 8 && R.chance(0.45)) { O.push({ kind: "crystal", x: px(x) + R.int(-6, 6), y: px(y) + 10, c: zone.accent ?? "#7ae0ff", v: R.int(0, 3), flip: R.chance(0.5) }); crystals++; }
     else if (nprops < 14) { O.push({ kind: "dprop", s: R.pick(props), x: px(x) + R.int(-6, 6), y: px(y) + 12 }); nprops++; }
   }
@@ -192,7 +192,10 @@ function normalFloor(floor, seed, party) {
   for (let i = 0; i < m.tiles.length; i++) if ((m.tiles[i] === T.FLOOR || m.tiles[i] === T.DECO) && !reach[i]) m.tiles[i] = T.WALL;
   m.start = [px(startX), px(startY)];
   m.exit = [px(cx), px(ay + 1)];
-  m.objects.push({ kind: "portal", id: "exit", x: m.exit[0], y: m.exit[1], locked: true });
+  m.objects.push({ kind: "portal", id: "exit", x: m.exit[0], y: m.exit[1], locked: true, label: "출구 (몬스터를 모두 처치하면 열림)" });
+  // 마을로 돌아가는 길 (시작 지점 옆, 1.5초 서 있으면 귀환)
+  m.objects.push({ kind: "portal", id: "town", x: px(startX - 3), y: px(startY + 1), label: "마을로", color: "town" });
+  for (const [x, y] of [[startX - 3, startY + 1], [startX - 4, startY + 1], [startX - 3, startY]]) m.tiles[y * m.w + x] = T.FLOOR;
   // 소환 지점: 가장자리 근처, 시작점에서 먼 곳
   const pts = [];
   for (let y = ay + 1; y < ay + ih - 1; y++) for (let x = ax + 1; x < ax + iw - 1; x++) {
@@ -240,6 +243,7 @@ function bossFloor(floor, seed) {
   addDeco(m, R, zone, 20);
   decorate(m, R, zone, { cx: px(mid), cy: px(ay + Math.floor(AH / 2)), traps: 0, start: m.start });
   m.objects.push({ kind: "sign", x: px(mid + 3), y: px(ry + 1), text: kind === "boss" ? "주요 보스의 방" : "중간보스의 방" });
+  m.objects.push({ kind: "portal", id: "town", x: px(mid - 3), y: px(ry + 6), label: "마을로", color: "town" });
   m.kind = kind;
   return m;
 }

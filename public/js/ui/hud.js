@@ -122,6 +122,24 @@ export function toast(text, kind = "info") {
   setTimeout(() => el.remove(), 4000);
   while ($("#toasts").children.length > 6) $("#toasts").firstChild.remove();
 }
+/** 파티 이동 투표 창 (파티원 전원이 동의해야 이동) */
+export function showVote(e) {
+  let el = $("#vote");
+  if (e.end) {
+    if (el) el.remove();
+    if (e.why) toast(e.why);
+    return;
+  }
+  const mine = e.yes.includes(G.you);
+  const box = h("div", { id: "vote" },
+    h("div", { class: "vt", text: `${e.label} 이동 투표 · ${e.yes.length}/${e.need}명 동의` }),
+    e.by ? h("div", { class: "vs", text: `${e.by}님이 이동을 제안했어요.` }) : null,
+    mine ? h("div", { class: "vs", text: "동의했어요. 다른 파티원을 기다리는 중..." })
+      : h("div", { class: "vb" },
+        h("button", { class: "btn primary", onclick: () => send({ t: "vote", ok: true }) }, "동의 (Y)"),
+        h("button", { class: "btn", onclick: () => send({ t: "vote", ok: false }) }, "거절 (N)")));
+  if (el) el.replaceWith(box); else $("#ui").append(box);
+}
 let centerTimer;
 export function center(text) {
   const el = $("#center-msg");
