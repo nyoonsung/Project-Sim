@@ -35,7 +35,10 @@ export function onMessage(m) {
     case "ents": for (const d of m.list) addEnt(d); break;
     case "s": onSnapshot(m); break;
     case "ev": for (const e of m.list) onEvent(e); break;
-    case "me": G.me = m; G.meAt = now(); G.ui.onMe(); break;
+    case "me":
+      G.me = m; G.meAt = now(); G.ui.onMe();
+      if (m.pf && G.char) { G.char.prof ??= {}; for (const [k, v] of Object.entries(m.pf)) { G.char.prof[k] = v; } G.ui.onProf?.(); }
+      break;
     case "prof": if (G.char) { (G.char.prof ??= {})[m.s] = m.xp; G.ui.onProf?.(m.s); } break;
     case "char": G.char = m.char; G.ui.onChar(); break;
     case "chat": G.ui.chat(m); break;

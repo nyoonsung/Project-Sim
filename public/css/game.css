@@ -1,8 +1,9 @@
-@font-face { font-family: "Galmuri11"; src: url("/fonts/Galmuri11.woff2") format("woff2"); font-display: swap; }
-@font-face { font-family: "Galmuri11"; font-weight: bold; src: url("/fonts/Galmuri11-Bold.woff2") format("woff2"); font-display: swap; }
-@font-face { font-family: "Galmuri9"; src: url("/fonts/Galmuri9.woff2") format("woff2"); font-display: swap; }
-@font-face { font-family: "Galmuri14"; src: url("/fonts/Galmuri14.woff2") format("woff2"); font-display: swap; }
-@font-face { font-family: "GalmuriMono11"; src: url("/fonts/GalmuriMono11.woff2") format("woff2"); font-display: swap; }
+/* 글꼴: 한글 11,172자·영문·기호만 남긴 가벼운 판 (한자·일본어 등 안 쓰는 글자 제거, tools/subset-fonts.py) */
+@font-face { font-family: "Galmuri11"; src: url("/fonts/Galmuri11-k.woff2") format("woff2"); font-display: swap; }
+@font-face { font-family: "Galmuri11"; font-weight: bold; src: url("/fonts/Galmuri11-Bold-k.woff2") format("woff2"); font-display: swap; }
+@font-face { font-family: "Galmuri9"; src: url("/fonts/Galmuri9-k.woff2") format("woff2"); font-display: swap; }
+@font-face { font-family: "Galmuri14"; src: url("/fonts/Galmuri14-k.woff2") format("woff2"); font-display: swap; }
+@font-face { font-family: "GalmuriMono11"; src: url("/fonts/GalmuriMono11-a.woff2") format("woff2"); font-display: swap; }
 
 :root {
   --bg: #0c0b10; --panel: #17151f; --panel2: #201d2b; --line: #3a3550; --line2: #59527a; --text: #ece8f4; --dim: #9c96b0;
@@ -13,7 +14,7 @@
 html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); font-family: "Galmuri11", system-ui, sans-serif; font-size: 13px; overflow: hidden; user-select: none; }
 .hidden { display: none !important; }
 button, input, select { font-family: inherit; font-size: inherit; color: inherit; }
-kbd { font-family: "GalmuriMono11", monospace; font-size: 10px; padding: 0 3px; border: 1px solid var(--line2); border-radius: 3px; color: var(--dim); }
+kbd { font-family: "GalmuriMono11", "Galmuri11", monospace; font-size: 10px; padding: 0 3px; border: 1px solid var(--line2); border-radius: 3px; color: var(--dim); }
 
 /* ── 로그인 */
 .screen { position: fixed; inset: 0; }
@@ -77,7 +78,7 @@ kbd { font-family: "GalmuriMono11", monospace; font-size: 10px; padding: 0 3px; 
 #skillbar { display: flex; gap: 4px; }
 .slot { position: relative; width: 46px; height: 46px; background: #0e0c14; border: 2px solid var(--line2); display: grid; place-items: center; font-size: 10px; text-align: center; line-height: 1.1; overflow: hidden; cursor: pointer; }
 .slot .nm { white-space: pre-line; padding: 2px; text-shadow: 1px 1px 0 #000; z-index: 1; }
-.slot .key { position: absolute; left: 2px; top: 1px; font-size: 9px; color: var(--dim); z-index: 2; font-family: "GalmuriMono11"; }
+.slot .key { position: absolute; left: 2px; top: 1px; font-size: 9px; color: var(--dim); z-index: 2; font-family: "GalmuriMono11", "Galmuri11"; }
 .slot .cd { position: absolute; inset: 0; background: #000b; transform-origin: bottom; z-index: 1; }
 .slot .cdt { position: absolute; inset: 0; display: grid; place-items: center; font-size: 13px; color: #fff; z-index: 3; text-shadow: 1px 1px 0 #000; }
 .slot.empty { opacity: 0.4; }

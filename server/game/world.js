@@ -128,7 +128,8 @@ export class World {
     const key = JSON.stringify([o.hp, o.mh, o.mp, o.mm, o.ki, o.holy, o.parts, o.gap, o.sh, o.lv, o.xp, o.gold, o.stance, o.acu, o.dead, o.cons, o.spd,
       Object.entries(o.cds).map(([k, v]) => [k, Math.round(now * 10 + v / 100)]), buffs.map((b) => [b[0], Math.round((now + b[1]) * 10), b[2]]), st.map((x) => [x[0], Math.round((now + x[1]) * 10)]), Object.keys(o.pcd).filter((k) => o.pcd[k] > 0)]);
     const tn = Date.now();
-    if (key === s.meKey && tn - (s.meAt ?? 0) < 1000) return;
+    if (s.profOut) { o.pf = s.profOut; s.profOut = null; } // 숙련 경험치 변경분
+    else if (key === s.meKey && tn - (s.meAt ?? 0) < 1000) return;
     s.meKey = key; s.meAt = tn;
     s.send(o);
   }

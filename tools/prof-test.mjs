@@ -36,7 +36,7 @@ function setup(kind = "dungeon", prof = {}) {
   world.clock += 5; r.now = world.clock;
   castSkill(r, u, 1, u.x + 60, u.y, null, r.now);
   ok(profLevel(ch.prof.c_slash).lv === 1 && r.events.some((e) => e.e === "proflv" && e.lv === 1), "Lv.1 달성 이벤트");
-  ok(sent.some((m) => m.t === "prof" && m.s === "c_slash"), "숙련 경험치를 본인에게 전송");
+  ok(u.session.profOut?.c_slash > 0 && u.session.meDirty, "숙련 경험치를 상태 메시지에 묶어 전송 예약");
 }
 // 3) 위력 +20% (Lv.10), 마나 -15%, 쿨타임 불변
 {

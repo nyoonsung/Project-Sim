@@ -23,5 +23,13 @@ writeFileSync(join(out, "_headers"), `/*
   Cross-Origin-Opener-Policy: same-origin
   Permissions-Policy: camera=(), microphone=(), geolocation=()
   Strict-Transport-Security: max-age=15552000
+
+# 글꼴은 파일 이름이 바뀔 때만 내용이 바뀜 → 30일 보관 (재접속·자동 업데이트 때 다시 안 받음)
+/fonts/*
+  Cache-Control: public, max-age=2592000, immutable
+
+# 이펙트 그림(pixelfx)은 거의 안 바뀜 → 7일 보관
+/vendor/*
+  Cache-Control: public, max-age=604800
 `);
 console.log("cf-dist ready");

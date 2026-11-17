@@ -156,7 +156,8 @@ function gainProf(room, u, sk, now) {
   ch.prof[sk.id] = (ch.prof[sk.id] ?? 0) + profGain(sk);
   const after = profLevel(ch.prof[sk.id], sk.id);
   u.session.dirty = true;
-  u.session.send({ t: "prof", s: sk.id, xp: ch.prof[sk.id] });
+  (u.session.profOut ??= {})[sk.id] = ch.prof[sk.id]; // 다음 상태 메시지(me)에 묶어서 보냄
+  u.session.meDirty = true;
   if (after.lv > before.lv) {
     room.ev({ e: "proflv", id: u.id, s: sk.id, lv: after.lv, x: u.x | 0, y: u.y | 0 });
     const unc = isUncapped(sk.id);
