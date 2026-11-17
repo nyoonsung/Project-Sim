@@ -11,7 +11,7 @@ export const G = {
   you: 0, map: null, room: null, kind: "town", floor: 0, zone: null, zoneName: "", objects: [], exitOpen: false, arena: null,
   ents: new Map(), projectiles: new Map(), tels: new Map(), zones: new Map(), loot: new Map(), beams: [],
   floaters: [], party: [], boss: null, shake: 0, hurtFlash: 0,
-  pred: { x: 0, y: 0, px: 0, py: 0, at: 0 }, local: { x: 0, y: 0 }, pending: [], seq: 0, forced: 0,
+  pred: { x: 0, y: 0, px: 0, py: 0, at: 0 }, local: { x: 0, y: 0 }, stick: [0, 0], touchHeld: new Set(), touch: false, aimLine: null, pending: [], seq: 0, forced: 0,
   keys: new Set(), mouse: { x: 0, y: 0, down: [false, false, false], wx: 0, wy: 0 }, cam: { x: 0, y: 0 },
   lastCastTry: 0, typing: false, casting: null,
 };
@@ -39,6 +39,8 @@ export function onMessage(m) {
     case "announce": G.ui.announce(m.text); break;
     case "kick": G.ui.kicked(m.why); break;
     case "enh": G.ui.onEnhance(m); break;
+    case "renamed": G.name = m.name; G.ui.toast(`닉네임을 ${m.name}(으)로 바꿨어요. 다음 로그인부터 새 닉네임으로 로그인하세요.`, "rank"); break;
+    case "renameFail": G.ui.toast(m.text, "info"); break;
     case "tp": G.pred.x = G.pred.px = G.local.x = m.x; G.pred.y = G.pred.py = G.local.y = m.y; G.pending.length = 0; break;
   }
 }
@@ -172,6 +174,7 @@ export function moveDir() {
     if (G.keys.has("KeyA") || G.keys.has("ArrowLeft")) mx -= 1;
     if (G.keys.has("KeyD") || G.keys.has("ArrowRight")) mx += 1;
   }
+  if (!G.typing && (G.stick[0] || G.stick[1])) { mx += G.stick[0]; my += G.stick[1]; }
   const l = Math.hypot(mx, my);
   if (l > 1) { mx /= l; my /= l; }
   return [mx, my];
@@ -205,8 +208,9 @@ export function inputTick() {
   if (G.pending.length > 40) G.pending.shift();
   G.pred.px = G.pred.x; G.pred.py = G.pred.y; G.pred.at = now();
   if (!frozen) [G.pred.x, G.pred.y] = applyInput(G.map, G.pred.x, G.pred.y, mx, my, G.me?.spd ?? 120, TICK_DT, PLAYER_RADIUS);
-  // 누르고 있는 스킬 키 반복
+  // 누르고 있는 스킬 키 반복 + 자동 사용 스킬
   tryHeldCasts();
+  autoTick();
 }
 
 export function cdLeft(id) {
@@ -216,7 +220,7 @@ export function cdLeft(id) {
 
 const KEYCODE = { Q: "KeyQ", E: "KeyE", R: "KeyR", F: "KeyF", SHIFT: "ShiftLeft", V: "KeyV" };
 function held(slotKey) {
-  if (slotKey === "LMB") return G.mouse.down[0];
+  if (slotKey === "LMB") return G.mouse.down[0] || G.touchHeld.has(0);
   if (slotKey === "RMB") return G.mouse.down[2];
   if (slotKey === "SHIFT") return G.keys.has("ShiftLeft") || G.keys.has("ShiftRight");
   return G.keys.has(KEYCODE[slotKey]);
@@ -225,24 +229,84 @@ function tryHeldCasts() {
   if (G.typing || G.ui.blockingWindow()) return;
   SLOT_KEYS.forEach((k, i) => { if (held(k)) tryCast(i); });
 }
-export function tryCast(slot) {
+/** 스킬 시전. at = { x, y, tx } 를 주면 마우스 대신 그 지점(자동 조준·자동 사용·대시 버튼) */
+export function tryCast(slot, at) {
   const id = G.char?.skills?.[slot];
   const sk = id && SKILLS[id];
-  if (!sk || sk.kind === "passive" || G.me?.dead) return;
-  if (cdLeft(id) > 0.06) return;
-  for (const [k, v] of Object.entries(sk.cost ?? {})) if ((G.me?.[k] ?? 0) < v) return;
+  if (!sk || sk.kind === "passive" || G.me?.dead) return false;
+  if (cdLeft(id) > 0.06) return false;
+  for (const [k, v] of Object.entries(sk.cost ?? {})) if ((G.me?.[k] ?? 0) < v) return false;
   const t = now();
-  if (t - G.lastCastTry < 0.09) return;
+  if (t - G.lastCastTry < 0.09) return false;
   G.lastCastTry = t;
-  const msg = { t: "cast", slot, ax: Math.round(G.mouse.wx), ay: Math.round(G.mouse.wy) };
-  if (sk.aim === "ally") {
+  const ax = at ? at.x : G.mouse.wx, ay = at ? at.y : G.mouse.wy;
+  const msg = { t: "cast", slot, ax: Math.round(ax), ay: Math.round(ay) };
+  if (at?.tx) msg.tx = at.tx;
+  else if (sk.aim === "ally") {
     let best = null, bd = 60;
-    for (const e of G.ents.values()) if (e.k === "p" && !e.dead) { const d = Math.hypot(e.rx - G.mouse.wx, e.ry - 16 - G.mouse.wy); if (d < bd) { bd = d; best = e; } }
+    for (const e of G.ents.values()) if (e.k === "p" && !e.dead) { const d = Math.hypot(e.rx - ax, e.ry - 16 - ay); if (d < bd) { bd = d; best = e; } }
     if (best) msg.tx = best.id;
   }
   send(msg);
   // 다음 확인 전 중복 전송 방지용 임시 쿨타임
   if (G.me) { G.me.cds = { ...G.me.cds, [id]: Math.max(G.me.cds[id] ?? 0, 150 + (now() - G.meAt) * 1000) }; }
+  return true;
+}
+
+// ── 스킬 자동 사용 (공용 스킬 제외, 스킬마다 수동/자동 선택. 설정은 이 브라우저에 저장)
+const AUTO_KEY = "abyss-auto-skills";
+G.autoSkills = (() => { try { return new Set(JSON.parse(localStorage.getItem(AUTO_KEY) || "[]")); } catch { return new Set(); } })();
+export const canAuto = (sk) => !!sk && sk.cls !== "common" && sk.kind !== "passive";
+export function setAuto(id, on) {
+  if (on) G.autoSkills.add(id); else G.autoSkills.delete(id);
+  try { localStorage.setItem(AUTO_KEY, JSON.stringify([...G.autoSkills])); } catch {}
+}
+/** 스킬이 닿는 대략의 거리 */
+function reachOf(sk) {
+  if (sk.range) return sk.range;
+  let r = 0;
+  for (const st of sk.steps ?? []) if (st.range) r = Math.max(r, st.range + (st.do === "melee" ? 10 : 0));
+  return r || 150;
+}
+const isHeal = (sk) => (sk.steps ?? []).some((st) => st.do === "heal");
+/** 가장 가까운 살아 있는 적 */
+export function nearestEnemy(range = 320) {
+  const me = G.ents.get(G.you);
+  if (!me) return null;
+  let best = null, bd = range;
+  for (const e of G.ents.values()) {
+    if ((e.k !== "m" && e.k !== "b") || e.dead) continue;
+    const d = Math.hypot(e.rx - me.rx, e.ry - me.ry);
+    if (d < bd) { bd = d; best = e; }
+  }
+  return best;
+}
+function autoTick() {
+  if (!G.autoSkills.size || !G.char || !G.me || G.me.dead || G.mapKind === "town" || G.mapKind === "safe") return;
+  const me = G.ents.get(G.you);
+  if (!me) return;
+  const myHp = G.me.hp / Math.max(1, G.me.mh);
+  for (let i = 0; i < 8; i++) {
+    const id = G.char.skills[i], sk = SKILLS[id];
+    if (!G.autoSkills.has(id) || !canAuto(sk) || cdLeft(id) > 0.06) continue;
+    let at = null;
+    if (sk.aim === "ally" || (sk.aim === "self" && isHeal(sk))) {
+      // 회복: 체력이 낮은 아군(나 포함)에게
+      let best = myHp < 0.7 ? { id: G.you, r: myHp, x: me.rx, y: me.ry } : null;
+      if (sk.aim === "ally") for (const e of G.ents.values()) {
+        if (e.k !== "p" || e.dead || e.id === G.you || e.hp == null) continue;
+        if (e.hp < 0.7 && Math.hypot(e.rx - me.rx, e.ry - me.ry) < reachOf(sk) && (!best || e.hp < best.r)) best = { id: e.id, r: e.hp, x: e.rx, y: e.ry };
+      }
+      if (best) at = { x: best.x, y: best.y - 16, tx: sk.aim === "ally" ? best.id : undefined };
+    } else if (sk.aim === "self") {
+      const t = nearestEnemy(170);
+      if (t) at = { x: t.rx, y: t.ry - 12 };
+    } else {
+      const t = nearestEnemy(reachOf(sk));
+      if (t) at = { x: t.rx, y: t.ry - 12 };
+    }
+    if (at && tryCast(i, at)) return; // 한 틱에 하나
+  }
 }
 
 /** 화면 → 월드 좌표 */

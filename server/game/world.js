@@ -10,6 +10,7 @@ import { makeFloor, makeTown, safeZone } from "./dungeon.js";
 import { newCharacter, sanitizeChar, makePlayerUnit, refreshStats, availableSkills, INV_SIZE } from "./player.js";
 import { secureRandom } from "./secure.js";
 import { moveMul } from "./combat.js";
+import { USERNAME_RE } from "../auth.js";
 
 let roomSeq = 1;
 const filterChat = (s) => s.replace(/[\u0000-\u001f\u007f<>]/g, "").replace(/\s+/g, " ").trim().slice(0, 120);
@@ -116,6 +117,7 @@ export class World {
       case "stat": this.addStat(s, m.key, m.n); break;
       case "resetStats": this.resetStats(s); break;
       case "class": this.changeClass(s, m.cls); break;
+      case "rename": this.rename(s, m.name); break;
       case "buy": this.buy(s, m.item, m.n); break;
       case "equip": this.equip(s, m.uid); break;
       case "unequip": this.unequip(s, m.slot); break;
@@ -322,6 +324,29 @@ export class World {
     refreshStats(s.unit);
     this.sendChar(s);
   }
+  /** 닉네임 변경 (= 로그인 아이디도 바뀜). 1시간에 한 번 */
+  rename(s, name) {
+    const fail = (text) => s.send({ t: "renameFail", text });
+    if (typeof name !== "string") return fail("닉네임을 넣어 주세요.");
+    name = name.trim();
+    if (!USERNAME_RE.test(name)) return fail("닉네임은 2~12자, 한글·영문·숫자·_ 만 쓸 수 있어요.");
+    if (name === s.name) return fail("지금 닉네임과 같아요.");
+    const wait = (s.char.renamedAt ?? 0) + 3600e3 - Date.now();
+    if (wait > 0) return fail(`닉네임은 1시간에 한 번 바꿀 수 있어요. (${Math.ceil(wait / 60000)}분 남음)`);
+    const other = Q.userByName.get(name);
+    if (other && other.id !== s.userId) return fail("이미 있는 닉네임이에요.");
+    try { Q.renameUser.run(name, s.userId); } catch { return fail("이미 있는 닉네임이에요."); }
+    const old = s.name;
+    s.name = name; s.char.name = name; s.unit.name = name; s.char.renamedAt = Date.now();
+    this.save(s);
+    secLog("rename", { userId: s.userId, username: name, ip: s.ip, detail: { from: old } });
+    s.send({ t: "renamed", name });
+    this.sendChar(s);
+    s.unit.room?.ev({ e: "add", ...s.unit.room.describe(s.unit) });
+    if (s.partyId) { const p = this.parties?.get?.(s.partyId); if (p) this.sendParty(p); }
+    this.broadcastSys(`${old}님의 닉네임이 ${name}(으)로 바뀌었어요.`, "join");
+  }
+
   changeClass(s, cls) {
     const c = s.char;
     if (!CLASS_INFO[cls] || cls === "adventurer") return;

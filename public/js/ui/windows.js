@@ -1,5 +1,5 @@
 // 창: 캐릭터, 스킬, 가방·장비, 파티, 도움말, 상점, 대장간(강화), 전직소, 던전 관문, 게시판, 훈련 교관
-import { G, send } from "../game.js";
+import { G, send, canAuto, setAuto } from "../game.js";
 import { h, openWin, refreshWin, closeWin, isOpen, tipOn } from "./dom.js";
 import { itemIcon } from "./icons.js";
 import { CLASS_INFO, STATS, stageOf, stageLevel, xpToNext } from "/shared/classes.js";
@@ -58,6 +58,17 @@ export function itemTip(it, compare) {
 }
 
 // ── 캐릭터 (C)
+function renameRow() {
+  const inp = h("input", { maxlength: 12, placeholder: "새 닉네임 (2~12자)", class: "rename-in" });
+  const go = () => { const v = inp.value.trim(); if (v) send({ t: "rename", name: v }); };
+  inp.addEventListener("keydown", (e) => { e.stopPropagation(); if (e.key === "Enter") go(); });
+  inp.addEventListener("focus", () => { G.typing = true; G.keys.clear(); });
+  inp.addEventListener("blur", () => (G.typing = false));
+  return h("details", { class: "rename" }, h("summary", { text: "닉네임 변경" }),
+    h("div", { class: "flexrow" }, inp, h("button", { class: "btn small primary", onclick: go }, "변경")),
+    h("div", { class: "note", text: "닉네임을 바꾸면 로그인 아이디도 새 닉네임으로 바뀌어요. (비밀번호는 그대로, 1시간에 한 번)" }));
+}
+
 export function openChar() {
   openWin("char", "캐릭터", () => {
     const c = G.char;
@@ -76,6 +87,7 @@ export function openChar() {
     const next = stage + 1 < info.ranks.length ? `다음 단계 ${info.ranks[stage + 1]}: Lv.${stageLevel(c.cls, stage + 1)}` : "최종 단계";
     return [
       h("div", { class: "flexrow" }, h("b", { text: `${c.name}` }), h("span", { text: `Lv.${c.level} ${info.name}` }), h("span", { class: "grade-영웅", text: c.cls === "adventurer" ? "" : `· ${rank}` })),
+      renameRow(),
       h("div", { class: "note", text: c.cls === "adventurer" ? "10층 보스를 처치하면 안전 구역의 전직소에서 전직할 수 있어요. 전직하면 지금까지 투자한 스탯이 전부 돌아와요." : `${info.position} · ${next}` }),
       h("h4", { text: `능력치 (남은 포인트 ${c.unspent})` }),
       ...rows,
@@ -109,7 +121,7 @@ export function openSkills() {
         if (selSkill) { const j = next.indexOf(selSkill); if (j >= 0) next[j] = null; next[i] = selSkill; selSkill = null; }
         else next[i] = null;
         send({ t: "skills", list: next });
-      } }, h("span", { class: "key", text: SLOT_KEYS[i] === "SHIFT" ? "⇧" : SLOT_KEYS[i] }), h("span", { class: "nm", text: sk?.name ?? "" }));
+      } }, h("span", { class: "key", text: SLOT_KEYS[i] === "SHIFT" ? "⇧" : SLOT_KEYS[i] }), h("span", { class: "nm", text: sk?.name ?? "" }), sk && G.autoSkills.has(sk.id) && canAuto(sk) ? h("span", { class: "auto-dot", text: "A" }) : null);
       if (sk) el.style.borderColor = GRADE_COLOR[sk.grade];
       if (sk) tipOn(el, () => skillTip(sk));
       return el;
@@ -126,12 +138,14 @@ export function openSkills() {
         const equipped = c.skills.includes(s.id);
         const cost = Object.entries(s.cost ?? {}).map(([k, v]) => `${RES_NAME[k]} ${v}`).join(" ");
         return h("div", { class: `sk${locked ? " locked" : ""}${selSkill === s.id ? " sel" : ""}${equipped ? " equipped" : ""}`, onclick: () => { if (!locked) { selSkill = selSkill === s.id ? null : s.id; refreshWin("skills"); } } },
-          h("div", {}, h("b", { class: "grade-" + s.grade, text: s.name }), " ", h("span", { class: "meta", text: { basic: "기본 공격", active: "액티브", passive: "패시브", ultimate: "궁극기" }[s.kind] })),
+          h("div", { class: "sk-top" }, h("b", { class: "grade-" + s.grade, text: s.name }), " ", h("span", { class: "meta", text: { basic: "기본 공격", active: "액티브", passive: "패시브", ultimate: "궁극기" }[s.kind] }),
+            canAuto(s) && !locked ? h("button", { class: "auto-tg" + (G.autoSkills.has(s.id) ? " on" : ""), title: "자동: 쿨타임이 돌면 가까운 적에게 알아서 사용 (회복은 체력 70% 아래일 때)", onclick: (e) => { e.stopPropagation(); setAuto(s.id, !G.autoSkills.has(s.id)); refreshWin("skills"); } }, G.autoSkills.has(s.id) ? "자동" : "수동") : null),
           h("div", { class: "meta", text: `${s.kind === "basic" ? `공격 속도 ${s.aspd}s` : s.kind === "passive" ? "패시브" : `쿨 ${s.cd}s`}${cost ? " · " + cost : ""}${s.stance ? " · " + s.stance : ""}${locked ? ` · 🔒 ${CLASS_INFO[c.cls].ranks[need]} 필요(Lv.${stageLevel(c.cls, need)})` : ""}` }),
           h("div", { class: "desc", text: s.desc }));
       })));
     }
     return [
+      h("div", { class: "note", text: "공용 스킬을 뺀 스킬은 [수동/자동]을 누르면 자동 사용으로 바꿀 수 있어요. 자동이면 쿨타임이 돌 때 가까운 적에게 알아서 써요. (언제든 바꿀 수 있음)" }),
       h("div", { class: "note", text: safe ? "스킬을 고른 뒤 아래 칸을 누르면 장착돼요. 장착한 칸을 그냥 누르면 비워요. 종류 구분 없이 8칸에 자유롭게 장착해요." : "⚠ 던전 전투 중에는 스킬을 바꿀 수 없어요. (마을·안전 구역에서 교체)" }),
       slots, ...cards,
     ];

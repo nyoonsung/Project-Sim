@@ -1,5 +1,7 @@
 // 시작점: 로그인 → 게임 연결 → 입력·렌더 루프
 import { G, onMessage, inputTick, tryCast, updateMouseWorld, send } from "./game.js";
+import { isTouchDevice, setupTouch, touchAimTick } from "./ui/touch.js";
+if (isTouchDevice()) document.body.classList.add("touch");
 import { Net } from "./net.js";
 import { Renderer } from "./render/world.js";
 import { $, h, closeAll, openWins, toggleWin, refreshWin, isOpen, closeWin } from "./ui/dom.js";
@@ -107,7 +109,7 @@ function resize() {
   const cv = $("#view");
   const s = Math.max(1, Math.floor(Math.min(innerWidth / VIEW_W, innerHeight / VIEW_H)));
   const fs = Math.min(innerWidth / VIEW_W, innerHeight / VIEW_H);
-  const scale = fs >= 1 ? s : fs;
+  const scale = fs >= 1 && !G.touch ? s : fs;
   cv.style.width = VIEW_W * scale + "px";
   cv.style.height = VIEW_H * scale + "px";
   G.scale = scale;
@@ -120,6 +122,7 @@ async function startGame() {
   window.__game = G; // 디버그용 (서버가 모든 판정을 하므로 조작해도 의미 없음)
   G.renderer = new Renderer($("#view"));
   HUD.buildHud();
+  if (isTouchDevice()) setupTouch({ openNpc: WIN.openNpc, interactTarget: HUD.interactTarget, toast: (t) => HUD.toast(t, "info") });
   resize();
   addEventListener("resize", resize);
   await document.fonts.load("12px Galmuri11").catch(() => {});
@@ -138,7 +141,7 @@ async function startGame() {
   setInterval(inputTick, 50);
   setInterval(() => { HUD.drawMinimap(); HUD.updateParty(); HUD.updateInteract(); }, 200);
   const loop = () => {
-    updateMouseWorld();
+    if (G.touch) touchAimTick(); else updateMouseWorld();
     G.renderer.frame();
     HUD.updateSkillbar();
     HUD.updateBoss();

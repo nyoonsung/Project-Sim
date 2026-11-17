@@ -26,6 +26,7 @@ const SCHEMA = {
   stat: (m) => isId(m.key) && isInt(m.n, 1, 500),
   resetStats: () => true,
   class: (m) => isId(m.cls),
+  rename: (m) => isStr(m.name, 24),
   buy: (m) => isId(m.item) && isInt(m.n, 1, 20),
   equip: (m) => isInt(m.uid, 1, 2 ** 31),
   unequip: (m) => ["weapon", "offhand", "helmet", "armor", "trinket"].includes(m.slot),

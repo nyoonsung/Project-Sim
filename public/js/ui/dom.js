@@ -32,7 +32,7 @@ export function moveTip(e) {
 }
 export function hideTip() { tip().classList.add("hidden"); }
 export function tipOn(el, build) {
-  el.addEventListener("mouseenter", (e) => showTip(e, build));
+  el.addEventListener("mouseenter", (e) => { if (document.body.classList.contains("touch") && el.closest("#skillbar, #potions")) return; showTip(e, build); });
   el.addEventListener("mousemove", moveTip);
   el.addEventListener("mouseleave", hideTip);
   return el;
@@ -50,13 +50,17 @@ export function openWin(id, title, build, { x, y, w } = {}) {
     win.dataset.id = id;
     if (w) win.style.width = w + "px";
     $("#windows").append(win);
-    win.style.left = (x ?? Math.max(10, innerWidth / 2 - (w ?? 360) / 2 + (wins.size % 4) * 24)) + "px";
-    win.style.top = (y ?? Math.max(10, innerHeight * 0.12 + (wins.size % 4) * 24)) + "px";
+    const touch = document.body.classList.contains("touch");
+    if (touch && w) win.style.width = Math.min(w, innerWidth - 16) + "px";
+    const ww = Math.min(w ?? 360, innerWidth - 16);
+    win.style.left = Math.max(8, Math.min(innerWidth - ww - 8, x ?? innerWidth / 2 - ww / 2 + (touch ? 0 : (wins.size % 4) * 24))) + "px";
+    win.style.top = (y ?? Math.max(touch ? 6 : 10, innerHeight * (touch ? 0.03 : 0.12) + (touch ? 0 : (wins.size % 4) * 24))) + "px";
     let drag = null;
-    head.addEventListener("mousedown", (e) => { drag = [e.clientX - win.offsetLeft, e.clientY - win.offsetTop]; win.style.zIndex = ++z; });
-    addEventListener("mousemove", (e) => { if (drag) { win.style.left = e.clientX - drag[0] + "px"; win.style.top = Math.max(0, e.clientY - drag[1]) + "px"; } });
-    addEventListener("mouseup", () => (drag = null));
-    win.addEventListener("mousedown", () => (win.style.zIndex = ++z));
+    head.addEventListener("pointerdown", (e) => { if (e.target.classList.contains("x")) return; drag = [e.clientX - win.offsetLeft, e.clientY - win.offsetTop, e.pointerId]; head.setPointerCapture(e.pointerId); win.style.zIndex = ++z; e.preventDefault(); });
+    head.addEventListener("pointermove", (e) => { if (drag && e.pointerId === drag[2]) { win.style.left = Math.max(-win.offsetWidth + 60, Math.min(innerWidth - 60, e.clientX - drag[0])) + "px"; win.style.top = Math.max(0, Math.min(innerHeight - 40, e.clientY - drag[1])) + "px"; } });
+    head.addEventListener("pointerup", () => (drag = null));
+    head.addEventListener("pointercancel", () => (drag = null));
+    win.addEventListener("pointerdown", () => (win.style.zIndex = ++z));
     wins.set(id, win);
     win._build = build;
   }

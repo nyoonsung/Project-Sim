@@ -507,6 +507,18 @@ export class Renderer {
         if (info.el) this.label(ctx, info.n, x, top - 3, "#ffb050");
       }
     }
+    // 터치 조준선
+    if (G.aimLine) {
+      const me = G.ents.get(G.you);
+      if (me) {
+        const x0 = Math.round(me.rx - cx), y0 = Math.round(me.ry - 16 - cy), x1 = Math.round(G.aimLine.x - cx), y1 = Math.round(G.aimLine.y - cy);
+        ctx.save();
+        ctx.strokeStyle = "rgba(255,230,140,0.85)"; ctx.lineWidth = 2; ctx.setLineDash([4, 3]);
+        ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke();
+        ctx.setLineDash([]); ctx.beginPath(); ctx.arc(x1, y1, 6, 0, Math.PI * 2); ctx.stroke();
+        ctx.restore();
+      }
+    }
     // 데미지 숫자
     G.floaters = G.floaters.filter((f) => {
       const age = t - f.t0;

@@ -163,7 +163,7 @@ try {
     const n = path[Math.min(2, path.length - 1)]; return [(n % M.w) * 32 + 16, ((n / M.w) | 0) * 32 + 16];
   };
   let killed = 0, tick = 0;
-  const skip = new Set(); let tid = null, best = 1e9, since = Date.now();
+  const skip = new Set(); let tid = null, best = 1e9, since = Date.now(), engaged = 0;
   const end = Date.now() + 70000;
   while (Date.now() < end && killed < 3) {
     for (const e of b1.events) if (e.e === "die" || e.e === "del") monsters.delete(e.id);
@@ -172,7 +172,9 @@ try {
     let pick = null;
     for (const [id, m] of monsters) { if (skip.has(id)) continue; const s = b1.ents.get(id); const x = s ? s[1] : m.x, y = s ? s[2] : m.y; const d = Math.hypot(x - me[0], y - me[1]); if (d < td) { td = d; target = [x, y]; pick = id; } }
     // 3초 동안 가까워지지 못하면(벽에 막힘) 다른 몬스터로
-    if (pick !== tid) { tid = pick; best = td; since = Date.now(); }
+    if (pick !== tid) { tid = pick; best = td; since = Date.now(); engaged = 0; }
+    if (td <= 38 && !engaged) engaged = Date.now();
+    if (engaged && Date.now() - engaged > 6000) { skip.add(pick); tid = null; continue; }
     else if (td < best - 8) { best = td; since = Date.now(); }
     else if (td > 38 && Date.now() - since > 3000) { skip.add(pick); tid = null; continue; }
     if (skip.size >= monsters.size) skip.clear();

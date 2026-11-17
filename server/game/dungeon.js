@@ -198,7 +198,7 @@ function normalFloor(floor, seed, party) {
   const pool = zone.monsters;
   rooms.forEach((r, i) => {
     if (i === 0) return;
-    const n = Math.max(2, Math.round((r.w * r.h) / 26 * (0.8 + floor * 0.004)));
+    const n = Math.max(2, Math.round((r.w * r.h) / 29 * (0.8 + floor * 0.004)));
     for (let k = 0; k < n; k++) {
       const tx = R.int(r.x + 1, r.x + r.w - 2), ty = R.int(r.y + 1, r.y + r.h - 2);
       if (get(m, tx, ty) !== T.FLOOR || !reach[ty * W + tx]) continue;

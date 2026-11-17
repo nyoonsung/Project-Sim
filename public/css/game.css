@@ -152,3 +152,99 @@ input.txt { padding: 5px 8px; background: #0e0c14; border: 1px solid var(--line2
 #nick-box input, #dev-box input { width: 100%; padding: 10px 12px; margin-bottom: 8px; background: #0e0c14; border: 2px solid var(--line); outline: none; }
 #nick-box .btn, #dev-box .btn { width: 100%; }
 #dev-box { margin-top: 10px; }
+
+/* ───────── 모바일(터치) ───────── */
+#joy-zone, #joy-base, #rotate-msg { display: none; }
+body.touch { -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent; touch-action: none; }
+body.touch #login { overflow-y: auto; touch-action: pan-y; align-items: start; padding: 12px 0; }
+body.touch .login-card { margin: auto; }
+body.touch #view { cursor: default; }
+body.touch #ui { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left); }
+/* 조이스틱: 화면 왼쪽 아래 넓게 */
+body.touch #joy-zone { display: block; position: absolute; left: 0; bottom: 0; width: 46%; height: 72%; touch-action: none; }
+body.touch #joy-base { display: block; position: fixed; width: 104px; height: 104px; margin: -52px 0 0 -52px; border-radius: 50%; background: radial-gradient(#ffffff10, #ffffff22); border: 2px solid #ffffff40; pointer-events: none; z-index: 5; }
+body.touch #joy-base.hidden { display: none !important; }
+body.touch #joy-knob { position: absolute; left: 50%; top: 50%; width: 46px; height: 46px; border-radius: 50%; background: #ffffff55; border: 2px solid #ffffffaa; transform: translate(-50%, -50%); }
+/* HUD 재배치 */
+body.touch #hud { position: static; transform: none; display: block; }
+body.touch #orbs { position: absolute; left: calc(8px + env(safe-area-inset-left)); top: 8px; grid-template-columns: 150px 150px; gap: 3px 4px; }
+body.touch .bar { height: 13px; } body.touch .bar span { font-size: 9px; } body.touch .bar.xp { height: 6px; } body.touch .bar.xp span { display: none; }
+body.touch #buffs { left: calc(8px + env(safe-area-inset-left)); top: 48px; bottom: auto; transform: none; justify-content: flex-start; flex-wrap: wrap; max-width: 300px; }
+body.touch #potions { position: absolute; left: auto; right: calc(270px + env(safe-area-inset-right)); bottom: 8px; flex-direction: row; }
+body.touch #potions .slot { width: 42px; height: 42px; border-radius: 8px; }
+body.touch #potions .slot .key { display: none; }
+body.touch #party-frames { top: 72px; transform: scale(0.85); transform-origin: top left; }
+body.touch #minimap { width: 110px; height: 86px; top: 6px; right: calc(6px + env(safe-area-inset-right)); }
+body.touch #menu-buttons { top: 6px; bottom: auto; right: calc(122px + env(safe-area-inset-right)); flex-direction: row; gap: 3px; }
+body.touch #menu-buttons button { width: 36px; height: 34px; padding: 0; font-size: 16px; text-align: center; border-radius: 6px; }
+
+body.touch #topbar { left: calc(8px + env(safe-area-inset-left)); top: 40px; transform: none; text-align: left; align-items: flex-start; }
+body.touch #zone-label { font-size: 11px; }
+body.touch #buffs { top: 58px; }
+body.touch #ui > #interact-hint { bottom: auto; top: 58%; padding: 10px 16px; font-size: 13px; pointer-events: auto; border-width: 2px; border-radius: 6px; }
+body.touch #interact-hint::before { content: "👆 "; }
+body.touch #center-msg { font-size: 20px; }
+body.touch #toasts { transform: scale(0.85); transform-origin: top center; }
+/* 채팅: 기본은 최근 몇 줄만 작게, 💬 누르면 입력창 */
+body.touch #chat { left: 50%; right: auto; top: 30px; bottom: auto; transform: translateX(-50%); width: min(360px, 44vw); pointer-events: none; }
+body.touch #chat-log { height: 54px; font-size: 10px; background: transparent; overflow: hidden; mask-image: linear-gradient(transparent, #000 40%); -webkit-mask-image: linear-gradient(transparent, #000 40%); }
+body.touch #chat-input { display: none; pointer-events: auto; font-size: 16px; }
+body.touch.chat-open #chat { pointer-events: auto; z-index: 30; }
+body.touch.chat-open #chat-log { height: 140px; background: #000c; overflow-y: auto; mask-image: none; -webkit-mask-image: none; font-size: 12px; }
+body.touch.chat-open #chat-input { display: block; opacity: 1; }
+/* 스킬 버튼: 오른쪽 아래 원호 */
+body.touch #skillbar { position: absolute; right: calc(58px + env(safe-area-inset-right)); bottom: calc(52px + env(safe-area-inset-bottom)); width: 0; height: 0; display: block; }
+body.touch .slot.tb { position: absolute; width: 54px; height: 54px; left: calc(var(--tx) - 27px); top: calc(var(--ty) - 27px); border-radius: 50%; background: #0e0c14cc; font-size: 9px; touch-action: none; }
+body.touch .slot.tb.big { width: 78px; height: 78px; left: calc(var(--tx) - 39px); top: calc(var(--ty) - 39px); font-size: 11px; }
+body.touch .slot.tb .key { display: none; }
+body.touch .slot.tb .cd { border-radius: 50%; }
+body.touch .slot.tb.down { background: #3a2f5acc; box-shadow: 0 0 0 3px #ffe08a88; }
+body.touch .slot.tb.empty { opacity: 0.25; }
+/* 창: 작은 화면에 맞게 */
+body.touch .win { min-width: 0; max-width: calc(100vw - 16px); max-height: calc(100vh - 12px); font-size: 12px; }
+body.touch .win header { padding: 8px 10px; }
+body.touch .win header .x { font-size: 18px; padding: 0 10px; }
+body.touch .win .body { touch-action: pan-y; -webkit-overflow-scrolling: touch; }
+body.touch #tooltip { max-width: 60vw; font-size: 11px; }
+/* 세로 화면 안내 */
+@media (orientation: portrait) {
+  body.touch #rotate-msg { display: grid; position: fixed; inset: 0; z-index: 100; place-content: center; gap: 12px; text-align: center; background: #0b0a10f2; color: var(--gold); font-size: 16px; }
+  body.touch #rotate-msg div:first-child { font-size: 48px; }
+}
+/* 아주 작은 화면(높이 360 이하) */
+@media (max-height: 520px) {
+  body.touch #login-art, body.touch .tagline { display: none; }
+  body.touch .login-card { padding: 14px 18px 10px; }
+  body.touch .logo { font-size: 26px; margin: 0 0 8px; }
+  body.touch #login-form input { padding: 8px 10px; margin-bottom: 6px; font-size: 16px; }
+}
+@media (max-width: 700px) {
+  body.touch #orbs { grid-template-columns: 120px 120px; }
+}
+@media (max-height: 360px) {
+  body.touch .slot.tb { width: 48px; height: 48px; left: calc(var(--tx) * 0.88 - 24px); top: calc(var(--ty) * 0.88 - 24px); }
+  body.touch #skillbar { right: calc(50px + env(safe-area-inset-right)); bottom: calc(44px + env(safe-area-inset-bottom)); }
+  body.touch #potions { right: calc(236px + env(safe-area-inset-right)); }
+  body.touch .slot.tb.big { width: 68px; height: 68px; left: calc(var(--tx) - 34px); top: calc(var(--ty) - 34px); }
+  body.touch #menu-buttons button { padding: 4px 6px; }
+}
+.rename { margin: 6px 0 2px; } .rename summary { cursor: pointer; color: var(--dim); font-size: 12px; } .rename summary:hover { color: #fff; }
+.rename .rename-in { flex: 1; padding: 5px 8px; background: #0e0c14; border: 1px solid var(--line); outline: none; font-size: 13px; }
+body.touch .rename .rename-in { font-size: 16px; }
+/* 스킬 자동 사용 */
+.sk-top { display: flex; align-items: center; gap: 4px; }
+.auto-tg { margin-left: auto; padding: 1px 8px; font-size: 11px; background: #0e0c14; border: 1px solid var(--line2); color: var(--dim); cursor: pointer; border-radius: 3px; }
+.auto-tg.on { background: #2a4a2a; border-color: #6ad06a; color: #c8ffc8; }
+body.touch .auto-tg { padding: 4px 12px; font-size: 12px; }
+.slot .auto-dot { position: absolute; right: 2px; top: 1px; font-size: 9px; color: #8aff8a; z-index: 3; }
+body.touch .slot.tb.auto::after { content: "자동"; position: absolute; top: 2px; left: 50%; transform: translateX(-50%); font-size: 8px; color: #8aff8a; z-index: 3; text-shadow: 1px 1px 0 #000; }
+body.touch .slot.tb.auto { border-color: #6ad06a !important; }
+body.touch .slot.tb.is-dash { display: none; }
+/* 대시 버튼 (오른쪽) */
+#dash-btn { display: none; }
+body.touch #dash-btn { display: grid; position: absolute; right: calc(10px + env(safe-area-inset-right)); bottom: calc(236px + env(safe-area-inset-bottom)); left: auto; top: auto; width: 58px; height: 58px; border-radius: 50%; border-color: #7ad0ff; background: #0e1a24cc; font-size: 12px; touch-action: none; }
+body.touch #dash-btn.off { opacity: 0.35; }
+body.touch #dash-btn.down { background: #1e3a54cc; box-shadow: 0 0 0 3px #7ad0ff88; }
+body.touch #minimap { width: 96px; height: 75px; }
+body.touch #menu-buttons { right: calc(108px + env(safe-area-inset-right)); }
+@media (max-height: 360px) { body.touch #dash-btn { bottom: calc(212px + env(safe-area-inset-bottom)); width: 52px; height: 52px; } }

@@ -47,6 +47,7 @@ const SQL = {
   metaGet: "SELECT v FROM meta WHERE k = ?",
   metaSet: "INSERT INTO meta (k, v) VALUES (?, ?) ON CONFLICT(k) DO UPDATE SET v = excluded.v",
   userByName: "SELECT * FROM users WHERE username = ?",
+  renameUser: "UPDATE users SET username = ? WHERE id = ?",
   userById: "SELECT * FROM users WHERE id = ?",
   userByGoogle: "SELECT * FROM users WHERE google_sub = ?",
   userByEmail: "SELECT * FROM users WHERE email = ?",
