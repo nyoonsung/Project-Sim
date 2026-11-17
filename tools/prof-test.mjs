@@ -4,7 +4,7 @@ import { makeFloor } from "../server/game/dungeon.js";
 import { makePlayerUnit, newCharacter, refreshStats, sanitizeChar } from "../server/game/player.js";
 import { castSkill } from "../server/game/skills.js";
 import { SKILLS } from "../shared/skills.js";
-import { profLevel, PROF_TOTAL, profGain } from "../shared/prof.js";
+import { profLevel, PROF_TOTAL, profGain, profPow, profNeed } from "../shared/prof.js";
 const ok = (c, m) => { console.log((c ? "✓ " : "✗ ") + m); if (!c) process.exitCode = 1; };
 const world = { clock: 100, pickup: () => true, onBossCleared() {}, usePortal() {}, partyFailed() {}, toTown() {} };
 const sent = [];
@@ -72,5 +72,20 @@ function setup(kind = "dungeon", prof = {}) {
 {
   const c = sanitizeChar({ ...newCharacter("x"), prof: { c_slash: 100, nope: 5, ma_arcane: -3, c_dash: "abc" } }, "x");
   ok(JSON.stringify(c.prof) === JSON.stringify({ c_slash: 100 }), "저장된 숙련도 검증");
+}
+// 5) 찌르기는 한도 없음, 다른 스킬은 Lv.10에서 멈춤
+{
+  let xp = 0; for (let n = 1; n <= 20; n++) xp += profNeed(n);
+  ok(profLevel(xp * 3, "c_slash").lv === 10, "다른 스킬은 Lv.10에서 멈춤");
+  ok(profLevel(xp, "c_thrust").lv === 20 && !profLevel(xp, "c_thrust").max, "찌르기는 Lv.10 넘어서 계속 성장 (Lv.20)");
+  ok(Math.abs(profPow(20) - 0.3) < 1e-9 && Math.abs(profPow(30) - 0.4) < 1e-9 && Math.abs(profPow(10) - 0.2) < 1e-9, "Lv.10 +20%, Lv.20 +30%, Lv.30 +40% (10 이후 레벨당 +1%)");
+  const { ch, u, r } = setup("dungeon", { c_thrust: xp });
+  ch.skills[0] = "c_thrust";
+  world.clock += 5; r.now = world.clock;
+  r.events.length = 0;
+  castSkill(r, u, 0, u.x + 30, u.y, null, r.now);
+  ok(r.events.find((e) => e.e === "cast")?.pl === 20, "찌르기 Lv.20이 시전에 반영");
+  let xp30 = 0; for (let n = 1; n <= 30; n++) xp30 += profNeed(n);
+  console.log(`찌르기 Lv.20까지 ${xp}회, Lv.30까지 ${xp30}회 사용 (초당 약 1.4회 → ${(xp / 1.4 / 3600).toFixed(0)}시간 / ${(xp30 / 1.4 / 3600).toFixed(0)}시간 전투)`);
 }
 console.log(`Lv.10까지 필요 숙련 경험치 ${PROF_TOTAL} (평타 1/회, 쿨 8초 스킬 9/회)`);

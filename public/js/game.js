@@ -1,7 +1,7 @@
 // 클라이언트 게임 상태: 서버 메시지 반영, 내 캐릭터 이동 예측, 입력 전송
 import { applyInput } from "/shared/move.js";
 import { castFx, hitFx, profUpFx } from "./render/skillfx.js";
-import { profOf, PROF_COST } from "/shared/prof.js";
+import { profOf, profCost } from "/shared/prof.js";
 import { onTown } from "./update.js";
 import { sfx, onEnemyHit, onEnemyDie, onMeHurt } from "./feel.js";
 import { TICK_DT, PLAYER_RADIUS, SLOT_KEYS, VIEW_W, VIEW_H } from "/shared/constants.js";
@@ -276,7 +276,7 @@ export function flushInputs() {
 export function effCost(sk) {
   const c = { ...(sk.cost ?? {}) };
   const lv = profOf(G.char, sk.id);
-  if (c.mp && lv) c.mp = Math.round(c.mp * (1 - PROF_COST * lv) * 10) / 10;
+  if (c.mp && lv) c.mp = Math.round(c.mp * (1 - profCost(lv)) * 10) / 10;
   return c;
 }
 export function cdLeft(id) {

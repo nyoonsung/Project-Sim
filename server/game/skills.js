@@ -1,6 +1,6 @@
 // 스킬 실행 엔진: shared/skills.js 의 steps 를 서버에서 판정
 import { SKILLS, unlockStage } from "../../shared/skills.js";
-import { profOf, profLevel, profGain, PROF_POW, PROF_COST, PROF_MAX } from "../../shared/prof.js";
+import { profOf, profLevel, profGain, profPow, profCost, PROF_MAX, isUncapped } from "../../shared/prof.js";
 import { CLASS_INFO, stageOf } from "../../shared/classes.js";
 import { moveCircle, circleHitsWall, lineOfSight } from "../../shared/move.js";
 import { dealDamage, heal, giveShield, applyStatus, addGroggy, isHardCC, buffSum, angDiff } from "./combat.js";
@@ -73,7 +73,7 @@ export function castSkill(room, u, slot, ax, ay, tx, now, exp) {
   const plv = profOf(ch, id);
   // 자원
   const cost = { ...(sk.cost ?? {}) };
-  if (cost.mp && plv) cost.mp = Math.round(cost.mp * (1 - PROF_COST * plv) * 10) / 10;
+  if (cost.mp && plv) cost.mp = Math.round(cost.mp * (1 - profCost(plv)) * 10) / 10;
   for (const [k, v] of Object.entries(cost)) {
     const have = u[k] ?? 0;
     if (have < v - 1e-6) {
@@ -88,7 +88,7 @@ export function castSkill(room, u, slot, ax, ay, tx, now, exp) {
   for (const [k, v] of Object.entries(cost)) if (k !== "gap") u[k] -= v;
   u.lastAction = now;
   const aim = Math.atan2(ay - u.y, ax - u.x);
-  const ctx = { sk, aim, ax, ay, tx, mul: 0, prof: plv, pf: 1 + plv * PROF_POW, now };
+  const ctx = { sk, aim, ax, ay, tx, mul: 0, prof: plv, pf: 1 + profPow(plv), now };
   gainProf(room, u, sk, now);
   // 검사 자세 전환: 다른 자세 스킬을 쓰면 그 스킬 피해 +15%, 내력 +10
   if (sk.stance && ch.cls === "sword") {
@@ -151,15 +151,17 @@ function gainProf(room, u, sk, now) {
   if (!near) return;
   const ch = u.session.char;
   ch.prof ??= {};
-  const before = profLevel(ch.prof[sk.id] ?? 0);
+  const before = profLevel(ch.prof[sk.id] ?? 0, sk.id);
   if (before.max) return;
   ch.prof[sk.id] = (ch.prof[sk.id] ?? 0) + profGain(sk);
-  const after = profLevel(ch.prof[sk.id]);
+  const after = profLevel(ch.prof[sk.id], sk.id);
   u.session.dirty = true;
   u.session.send({ t: "prof", s: sk.id, xp: ch.prof[sk.id] });
   if (after.lv > before.lv) {
     room.ev({ e: "proflv", id: u.id, s: sk.id, lv: after.lv, x: u.x | 0, y: u.y | 0 });
-    if (after.lv === PROF_MAX || after.lv === 5) room.ev({ e: "msg", text: `${u.name}님의 [${sk.name}] 숙련도 Lv.${after.lv}! ${after.lv === PROF_MAX ? "최고 숙련 달성!" : "이펙트가 강화됐어요!"}`, kind: after.lv === PROF_MAX ? "legend" : "info" });
+    const unc = isUncapped(sk.id);
+    if (after.lv === 5 || (after.lv === PROF_MAX) || (unc && after.lv > PROF_MAX && after.lv % 10 === 0))
+      room.ev({ e: "msg", text: `${u.name}님의 [${sk.name}] 숙련도 Lv.${after.lv}! ${after.lv === 5 ? "이펙트가 강화됐어요!" : unc ? "끝없는 수련!" : "최고 숙련 달성!"}`, kind: after.lv >= PROF_MAX ? "legend" : "info" });
   }
 }
 const hasPassive = (ch, id) => ch.skills.includes(id);
@@ -420,7 +422,7 @@ const STEP = {
     else targets = [pickAlly(room, u, ctx, ctx.sk.range ?? 240)];
     room.ev({ e: "anim", id: u.id, a: "cast" });
     for (const t of targets) {
-      let amt = (st.pctMax ? t.maxHp * st.pctMax : healPower(u) * st.pow) * (1 + (ctx.prof ?? 0) * PROF_POW);
+      let amt = (st.pctMax ? t.maxHp * st.pctMax : healPower(u) * st.pow) * (1 + profPow(ctx.prof ?? 0));
       // 구휼의 증표: 체력 낮은 아군 직접 치유 +30% (대상별 12초)
       if (hasPassive(u.session.char, "pr_relief") && t.hp / t.maxHp <= 0.5 && now >= (u.icd.get("relief" + t.id) ?? 0)) { amt *= 1.3; u.icd.set("relief" + t.id, now + 12); }
       if (u.cls === "priest") { t.healedBy = { id: u.id, until: now + 10 }; }
@@ -441,7 +443,7 @@ const STEP = {
     else targets = [pickAlly(room, u, ctx, ctx.sk.range ?? 240)];
     room.ev({ e: "anim", id: u.id, a: "cast" });
     for (const t of targets) {
-      let amt = (st.pctMax ? t.maxHp * st.pctMax : healPower(u) * st.pow * u.stats.shield) * (1 + (ctx.prof ?? 0) * PROF_POW);
+      let amt = (st.pctMax ? t.maxHp * st.pctMax : healPower(u) * st.pow * u.stats.shield) * (1 + profPow(ctx.prof ?? 0));
       if (t === u && st.selfMul) amt *= st.selfMul;
       giveShield(room, t, amt, st.dur, now);
       if (ctx.sk.fx?.self) room.ev({ e: "fx", fx: ctx.sk.fx.self, x: t.x | 0, y: t.y | 0, at: t.id, pal: ctx.sk.fx.palette ?? null });

@@ -1,6 +1,6 @@
 // 창: 캐릭터, 스킬, 가방·장비, 파티, 도움말, 상점, 대장간(강화), 전직소, 던전 관문, 게시판, 훈련 교관
 import { G, send, canAuto, setAuto } from "../game.js";
-import { profLevel, PROF_POW, PROF_COST } from "/shared/prof.js";
+import { profLevel, profPow, profCost, isUncapped } from "/shared/prof.js";
 import { h, openWin, refreshWin, closeWin, isOpen, tipOn } from "./dom.js";
 import { itemIcon } from "./icons.js";
 import { CLASS_INFO, STATS, stageOf, stageLevel, xpToNext } from "/shared/classes.js";
@@ -23,13 +23,14 @@ function iconEl(it) {
 // ── 툴팁
 /** 숙련도 막대: Lv, 경험치, 현재 보너스 */
 export function profBlock(sk, long = false) {
-  const p = profLevel(G.char?.prof?.[sk.id] ?? 0);
+  const p = profLevel(G.char?.prof?.[sk.id] ?? 0, sk.id);
+  const unc = isUncapped(sk.id);
   const pct = p.max ? 100 : Math.floor((p.cur / p.need) * 100);
-  const bonus = p.lv ? `위력 +${Math.round(p.lv * PROF_POW * 100)}%${sk.cost?.mp ? ` · 마나 -${(p.lv * PROF_COST * 100).toFixed(1).replace(/\.0$/, "")}%` : ""}` : "던전에서 적과 싸우며 쓰면 올라요";
+  const bonus = p.lv ? `위력 +${Math.round(profPow(p.lv) * 100)}%${sk.cost?.mp ? ` · 마나 -${(profCost(p.lv) * 100).toFixed(1).replace(/\.0$/, "")}%` : ""}` : unc ? "한도 없이 계속 성장 · 던전에서 싸우며 쓰면 올라요" : "던전에서 적과 싸우며 쓰면 올라요";
   return h("div", { class: "prof" + (p.lv >= 10 ? " t2" : p.lv >= 5 ? " t1" : "") },
-    h("div", { class: "prof-top" }, h("span", { class: "prof-lv", text: p.max ? "숙련 MAX" : `숙련 Lv.${p.lv}` }), h("span", { class: "prof-b", text: bonus })),
+    h("div", { class: "prof-top" }, h("span", { class: "prof-lv", text: p.max ? "숙련 MAX" : `숙련 Lv.${p.lv}${unc ? " ∞" : ""}` }), h("span", { class: "prof-b", text: bonus })),
     h("div", { class: "prof-bar" }, h("i", { style: { width: pct + "%" } })),
-    long ? h("div", { class: "tt-sub", text: p.max ? "최고 숙련! 이펙트 최고 단계" : `다음 레벨까지 ${p.need - p.cur} · Lv.5·10에서 이펙트 강화 · 쿨타임은 줄지 않아요` }) : null);
+    long ? h("div", { class: "tt-sub", text: p.max ? "최고 숙련! 이펙트 최고 단계" : `다음 레벨까지 ${p.need - p.cur} · ${unc ? "한도 없음(Lv.10 뒤로는 레벨마다 위력 +1%)" : "Lv.5·10에서 이펙트 강화"} · 쿨타임은 줄지 않아요` }) : null);
 }
 
 export function skillTip(sk) {
