@@ -95,7 +95,19 @@ function vibrate(ms) { if (G.touch && navigator.vibrate) try { navigator.vibrate
 
 // ── 화면 효과 ───────────────────────────────────────────
 // (G는 game.js와 서로 불러오므로 모듈 로드 시점이 아니라 처음 쓸 때 준비)
-function ensure() { if (!G.parts) { G.parts = []; G.camKick = { x: 0, y: 0 }; } }
+function ensure() { if (!G.parts) { G.parts = []; G.camKick = { x: 0, y: 0 }; G.trauma = 0; } }
+/** 화면 흔들림 '충격량' (0~1). 실제 흔들림은 충격량²에 비례해서 작은 타격은 살짝, 큰 타격은 확실히 */
+let lastTraumaAt = 0;
+export function addTrauma(v, gap = 0) {
+  ensure();
+  const t = now();
+  if (gap && t - lastTraumaAt < gap) return;
+  lastTraumaAt = t;
+  G.trauma = Math.min(1, (G.trauma ?? 0) + v);
+}
+let shakeOn = (() => { try { return localStorage.getItem("abyss.shake") !== "0"; } catch { return true; } })();
+export const shakeEnabled = () => shakeOn;
+export function toggleShake() { shakeOn = !shakeOn; try { localStorage.setItem("abyss.shake", shakeOn ? "1" : "0"); } catch {} return shakeOn; }
 function sparks(x, y, dir, n, cols, spd = 120) {
   ensure();
   for (let i = 0; i < n; i++) {
@@ -121,8 +133,8 @@ export function onEnemyHit(ent, e) {
     // 공격하는 쪽도 함께 멈춤 (둘 다 멈춰야 '맞았다'로 읽힘)
     if (me.anim && !me.anim.stopped && t - me.anim.t0 < 0.5) { me.anim.t0 += stop; me.anim.stopped = true; }
     G.camKick.x += Math.cos(dir) * (e.c ? 3 : 1.5); G.camKick.y += Math.sin(dir) * (e.c ? 3 : 1.5);
-    if (e.c) { G.shake = Math.max(G.shake, 2.5); vibrate(18); sfx("crit"); }
-    else sfx("hit", heavy ? 1.3 : 1);
+    if (e.c) { addTrauma(0.3, 0.04); vibrate(18); sfx("crit"); }
+    else { addTrauma(heavy ? 0.18 : 0.07, 0.05); sfx("hit", heavy ? 1.3 : 1); }
   } else if (e.c) sfx("hit", 0.8);
 }
 export function onEnemyDie(ent) {
@@ -130,11 +142,12 @@ export function onEnemyDie(ent) {
   sparks(ent.rx, ent.ry - 12, -Math.PI / 2, 16, ["#ffffff", "#ffd0a0", "#ff7050", "#c0c0c0"], 150);
   ent.dieFlash = t;
   const me = G.ents.get(G.you);
-  if (me && Math.hypot(ent.rx - me.rx, ent.ry - me.ry) < 400) { sfx("kill"); G.shake = Math.max(G.shake, ent.k === "b" ? 8 : 1.8); vibrate(ent.k === "b" ? 60 : 10); }
+  if (me && Math.hypot(ent.rx - me.rx, ent.ry - me.ry) < 400) { sfx("kill"); if (ent.k === "b") addTrauma(0.75); else addTrauma(0.07, 0.03); vibrate(ent.k === "b" ? 60 : 10); }
 }
 export function onMeHurt(v) {
   sfx("hurt");
   vibrate(v > (G.me?.mh ?? 999) * 0.15 ? 35 : 12);
+  addTrauma(Math.min(0.5, 0.12 + (v / (G.me?.mh ?? 999)) * 1.8));
   const me = G.ents.get(G.you);
   if (me) sparks(me.rx, me.ry - 16, -Math.PI / 2, 6, ["#ff4050", "#c01828", "#ff8080"], 90);
 }
@@ -146,6 +159,7 @@ export function tickFeel(dt) {
   G.parts = G.parts.filter((p) => p.t < p.life);
   const k = Math.max(0, 1 - dt * 14);
   G.camKick.x *= k; G.camKick.y *= k;
+  G.trauma = Math.max(0, (G.trauma ?? 0) - dt * 1.7);
 }
 export function drawParts(ctx, cx, cy) {
   if (!G.parts) return;

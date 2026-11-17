@@ -1,5 +1,6 @@
 // 창: 캐릭터, 스킬, 가방·장비, 파티, 도움말, 상점, 대장간(강화), 전직소, 던전 관문, 게시판, 훈련 교관
 import { G, send, canAuto, setAuto } from "../game.js";
+import { profLevel, PROF_POW, PROF_COST } from "/shared/prof.js";
 import { h, openWin, refreshWin, closeWin, isOpen, tipOn } from "./dom.js";
 import { itemIcon } from "./icons.js";
 import { CLASS_INFO, STATS, stageOf, stageLevel, xpToNext } from "/shared/classes.js";
@@ -20,6 +21,17 @@ function iconEl(it) {
 }
 
 // ── 툴팁
+/** 숙련도 막대: Lv, 경험치, 현재 보너스 */
+export function profBlock(sk, long = false) {
+  const p = profLevel(G.char?.prof?.[sk.id] ?? 0);
+  const pct = p.max ? 100 : Math.floor((p.cur / p.need) * 100);
+  const bonus = p.lv ? `위력 +${Math.round(p.lv * PROF_POW * 100)}%${sk.cost?.mp ? ` · 마나 -${(p.lv * PROF_COST * 100).toFixed(1).replace(/\.0$/, "")}%` : ""}` : "던전에서 적과 싸우며 쓰면 올라요";
+  return h("div", { class: "prof" + (p.lv >= 10 ? " t2" : p.lv >= 5 ? " t1" : "") },
+    h("div", { class: "prof-top" }, h("span", { class: "prof-lv", text: p.max ? "숙련 MAX" : `숙련 Lv.${p.lv}` }), h("span", { class: "prof-b", text: bonus })),
+    h("div", { class: "prof-bar" }, h("i", { style: { width: pct + "%" } })),
+    long ? h("div", { class: "tt-sub", text: p.max ? "최고 숙련! 이펙트 최고 단계" : `다음 레벨까지 ${p.need - p.cur} · Lv.5·10에서 이펙트 강화 · 쿨타임은 줄지 않아요` }) : null);
+}
+
 export function skillTip(sk) {
   if (!sk) return [];
   const cost = Object.entries(sk.cost ?? {}).map(([k, v]) => `${RES_NAME[k]} ${v}`).join(", ");
@@ -29,7 +41,8 @@ export function skillTip(sk) {
     h("div", { class: "tt-name", text: sk.name }),
     h("div", { class: "tt-sub" }, h("span", { class: "grade-" + sk.grade, text: sk.grade }), ` · ${kind} · ${cd}${cost ? " · " + cost : ""}${sk.cast ? ` · 시전 ${sk.cast}초` : ""}${sk.stance ? ` · ${sk.stance} 자세` : ""}`),
     h("div", { text: sk.desc }),
-    h("div", { class: "tt-sub", text: "제한: " + sk.limit }));
+    h("div", { class: "tt-sub", text: "제한: " + sk.limit }),
+    sk.kind !== "passive" ? profBlock(sk, true) : null);
   return [el];
 }
 
@@ -141,7 +154,8 @@ export function openSkills() {
           h("div", { class: "sk-top" }, h("b", { class: "grade-" + s.grade, text: s.name }), " ", h("span", { class: "meta", text: { basic: "기본 공격", active: "액티브", passive: "패시브", ultimate: "궁극기" }[s.kind] }),
             canAuto(s) && !locked ? h("button", { class: "auto-tg" + (G.autoSkills.has(s.id) ? " on" : ""), title: "자동: 쿨타임이 돌면 가까운 적에게 알아서 사용 (회복은 체력 70% 아래일 때)", onclick: (e) => { e.stopPropagation(); setAuto(s.id, !G.autoSkills.has(s.id)); refreshWin("skills"); } }, G.autoSkills.has(s.id) ? "자동" : "수동") : null),
           h("div", { class: "meta", text: `${s.kind === "basic" ? `공격 속도 ${s.aspd}s` : s.kind === "passive" ? "패시브" : `쿨 ${s.cd}s`}${cost ? " · " + cost : ""}${s.stance ? " · " + s.stance : ""}${locked ? ` · 🔒 ${CLASS_INFO[c.cls].ranks[need]} 필요(Lv.${stageLevel(c.cls, need)})` : ""}` }),
-          h("div", { class: "desc", text: s.desc }));
+          h("div", { class: "desc", text: s.desc }),
+          s.kind !== "passive" && !locked ? profBlock(s) : null);
       })));
     }
     return [

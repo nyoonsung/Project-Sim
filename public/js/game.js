@@ -1,5 +1,7 @@
 // 클라이언트 게임 상태: 서버 메시지 반영, 내 캐릭터 이동 예측, 입력 전송
 import { applyInput } from "/shared/move.js";
+import { castFx, hitFx, profUpFx } from "./render/skillfx.js";
+import { profOf, PROF_COST } from "/shared/prof.js";
 import { onTown } from "./update.js";
 import { sfx, onEnemyHit, onEnemyDie, onMeHurt } from "./feel.js";
 import { TICK_DT, PLAYER_RADIUS, SLOT_KEYS, VIEW_W, VIEW_H } from "/shared/constants.js";
@@ -34,6 +36,7 @@ export function onMessage(m) {
     case "s": onSnapshot(m); break;
     case "ev": for (const e of m.list) onEvent(e); break;
     case "me": G.me = m; G.meAt = now(); G.ui.onMe(); break;
+    case "prof": if (G.char) { (G.char.prof ??= {})[m.s] = m.xp; G.ui.onProf?.(m.s); } break;
     case "char": G.char = m.char; G.ui.onChar(); break;
     case "chat": G.ui.chat(m); break;
     case "party": G.party = m.members; G.ui.onParty(); break;
@@ -130,8 +133,8 @@ function onEvent(e) {
       if (ent) {
         ent.hurtAt = now();
         floater(ent.rx, ent.ry - 34, String(e.v), e.p ? "hurt" : e.c ? "crit" : e.d ? "dot" : e.a ? "absorb" : "dmg");
-        if (e.id === G.you) { G.hurtFlash = 0.35; G.shake = Math.max(G.shake, e.v > (G.me?.mh ?? 999) * 0.15 ? 5 : 2); if (!e.d) onMeHurt(e.v); }
-        else if ((ent.k === "m" || ent.k === "b") && !e.d && !e.a) onEnemyHit(ent, e);
+        if (e.id === G.you) { G.hurtFlash = 0.35; if (!e.d) onMeHurt(e.v); }
+        else if ((ent.k === "m" || ent.k === "b") && !e.d && !e.a) { onEnemyHit(ent, e); hitFx(ent, e); }
       }
       break;
     case "heal": if (ent) floater(ent.rx, ent.ry - 34, "+" + e.v, "heal"); break;
@@ -143,7 +146,12 @@ function onEvent(e) {
       if (ent.anim?.local && ent.anim.name === e.a && now() - ent.anim.t0 < 0.45) { ent.anim.local = false; ent.anim.n = e.n ?? 1; }
       else ent.anim = { name: e.a, t0: now(), n: e.n ?? 1 };
     } break;
-    case "cast": if (ent) { ent.castAng = e.a / 1000; } if (e.id === G.you) G.ui.flashSkill(e.s); break;
+    case "cast": if (ent) { ent.castAng = e.a / 1000; } if (e.id === G.you) G.ui.flashSkill(e.s); castFx(e, ent); break;
+    case "proflv": {
+      profUpFx(e, ent);
+      if (e.id === G.you) { floater((ent?.rx ?? e.x), (ent?.ry ?? e.y) - 50, `${SKILLS[e.s]?.name ?? ""} 숙련 Lv.${e.lv}!`, "crit"); sfx("level"); G.ui.onProf?.(e.s); }
+      break;
+    }
     case "casting": if (ent) ent.casting = { s: e.s, t0: now(), d: e.d }; if (e.id === G.you) G.casting = { s: e.s, t0: now(), d: e.d }; break;
     case "cx": if (ent) ent.casting = null; if (e.id === G.you) G.casting = null; break;
     case "pj": G.projectiles.set(e.id, { ...e, a: e.a / 1000, t0: now() }); break;
@@ -264,6 +272,13 @@ export function flushInputs() {
   send({ t: "in", b: G.outBatch });
   G.outBatch = [];
 }
+/** 숙련도가 반영된 실제 소모량 (마나만 줄어듦) */
+export function effCost(sk) {
+  const c = { ...(sk.cost ?? {}) };
+  const lv = profOf(G.char, sk.id);
+  if (c.mp && lv) c.mp = Math.round(c.mp * (1 - PROF_COST * lv) * 10) / 10;
+  return c;
+}
 export function cdLeft(id) {
   if (!G.me?.cds?.[id]) return 0;
   return Math.max(0, G.me.cds[id] / 1000 - (now() - G.meAt));
@@ -288,7 +303,7 @@ export function tryCast(slot, at) {
   if (!sk || sk.kind === "passive" || G.me?.dead) return false;
   const left = cdLeft(id);
   if (left > 0.3) return false; // 0.3초 안에 풀리면 서버가 기억해 뒀다가 바로 시전(선입력)
-  for (const [k, v] of Object.entries(sk.cost ?? {})) if ((G.me?.[k] ?? 0) < v) return false;
+  for (const [k, v] of Object.entries(effCost(sk))) if ((G.me?.[k] ?? 0) < v) return false;
   const t = now();
   if (t - G.lastCastTry < 0.05) return false;
   G.lastCastTry = t;

@@ -12,7 +12,7 @@
 - 장비 5부위, 등급 일반·희귀·영웅·전설·신화(0.5%), **쿨타임 감소 효과 없음**
 - 강화 +99까지: +n→+n+1 성공 (99−n)%, 파괴 항상 1%
 - 관리자 페이지(`/gm`): 서버 현황, 플레이어 검색·수정·아이템 지급/회수·킥·차단·채금·층 이동·임시 비밀번호 발급, 공지, 관리 기록, 보안 로그
-- 그래픽: 캐릭터·몬스터·타일 [0x72 DungeonTileset II](https://0x72.itch.io/dungeontileset-ii)(CC0, 구역·직업별 색 입힘), 마을·주민·수정 [Ninja Adventure](https://pixel-boy.itch.io/ninja-adventure-asset-pack)(CC0), 이펙트 [pixelfx](https://github.com/patch-gg/pixelfx)(MIT), [Galmuri](https://github.com/quiple/galmuri)(OFL) 픽셀 폰트
+- 그래픽: 캐릭터·몬스터·타일 [0x72 DungeonTileset II](https://0x72.itch.io/dungeontileset-ii)(CC0, 구역·직업별 색 입힘), 마을·주민·수정 [Ninja Adventure](https://pixel-boy.itch.io/ninja-adventure-asset-pack)(CC0), 이펙트 [pixelfx](https://github.com/patch-gg/pixelfx)(MIT), [Galmuri](https://github.com/quiple/galmuri)(OFL) 픽셀 폰트(본문 11·9, 제목·데미지 숫자 14)
 - 타격감: 히트스톱(공격자·대상 함께), 흰색 번쩍임·찌그러짐, 밀림, 불꽃 입자, 카메라 반동, 효과음(Web Audio 합성), 휴대폰 진동
 
 ## 관리자
@@ -121,3 +121,10 @@ LV=0.85 RARITY=일반 node tools/sim.js sword 10 20 50 100   # 밸런스 시뮬�
 - 한 번 깬 보스층(5·10·15…)은 문지기에게서 **보스 재도전**으로 다시 갈 수 있어요(파티는 모두 깬 층만).
 - 파티는 누군가 출구에 서면 **이동 투표**가 열리고, 전원 동의(Y/N 또는 버튼)해야 다음 층으로 가요.
 - **자동 업데이트**: 새 버전을 배포하면 마을에 있는 사람은 바로 새로고침되고, 던전에 있는 사람은 마을로 돌아오는 순간 적용돼요. 배포로 서버가 다시 시작되면 끊긴 사람도 자동으로 재접속해요.
+
+## 스킬 숙련도
+- 던전에서 적 근처(450px)에서 스킬을 쓰면 그 스킬의 숙련 경험치가 올라요(마을·허공은 X). 평타 1, 다른 스킬은 1+쿨타임초.
+- 레벨마다 위력(피해·치유·보호막) ×1.02, 마나 -1.5% → Lv.10: 위력 +20%, 마나 -15%. **쿨타임은 절대 줄지 않음.**
+- Lv.5·Lv.10에서 이펙트가 한 단계씩 화려해져요. 직업 경지 승급 조건용 함수 `profOf`·`meetsProf`(shared/prof.js).
+- 스킬 등급(희귀→영웅→전설→궁극기)이 높을수록 시전 연출(충격파·룬 진·궤적·빛 기둥·빛살)이 커지고, 적당한 화면 흔들림이 들어가요(메뉴에서 끌 수 있음).
+- 검사: `node tools/prof-test.mjs`, `node tools/rules-test.mjs`

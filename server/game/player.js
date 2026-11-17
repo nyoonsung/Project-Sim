@@ -10,7 +10,7 @@ export const INV_SIZE = 40;
 export function newCharacter(name) {
   const g = starterGear();
   return {
-    v: 1, name, level: 1, xp: 0, cls: "adventurer", stats: {}, unspent: 0,
+    v: 1, name, level: 1, xp: 0, cls: "adventurer", stats: {}, unspent: 0, prof: {},
     skills: ["c_thrust", "c_slash", null, null, null, null, "c_dash", "c_firstaid"],
     equip: { weapon: { uid: 1, ...g.weapon }, offhand: { uid: 2, ...g.offhand }, helmet: null, armor: null, trinket: null },
     inv: [], nextUid: 3, cons: { hp_potion: 5, antidote: 2, mp_potion: 2 }, gold: 100,
@@ -28,6 +28,10 @@ export function sanitizeChar(c, name) {
   if (!Array.isArray(out.skills) || out.skills.length !== 8) out.skills = d.skills;
   if (!Array.isArray(out.inv)) out.inv = [];
   out.cons = { ...d.cons, ...(out.cons ?? {}) };
+  // 스킬 숙련도: { 스킬id: 경험치 } (알 수 없는 스킬·잘못된 값 제거)
+  const prof = {};
+  if (out.prof && typeof out.prof === "object") for (const [k, v] of Object.entries(out.prof)) if (SKILLS[k] && Number.isFinite(v) && v > 0) prof[k] = Math.min(Math.floor(v), 1e7);
+  out.prof = prof;
   out.equip = { ...d.equip, ...(out.equip ?? {}) };
   return out;
 }

@@ -1,5 +1,6 @@
 // HUD: 체력·자원·경험치, 스킬바, 물약, 버프, 채팅, 알림, 보스바, 미니맵, 파티창
-import { G, send, cdLeft, tryCast } from "../game.js";
+import { G, send, cdLeft, tryCast, effCost } from "../game.js";
+import { profLevel } from "/shared/prof.js";
 import { h, $, tipOn } from "./dom.js";
 import { SKILLS } from "/shared/skills.js";
 import { SLOT_KEYS, ITEMS, TILE, T, GRADE_COLOR } from "/shared/constants.js";
@@ -40,6 +41,14 @@ export function updateSkillbar() {
     nm.textContent = sk ? sk.name : "";
     el.style.borderColor = sk ? GRADE_COLOR[sk.grade] : "";
     el.style.setProperty("--gc", sk ? GRADE_COLOR[sk.grade] : "#59527a");
+    // 숙련도 배지 (Lv.1 이상)
+    const plv = sk && sk.kind !== "passive" ? profLevel(G.char?.prof?.[id] ?? 0).lv : 0;
+    if (el._plv !== plv) {
+      el._plv = plv;
+      let b = el.querySelector(".plv");
+      if (!plv) b?.remove();
+      else { if (!b) { b = h("span", { class: "plv" }); el.append(b); } b.textContent = plv >= 10 ? "M" : plv; b.className = "plv" + (plv >= 10 ? " t2" : plv >= 5 ? " t1" : ""); }
+    }
     if (el.dataset.sid !== (id ?? "")) {
       el.dataset.sid = id ?? "";
       el.querySelector(".ic")?.remove();
@@ -58,7 +67,7 @@ export function updateSkillbar() {
       cdt.textContent = left > 0.3 && sk.kind !== "basic" ? (left >= 10 ? Math.ceil(left) : left.toFixed(1)) : "";
       // 자원 부족 표시
       let lack = false;
-      for (const [k, v] of Object.entries(sk.cost ?? {})) if ((G.me?.[k] ?? 0) < v) lack = true;
+      for (const [k, v] of Object.entries(effCost(sk))) if ((G.me?.[k] ?? 0) < v) lack = true;
       el.classList.toggle("nores", lack);
     } else { cd.style.transform = "scaleY(0)"; cdt.textContent = sk ? "패시브" : ""; }
   });

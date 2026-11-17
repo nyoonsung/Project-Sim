@@ -5,6 +5,8 @@ import { dtLookFor, drawDT } from "./looks.js";
 import { drawTownObject, drawStrings, spawnFolk, tickFolk, folkList, drawFolk, drawTownNpc } from "./townart.js";
 import { beginGlows, addGlow, drawGlows, forEachGlow } from "./glow.js";
 import { drawDungeonObject } from "./dungeonart.js";
+import { tickSkillFx, drawSkillFx } from "./skillfx.js";
+import { shakeEnabled } from "../feel.js";
 import { VIEW_W, VIEW_H, TILE } from "/shared/constants.js";
 import { MONSTERS, BOSSES, ZONES } from "/shared/zones.js";
 import { SKILLS } from "/shared/skills.js";
@@ -90,6 +92,7 @@ export class Renderer {
     // 위치: 나는 매 프레임 즉시 이동, 다른 유닛은 보간
     localStep(dt);
     tickFeel(dt);
+    tickSkillFx(dt);
     const rt = t - 0.1;
     for (const e of G.ents.values()) {
       if (e.id === G.you) { e.rx = G.local.x; e.ry = G.local.y; continue; }
@@ -110,7 +113,13 @@ export class Renderer {
     G.cam.x = Math.round(mw <= VIEW_W ? (mw - VIEW_W) / 2 : Math.max(0, Math.min(mw - VIEW_W, tx)));
     G.cam.y = Math.round(mh <= VIEW_H ? (mh - VIEW_H) / 2 : Math.max(0, Math.min(mh - VIEW_H, ty)));
     let sx = 0, sy = 0;
-    if (G.shake > 0) { sx = (Math.random() - 0.5) * G.shake * 2; sy = (Math.random() - 0.5) * G.shake * 2; G.shake = Math.max(0, G.shake - dt * 18); }
+    // 화면 흔들림: 충격량^1.5 × 최대 10px, 부드러운 진동(무작위 덜덜이 대신)
+    const tr = G.trauma ?? 0, amp = shakeEnabled() ? Math.max(G.shake, Math.pow(tr, 1.5) * 10) : 0;
+    if (amp > 0.05) {
+      sx = amp * (Math.sin(t * 63.1) * 0.6 + Math.sin(t * 29.7 + 1.3) * 0.4);
+      sy = amp * (Math.sin(t * 57.3 + 0.7) * 0.6 + Math.sin(t * 33.9 + 2.1) * 0.4);
+    }
+    G.shake = Math.max(0, G.shake - dt * 18);
     const cx = Math.round(G.cam.x + sx + (G.camKick?.x ?? 0)), cy = Math.round(G.cam.y + sy + (G.camKick?.y ?? 0));
     if (me) G.map.reveal(me.rx, me.ry);
 
@@ -134,6 +143,7 @@ export class Renderer {
     if (G.kind === "town") drawStrings(ctx, cx, cy, t);
     this.drawLighting(ctx, cx, cy, t);
     drawGlows(ctx, cx, cy, VIEW_W, VIEW_H);
+    drawSkillFx(ctx, cx, cy);
     if (this.weather.list.length) {
       const wc = this.wctx ?? (this.wctx = this.mkWeatherCtx());
       wc.clearRect(0, 0, 320, 180);
@@ -572,7 +582,7 @@ export class Renderer {
       const x = Math.round(f.x - cx), y = Math.round(f.y - cy - age * 26);
       ctx.globalAlpha = Math.min(1, (1.1 - age) * 3);
       const style = {
-        dmg: ["#ffffff", "12px Galmuri11"], crit: ["#ffcf3a", "bold 16px Galmuri11"], hurt: ["#ff5a5a", "12px Galmuri11"], heal: ["#6aff8a", "12px Galmuri11"],
+        dmg: ["#ffffff", "14px Galmuri14"], crit: ["#ffcf3a", "bold 16px Galmuri11"], hurt: ["#ff5a5a", "14px Galmuri14"], heal: ["#6aff8a", "14px Galmuri14"],
         dot: ["#c8a0ff", "10px Galmuri9"], absorb: ["#c8e0ff", "10px Galmuri9"], miss: ["#aaaaaa", "10px Galmuri9"], gold: ["#ffd35a", "10px Galmuri9"], status: ["#ffb0ff", "12px Galmuri11"],
       }[f.kind] ?? ["#fff", "12px Galmuri11"];
       // 튀어나왔다가 자리 잡는 숫자 (치명타는 더 크게)
@@ -581,12 +591,20 @@ export class Renderer {
       ctx.save();
       ctx.translate(x + (f.vx ?? 0) * age, y);
       ctx.scale(pop, pop);
-      ctx.font = crit ? "bold 17px Galmuri11" : style[1];
+      ctx.font = crit ? "28px Galmuri14" : style[1];
+      if (crit) ctx.scale(0.75, 0.75); // 28px로 그려 또렷하게 → 21px 크기
       ctx.textAlign = "center"; ctx.textBaseline = "middle";
-      ctx.lineJoin = "round"; ctx.lineWidth = crit ? 4 : 3; ctx.strokeStyle = crit ? "#3a1a00" : "#000";
+      ctx.lineJoin = "round"; ctx.lineWidth = crit ? 6 : 3; ctx.strokeStyle = crit ? "#4a1800" : "#000";
       const text = crit ? f.text + "!" : f.text;
       ctx.strokeText(text, 0, 0);
-      ctx.fillStyle = style[0]; ctx.fillText(text, 0, 0);
+      if (crit) {
+        // 치명타: 위는 밝은 금색 → 아래는 주황 그라데이션 + 빛
+        const g = ctx.createLinearGradient(0, -12, 0, 12);
+        g.addColorStop(0, "#fff8d0"); g.addColorStop(0.45, "#ffd35a"); g.addColorStop(1, "#ff7a1a");
+        ctx.shadowColor = "#ff9a3a"; ctx.shadowBlur = 8;
+        ctx.fillStyle = g;
+      } else ctx.fillStyle = style[0];
+      ctx.fillText(text, 0, 0);
       ctx.restore();
       ctx.globalAlpha = 1;
       return true;

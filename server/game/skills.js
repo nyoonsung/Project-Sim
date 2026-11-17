@@ -1,5 +1,6 @@
 // 스킬 실행 엔진: shared/skills.js 의 steps 를 서버에서 판정
 import { SKILLS, unlockStage } from "../../shared/skills.js";
+import { profOf, profLevel, profGain, PROF_POW, PROF_COST, PROF_MAX } from "../../shared/prof.js";
 import { CLASS_INFO, stageOf } from "../../shared/classes.js";
 import { moveCircle, circleHitsWall, lineOfSight } from "../../shared/move.js";
 import { dealDamage, heal, giveShield, applyStatus, addGroggy, isHardCC, buffSum, angDiff } from "./combat.js";
@@ -68,8 +69,11 @@ export function castSkill(room, u, slot, ax, ay, tx, now, exp) {
   if (sk.kind === "basic" && u.queued && SKILLS[ch.skills[u.queued.slot]]?.kind !== "basic" && now <= u.queued.exp) return;
   u.queued = null;
   if (room.kind === "town" && sk.steps.some((s) => s.do === "device" || s.do === "zone")) return msg(u, "마을에서는 쓸 수 없는 스킬이에요.");
+  // 숙련도: 위력 +2%/레벨, 마나 -1.5%/레벨 (쿨타임은 그대로)
+  const plv = profOf(ch, id);
   // 자원
-  const cost = sk.cost ?? {};
+  const cost = { ...(sk.cost ?? {}) };
+  if (cost.mp && plv) cost.mp = Math.round(cost.mp * (1 - PROF_COST * plv) * 10) / 10;
   for (const [k, v] of Object.entries(cost)) {
     const have = u[k] ?? 0;
     if (have < v - 1e-6) {
@@ -84,7 +88,8 @@ export function castSkill(room, u, slot, ax, ay, tx, now, exp) {
   for (const [k, v] of Object.entries(cost)) if (k !== "gap") u[k] -= v;
   u.lastAction = now;
   const aim = Math.atan2(ay - u.y, ax - u.x);
-  const ctx = { sk, aim, ax, ay, tx, mul: 0, now };
+  const ctx = { sk, aim, ax, ay, tx, mul: 0, prof: plv, pf: 1 + plv * PROF_POW, now };
+  gainProf(room, u, sk, now);
   // 검사 자세 전환: 다른 자세 스킬을 쓰면 그 스킬 피해 +15%, 내력 +10
   if (sk.stance && ch.cls === "sword") {
     if (sk.stance !== u.stance || u.stanceShift) {
@@ -114,7 +119,7 @@ export function castSkill(room, u, slot, ax, ay, tx, now, exp) {
   u.lastSkill = id;
   u.lastSkillAt = now;
   if (sk.moveSkill) { u.moveLock = now + 0.6; triggerPassive(room, u, "move_skill", now); }
-  room.ev({ e: "cast", id: u.id, s: id, a: Math.round(aim * 1000), ct: sk.cast ? 1 : 0 });
+  room.ev({ e: "cast", id: u.id, s: id, a: Math.round(aim * 1000), ct: sk.cast ? 1 : 0, pl: plv, x: u.x | 0, y: u.y | 0, ax: Math.round(ax), ay: Math.round(ay) });
   const go = (t) => {
     if (cost.gap) { ctx.gapSpent = u.gap; if (sk.steps.some((s) => s.consumeGap)) u.gap = 0; else u.gap -= cost.gap; }
     runSteps(room, u, ctx, sk.steps, 0, t);
@@ -138,6 +143,25 @@ export function castSkill(room, u, slot, ax, ay, tx, now, exp) {
   u.session.meDirty = true;
 }
 const s0 = (sk) => sk.steps[0];
+/** 숙련 경험치: 던전에서 근처(450px)에 적이 있을 때만 오름 */
+function gainProf(room, u, sk, now) {
+  if (room.kind !== "dungeon" || room.map.safe || sk.kind === "passive") return;
+  let near = false;
+  for (const t of room.units.values()) if (t.team === "m" && !t.dead && !t.dummy && Math.hypot(t.x - u.x, t.y - u.y) < 450) { near = true; break; }
+  if (!near) return;
+  const ch = u.session.char;
+  ch.prof ??= {};
+  const before = profLevel(ch.prof[sk.id] ?? 0);
+  if (before.max) return;
+  ch.prof[sk.id] = (ch.prof[sk.id] ?? 0) + profGain(sk);
+  const after = profLevel(ch.prof[sk.id]);
+  u.session.dirty = true;
+  u.session.send({ t: "prof", s: sk.id, xp: ch.prof[sk.id] });
+  if (after.lv > before.lv) {
+    room.ev({ e: "proflv", id: u.id, s: sk.id, lv: after.lv, x: u.x | 0, y: u.y | 0 });
+    if (after.lv === PROF_MAX || after.lv === 5) room.ev({ e: "msg", text: `${u.name}님의 [${sk.name}] 숙련도 Lv.${after.lv}! ${after.lv === PROF_MAX ? "최고 숙련 달성!" : "이펙트가 강화됐어요!"}`, kind: after.lv === PROF_MAX ? "legend" : "info" });
+  }
+}
 const hasPassive = (ch, id) => ch.skills.includes(id);
 
 function runSteps(room, u, ctx, steps, i, now) {
@@ -186,7 +210,7 @@ function strike(room, u, t, st, ctx, now, extra = {}) {
   if (st.vsCC && (isHardCC(t) || t.status.has("root"))) bonus += st.vsCC;
   if (st.ifAcupoint4 && (u.acupoint >= 4 || now - (u.lastSuppress ?? -9) < 3)) { bonus += st.ifAcupoint4; u.acupoint = 0; u.buffs.delete("acupoint"); }
   if (st.execute) bonus += st.execute * (1 - t.hp / t.maxHp);
-  let pow = st.pow ?? (st.hit?.pow ?? 1);
+  let pow = (st.pow ?? (st.hit?.pow ?? 1)) * (ctx.pf ?? 1); // 숙련도: 위력 배율(다른 보너스와 따로 곱함)
   if (st.perGap) pow += st.perGap * (ctx.gapSpent ?? 0);
   if (st.falloff && extra.travel != null) pow *= 1 - st.falloff * extra.travel;
   if (st.bossMul && t.boss) pow *= st.bossMul;
@@ -396,7 +420,7 @@ const STEP = {
     else targets = [pickAlly(room, u, ctx, ctx.sk.range ?? 240)];
     room.ev({ e: "anim", id: u.id, a: "cast" });
     for (const t of targets) {
-      let amt = st.pctMax ? t.maxHp * st.pctMax : healPower(u) * st.pow;
+      let amt = (st.pctMax ? t.maxHp * st.pctMax : healPower(u) * st.pow) * (1 + (ctx.prof ?? 0) * PROF_POW);
       // 구휼의 증표: 체력 낮은 아군 직접 치유 +30% (대상별 12초)
       if (hasPassive(u.session.char, "pr_relief") && t.hp / t.maxHp <= 0.5 && now >= (u.icd.get("relief" + t.id) ?? 0)) { amt *= 1.3; u.icd.set("relief" + t.id, now + 12); }
       if (u.cls === "priest") { t.healedBy = { id: u.id, until: now + 10 }; }
@@ -417,7 +441,7 @@ const STEP = {
     else targets = [pickAlly(room, u, ctx, ctx.sk.range ?? 240)];
     room.ev({ e: "anim", id: u.id, a: "cast" });
     for (const t of targets) {
-      let amt = st.pctMax ? t.maxHp * st.pctMax : healPower(u) * st.pow * u.stats.shield;
+      let amt = (st.pctMax ? t.maxHp * st.pctMax : healPower(u) * st.pow * u.stats.shield) * (1 + (ctx.prof ?? 0) * PROF_POW);
       if (t === u && st.selfMul) amt *= st.selfMul;
       giveShield(room, t, amt, st.dur, now);
       if (ctx.sk.fx?.self) room.ev({ e: "fx", fx: ctx.sk.fx.self, x: t.x | 0, y: t.y | 0, at: t.id, pal: ctx.sk.fx.palette ?? null });
@@ -503,7 +527,7 @@ function chain(room, u, first, st, ctx, now) {
     if (!next) break;
     hit.add(next.id);
     room.ev({ e: "beam", fx: "lightning", x0: from.x | 0, y0: from.y | 0, x1: next.x | 0, y1: next.y | 0 });
-    dealDamage(room, u, next, { pow: st.chain.pow, bonus: ctx.mul }, now);
+    dealDamage(room, u, next, { pow: st.chain.pow * (ctx.pf ?? 1), bonus: ctx.mul }, now);
     if (st.status) applyStatus(room, u, next, st.status, now);
     from = next;
   }
@@ -512,7 +536,7 @@ function chain(room, u, first, st, ctx, now) {
 function explode(room, u, ctx, st, x, y, now, skipId) {
   if (ctx.sk.fx?.hit) room.ev({ e: "fx", fx: ctx.sk.fx.hit, x: x | 0, y: y | 0, s: 0.45 });
   const list = enemies(room, u).filter((t) => t.id !== skipId && Math.hypot(t.x - x, t.y - y) - t.r <= st.explode.radius).slice(0, st.explode.max ?? 99);
-  for (const t of list) dealDamage(room, u, t, { pow: st.explode.pow, bonus: ctx.mul }, now);
+  for (const t of list) dealDamage(room, u, t, { pow: st.explode.pow * (ctx.pf ?? 1), bonus: ctx.mul }, now);
 }
 
 const CUSTOM = {

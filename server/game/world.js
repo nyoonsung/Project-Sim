@@ -109,7 +109,7 @@ export class World {
 
   publicChar(s) {
     const c = s.char;
-    return { name: c.name, level: c.level, xp: c.xp, cls: c.cls, stats: c.stats, unspent: c.unspent, skills: c.skills, equip: c.equip, inv: c.inv, cons: c.cons, gold: c.gold, best: c.best, checkpoint: c.checkpoint, cleared: c.cleared, kills: c.kills, deaths: c.deaths };
+    return { name: c.name, level: c.level, xp: c.xp, cls: c.cls, stats: c.stats, unspent: c.unspent, skills: c.skills, equip: c.equip, inv: c.inv, cons: c.cons, gold: c.gold, best: c.best, checkpoint: c.checkpoint, cleared: c.cleared, kills: c.kills, deaths: c.deaths, prof: c.prof ?? {} };
   }
   sendChar(s) { s.dirty = true; s.send({ t: "char", char: this.publicChar(s) }); }
   sendMe(s) {

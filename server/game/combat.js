@@ -145,7 +145,9 @@ export function dealDamage(room, src, t, o, now) {
   const real = dmg - absorbed;
   t.hp = Math.max(0, t.hp - real);
   t.lastHurt = now;
-  room.ev({ e: "dmg", id: t.id, v: dmg, c: crit ? 1 : 0, a: absorbed > 0 ? 1 : 0, d: o.dot ? 1 : 0, p: t.team === "p" ? 1 : 0 });
+  const ev = { e: "dmg", id: t.id, v: dmg, c: crit ? 1 : 0, a: absorbed > 0 ? 1 : 0, d: o.dot ? 1 : 0, p: t.team === "p" ? 1 : 0 };
+  if (o.skill && !o.dot && src?.type === "p") ev.sk = o.skill; // 스킬별 적중 연출용
+  room.ev(ev);
   // 위협 (몬스터가 맞을 때)
   if (t.team === "m" && src?.team === "p") {
     const th = dmg * (o.threat ?? 1) * (src.stats.threat ?? 1);

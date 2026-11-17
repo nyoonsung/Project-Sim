@@ -1,7 +1,7 @@
 // 시작점: 로그인 → 게임 연결 → 입력·렌더 루프
 import { G, onMessage, inputTick, tryCast, updateMouseWorld, send } from "./game.js";
 import { isTouchDevice, setupTouch, touchAimTick } from "./ui/touch.js";
-import { unlockAudio, toggleSound, soundOn, sfx } from "./feel.js";
+import { unlockAudio, toggleSound, soundOn, sfx, toggleShake, shakeEnabled, addTrauma } from "./feel.js";
 import { loadDT2, frame } from "./render/dt2.js";
 import { dtLookFor, drawDT } from "./render/looks.js";
 if (isTouchDevice()) document.body.classList.add("touch");
@@ -96,6 +96,7 @@ async function boot() {
 const ui = {
   onChar() { HUD.updateSkillbar(); WIN.refreshAll(); },
   onMe() { HUD.updateBars(); },
+  onProf() { if (isOpen("skills") && !(G._profRefresh > performance.now())) { G._profRefresh = performance.now() + 500; refreshWin("skills"); } },
   onMap() { HUD.updateZoneLabel(); WIN.refreshAll(); HUD.toast(G.mapKind === "town" ? "모험가 마을" : G.mapKind === "safe" ? "안전 구역 — 전직소" : `${G.floor}층 · ${G.zone.name}`, "floor"); },
   chat: HUD.chatLine,
   onParty() { HUD.updateParty(); WIN.refreshAll(); },
@@ -142,6 +143,7 @@ async function startGame() {
   addEventListener("resize", resize);
   await Promise.all([loadDT2().catch((e) => console.warn("아틀라스 로드 실패", e)), document.fonts.load("12px Galmuri11").catch(() => {})]);
   await document.fonts.load("10px Galmuri9").catch(() => {});
+  document.fonts.load("14px Galmuri14").catch(() => {}); // 제목·데미지 숫자용 (기다리지 않음)
   const NetClass = globalThis.__LOCAL_NET ?? Net;
   G.net = new NetClass(onMessage, (e) => {
     $("#game").classList.add("hidden");
@@ -217,6 +219,10 @@ function bindInput() {
   const paintSound = () => { sb.textContent = G.touch ? (soundOn() ? "🔊" : "🔇") : soundOn() ? "소리 켜짐" : "소리 꺼짐"; };
   paintSound();
   sb.addEventListener("click", () => { unlockAudio(); toggleSound(); paintSound(); sfx("click"); });
+  const kb = $("#shake-btn");
+  const paintShake = () => { kb.textContent = G.touch ? (shakeEnabled() ? "📳" : "📴") : shakeEnabled() ? "흔들림 켜짐" : "흔들림 꺼짐"; };
+  paintShake();
+  kb.addEventListener("click", () => { toggleShake(); paintShake(); sfx("click"); if (shakeEnabled()) addTrauma(0.4); });
   $("#minimap").addEventListener("click", () => HUD.toggleBigMap());
   $("#bigmap").addEventListener("click", () => HUD.toggleBigMap());
   for (const b of document.querySelectorAll("#menu-buttons button[data-win]")) {

@@ -1,6 +1,7 @@
 @font-face { font-family: "Galmuri11"; src: url("/fonts/Galmuri11.woff2") format("woff2"); font-display: swap; }
 @font-face { font-family: "Galmuri11"; font-weight: bold; src: url("/fonts/Galmuri11-Bold.woff2") format("woff2"); font-display: swap; }
 @font-face { font-family: "Galmuri9"; src: url("/fonts/Galmuri9.woff2") format("woff2"); font-display: swap; }
+@font-face { font-family: "Galmuri14"; src: url("/fonts/Galmuri14.woff2") format("woff2"); font-display: swap; }
 @font-face { font-family: "GalmuriMono11"; src: url("/fonts/GalmuriMono11.woff2") format("woff2"); font-display: swap; }
 
 :root {
@@ -308,3 +309,32 @@ body.touch #joy-knob { background: radial-gradient(circle at 40% 35%, #ffffffcc,
 #vote .vb .btn { min-width: 84px; }
 body.touch #vote { top: 14%; }
 .floors .btn.boss { border-color: #ff8a4a; color: #ffb88a; }
+
+/* 스킬 숙련도 */
+.prof { margin-top: 5px; }
+.prof-top { display: flex; justify-content: space-between; gap: 8px; font-size: 10px; }
+.prof-lv { color: #ffe08a; font-weight: bold; }
+.prof-b { color: #b8aed6; }
+.prof-bar { height: 5px; margin-top: 2px; background: #0b0912; border: 1px solid #3a3150; border-radius: 3px; overflow: hidden; }
+.prof-bar i { display: block; height: 100%; background: linear-gradient(90deg, #6a5acd, #b08aff); box-shadow: 0 0 6px #b08aff88; }
+.prof.t1 .prof-bar i { background: linear-gradient(90deg, #3a8aff, #6ae0ff); box-shadow: 0 0 8px #6ae0ffaa; }
+.prof.t2 .prof-lv { color: #ffb347; text-shadow: 0 0 6px #ff8a2a; }
+.prof.t2 .prof-bar i { background: linear-gradient(90deg, #ff8a2a, #ffe08a, #fff); box-shadow: 0 0 10px #ffb347; }
+.slot .plv { position: absolute; right: 1px; top: 1px; z-index: 6; min-width: 12px; height: 12px; padding: 0 2px; border-radius: 6px; font-size: 8px; line-height: 12px; text-align: center; color: #fff; background: #4a3a7a; box-shadow: 0 0 0 1px #000; pointer-events: none; }
+.slot .plv.t1 { background: #2a6ac0; }
+.slot .plv.t2 { background: linear-gradient(#ffb347, #c06020); color: #fff8e0; box-shadow: 0 0 0 1px #000, 0 0 6px #ffb347; }
+body.touch .slot.tb .plv { right: 11%; top: 11%; }
+
+/* ───────── 글씨: 제목·강조는 Galmuri14(더 매끈한 픽셀 서체) + 외곽선·빛 ───────── */
+:root { --display: "Galmuri14", "Galmuri11", system-ui, sans-serif; }
+.win header { font-family: var(--display); font-weight: normal; font-size: 14px; letter-spacing: 0.5px; color: #fff3d0; text-shadow: 1px 1px 0 #000, 0 0 8px #ffd35a33; }
+.win h4 { font-family: var(--display); font-weight: normal; font-size: 14px; letter-spacing: 0.3px; color: #ffe08a; text-shadow: 1px 1px 0 #000; }
+#center-msg { font-family: var(--display); font-size: 28px; letter-spacing: 1px; color: #ffe9a8; text-shadow: 0 2px 0 #7a4a00, 2px 4px 0 #000, 0 0 18px #ffb34788; }
+#zone-label { font-family: var(--display); font-size: 15px; letter-spacing: 0.5px; color: #fff; text-shadow: 1px 1px 0 #000, 2px 2px 0 #000, 0 0 10px #8a6aff66; }
+.toast { font-family: var(--display); font-size: 13px; letter-spacing: 0.3px; border-radius: 6px; background: linear-gradient(#1a1428e8, #0c0a12e8); box-shadow: 0 2px 8px #0008; }
+#tooltip .tt-name { font-family: var(--display); font-weight: normal; font-size: 14px; }
+.btn, #menu-buttons button { letter-spacing: 0.2px; }
+.prof-lv { font-family: var(--display); font-weight: normal; font-size: 11px; }
+#vote .vt { font-family: var(--display); font-size: 14px; }
+body.touch #center-msg { font-size: 21px; }
+body.touch #zone-label { font-size: 12px; }
