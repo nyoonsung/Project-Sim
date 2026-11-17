@@ -96,6 +96,21 @@ export function skillIcon(sk) {
     case "passive": P(g, ink, 4, 4, 8, 8); P(g, c, 5, 5, 6, 6); P(g, ink, 7, 7, 2, 2); break;
     default: line([[8, 1], [8, 2], [7, 3], [9, 3], [1, 6], [2, 6], [3, 6], [13, 6], [14, 6], [15, 6]], c); P(g, c, 5, 4, 6, 7); P(g, wh, 7, 6, 2, 2); P(g, c, 3, 11, 2, 3); P(g, c, 11, 11, 2, 3);
   }
+  centerArt(cv);
   cache.set(key, cv);
   return cv;
+}
+
+/** 그림이 칸 한쪽으로 치우쳐 있으면 가운데로 옮김 (16x16 아이콘) */
+function centerArt(cv) {
+  const g = cv.getContext("2d"), W = cv.width, H = cv.height;
+  const d = g.getImageData(0, 0, W, H).data;
+  let x0 = W, y0 = H, x1 = -1, y1 = -1;
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if (d[(y * W + x) * 4 + 3] > 20) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
+  if (x1 < 0) return;
+  const dx = Math.round((W - 1 - x1 - x0) / 2), dy = Math.round((H - 1 - y1 - y0) / 2);
+  if (!dx && !dy) return;
+  const tmp = document.createElement("canvas"); tmp.width = W; tmp.height = H;
+  tmp.getContext("2d").drawImage(cv, 0, 0);
+  g.clearRect(0, 0, W, H); g.drawImage(tmp, dx, dy);
 }

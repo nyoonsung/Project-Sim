@@ -12,7 +12,7 @@ export const G = {
   you: 0, map: null, room: null, kind: "town", floor: 0, zone: null, zoneName: "", objects: [], exitOpen: false, arena: null,
   ents: new Map(), projectiles: new Map(), tels: new Map(), zones: new Map(), loot: new Map(), beams: [],
   floaters: [], party: [], boss: null, shake: 0, hurtFlash: 0,
-  pred: { x: 0, y: 0, px: 0, py: 0, at: 0 }, local: { x: 0, y: 0 }, stick: [0, 0], touchHeld: new Set(), touch: false, aimLine: null, pending: [], seq: 0, forced: 0,
+  pred: { x: 0, y: 0, px: 0, py: 0, at: 0 }, local: { x: 0, y: 0 }, stick: [0, 0], touchHeld: new Set(), touch: false, aimLine: null, pending: [], seq: 0, ackSeq: 0, forced: 0,
   keys: new Set(), mouse: { x: 0, y: 0, down: [false, false, false], wx: 0, wy: 0 }, cam: { x: 0, y: 0 },
   lastCastTry: 0, typing: false, casting: null,
 };
@@ -42,7 +42,7 @@ export function onMessage(m) {
     case "enh": G.ui.onEnhance(m); break;
     case "renamed": G.name = m.name; G.ui.toast(`닉네임을 ${m.name}(으)로 바꿨어요. 다음 로그인부터 새 닉네임으로 로그인하세요.`, "rank"); break;
     case "renameFail": G.ui.toast(m.text, "info"); break;
-    case "tp": G.pred.x = G.pred.px = G.local.x = m.x; G.pred.y = G.pred.py = G.local.y = m.y; G.pending.length = 0; break;
+    case "tp": G.localDash = null; G.pred.x = G.pred.px = G.local.x = m.x; G.pred.y = G.pred.py = G.local.y = m.y; G.pending.length = 0; break;
   }
 }
 
@@ -59,6 +59,7 @@ function onMap(m) {
   G.arena = m.arena;
   G.ents.clear(); G.projectiles.clear(); G.tels.clear(); G.zones.clear(); G.loot.clear(); G.beams = []; G.floaters = [];
   G.boss = null;
+  G.localDash = null;
   G.pred.x = G.pred.px = G.local.x = m.start[0]; G.pred.y = G.pred.py = G.local.y = m.start[1];
   G.pending.length = 0;
   G.renderer?.onMap();
@@ -92,6 +93,7 @@ function onSnapshot(m) {
   // 내 위치 보정 (서버 위치 + 아직 확인 안 된 입력 재적용)
   const me = G.ents.get(G.you);
   if (me && G.map) {
+    G.ackSeq = m.a;
     G.pending = G.pending.filter((p) => p.s > m.a);
     let x = me.x, y = me.y;
     const spd = G.me?.spd ?? 120;
@@ -166,7 +168,13 @@ function onEvent(e) {
     case "wave": sfx("wave"); G.ui.center(e.n >= e.of ? `마지막 웨이브! (${e.n}/${e.of})` : `웨이브 ${e.n} / ${e.of}`); G.wave = { n: e.n, of: e.of }; break;
     case "warp": G.ui.center("이동 중..."); R?.fx("arcane/portal", G.pred.x, G.pred.y, { s: 0.6 }); break;
     case "shake": G.shake = Math.max(G.shake, e.v); break;
-    case "dash": if (e.id === G.you) G.forced = now() + e.d / e.v + 0.1; break;
+    case "dash": {
+      if (e.id !== G.you) break;
+      const D = G.localDash;
+      if (D && !D.got && now() - D.t0 < 1.5) D.got = true; // 내가 미리 움직인 대시: 서버 위치 강제 맞춤 안 함
+      else G.forced = now() + e.d / e.v + 0.1;
+      break;
+    }
     case "stance": if (e.id === G.you) G.ui.toast(`${e.s} 자세`, "self"); break;
     case "nores": if (e.id === G.you) G.ui.noRes(e.k); break;
     case "beam": G.beams.push({ ...e, t0: now(), d: e.d ?? 0.25 }); break;
@@ -203,22 +211,29 @@ export function localStep(dt) {
   // 대시: 누르는 즉시 내 화면에서 먼저 이동 (서버 위치는 뒤따라 맞춤)
   const D = G.localDash, tn = now();
   if (D && tn < D.until) { [L.x, L.y] = applyInput(G.map, L.x, L.y, D.dx, D.dy, D.speed, Math.min(dt, D.until - tn + dt), PLAYER_RADIUS); return; }
-  if (D && tn < D.until + 0.45 && isFrozen()) return; // 서버 대시가 끝날 때까지 기다렸다가 맞춤
-  if (isFrozen()) { const k = Math.min(1, dt * 20); L.x += (A.x - L.x) * k; L.y += (A.y - L.y) * k; return; }
+  // 대시 직후: 서버가 대시 동안 보낸 입력을 다 처리할 때까지(= 서버 위치에 대시가 반영될 때까지) 뒤로 당기지 않음
+  const hold = D && !D.done && (G.ackSeq < D.seqEnd + 2 && tn < D.until + 1.2);
+  if (D && !hold && !D.done) { D.done = true; G.softUntil = tn + 0.4; }
+  if (!hold && isFrozen()) { const k = Math.min(1, dt * 20); L.x += (A.x - L.x) * k; L.y += (A.y - L.y) * k; return; }
   const [mx, my] = moveDir();
-  if (mx || my) [L.x, L.y] = applyInput(G.map, L.x, L.y, mx, my, G.me?.spd ?? 120, dt, PLAYER_RADIUS);
+  if ((mx || my) && !isFrozen()) [L.x, L.y] = applyInput(G.map, L.x, L.y, mx, my, G.me?.spd ?? 120, dt, PLAYER_RADIUS);
+  if (hold) return;
   const ex = A.x - L.x, ey = A.y - L.y, d = Math.hypot(ex, ey);
-  if (d > 48) { L.x = A.x; L.y = A.y; }
+  // 크게 어긋나면 바로 맞춤 (단, 대시 직후엔 부드럽게)
+  if (d > (tn < (G.softUntil ?? 0) ? 160 : 48)) { L.x = A.x; L.y = A.y; }
   else if (d > 0.5) { const k = Math.min(1, dt * ((mx || my) ? 4 : d < 8 ? 1.5 : 8)); [L.x, L.y] = [L.x + ex * k, L.y + ey * k]; }
 }
 
 export function inputTick() {
   if (!G.map || !G.net) return;
-  const [mx, my] = moveDir();
+  let [mx, my] = moveDir();
   const s = ++G.seq;
   const ax = Math.round(G.mouse.wx), ay = Math.round(G.mouse.wy);
+  // 내 화면에서 대시 중이면 이동 입력은 0 (서버도 대시 중엔 걷지 않음 → 두 위치가 그대로 일치)
+  const D = G.localDash, dashing = D && now() < D.until;
+  if (dashing) { mx = 0; my = 0; D.seqEnd = s; }
   send({ t: "in", s, mx: +mx.toFixed(3), my: +my.toFixed(3), ax, ay });
-  const frozen = isFrozen();
+  const frozen = isFrozen() || dashing;
   G.pending.push({ s, mx, my, frozen });
   if (G.pending.length > 40) G.pending.shift();
   G.pred.px = G.pred.x; G.pred.py = G.pred.y; G.pred.at = now();
@@ -257,7 +272,7 @@ export function tryCast(slot, at) {
   if (t - G.lastCastTry < 0.05) return false;
   G.lastCastTry = t;
   const ax = at ? at.x : G.mouse.wx, ay = at ? at.y : G.mouse.wy;
-  const msg = { t: "cast", slot, ax: Math.round(ax), ay: Math.round(ay) };
+  const msg = { t: "cast", slot, ax: Math.round(ax), ay: Math.round(ay), s: G.seq };
   if (at?.tx) msg.tx = at.tx;
   else if (sk.aim === "ally") {
     let best = null, bd = 60;
@@ -272,10 +287,12 @@ export function tryCast(slot, at) {
   if (dashStep && left <= 0.06 && t >= (G.localDash?.until ?? 0) + 0.2 && !isFrozen()) {
     const me = G.ents.get(G.you);
     if (me) {
+      // 출발점을 '서버가 이 입력까지 처리했을 때의 위치'(pred)로 맞춰 서버 대시와 정확히 같은 경로로 이동
+      if (Math.hypot(G.pred.x - G.local.x, G.pred.y - G.local.y) < 24) { G.local.x = G.pred.x; G.local.y = G.pred.y; }
       let dx = ax - G.local.x, dy = ay - G.local.y; // 서버와 같은 기준(발밑)
       const l = Math.hypot(dx, dy) || 1;
       dx /= l; dy /= l;
-      G.localDash = { dx, dy, speed: dashStep.speed ?? 520, until: t + (dashStep.dist ?? 96) / (dashStep.speed ?? 520) };
+      G.localDash = { dx, dy, t0: t, seqEnd: G.seq, speed: dashStep.speed ?? 520, until: t + (dashStep.dist ?? 96) / (dashStep.speed ?? 520) };
     }
   }
   // 바로 동작 보여 주기 (서버 응답을 기다리지 않음)

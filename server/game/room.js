@@ -119,7 +119,7 @@ export class Room {
     u.y = y + (Math.random() * 24 - 12);
     if (circleHitsWall(this.map, u.x, u.y, u.r)) { u.x = x; u.y = y; }
     u.room = this;
-    u.inputs.length = 0;
+    u.inputs.length = 0; u.castQ = []; u.owed = 0;
     u.casting = null; u.channel = null; u.dash = null; u.parry = null;
     u.devices = [];
     this.units.set(u.id, u);
@@ -162,6 +162,11 @@ export class Room {
     u.inputs.push(m);
   }
   cast(u, m) {
+    if (m.s != null && u.lastSeq < m.s && u.inputs.some((i) => i.s <= m.s)) {
+      (u.castQ ??= []).push({ slot: m.slot, ax: m.ax, ay: m.ay, tx: m.tx, s: m.s, exp: this.now + 0.5 });
+      if (u.castQ.length > 4) u.castQ.shift();
+      return;
+    }
     castSkill(this, u, m.slot, m.ax, m.ay, m.tx, this.now);
   }
   cancelCast(u, why) { cancelCast(this, u, why); }
@@ -335,6 +340,15 @@ export class Room {
     this.checkProgress(now);
   }
 
+  applyMove(u, inp, now) {
+    const canMove = !isHardCC(u) && !u.status.has("root") && !u.casting && !u.channel && !(u.rooted && now < u.rooted);
+    if (!canMove || (!inp.mx && !inp.my)) return;
+    const spd = u.stats.move * moveMul(u) * (u.guarding && now < u.guarding ? 0.35 : 1);
+    const [nx, ny] = applyInput(this.map, u.x, u.y, inp.mx, inp.my, spd, TICK_DT, u.r);
+    if (Math.hypot(nx - u.x, ny - u.y) > 0.1) u.idleSince = now;
+    u.x = nx; u.y = ny;
+  }
+
   tickPlayer(u, now) {
     tickStatuses(this, u, now);
     if (u.dead) { u.inputs.length = 0; return; }
@@ -353,10 +367,28 @@ export class Room {
       giveShield(this, u, u.maxHp * 0.05, 12, now);
     }
     // 입력 1틱 소비 (속도 조작 불가: 서버가 한 틱에 한 입력만 적용)
+    //  - 입력이 늦게 와서 빈 틱은 '빚'으로 쌓아 두고, 밀린 입력이 오면 한 틱에 하나 더 처리해 따라잡음
+    //    (총 처리 수 ≤ 지난 틱 수라 속도 조작 불가, 밀린 입력 때문에 조작감이 계속 늦어지는 것 방지)
+    //  - 빈 틱에 예전 입력으로 미리 움직이지 않음: 나중에 진짜 입력과 겹쳐 내 화면이 앞뒤로 튀는 원인
     let inp = u.inputs.shift();
-    if (inp) { u.lastInput = inp; u.lastSeq = inp.s; u.missed = 0; }
-    else if (++u.missed <= 2) inp = u.lastInput; // 잠깐 끊겨도 부드럽게
-    else inp = { ...u.lastInput, mx: 0, my: 0 };
+    if (inp) {
+      if (u.owed > 0 && u.inputs.length >= 1 && !u.dash) {
+        this.applyMove(u, inp, now); // 밀린 입력 이동만 먼저 반영
+        inp = u.inputs.shift(); u.owed--;
+      }
+      u.lastInput = inp; u.lastSeq = inp.s; u.missed = 0;
+    } else {
+      if (u.lastSeq) u.owed = Math.min(4, (u.owed ?? 0) + 1);
+      inp = { ...u.lastInput, mx: 0, my: 0 };
+    }
+    // 스킬은 "누를 때까지 보낸 이동"이 다 반영된 뒤 시전 (서버·화면 위치가 같아 대시가 되돌아가지 않음)
+    if (u.castQ?.length) {
+      const q = u.castQ; u.castQ = [];
+      for (const c of q) {
+        if (u.lastSeq >= c.s || now >= c.exp || !u.inputs.some((i) => i.s <= c.s)) castSkill(this, u, c.slot, c.ax, c.ay, c.tx, now);
+        else u.castQ.push(c);
+      }
+    }
     const aimAng = Math.atan2(inp.ay - u.y, inp.ax - u.x);
     tickPlayerSkills(this, u, now, inp);
     if (u.dash) {
@@ -372,14 +404,7 @@ export class Room {
       u.facing = d.dir;
       return;
     }
-    const canMove = !isHardCC(u) && !u.status.has("root") && !u.casting && !u.channel && !(u.rooted && now < u.rooted);
-    if (canMove) {
-      const spd = s.move * moveMul(u) * (u.guarding && now < u.guarding ? 0.35 : 1);
-      const [nx, ny] = applyInput(this.map, u.x, u.y, inp.mx, inp.my, spd, TICK_DT, u.r);
-      const moved = Math.hypot(nx - u.x, ny - u.y) > 0.1;
-      u.x = nx; u.y = ny;
-      if (moved) u.idleSince = now;
-    }
+    this.applyMove(u, inp, now);
     if (!isHardCC(u)) u.facing = aimAng;
     if (u.casting && now >= u.casting.until) {
       const c = u.casting;

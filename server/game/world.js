@@ -24,7 +24,15 @@ export class World {
     this.announcement = null;
     this.startedAt = Date.now();
     this.tickTimes = [];
-    setInterval(() => this.tick(), 1000 / TICK_RATE);
+    // 고정 시간 간격: 타이머가 늦게 깨어나도 실제 시간만큼 틱을 따라잡아 게임 속도·입력 처리 속도가 흔들리지 않게
+    const STEP = 1000 / TICK_RATE;
+    let last = performance.now(), acc = 0;
+    setInterval(() => {
+      const n = performance.now();
+      acc += n - last; last = n;
+      if (acc > STEP * 5) acc = STEP * 2; // 너무 밀리면(일시 정지 등) 버림
+      while (acc >= STEP) { this.tick(); acc -= STEP; }
+    }, STEP / 2);
     setInterval(() => this.saveAll(), 30_000).unref?.();
   }
   addRoom(r) { this.rooms.set(r.id, r); return r; }

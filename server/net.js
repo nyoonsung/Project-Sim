@@ -15,7 +15,7 @@ const isId = (v) => typeof v === "string" && /^[a-z0-9_]{1,24}$/.test(v);
 // 메시지 종류별 검증기
 const SCHEMA = {
   in: (m) => isInt(m.s, 0, 2 ** 31) && isNum(m.mx, -1, 1) && isNum(m.my, -1, 1) && isNum(m.ax, -1e5, 1e5) && isNum(m.ay, -1e5, 1e5),
-  cast: (m) => isInt(m.slot, 0, 7) && isNum(m.ax, -1e5, 1e5) && isNum(m.ay, -1e5, 1e5) && (m.tx === undefined || isInt(m.tx, 0, 2 ** 31)),
+  cast: (m) => isInt(m.slot, 0, 7) && (m.s === undefined || isInt(m.s, 0, 2 ** 31)) && isNum(m.ax, -1e5, 1e5) && isNum(m.ay, -1e5, 1e5) && (m.tx === undefined || isInt(m.tx, 0, 2 ** 31)),
   use: (m) => isId(m.item),
   chat: (m) => isStr(m.text, 120) && m.text.trim().length > 0,
   party: (m) => ["invite", "accept", "decline", "leave", "kick", "promote"].includes(m.op) && (m.name === undefined || isStr(m.name, 12)),
