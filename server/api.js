@@ -67,7 +67,7 @@ export async function handleApi(req) {
     return reply(404, { error: "없는 API예요." });
   } catch (e) {
     if (["type", "size", "json"].includes(e?.message)) return reply(400, { error: "잘못된 요청 형식이에요." });
-    console.error(e);
+    console.error("API 오류", path, e?.stack ?? e);
     return reply(500, { error: "서버 오류" });
   }
 }
@@ -82,8 +82,12 @@ export async function wsAuth(req) {
 
 /** 첫 실행 시 환경 변수로 GM 계정 */
 export async function ensureInitialGm() {
-  const name = CONFIG.initialGmUser, pass = CONFIG.initialGmPass;
-  if (!name || !pass || !USERNAME_RE.test(name)) return;
+  try { await createInitialGm(); } catch (e) { console.error("GM 계정 생성 실패", e); }
+}
+async function createInitialGm() {
+  const name = CONFIG.initialGmUser?.trim(), pass = CONFIG.initialGmPass;
+  if (!name || !pass) return;
+  if (!USERNAME_RE.test(name)) return console.warn(`INITIAL_GM_USER "${name}"는 쓸 수 없는 아이디예요 (2~12자, 한글·영문·숫자·_, 띄어쓰기 불가).`);
   const ex = Q.userByName.get(name);
   if (!ex) {
     if (validatePassword(pass)) return console.warn("INITIAL_GM_PASS가 약해서 GM 계정을 만들지 않았어요 (8자 이상, 영문+숫자).");

@@ -1,12 +1,12 @@
 // 계정·세션 보안 (Node·Cloudflare 공용, Web Crypto)
-//  - 비밀번호: PBKDF2-SHA256 21만 회 + 무작위 소금
+//  - 비밀번호: PBKDF2-SHA256 10만 회(Cloudflare 상한) + 무작위 소금
 //  - 세션: 무작위 토큰, DB에는 SHA-256 해시만 저장
 //  - 로그인·가입 시도 제한
 import { Q, secLog } from "./db.js";
 import { CONFIG } from "./config.js";
 
 const subtle = globalThis.crypto.subtle;
-const ITER = 210000;
+const ITER = 100000; // Cloudflare Workers의 PBKDF2 최대 반복 횟수
 export const USERNAME_RE = /^[A-Za-z0-9가-힣_]{2,12}$/;
 
 const b64 = (u8) => btoa(String.fromCharCode(...u8));
@@ -31,7 +31,7 @@ export async function hashPassword(pw) {
 export async function verifyPassword(pw, stored) {
   const [alg, it, s, k] = String(stored).split("$");
   if (alg !== "pbkdf2" || !s || !k) return false;
-  return same(await pbkdf2(pw, unb64(s), Number(it) || ITER), unb64(k));
+  return same(await pbkdf2(pw, unb64(s), Math.min(Number(it) || ITER, 210000)), unb64(k));
 }
 let DUMMY = null; // 없는 계정도 같은 시간이 걸리도록
 
