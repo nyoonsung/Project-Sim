@@ -1,4 +1,6 @@
-# Project-Sim — 2D 픽셀 던전 RPG
+# Abyss Run — 2D 픽셀 던전 RPG
+
+접속: https://abyss-run.nyoonsung0412.workers.dev (GM 패널: `/gm`)
 
 모험가로 시작해 1~100층 던전을 공략하는 웹 브라우저 멀티플레이 RPG.
 전투는 **서버가 전부 계산**하고 브라우저는 입력만 보내는 구조라 클라이언트 조작(속도핵·데미지 조작 등)이 통하지 않습니다.
@@ -57,7 +59,7 @@ GitHub Pages는 정적 파일만 올리는 곳이라 서버를 못 돌려요. �
 2. **Workers & Pages → Create → Import a repository** → GitHub 연결 → `Project-Sim` 선택 → Deploy
    (빌드·배포 명령은 `wrangler.toml`에 들어 있어요: 빌드 `node tools/build-cf.mjs`, 배포 `npx wrangler deploy`)
 3. 만들어진 Worker의 **Settings → Variables and Secrets** 에서 비밀(Secret)로 `INITIAL_GM_USER`, `INITIAL_GM_PASS` 추가 → 다시 배포
-4. `https://project-sim.<내 계정>.workers.dev` 에서 접속, `/gm` 이 GM 패널
+4. `https://abyss-run.<내 계정>.workers.dev` 에서 접속, `/gm` 이 GM 패널
 
 명령줄로 하려면: `npx wrangler login` → `npm run deploy` → `npx wrangler secret put INITIAL_GM_PASS`
 

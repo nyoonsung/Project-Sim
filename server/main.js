@@ -100,7 +100,7 @@ server.on("upgrade", async (req, socket, head) => {
 });
 
 setInterval(() => Q.purgeSessions.run(Date.now()), 3600e3).unref();
-server.listen(CONFIG.port, CONFIG.host, () => console.log(`Project-Sim 서버 실행 중: http://localhost:${CONFIG.port}`));
+server.listen(CONFIG.port, CONFIG.host, () => console.log(`Abyss Run 서버 실행 중: http://localhost:${CONFIG.port}`));
 const shutdown = () => { console.log("저장 후 종료합니다..."); world.saveAll(); process.exit(0); };
 process.on("SIGINT", shutdown);
 process.on("SIGTERM", shutdown);

@@ -67,8 +67,8 @@ class Bot {
 
 try {
   if (TARGET) log += "실행 중 GM 계정 생성";
-  for (let i = 0; i < 60 && !log.includes("실행 중"); i++) await sleep(100);
-  ok(log.includes("실행 중"), "서버 시작");
+  for (let i = 0; i < 60 && !log.includes("서버 실행 중"); i++) await sleep(100);
+  ok(log.includes("서버 실행 중"), "서버 시작");
   ok(log.includes("GM 계정 생성"), "환경 변수로 GM 계정 생성");
 
   // ── 가입·로그인 보안

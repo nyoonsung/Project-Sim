@@ -1,5 +1,5 @@
 {
-  "name": "project-sim",
+  "name": "abyss-run",
   "version": "0.1.0",
   "description": "2D 픽셀 던전 RPG — 서버 판정형 멀티플레이 웹 게임",
   "type": "module",

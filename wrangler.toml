@@ -1,5 +1,5 @@
 # Cloudflare Workers 배포 설정 (무료 플랜: SQLite Durable Object)
-name = "project-sim"
+name = "abyss-run"
 main = "worker/index.js"
 compatibility_date = "2026-11-01"
 compatibility_flags = ["nodejs_compat"]
