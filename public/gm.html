@@ -3,30 +3,34 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Abyss Run GM 패널</title>
+  <title>Abyss Run 관리자</title>
   <link rel="stylesheet" href="/css/game.css" />
   <link rel="stylesheet" href="/css/gm.css" />
 </head>
 <body class="gm">
   <header class="gm-top">
-    <b class="logo-s">ABYSS·RUN <span>GM</span></b>
+    <b class="logo-s">ABYSS·RUN <span>관리자</span></b>
     <nav>
       <button data-tab="overview" class="on">서버 현황</button>
       <button data-tab="players">플레이어</button>
       <button data-tab="notice">공지</button>
-      <button data-tab="audit">GM 기록</button>
+      <button data-tab="audit">관리 기록</button>
       <button data-tab="security">보안 로그</button>
     </nav>
     <span id="gm-who"></span>
+    <button id="gm-out" class="btn small">관리자 나가기</button>
     <a href="/" class="btn small">게임으로</a>
   </header>
   <main id="gm-main"></main>
   <div id="gm-login" class="hidden">
     <div class="login-card">
-      <h1 class="logo">GM 로그인</h1>
-      <p class="note">GM으로 지정된 구글 계정으로 로그인하세요.</p>
-      <a class="btn google" href="/api/auth/google"><span class="g">G</span> Google 계정으로 로그인</a>
-      <p id="gm-msg" class="msg"></p>
+      <h1 class="logo">관리자</h1>
+      <p class="note">서버 창에 나온 관리자 주소로 들어오면 자동으로 로그인돼요. 또는 관리자 키를 붙여 넣으세요. (서버 폴더의 data/admin-key.txt)</p>
+      <form id="gm-form">
+        <input id="gm-key" type="password" placeholder="관리자 키" autocomplete="off" required />
+        <button class="btn primary" type="submit">들어가기</button>
+        <p id="gm-msg" class="msg"></p>
+      </form>
     </div>
   </div>
   <div id="tooltip" class="hidden"></div>

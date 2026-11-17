@@ -92,7 +92,6 @@ export function chatLine(m) {
   const log = $("#chat-log");
   const line = h("div", { class: m.kind ?? "say" });
   if (m.from) {
-    if (m.gm) line.append(h("span", { class: "gmtag", text: "[GM] " }));
     line.append(h("b", { text: m.from + (m.kind === "party" ? " (파티)" : "") + ": " }), document.createTextNode(m.text));
   } else line.textContent = m.text;
   const atBottom = log.scrollTop + log.clientHeight >= log.scrollHeight - 10;

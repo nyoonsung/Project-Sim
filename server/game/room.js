@@ -102,7 +102,7 @@ export class Room {
   describe(u) {
     if (u.type === "p") {
       const ch = u.session.char;
-      return { id: u.id, k: "p", n: u.name, c: ch.cls, mh: u.maxHp, lv: ch.level, w: ch.equip.weapon?.type ?? null, o: ch.equip.offhand?.type ?? null, gm: u.session.role === "gm" ? 1 : 0, party: this.partyId ? 1 : 0, x: u.x | 0, y: u.y | 0 };
+      return { id: u.id, k: "p", n: u.name, c: ch.cls, mh: u.maxHp, lv: ch.level, w: ch.equip.weapon?.type ?? null, o: ch.equip.offhand?.type ?? null, party: this.partyId ? 1 : 0, x: u.x | 0, y: u.y | 0 };
     }
     if (u.type === "m") return { id: u.id, k: "m", n: u.name, m: u.mid, mh: u.maxHp, lv: u.level, el: u.elite ? 1 : 0, x: u.x | 0, y: u.y | 0 };
     if (u.type === "b") return { id: u.id, k: "b", n: u.name, b: u.bid, mh: u.maxHp, lv: u.level, x: u.x | 0, y: u.y | 0 };

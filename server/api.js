@@ -1,8 +1,8 @@
 // HTTP API (플랫폼 공용). Node/Cloudflare 진입점이 요청을 { method, path, url, headers(소문자 키), ip, readJson } 로 바꿔 넘긴다.
 import { CONFIG } from "./config.js";
 import { Q, secLog } from "./db.js";
-import { parseCookies, sessionCookie, sessionUser, destroySession, createSession, USERNAME_RE } from "./auth.js";
-import { startGoogle, googleCallback, finishSignup, googleEnabled } from "./oauth.js";
+import { login, register, parseCookies, sessionCookie, sessionUser, destroySession, hashPassword, validatePassword } from "./auth.js";
+import { isAdmin, adminLogin, adminLogout } from "./admin.js";
 import { handleGm } from "./gm.js";
 
 export const reply = (status, body, headers = {}) => ({ status, body, headers });
@@ -11,7 +11,9 @@ export function sameOrigin(req) {
   const origin = req.headers.origin;
   if (!origin) return false;
   if (CONFIG.allowedOrigins.includes(origin)) return true;
-  try { return new URL(origin).host === req.headers.host; } catch { return false; }
+  // 터널(인터넷 공유)을 거치면 Host가 바뀔 수 있어 X-Forwarded-Host도 확인
+  // (브라우저는 다른 사이트에서 이 헤더를 마음대로 붙일 수 없음)
+  try { const h = new URL(origin).host; return h === req.headers.host || h === req.headers["x-forwarded-host"]; } catch { return false; }
 }
 
 export async function currentUser(req) {
@@ -28,20 +30,17 @@ export async function handleApi(req) {
       return reply(403, { error: "허용되지 않은 출처예요." });
     }
     const cookie = (t) => ({ "Set-Cookie": sessionCookie(t, t ? CONFIG.sessionDays * 86400 : 0) });
-    // 구글 로그인
-    if (path === "/api/auth/config" && method === "GET") return reply(200, { google: googleEnabled(), dev: CONFIG.devLogin });
-    if (path === "/api/auth/google" && method === "GET") return await startGoogle(req);
-    if (path === "/api/auth/google/callback" && method === "GET") return await googleCallback(req);
-    if (path === "/api/auth/signup" && method === "POST") return await finishSignup(req);
-    // 테스트 전용 (DEV_LOGIN=1일 때만)
-    if (path === "/api/dev-login" && method === "POST" && CONFIG.devLogin) {
+    if (path === "/api/register" && method === "POST") {
       const b = await req.readJson();
-      const name = String(b.username ?? "");
-      if (!USERNAME_RE.test(name)) return reply(400, { error: "닉네임 형식" });
-      let u = Q.userByName.get(name);
-      if (!u) { Q.createGoogleUser.run(name, "dev:" + name, null, b.gm ? "gm" : "player", Date.now()); u = Q.userByName.get(name); }
-      if (u.banned_until > Date.now()) return reply(403, { error: "이용이 제한된 계정이에요." });
-      return reply(200, { ok: true, user: { name: u.username, role: u.role } }, cookie(await createSession(u.id, ip)));
+      const r = await register(b.username, b.password, ip);
+      if (r.error) return reply(r.status ?? 400, { error: r.error });
+      return reply(200, { ok: true, user: { name: r.user.username } }, cookie(r.token));
+    }
+    if (path === "/api/login" && method === "POST") {
+      const b = await req.readJson();
+      const r = await login(b.username, b.password, ip);
+      if (r.error) return reply(r.status ?? 401, { error: r.error });
+      return reply(200, { ok: true, user: { name: r.user.username } }, cookie(r.token));
     }
     if (path === "/api/logout" && method === "POST") {
       await destroySession(parseCookies(req.headers.cookie).sid);
@@ -50,10 +49,27 @@ export async function handleApi(req) {
     if (path === "/api/me" && method === "GET") {
       const u = await currentUser(req);
       if (!u) return reply(401, { error: "로그인이 필요해요." });
-      return reply(200, { name: u.username, role: u.role });
+      return reply(200, { name: u.username });
     }
+    if (path === "/api/password" && method === "POST") {
+      const u = await currentUser(req);
+      if (!u) return reply(401, { error: "로그인이 필요해요." });
+      const b = await req.readJson();
+      const r = await login(u.username, b.current, ip);
+      if (r.error) return reply(400, { error: "현재 비밀번호가 맞지 않아요." });
+      await destroySession(r.token);
+      const err = validatePassword(b.next);
+      if (err) return reply(400, { error: err });
+      Q.setPass.run(await hashPassword(b.next), u.id);
+      Q.deleteUserSessions.run(u.id);
+      return reply(200, { ok: true }, cookie(""));
+    }
+    // 관리자 (서버 주인)
+    if (path === "/api/admin/login" && method === "POST") { const b = await req.readJson(); return adminLogin(req, b.key); }
+    if (path === "/api/admin/logout" && method === "POST") return adminLogout(req);
+    if (path === "/api/admin/me" && method === "GET") return reply(isAdmin(req) ? 200 : 401, { admin: isAdmin(req) });
     if (path === "/api/ranking" && method === "GET") return reply(200, { list: Q.ranking.all() });
-    if (path.startsWith("/api/gm/")) return await handleGm(req, null, path, { readJson: () => req.readJson(), send: (_res, s, b, h) => reply(s, b, h), currentUser, ip, url: req.url });
+    if (path.startsWith("/api/gm/")) return await handleGm(req, null, path, { readJson: () => req.readJson(), send: (_res, s, b, h) => reply(s, b, h), isAdmin, ip, url: req.url });
     return reply(404, { error: "없는 API예요." });
   } catch (e) {
     if (["type", "size", "json"].includes(e?.message)) return reply(400, { error: "잘못된 요청 형식이에요." });
@@ -70,11 +86,3 @@ export async function wsAuth(req) {
   return { user: u };
 }
 
-/** INITIAL_GM_EMAIL 과 같은 이메일로 이미 가입한 계정이 있으면 GM으로 */
-export async function ensureInitialGm() {
-  if (!CONFIG.initialGmEmail) return;
-  try {
-    const u = Q.userByEmail.get(CONFIG.initialGmEmail);
-    if (u && u.role !== "gm") { Q.setRole.run("gm", u.id); console.log("GM 지정:", u.username); }
-  } catch (e) { console.error("GM 지정 실패", e); }
-}

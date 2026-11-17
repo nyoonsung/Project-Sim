@@ -1,4 +1,4 @@
-// GM 패널: 서버 현황, 플레이어 검색·상세·수정·지급·킥·밴·채금·이동, 공지, 감사 기록, 보안 로그
+// 관리자 페이지: 서버 현황, 플레이어 검색·상세·수정·지급·킥·밴·채금·이동, 공지, 감사 기록, 보안 로그
 import { h, $, tipOn } from "./ui/dom.js";
 import { itemTip } from "./ui/windows.js";
 import { itemIcon } from "./ui/icons.js";
@@ -44,7 +44,7 @@ const TABS = {
         ...list.list.map((p) => h("tr", { class: "click", onclick: () => openPlayer(p.id) },
           h("td", {}, h("span", { class: "on-dot" + (p.online ? " y" : "") })), h("td", { text: p.username }), h("td", { text: CLASS_INFO[p.cls]?.name ?? "-" }), h("td", { text: p.level ?? "-" }), h("td", { text: p.best_floor ?? "-" }),
           h("td", { text: p.online ? (p.room === "town" ? "마을" : `${p.floor}층`) : "-" }), h("td", { text: fmtT(p.created_at) }), h("td", { text: fmtT(p.last_login) }),
-          h("td", {}, p.role === "gm" ? h("span", { class: "badge gm", text: "GM" }) : null, p.banned_until > Date.now() ? h("span", { class: "badge ban", text: "차단" }) : null, p.muted_until > Date.now() ? h("span", { class: "badge mute", text: "채금" }) : null)))),
+          h("td", {}, p.banned_until > Date.now() ? h("span", { class: "badge ban", text: "차단" }) : null, p.muted_until > Date.now() ? h("span", { class: "badge mute", text: "채금" }) : null)))),
     ];
   },
   async notice() {
@@ -61,12 +61,12 @@ const TABS = {
   },
   async audit() {
     const { list } = await api("/api/gm/audit");
-    return [h("table", { class: "tbl" }, h("tr", {}, ...["시간", "GM", "작업", "대상", "내용"].map((t) => h("th", { text: t }))),
+    return [h("table", { class: "tbl" }, h("tr", {}, ...["시간", "누가", "작업", "대상", "내용"].map((t) => h("th", { text: t }))),
       ...list.map((a) => h("tr", {}, h("td", { text: fmtT(a.at) }), h("td", { text: a.gm_name }), h("td", { text: a.action }), h("td", { text: a.target_name ?? "-" }), h("td", { class: "mono", text: a.detail ?? "" }))))];
   },
   async security() {
     const { list } = await api("/api/gm/security");
-    const KIND = { oauth_bad_state: "구글 로그인 상태 불일치", oauth_token_fail: "구글 토큰 교환 실패", oauth_bad_token: "잘못된 구글 토큰", login_fail: "로그인 실패", login_banned: "차단 계정 로그인", register: "가입", csrf_block: "다른 출처 요청 차단", ws_reject: "웹소켓 거부", ws_flood: "메시지 폭주", ws_bad_frame: "비정상 프레임", ws_bad_json: "잘못된 JSON", ws_bad_msg: "잘못된 메시지", ws_bad_schema: "형식 위반 메시지", ws_kick_abuse: "악용으로 연결 차단", gm_denied: "GM 권한 없는 접근", password_change: "비밀번호 변경" };
+    const KIND = { admin_login: "관리자 로그인", admin_key_fail: "관리자 키 틀림", login_fail: "로그인 실패", login_banned: "차단 계정 로그인", register: "가입", csrf_block: "다른 출처 요청 차단", ws_reject: "웹소켓 거부", ws_flood: "메시지 폭주", ws_bad_frame: "비정상 프레임", ws_bad_json: "잘못된 JSON", ws_bad_msg: "잘못된 메시지", ws_bad_schema: "형식 위반 메시지", ws_kick_abuse: "악용으로 연결 차단", gm_denied: "관리자 아닌 접근", password_change: "비밀번호 변경" };
     return [h("table", { class: "tbl" }, h("tr", {}, ...["시간", "종류", "계정", "IP", "내용"].map((t) => h("th", { text: t }))),
       ...list.map((a) => h("tr", {}, h("td", { text: fmtT(a.at) }), h("td", { text: KIND[a.kind] ?? a.kind }), h("td", { text: a.username ?? "-" }), h("td", { class: "mono", text: a.ip ?? "" }), h("td", { class: "mono", text: a.detail ?? "" }))))];
   },
@@ -80,7 +80,7 @@ async function openPlayer(id) {
   const d = await api(`/api/gm/player/${id}`);
   const u = d.user, c = d.char;
   const msg = h("div");
-  const act = (path, body, after) => async () => { try { const r = await api(`/api/gm/player/${id}/${path}`, body()); flash(msg, true, "완료했어요." + (r.item ? ` (${r.item.name})` : "")); after?.(); setTimeout(() => openPlayer(id), 400); } catch (e) { flash(msg, false, e.message); } };
+  const act = (path, body, after) => async () => { try { const r = await api(`/api/gm/player/${id}/${path}`, body()); flash(msg, true, r.tempPassword ? `임시 비밀번호: ${r.tempPassword}  (플레이어에게 알려 주세요)` : "완료했어요." + (r.item ? ` (${r.item.name})` : "")); if (r.tempPassword) return; after?.(); setTimeout(() => openPlayer(id), 400); } catch (e) { flash(msg, false, e.message); } };
   const field = (lbl, el) => [h("span", { text: lbl }), el];
   const lv = h("input", { type: "number", min: 1, max: 150, value: c?.level ?? 1 });
   const gold = h("input", { type: "number", min: 0, value: c?.gold ?? 0 });
@@ -104,7 +104,7 @@ async function openPlayer(id) {
   };
   main.replaceChildren(
     h("div", { class: "toolbar" }, h("button", { class: "btn small", onclick: () => { tab = "players"; render(); } }, "← 목록"),
-      h("b", { text: u.username }), u.role === "gm" ? h("span", { class: "badge gm", text: "GM" }) : null, h("span", { class: "on-dot" + (d.online ? " y" : "") }),
+      h("b", { text: u.username }), h("span", { class: "on-dot" + (d.online ? " y" : "") }),
       d.online ? h("span", { text: `${d.room.kind === "town" ? "마을" : `${d.room.floor}층`} · HP ${d.room.hp}/${d.room.mh}` }) : h("span", { class: "note", text: "오프라인" }),
       u.banned_until > Date.now() ? h("span", { class: "badge ban", text: `차단 ~${fmtT(u.banned_until)} (${u.ban_reason ?? ""})` }) : null,
       u.muted_until > Date.now() ? h("span", { class: "badge mute", text: `채금 ~${fmtT(u.muted_until)}` }) : null),
@@ -122,10 +122,11 @@ async function openPlayer(id) {
           h("div", { class: "form" },
             ...field("차단(시간)", h("div", { class: "flexrow" }, banH, banR, h("button", { class: "btn small danger", onclick: act("ban", () => ({ hours: +banH.value, reason: banR.value })) }, "차단"), h("button", { class: "btn small", onclick: act("ban", () => ({ hours: 0 })) }, "해제"))),
             ...field("채팅 금지(분)", h("div", { class: "flexrow" }, muteM, h("button", { class: "btn small danger", onclick: act("mute", () => ({ minutes: +muteM.value })) }, "채금"), h("button", { class: "btn small", onclick: act("mute", () => ({ minutes: 0 })) }, "해제"))),
-            ...field("연결 끊기", h("button", { class: "btn small danger", onclick: act("kick", () => ({ reason: "GM에 의해 연결이 끊겼어요." })) }, "킥")),
+            ...field("연결 끊기", h("button", { class: "btn small danger", onclick: act("kick", () => ({ reason: "관리자에 의해 연결이 끊겼어요." })) }, "킥")),
+            ...field("비밀번호", h("button", { class: "btn small", onclick: act("reset-password", () => ({})) }, "임시 비밀번호 발급")),
             ...field("마을로", h("button", { class: "btn small", onclick: act("town", () => ({})) }, "마을로 이동")),
             ...field("층 이동", h("div", { class: "flexrow" }, warpF, h("button", { class: "btn small", onclick: act("warp", () => ({ floor: +warpF.value })) }, "이동"))),
-            ...field("권한", h("div", { class: "flexrow" }, h("button", { class: "btn small", onclick: act("role", () => ({ role: "gm" })) }, "GM 지정"), h("button", { class: "btn small", onclick: act("role", () => ({ role: "player" })) }, "일반으로"))))),
+          )),
       ),
       h("div", {},
         c ? h("div", { class: "box" }, h("h3", { text: `${c.name} · Lv.${c.level} ${CLASS_INFO[c.cls]?.name}` }),
@@ -134,7 +135,7 @@ async function openPlayer(id) {
           h("div", { class: "note", text: "스킬: " + c.skills.filter(Boolean).join(", ") }),
           h("h4", { text: "장착" }), h("div", { class: "items" }, ...Object.values(c.equip).filter(Boolean).map((it) => itemCell(it, "장착"))),
           h("h4", { text: `가방 ${c.inv.length}/40` }), h("div", { class: "items" }, ...c.inv.map((it) => itemCell(it, "가방")))) : h("div", { class: "box", text: "캐릭터 없음" }),
-        h("div", { class: "box" }, h("h3", { text: "계정" }), h("div", { class: "mono", text: `구글 ${u.email ?? "-"} · 가입 ${fmtT(u.created_at)} · 최근 접속 ${fmtT(u.last_login)} · IP ${u.last_ip ?? "-"}` })),
+        h("div", { class: "box" }, h("h3", { text: "계정" }), h("div", { class: "mono", text: `가입 ${fmtT(u.created_at)} · 최근 접속 ${fmtT(u.last_login)} · IP ${u.last_ip ?? "-"}` })),
         h("div", { class: "box" }, h("h3", { text: "아이템·강화 기록" }), h("table", { class: "tbl" }, ...d.items.map((x) => h("tr", {}, h("td", { text: fmtT(x.at) }), h("td", { text: x.kind }), h("td", { class: "mono", text: x.detail }))))),
         h("div", { class: "box" }, h("h3", { text: "보안 기록" }), h("table", { class: "tbl" }, ...d.security.map((x) => h("tr", {}, h("td", { text: fmtT(x.at) }), h("td", { text: x.kind }), h("td", { class: "mono", text: x.detail ?? "" }))))),
       )));
@@ -143,19 +144,33 @@ async function openPlayer(id) {
 async function render() {
   clearInterval(timer);
   for (const b of document.querySelectorAll("nav button")) b.classList.toggle("on", b.dataset.tab === tab);
-  try { main.replaceChildren(...(await TABS[tab]())); } catch (e) { main.replaceChildren(h("div", { class: "err-msg", text: e.message })); }
-  if (tab === "overview") timer = setInterval(async () => { if (tab === "overview") main.replaceChildren(...(await TABS.overview())); }, 3000);
+  try { main.replaceChildren(...(await TABS[tab]()).filter((x) => x != null)); } catch (e) { main.replaceChildren(h("div", { class: "err-msg", text: e.message })); }
+  if (tab === "overview") timer = setInterval(async () => { if (tab === "overview") main.replaceChildren(...(await TABS.overview()).filter((x) => x != null)); }, 3000);
 }
 
 async function boot() {
-  const me = await fetch("/api/me", { credentials: "same-origin" }).then((r) => (r.ok ? r.json() : null));
-  if (!me || me.role !== "gm") {
+  const tryKey = async (key) => {
+    const r = await fetch("/api/admin/login", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ key }), credentials: "same-origin" });
+    const j = await r.json().catch(() => ({}));
+    return r.ok ? null : j.error ?? "실패했어요.";
+  };
+  // 서버 창의 주소(#key=...)로 들어오면 자동 로그인, 주소창에서 키는 바로 지움
+  const m = location.hash.match(/key=([A-Za-z0-9_-]+)/);
+  if (m) { history.replaceState(null, "", "/gm"); await tryKey(m[1]); }
+  const ok = await fetch("/api/admin/me", { credentials: "same-origin" }).then((r) => r.ok).catch(() => false);
+  if (!ok) {
     $("#gm-login").classList.remove("hidden");
-    if (me) $("#gm-msg").textContent = `${me.name} 계정은 GM이 아니에요. GM 구글 계정으로 다시 로그인하세요.`;
+    $("#gm-form").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const err = await tryKey($("#gm-key").value);
+      if (err) $("#gm-msg").textContent = err; else location.reload();
+    });
     return;
   }
-  $("#gm-who").textContent = `${me.name} (GM)`;
+  $("#gm-who").textContent = "서버 주인";
+  $("#gm-out").addEventListener("click", async () => { await fetch("/api/admin/logout", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" }); location.reload(); });
   for (const b of document.querySelectorAll("nav button")) b.addEventListener("click", () => { tab = b.dataset.tab; render(); });
   render();
 }
+window.addEventListener("hashchange", () => { if (/key=/.test(location.hash)) location.reload(); });
 boot();

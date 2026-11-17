@@ -1,13 +1,15 @@
-// Node 진입점: 정적 파일 + API + 웹소켓 (Cloudflare 진입점은 worker/index.js)
+// 서버 진입점: 정적 파일 + API + 웹소켓. 내 컴퓨터에서 켜서 친구들이 접속하는 자체 서버.
 import http from "node:http";
-import { createReadStream, statSync, mkdirSync } from "node:fs";
+import { createReadStream, statSync, mkdirSync, readFileSync, writeFileSync, existsSync } from "node:fs";
+import { networkInterfaces } from "node:os";
 import { join, normalize, extname, sep, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { DatabaseSync } from "node:sqlite";
 import { WebSocketServer } from "ws";
 import { CONFIG } from "./config.js";
 import { initDb, Q } from "./db.js";
-import { handleApi, wsAuth, ensureInitialGm } from "./api.js";
+import { handleApi, wsAuth } from "./api.js";
+import { setAdminKey, newAdminKey } from "./admin.js";
 import { attachSocket, initWorld } from "./net.js";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -17,7 +19,14 @@ mkdirSync(dirname(dbPath), { recursive: true });
 const sqlite = new DatabaseSync(dbPath);
 sqlite.exec("PRAGMA journal_mode = WAL");
 initDb({ exec: (s) => sqlite.exec(s), prepare: (s) => sqlite.prepare(s) });
-await ensureInitialGm();
+// 관리자 키: 환경 변수 ADMIN_KEY 또는 data/admin-key.txt (없으면 새로 만듦)
+const keyFile = join(dirname(dbPath), "admin-key.txt");
+let adminKey = CONFIG.adminKey;
+if (!adminKey) {
+  if (existsSync(keyFile)) adminKey = readFileSync(keyFile, "utf8").trim();
+  if (!adminKey) { adminKey = newAdminKey(); writeFileSync(keyFile, adminKey + "\n"); }
+}
+setAdminKey(adminKey);
 const world = initWorld();
 
 const TYPES = {
@@ -31,9 +40,15 @@ export const SECURITY_HEADERS = (host) => ({
   ...(CONFIG.secureCookies ? { "Strict-Transport-Security": "max-age=15552000" } : {}),
 });
 
+const isLoopback = (a) => a === "127.0.0.1" || a === "::1" || a === "::ffff:127.0.0.1";
 const clientIp = (req) => {
-  if (CONFIG.trustProxy) { const f = String(req.headers["x-forwarded-for"] ?? "").split(",")[0].trim(); if (f) return f.slice(0, 64); }
-  return (req.socket.remoteAddress ?? "?").slice(0, 64);
+  const remote = req.socket.remoteAddress ?? "?";
+  // 같은 컴퓨터에서 돌아가는 터널(인터넷 공유)을 거쳐 온 요청은 원래 IP를 헤더에서 읽음
+  if (CONFIG.trustProxy || isLoopback(remote)) {
+    const f = String(req.headers["cf-connecting-ip"] ?? req.headers["x-forwarded-for"] ?? "").split(",")[0].trim();
+    if (f) return f.slice(0, 64);
+  }
+  return remote.slice(0, 64);
 };
 const readJson = (req, limit = 8192) => new Promise((resolve, reject) => {
   if (!String(req.headers["content-type"] ?? "").startsWith("application/json")) return reject(new Error("type"));
@@ -101,7 +116,16 @@ server.on("upgrade", async (req, socket, head) => {
 });
 
 setInterval(() => Q.purgeSessions.run(Date.now()), 3600e3).unref();
-server.listen(CONFIG.port, CONFIG.host, () => console.log(`Abyss Run 서버 실행 중: http://localhost:${CONFIG.port}`));
+server.listen(CONFIG.port, CONFIG.host, () => {
+  const lan = Object.values(networkInterfaces()).flat().filter((n) => n && n.family === "IPv4" && !n.internal).map((n) => n.address);
+  const line = "─".repeat(56);
+  console.log(`\n${line}\n  Abyss Run 서버 실행 중\n${line}`);
+  console.log(`  이 컴퓨터에서 접속      http://localhost:${CONFIG.port}`);
+  for (const ip of lan) console.log(`  같은 와이파이 친구 접속  http://${ip}:${CONFIG.port}`);
+  console.log(`\n  관리자 페이지 (나만 보기, 다른 사람에게 보여 주지 마세요)`);
+  console.log(`  http://localhost:${CONFIG.port}/gm#key=${adminKey}`);
+  console.log(`\n  끄려면 이 창을 닫거나 Ctrl+C\n${line}\n`);
+});
 const shutdown = () => { console.log("저장 후 종료합니다..."); world.saveAll(); process.exit(0); };
 process.on("SIGINT", shutdown);
 process.on("SIGTERM", shutdown);

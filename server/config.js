@@ -1,4 +1,4 @@
-// 설정. 비밀값은 코드에 넣지 말고 환경 변수로. (Node는 process.env, Cloudflare는 env 바인딩을 applyEnv로)
+// 설정. 바꿀 값은 환경 변수로 (예: PORT=4000)
 export const CONFIG = {};
 
 export function applyEnv(env = {}) {
@@ -8,14 +8,9 @@ export function applyEnv(env = {}) {
     dbPath: env.DB_PATH ?? null,
     secureCookies: env.SECURE_COOKIES === "1" || env.NODE_ENV === "production",
     allowedOrigins: String(env.ALLOWED_ORIGINS ?? "").split(",").map((s) => s.trim()).filter(Boolean),
-    trustProxy: env.TRUST_PROXY === "1" || !!env.RENDER,
+    trustProxy: env.TRUST_PROXY === "1",
     sessionDays: 14,
-    googleClientId: env.GOOGLE_CLIENT_ID ?? null,
-    googleClientSecret: env.GOOGLE_CLIENT_SECRET ?? null,
-    initialGmEmail: env.INITIAL_GM_EMAIL ? String(env.INITIAL_GM_EMAIL).trim().toLowerCase() : null,
-    publicUrl: env.PUBLIC_URL ?? null,
-    // 테스트 전용 로그인 (구글 없이). 실서버에서는 절대 켜지 말 것
-    devLogin: env.DEV_LOGIN === "1",
+    adminKey: env.ADMIN_KEY ?? null,
     maxConnectionsPerIp: Number(env.MAX_CONN_PER_IP ?? 6),
     registrationOpen: env.REGISTRATION_OPEN !== "0",
   });

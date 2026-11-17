@@ -7,7 +7,7 @@ import { TileMap } from "./render/tiles.js";
 
 export const G = {
   net: null, ui: null, renderer: null,
-  name: "", role: "player", char: null, me: null, meAt: 0,
+  name: "", char: null, me: null, meAt: 0,
   you: 0, map: null, room: null, kind: "town", floor: 0, zone: null, zoneName: "", objects: [], exitOpen: false, arena: null,
   ents: new Map(), projectiles: new Map(), tels: new Map(), zones: new Map(), loot: new Map(), beams: [],
   floaters: [], party: [], boss: null, shake: 0, hurtFlash: 0,
@@ -24,7 +24,7 @@ export function send(o) { G.net.send(o); }
 export function onMessage(m) {
   switch (m.t) {
     case "hello":
-      G.name = m.name; G.role = m.role; G.char = m.char;
+      G.name = m.name; G.char = m.char;
       G.ui.onChar(); if (m.announce) G.ui.announce(m.announce.text);
       break;
     case "map": onMap(m); break;

@@ -6,13 +6,13 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import WebSocket from "ws";
 
-// TARGET=http://localhost:8787 처럼 주면 이미 떠 있는 서버(예: wrangler dev)를 시험
+// TARGET=http://localhost:3000 처럼 주면 이미 떠 있는 서버를 시험 (ADMIN_KEY 환경 변수도 같이)
 const TARGET = process.env.TARGET;
 const PORT = TARGET ? Number(new URL(TARGET).port) : 3400 + Math.floor(Math.random() * 500);
 const BASE = TARGET ?? `http://localhost:${PORT}`;
 const dir = mkdtempSync(join(tmpdir(), "psim-"));
 const srv = TARGET ? { kill() {}, stdout: { on() {} }, stderr: { on() {} } } : spawn(process.execPath, ["--disable-warning=ExperimentalWarning", "server/main.js"], {
-  env: { ...process.env, PORT: String(PORT), DB_PATH: join(dir, "t.db"), DEV_LOGIN: "1", GOOGLE_CLIENT_ID: "test-client.apps.googleusercontent.com", GOOGLE_CLIENT_SECRET: "test-secret" },
+  env: { ...process.env, PORT: String(PORT), DB_PATH: join(dir, "t.db"), ADMIN_KEY: "test-admin-key-123" },
   stdio: ["ignore", "pipe", "pipe"],
 });
 let log = "";
@@ -71,25 +71,23 @@ try {
   ok(log.includes("서버 실행 중"), "서버 시작");
 
   // ── 가입·로그인 보안
-  let r = await api("/api/dev-login", { username: "a" });
-  ok(r.status === 400, "잘못된 닉네임 거부");
-  r = await api("/api/dev-login", { username: "봇하나" }, null, "http://evil.example");
-  ok(r.status === 403, "다른 출처의 로그인 요청 차단(CSRF)");
-  r = await api("/api/dev-login", { username: "봇하나" });
-  ok(r.status === 200 && r.cookie.startsWith("sid="), "로그인 + 세션 쿠키");
+  let r = await api("/api/register", { username: "a", password: "x" });
+  ok(r.status === 400, "짧은 아이디/약한 비번 거부");
+  r = await api("/api/register", { username: "봇하나", password: "password1" }, null, "http://evil.example");
+  ok(r.status === 403, "다른 출처의 가입 요청 차단(CSRF)");
+  r = await api("/api/register", { username: "봇하나", password: "password1" });
+  ok(r.status === 200 && r.cookie.startsWith("sid="), "가입 + 세션 쿠키");
   const c1 = r.cookie;
-  r = await api("/api/dev-login", { username: "봇둘" });
+  r = await api("/api/register", { username: "봇둘", password: "password2" });
   const c2 = r.cookie;
-  // 구글 로그인 흐름: 시작하면 구글로 보내고 state 쿠키를 심는다, 위조된 콜백은 거부
-  const g = await fetch(BASE + "/api/auth/google", { redirect: "manual" });
-  const loc = g.headers.get("location") ?? "";
-  ok(g.status === 302 && loc.startsWith("https://accounts.google.com/") && loc.includes("code_challenge=") && /oauth_state=/.test(g.headers.get("set-cookie") ?? ""), "구글 로그인 시작 (PKCE·state)");
-  const cb = await fetch(BASE + "/api/auth/google/callback?state=forged&code=x", { redirect: "manual" });
-  ok(cb.status === 302 && (cb.headers.get("location") ?? "").includes("error=state"), "위조된 구글 콜백 거부");
-  r = await api("/api/auth/signup", { name: "가짜가입" });
-  ok(r.status === 400, "구글 인증 없이 가입 불가");
+  r = await api("/api/login", { username: "봇하나", password: "wrongpass1" });
+  ok(r.status === 401, "틀린 비밀번호 거부");
+  r = await api("/api/login", { username: "봇하나", password: "password1" });
+  ok(r.status === 200, "올바른 비밀번호 로그인");
+  r = await api("/api/admin/login", { key: "wrong-key" });
+  ok(r.status === 401, "틀린 관리자 키 거부");
   r = await api("/api/gm/overview", null, c1);
-  ok(r.status === 403, "일반 유저 GM API 차단");
+  ok(r.status === 403, "일반 유저는 관리 API 못 씀");
 
   // ── 웹소켓
   let rejected = false;
@@ -165,12 +163,19 @@ try {
     const n = path[Math.min(2, path.length - 1)]; return [(n % M.w) * 32 + 16, ((n / M.w) | 0) * 32 + 16];
   };
   let killed = 0, tick = 0;
+  const skip = new Set(); let tid = null, best = 1e9, since = Date.now();
   const end = Date.now() + 70000;
   while (Date.now() < end && killed < 3) {
     for (const e of b1.events) if (e.e === "die" || e.e === "del") monsters.delete(e.id);
     const me = b1.pos();
     let target = null, td = 1e9;
-    for (const [id, m] of monsters) { const s = b1.ents.get(id); const x = s ? s[1] : m.x, y = s ? s[2] : m.y; const d = Math.hypot(x - me[0], y - me[1]); if (d < td) { td = d; target = [x, y]; } }
+    let pick = null;
+    for (const [id, m] of monsters) { if (skip.has(id)) continue; const s = b1.ents.get(id); const x = s ? s[1] : m.x, y = s ? s[2] : m.y; const d = Math.hypot(x - me[0], y - me[1]); if (d < td) { td = d; target = [x, y]; pick = id; } }
+    // 3초 동안 가까워지지 못하면(벽에 막힘) 다른 몬스터로
+    if (pick !== tid) { tid = pick; best = td; since = Date.now(); }
+    else if (td < best - 8) { best = td; since = Date.now(); }
+    else if (td > 38 && Date.now() - since > 3000) { skip.add(pick); tid = null; continue; }
+    if (skip.size >= monsters.size) skip.clear();
     if (target) {
       if (td > 38) { const [wx, wy] = nextStep(me, target); const dx = wx - me[0], dy = wy - me[1], d = Math.hypot(dx, dy) || 1; b1.move(dx / d, dy / d, target[0], target[1]); }
       else { b1.move(0, 0, target[0], target[1]); if (++tick % 4 === 0) b1.send({ t: "cast", slot: tick % 8 === 0 ? 1 : 0, ax: target[0], ay: target[1] }); }
@@ -185,22 +190,33 @@ try {
   ok(b1.me && b1.me.xp > 0 || b1.me.lv > 1, `경험치 획득 (lv ${b1.me?.lv}, xp ${b1.me?.xp})`);
 
   // ── GM API
-  r = await api("/api/dev-login", { username: "gmtest", gm: true });
+  r = await api("/api/admin/login", { key: process.env.ADMIN_KEY ?? "test-admin-key-123" });
   const gmc = r.cookie;
+  ok(r.status === 200 && gmc.startsWith("adm="), "관리자 키로 관리자 로그인");
   r = await api("/api/gm/overview", null, gmc);
   ok(r.status === 200 && r.j.online === 2, `GM 개요 (접속 ${r.j.online})`);
   r = await api("/api/gm/players?q=봇", null, gmc);
   const target = r.j.list.find((x) => x.username === "봇하나");
-  ok(!!target && target.online, "GM 플레이어 검색");
+  ok(!!target && target.online, "관리자 플레이어 검색");
   r = await api(`/api/gm/player/${target.id}/edit`, { level: 12, gold: 50000 }, gmc);
-  ok(r.status === 200, "GM 레벨·골드 수정");
+  ok(r.status === 200, "관리자 레벨·골드 수정");
   ok(await b1.wait(() => b1.char?.level === 12 && b1.char?.gold === 50000), "수정이 접속 중 캐릭터에 즉시 반영");
   r = await api(`/api/gm/player/${target.id}/give`, { rarity: "신화", ilvl: 10 }, gmc);
-  ok(r.status === 200 && r.j.item.mythic, `GM 신화 아이템 지급 (${r.j.item?.name})`);
+  ok(r.status === 200 && r.j.item.mythic, `관리자 신화 아이템 지급 (${r.j.item?.name})`);
   r = await api(`/api/gm/player/${target.id}/edit`, { level: 99999 }, gmc);
-  ok(r.status === 400, "GM 입력값도 범위 검증");
+  ok(r.status === 400, "관리자 입력값도 범위 검증");
   r = await api(`/api/gm/audit`, null, gmc);
-  ok(r.j.list.length >= 2, "GM 감사 기록");
+  ok(r.j.list.length >= 2, "관리자 감사 기록");
+  await api("/api/register", { username: "봇셋", password: "password3" });
+  r = await api(`/api/gm/players?q=${encodeURIComponent("봇셋")}`, null, gmc);
+  const t3 = r.j.list[0];
+  r = await api(`/api/gm/player/${t3.id}/reset-password`, {}, gmc);
+  const temp = r.j.tempPassword;
+  ok(r.status === 200 && /^[a-z]{6}[0-9]{4}$/.test(temp), "관리자 임시 비밀번호 발급");
+  r = await api("/api/login", { username: "봇셋", password: "password3" });
+  ok(r.status === 401, "옛 비밀번호는 더 이상 안 됨");
+  r = await api("/api/login", { username: "봇셋", password: temp });
+  ok(r.status === 200, "임시 비밀번호로 로그인");
 
   // ── 마을 귀환·강화
   b1.send({ t: "town" });
@@ -213,7 +229,8 @@ try {
   let res = { success: 0, fail: 0, destroy: 0 };
   for (let i = 0; i < 10; i++) { b1.send({ t: "enhance", uid: 1 }); await sleep(120); }
   for (const m of b1.msgs) if (m.t === "enh") res[m.result]++;
-  ok(res.success + res.fail + res.destroy === 10, `강화 10회: 성공 ${res.success} / 실패 ${res.fail} / 파괴 ${res.destroy}`);
+  // 파괴(1%)되면 그 뒤 요청은 없는 아이템이라 응답이 없음 — 정상
+  ok(res.destroy ? res.success + res.fail + res.destroy >= 1 && res.destroy === 1 : res.success + res.fail === 10, `강화 10회: 성공 ${res.success} / 실패 ${res.fail} / 파괴 ${res.destroy}`);
 
   // ── 메시지 폭주 → 연결 차단
   const b3 = await new Bot(c2).connect();

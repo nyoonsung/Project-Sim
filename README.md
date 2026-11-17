@@ -1,8 +1,7 @@
 # Abyss Run — 2D 픽셀 던전 RPG
 
-접속: https://abyss-run.nyoonsung0412.workers.dev (GM 패널: `/gm`)
-
 모험가로 시작해 1~100층 던전을 공략하는 웹 브라우저 멀티플레이 RPG.
+**내 컴퓨터를 서버로** 켜고 친구들이 접속하는 방식입니다.
 전투는 **서버가 전부 계산**하고 브라우저는 입력만 보내는 구조라 클라이언트 조작(속도핵·데미지 조작 등)이 통하지 않습니다.
 
 - 7직업(검사·권투사·궁수·도적·마법사·성직자·대장장이) + 모험가, 기획서 스킬 전부(공용 4 + 직업 스킬 101개)
@@ -10,28 +9,39 @@
 - 솔로 / 최대 4인 실시간 파티, 개인 드롭
 - 장비 5부위, 등급 일반·희귀·영웅·전설·신화(0.5%), **쿨타임 감소 효과 없음**
 - 강화 +99까지: +n→+n+1 성공 (99−n)%, 파괴 항상 1%
-- GM 패널(`/gm`): 서버 현황, 플레이어 검색·수정·아이템 지급/회수·킥·차단·채금·층 이동·비밀번호 재설정·권한, 공지, GM 감사 기록, 보안 로그
+- 관리자 페이지(`/gm`, 서버 주인만): 서버 현황, 플레이어 검색·수정·아이템 지급/회수·킥·차단·채금·층 이동·임시 비밀번호 발급, 공지, 관리 기록, 보안 로그
 - 그래픽: [pixelfx](https://github.com/patch-gg/pixelfx)(MIT) 이펙트와 픽셀 캐릭터 리그, [Galmuri](https://github.com/quiple/galmuri)(OFL) 픽셀 폰트
 
-## 내 컴퓨터에서 실행
+## 서버 켜기 (Windows)
 
-Node.js **22.13 이상**이 필요합니다 (내장 SQLite 사용, 별도 DB 설치 없음).
+1. [nodejs.org](https://nodejs.org)에서 **LTS** 버전 설치 (22.13 이상)
+2. 이 저장소를 내려받아 압축 풀기 (GitHub → Code → Download ZIP)
+3. **`서버켜기.bat`** 더블클릭 → 방화벽 창이 뜨면 "허용"
+4. 서버 창에 주소가 나옵니다
+   - `http://localhost:3000` — 내 컴퓨터에서 접속
+   - `http://192.168.x.x:3000` — **같은 와이파이**의 친구 접속
+   - `http://localhost:3000/gm#key=...` — **관리자 페이지** (나만 보기)
+
+서버 창을 닫으면 서버가 꺼집니다. 데이터는 `data/` 폴더(`game.db`)에 저장되니 지우지 마세요. 백업은 서버를 끈 뒤 `data` 폴더를 복사하면 됩니다.
+
+### 다른 곳에 있는 친구도 접속시키기
+
+서버를 켠 상태에서 **`인터넷공유.bat`** 실행 → `https://....trycloudflare.com` 주소가 나오면 친구에게 보내기.
+(처음 한 번 공유 프로그램 cloudflared가 자동 설치됨, 계정 필요 없음. 창을 닫으면 주소가 사라지고 다시 켜면 주소가 바뀝니다.)
+
+### 관리자
+
+- GM 계정은 없습니다. 서버를 켠 사람이 **관리자 키**로 관리자 페이지에 들어갑니다.
+- 키는 처음 실행할 때 자동으로 만들어져 `data/admin-key.txt`에 저장됩니다. 서버 창의 관리자 주소를 누르면 바로 로그인돼요.
+- 키가 남에게 보였다면: `npm run new-admin-key` 후 서버 다시 켜기
+- 플레이어가 비밀번호를 잊으면: 관리자 페이지 → 플레이어 → **임시 비밀번호 발급**
+
+### Mac / Linux
 
 ```bash
 npm install
-DEV_LOGIN=1 npm start   # 내 컴퓨터 시험용: 구글 없이 닉네임만으로 로그인
+npm start
 ```
-
-Windows PowerShell:
-
-```powershell
-npm install
-$env:DEV_LOGIN="1"; npm start
-```
-
-- 게임: http://localhost:3000
-- GM 패널: http://localhost:3000/gm (또는 게임 안 도움말(H) → GM 패널 열기)
-- 로컬에서 GM 지정: 먼저 접속해 닉네임을 만든 뒤 `npm run create-gm -- 닉네임`
 
 ## 조작
 
@@ -48,63 +58,17 @@ $env:DEV_LOGIN="1"; npm start
 ## 링크 데모 (혼자 플레이)
 
 `node demo/build.mjs` → `demo/dist/` 에 서버 없이 브라우저만으로 돌아가는 혼자 플레이 버전이 만들어져요.
-같은 게임 엔진을 브라우저 안에서 돌리고, 저장은 그 브라우저(localStorage)에 해요. 파티·GM·해킹 방지는 실제 서버 버전에서만 동작해요.
-
-## 서버 배포 — Cloudflare (무료, 데이터 유지)
-
-GitHub Pages는 정적 파일만 올리는 곳이라 서버를 못 돌려요. 이 게임은 **Cloudflare Workers + Durable Object(SQLite)** 로 올려요.
-무료 플랜에서 카드 없이 동작하고, 서버가 쉬어도 데이터(계정·캐릭터)는 지워지지 않아요. 게임 서버 하나(Durable Object)가 모든 판정을 해요.
-
-1. dash.cloudflare.com 가입 (무료)
-2. **Workers & Pages → Create → Import a repository** → GitHub 연결 → `Project-Sim` 선택 → Deploy
-   (빌드·배포 명령은 `wrangler.toml`에 들어 있어요: 빌드 `node tools/build-cf.mjs`, 배포 `npx wrangler deploy`)
-3. 구글 로그인 준비 (아래 "구글 로그인 설정")
-4. Worker의 **Settings → Variables and Secrets** 에 Secret으로 `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `INITIAL_GM_EMAIL`(GM이 될 구글 이메일) 추가 → 다시 배포
-5. `https://abyss-run.<내 계정>.workers.dev` 에서 접속, `/gm` 이 GM 패널
-
-### 구글 로그인 설정 (Google Cloud Console)
-
-1. console.cloud.google.com → 새 프로젝트
-2. **Google 인증 플랫폼(OAuth 동의 화면)** → 시작하기 → 앱 이름·지원 이메일, 대상 **외부** → 만들기 → **대상**에서 **앱 게시**(테스트 상태면 등록한 사용자만 로그인 가능)
-3. **클라이언트 → 클라이언트 만들기 → 웹 애플리케이션** → 승인된 리디렉션 URI: `https://abyss-run.<내 계정>.workers.dev/api/auth/google/callback`
-4. 나온 클라이언트 ID·보안 비밀을 Cloudflare Secret `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` 에 넣기
-
-비밀번호는 저장하지 않아요. 처음 로그인할 때 게임 닉네임을 정하고, 구글 계정 고유번호로 계정을 찾아요. `INITIAL_GM_EMAIL`과 같은 이메일의 구글 계정이 GM이에요(그 외에는 GM 패널의 "GM 지정"으로만).
-
-명령줄로 하려면: `npx wrangler login` → `npm run deploy` → `npx wrangler secret put GOOGLE_CLIENT_SECRET`
-
-내 컴퓨터에서 Cloudflare 환경 그대로 시험: `npm run dev:cf` (http://localhost:8787)
-
-무료 한도(매일 0시 UTC 초기화): Durable Object 요청 하루 10만 건(웹소켓 수신 메시지는 20개당 1건), 실행 시간 등. 친구 몇 명이 노는 정도는 넉넉해요. 한도를 넘기면 그날은 접속이 실패해요.
-
-### 다른 호스팅 (Node)
-
-`npm start` 로 어디서든 돌릴 수 있어요. 단, 저장 파일(`DB_PATH`)이 유지되는 곳이어야 해요 (Render 무료 플랜은 잠들 때 파일이 지워져서 안 맞아요).
-
-환경 변수
-
-| 이름 | 설명 |
-|---|---|
-| `PORT` | 포트 (기본 3000) |
-| `DB_PATH` | DB 파일 경로 (기본 `data/game.db`) |
-| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | 구글 로그인 |
-| `INITIAL_GM_EMAIL` | 이 이메일의 구글 계정이 GM |
-| `PUBLIC_URL` | 구글 리디렉션 주소의 기준 (기본: 접속한 주소) |
-| `DEV_LOGIN=1` | 테스트 전용 로그인(구글 없이). 실서버에서는 켜지 말 것 |
-| `SECURE_COOKIES=1` | https 배포 시 (NODE_ENV=production이면 자동) |
-| `TRUST_PROXY=1` | 프록시 뒤에서 실제 IP 기록 (Render는 자동) |
-| `ALLOWED_ORIGINS` | 추가로 허용할 출처(쉼표 구분) |
-| `REGISTRATION_OPEN=0` | 가입 막기 |
+같은 게임 엔진을 브라우저 안에서 돌리고, 저장은 그 브라우저(localStorage)에 해요. 파티·관리자·해킹 방지는 실제 서버 버전에서만 동작해요.
 
 ## 보안 설계
 
-- 구글 로그인(OAuth 2.0 인가 코드 + PKCE + state), 비밀번호를 저장하지 않음. 세션 토큰은 해시만 DB에 저장, 쿠키 `HttpOnly; SameSite=Strict`(+https면 `Secure`)
+- 비밀번호는 PBKDF2-SHA256(21만 회)+소금으로만 저장, 로그인 시도 제한. 세션 토큰은 해시만 DB에 저장, 쿠키 `HttpOnly; SameSite=Strict`(+https면 `Secure`)
 - 모든 POST와 웹소켓은 같은 출처(Origin)만 허용 → CSRF·웹소켓 하이재킹 차단
 - CSP(인라인 스크립트 금지), 화면에 사용자 글자는 항상 textContent로 넣어 XSS 차단
 - 웹소켓: 메시지 크기 4KB 제한, 메시지 종류별 형식·범위 검증, 초당 40개 제한, 위반 누적 시 연결 차단, IP당 연결 수 제한, 중복 접속 시 이전 연결 종료
 - 게임 판정: 이동은 서버가 한 틱에 입력 하나만 적용(속도핵 불가), 쿨타임·자원·스킬 해금·사거리·NPC 거리·안전 구역 여부를 모두 서버가 확인, 드롭·강화는 암호학적 난수
-- GM API는 서버에서 권한 확인, 모든 GM 행동은 감사 기록, 다른 GM 차단·강등 불가
-- 위반·실패 기록은 GM 패널 보안 로그에서 확인
+- 관리 API는 관리자 키 로그인(시도 5회 실패 시 10분 잠금)으로만 사용, 모든 관리 행동은 기록
+- 위반·실패 기록은 관리자 페이지 보안 로그에서 확인
 
 ## 기획서에 없어서 정한 것
 
@@ -129,21 +93,21 @@ GitHub Pages는 정적 파일만 올리는 곳이라 서버를 못 돌려요. �
 
 ```
 server/            Node 서버 (main.js 진입점)
-  auth.js db.js gm.js net.js config.js
+  auth.js admin.js db.js gm.js net.js config.js
   game/            world(접속·파티·상점·강화·전직) room(시뮬레이션) skills(스킬 엔진)
                    ai(몬스터·보스) combat(피해·치명타·상태이상) dungeon(층 생성) player
 shared/            서버·브라우저 공용 데이터 (직업·스킬·몬스터·아이템·이동 판정)
-public/            브라우저 (index.html 게임, gm.html GM 패널)
+public/            브라우저 (index.html 게임, gm.html 관리자 페이지)
   js/render/       타일·캐릭터 리그·pixelfx 이펙트·조명
   js/ui/           HUD·창·툴팁
   vendor/pixelfx/  이펙트 라이브러리 (MIT, LICENSE·NOTICE 포함)
-tools/             bot-test.js(통합 테스트) sim.js(밸런스 시뮬) skill-sweep.js(전 스킬 실행) create-gm.js
+tools/             bot-test.js(통합 테스트) sim.js(밸런스 시뮬) skill-sweep.js(전 스킬 실행) new-admin-key.js
 ```
 
 ## 테스트
 
 ```bash
-npm test                        # 서버를 띄워 봇이 가입·이동·전투·파티·GM·강화·보안 위반을 시험
+npm test                        # 서버를 띄워 봇이 가입·이동·전투·파티·관리자·강화·보안 위반을 시험
 node tools/skill-sweep.js       # 모든 직업의 모든 스킬 실행
 LV=0.85 RARITY=일반 node tools/sim.js sword 10 20 50 100   # 밸런스 시뮬레이션
 ```

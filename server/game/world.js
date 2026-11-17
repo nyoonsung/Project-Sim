@@ -48,7 +48,7 @@ export class World {
     let char;
     try { char = row ? sanitizeChar(JSON.parse(row.data), u.username) : newCharacter(u.username); } catch { char = newCharacter(u.username); }
     const s = {
-      userId: u.id, name: u.username, role: u.role, conn, char, ip: conn.ip, joinedAt: Date.now(), partyId: null, invites: new Set(),
+      userId: u.id, name: u.username, conn, char, ip: conn.ip, joinedAt: Date.now(), partyId: null, invites: new Set(),
       mutedUntil: u.muted_until, dirty: true, meDirty: true, potionCd: {},
       send: (o) => conn.send(o),
       notice: (text) => conn.send({ t: "ev", list: [{ e: "notice", text }] }),
@@ -56,7 +56,7 @@ export class World {
     };
     this.sessions.set(u.id, s);
     s.unit = makePlayerUnit(s);
-    s.send({ t: "hello", name: u.username, role: u.role, char: this.publicChar(s), announce: this.announcement, serverTime: Date.now() });
+    s.send({ t: "hello", name: u.username, char: this.publicChar(s), announce: this.announcement, serverTime: Date.now() });
     this.town.addPlayer(s.unit);
     this.save(s);
     this.broadcastSys(`${u.username}님이 접속했어요.`, "join");
@@ -144,11 +144,11 @@ export class World {
     if (!clean) return;
     if (clean.startsWith("/p ") && s.partyId) {
       const p = this.parties.get(s.partyId);
-      for (const id of p.members) this.sessions.get(id)?.send({ t: "chat", from: s.name, text: clean.slice(3), kind: "party", gm: s.role === "gm" ? 1 : 0 });
+      for (const id of p.members) this.sessions.get(id)?.send({ t: "chat", from: s.name, text: clean.slice(3), kind: "party" });
       return;
     }
     const room = s.unit.room;
-    for (const o of this.sessions.values()) if (o.unit.room === room) o.send({ t: "chat", from: s.name, text: clean, kind: "say", gm: s.role === "gm" ? 1 : 0 });
+    for (const o of this.sessions.values()) if (o.unit.room === room) o.send({ t: "chat", from: s.name, text: clean, kind: "say" });
   }
 
   // ── 파티

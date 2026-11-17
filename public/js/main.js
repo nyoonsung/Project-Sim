@@ -41,8 +41,9 @@ async function boot() {
   // 링크(데모) 버전: 서버 없이 브라우저 안에서 같은 게임 엔진을 돌림
   if (globalThis.__LOCAL_NET) {
     $("#login").classList.remove("hidden");
-    $("#nick-box").classList.remove("hidden");
-    $("#nick-note").textContent = "닉네임만 정하면 바로 시작해요.";
+    $("#lf-pass").remove();
+    $("#lf-register").remove();
+    $("#lf-login").textContent = "시작하기";
     $(".tagline").textContent = "100층 던전을 정복하라 — 혼자 플레이 데모 (저장: 이 브라우저)";
     let saved = "";
     try { saved = localStorage.getItem("psim_name") ?? ""; } catch {}
@@ -64,35 +65,16 @@ async function boot() {
   $("#login").classList.remove("hidden");
   loginArt();
   const msg = $("#lf-msg");
-  const params = new URLSearchParams(location.search);
-  const ERR = { state: "로그인 시간이 지났어요. 다시 시도해 주세요.", google: "구글 로그인에 실패했어요. 다시 시도해 주세요.", banned: "이용이 제한된 계정이에요.", google_off: "서버에 구글 로그인이 아직 설정되지 않았어요." };
-  if (params.get("error")) msg.textContent = ERR[params.get("error")] ?? "로그인에 실패했어요.";
-  const cfg = await fetch("/api/auth/config").then((r) => r.json()).catch(() => ({}));
-  if (params.get("signup")) {
-    // 첫 로그인: 닉네임 정하기
-    $("#nick-box").classList.remove("hidden");
-    $("#lf-user").focus();
-    $("#login-form").addEventListener("submit", async (e) => {
-      e.preventDefault();
-      msg.textContent = "";
-      const r = await api("/api/auth/signup", { name: $("#lf-user").value.trim() });
-      if (!r.ok) { msg.textContent = r.j.error ?? "실패했어요."; if (r.status === 400 && /시간|다시/.test(r.j.error ?? "")) $("#google-btn").classList.remove("hidden"); return; }
-      history.replaceState(null, "", "/");
-      startGame();
-    });
-  } else {
-    $("#google-btn").classList.remove("hidden");
-    if (!cfg.google) { $("#google-btn").classList.add("hidden"); if (!params.get("error")) msg.textContent = ERR.google_off; }
-  }
-  if (cfg.dev) {
-    $("#dev-box").classList.remove("hidden");
-    $("#dev-login").addEventListener("click", async () => {
-      const r = await api("/api/dev-login", { username: $("#dev-user").value.trim() });
-      if (!r.ok) { msg.textContent = r.j.error ?? "실패"; return; }
-      startGame();
-    });
-  }
-  if (params.get("error")) history.replaceState(null, "", "/");
+  const go = async (path) => {
+    msg.textContent = "";
+    const name = $("#lf-user").value.trim(), pw = $("#lf-pass").value;
+    if (!name || !pw) { msg.textContent = "닉네임과 비밀번호를 넣어 주세요."; return; }
+    const r = await api(path, { username: name, password: pw });
+    if (!r.ok) { msg.textContent = r.j.error ?? "실패했어요."; return; }
+    startGame();
+  };
+  $("#login-form").addEventListener("submit", (e) => { e.preventDefault(); go("/api/login"); });
+  $("#lf-register").addEventListener("click", () => go("/api/register"));
 }
 
 // ── UI 연결

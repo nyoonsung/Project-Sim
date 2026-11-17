@@ -207,7 +207,7 @@ export function openHelp() {
     h("div", { class: "note", text: "등급: 일반 < 희귀 < 영웅 < 전설 < 신화(드롭 0.5%). 쿨타임 감소 효과는 없어요. 강화는 최대 +99, +n→+n+1 성공 확률 (99−n)%, 파괴 확률은 항상 1%예요. 실패하면 단계가 그대로예요." }),
     h("h4", { text: "전직" }),
     h("div", { class: "note", text: "모험가로 시작해 10층 전직소에서 검사·권투사·궁수·도적·마법사·성직자·대장장이 중 하나를 고르거나 보류할 수 있어요. 첫 전직을 확정하면 직업이 고정돼요." }),
-    h("div", { class: "flexrow" }, h("button", { class: "btn small danger", onclick: () => G.ui.logout() }, "로그아웃"), G.role === "gm" ? h("button", { class: "btn small", onclick: () => window.open("/gm", "_blank", "noopener") }, "GM 패널 열기") : null),
+    h("div", { class: "flexrow" }, h("button", { class: "btn small danger", onclick: () => G.ui.logout() }, "로그아웃")),
   ], { w: 460 });
 }
 

@@ -1,20 +1,20 @@
-// GM API: 모든 요청은 서버에서 GM 권한을 확인하고, 모든 변경은 감사 기록에 남긴다
+// 관리 API: 관리자 키로 로그인한 서버 주인만 쓸 수 있고, 모든 변경은 감사 기록에 남긴다
 import { Q, secLog } from "./db.js";
 import { world } from "./net.js";
 import { rollItem, RARITIES, SLOTS, canEquip } from "../shared/items.js";
 import { CLASS_INFO } from "../shared/classes.js";
 import { MAX_LEVEL, ITEMS } from "../shared/constants.js";
 import { secureRandom } from "./game/secure.js";
+import { hashPassword } from "./auth.js";
 
 const int = (v, lo, hi) => Number.isInteger(v) && v >= lo && v <= hi;
 
-export async function handleGm(req, res, path, { readJson, send, currentUser, ip, url }) {
-  const gm = await currentUser(req);
-  if (!gm || gm.role !== "gm") {
-    secLog("gm_denied", { userId: gm?.id ?? null, username: gm?.username ?? null, ip, detail: { path } });
-    return send(res, 403, { error: "GM 권한이 필요해요." });
+export async function handleGm(req, res, path, { readJson, send, isAdmin, ip, url }) {
+  if (!isAdmin(req)) {
+    secLog("gm_denied", { ip, detail: { path } });
+    return send(res, 403, { error: "관리자 로그인이 필요해요." });
   }
-  const audit = (action, target, detail) => Q.audit.run(Date.now(), gm.id, gm.username, action, target?.id ?? null, target?.username ?? null, detail ? JSON.stringify(detail).slice(0, 2000) : null);
+  const audit = (action, target, detail) => Q.audit.run(Date.now(), null, "관리자", action, target?.id ?? null, target?.username ?? null, detail ? JSON.stringify(detail).slice(0, 2000) : null);
   const m = path.match(/^\/api\/gm\/player\/(\d+)(?:\/([a-z-]+))?$/);
 
   if (path === "/api/gm/overview" && req.method === "GET") return send(res, 200, world.stats());
@@ -37,11 +37,11 @@ export async function handleGm(req, res, path, { readJson, send, currentUser, ip
     const b = await readJson();
     const text = typeof b.text === "string" ? b.text.replace(/[<>]/g, "").trim().slice(0, 200) : "";
     if (!text) return send(res, 400, { error: "내용이 비었어요." });
-    world.broadcastSys(`[GM] ${text}`, "gm");
+    world.broadcastSys(`[공지] ${text}`, "gm");
     audit("broadcast", null, { text });
     return send(res, 200, { ok: true });
   }
-  if (!m) return send(res, 404, { error: "없는 GM 기능이에요." });
+  if (!m) return send(res, 404, { error: "없는 관리 기능이에요." });
 
   const id = Number(m[1]);
   const target = Q.userById.get(id);
@@ -62,7 +62,6 @@ export async function handleGm(req, res, path, { readJson, send, currentUser, ip
   if (req.method !== "POST") return send(res, 405, { error: "method" });
   const b = await readJson();
   // 다른 GM을 건드리는 위험 작업은 막음 (자기 자신 강등 포함)
-  const protectedTarget = target.role === "gm" && target.id !== gm.id;
 
   switch (action) {
     case "edit": {
@@ -112,13 +111,24 @@ export async function handleGm(req, res, path, { readJson, send, currentUser, ip
       audit("remove_item", target, { uid: b.uid, name: removed?.name ?? null });
       return send(res, 200, { ok: !!removed });
     }
+    case "reset-password": {
+      // 비밀번호를 잊은 플레이어용: 임시 비밀번호를 만들어 관리자에게만 보여 줌
+      const abc = "abcdefghjkmnpqrstuvwxyz", num = "23456789";
+      let pw = "";
+      for (let i = 0; i < 6; i++) pw += abc[Math.floor(secureRandom() * abc.length)];
+      for (let i = 0; i < 4; i++) pw += num[Math.floor(secureRandom() * num.length)];
+      Q.setPass.run(await hashPassword(pw), target.id);
+      Q.deleteUserSessions.run(target.id);
+      world.gmKick(target.id, "비밀번호가 초기화됐어요. 새 비밀번호로 다시 로그인해 주세요.");
+      audit("reset_password", target, null);
+      return send(res, 200, { ok: true, tempPassword: pw });
+    }
     case "kick": {
       const ok = world.gmKick(id, typeof b.reason === "string" ? b.reason.slice(0, 100) : "");
       audit("kick", target, { reason: b.reason });
       return send(res, 200, { ok });
     }
     case "ban": {
-      if (protectedTarget || target.id === gm.id) return send(res, 403, { error: "GM 계정은 차단할 수 없어요." });
       if (!(typeof b.hours === "number" && b.hours >= 0 && b.hours <= 24 * 365 * 10)) return send(res, 400, { error: "기간이 잘못됐어요." });
       const until = b.hours === 0 ? 0 : Date.now() + b.hours * 3600e3;
       const reason = typeof b.reason === "string" ? b.reason.slice(0, 200) : null;
@@ -147,16 +157,6 @@ export async function handleGm(req, res, path, { readJson, send, currentUser, ip
       audit("warp", target, { floor: b.floor });
       return send(res, ok ? 200 : 400, ok ? { ok: true } : { error: "접속 중인 플레이어만 이동시킬 수 있어요." });
     }
-    case "role": {
-      if (!["player", "gm"].includes(b.role)) return send(res, 400, { error: "역할이 잘못됐어요." });
-      if (target.id === gm.id) return send(res, 403, { error: "자기 자신의 권한은 바꿀 수 없어요." });
-      if (protectedTarget && b.role !== "gm") return send(res, 403, { error: "다른 GM의 권한은 내릴 수 없어요." });
-      Q.setRole.run(b.role, id);
-      Q.deleteUserSessions.run(id);
-      world.gmKick(id, "권한이 바뀌어 다시 로그인해야 해요.");
-      audit("role", target, { role: b.role });
-      return send(res, 200, { ok: true });
-    }
   }
-  return send(res, 404, { error: "없는 GM 기능이에요." });
+  return send(res, 404, { error: "없는 관리 기능이에요." });
 }
