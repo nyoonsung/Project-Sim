@@ -38,6 +38,28 @@ function loginArt() {
 }
 
 async function boot() {
+  // 링크(데모) 버전: 서버 없이 브라우저 안에서 같은 게임 엔진을 돌림
+  if (globalThis.__LOCAL_NET) {
+    $("#login").classList.remove("hidden");
+    $("#lf-pass").remove();
+    $("#lf-register").remove();
+    $("#lf-login").textContent = "시작하기";
+    $(".tagline").textContent = "100층 던전을 정복하라 — 혼자 플레이 데모 (저장: 이 브라우저)";
+    let saved = "";
+    try { saved = localStorage.getItem("psim_name") ?? ""; } catch {}
+    $("#lf-user").value = saved;
+    $("#lf-user").placeholder = "닉네임 (2~12자, 한글·영문·숫자)";
+    loginArt();
+    $("#login-form").addEventListener("submit", (e) => {
+      e.preventDefault();
+      const name = $("#lf-user").value.trim();
+      if (!/^[A-Za-z0-9가-힣_]{2,12}$/.test(name)) { $("#lf-msg").textContent = "닉네임은 2~12자, 한글·영문·숫자·_ 만 쓸 수 있어요."; return; }
+      try { localStorage.setItem("psim_name", name); } catch {}
+      G.localName = name;
+      startGame();
+    });
+    return;
+  }
   const me = await fetch("/api/me", { credentials: "same-origin" });
   if (me.ok) return startGame();
   $("#login").classList.remove("hidden");
@@ -76,7 +98,7 @@ const ui = {
   noRes() {},
   flashSkill: HUD.flashSkill,
   blockingWindow: () => false,
-  async logout() { await api("/api/logout"); location.reload(); },
+  async logout() { if (!globalThis.__LOCAL_NET) await api("/api/logout"); location.reload(); },
 };
 
 function resize() {
@@ -100,7 +122,8 @@ async function startGame() {
   addEventListener("resize", resize);
   await document.fonts.load("12px Galmuri11").catch(() => {});
   await document.fonts.load("10px Galmuri9").catch(() => {});
-  G.net = new Net(onMessage, (e) => {
+  const NetClass = globalThis.__LOCAL_NET ?? Net;
+  G.net = new NetClass(onMessage, (e) => {
     $("#game").classList.add("hidden");
     $("#login").classList.remove("hidden");
     $("#login-form").classList.add("hidden");

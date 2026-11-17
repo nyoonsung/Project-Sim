@@ -216,10 +216,11 @@ export function makeTown() {
   return m;
 }
 
+const toB64 = (u8) => (typeof Buffer !== "undefined" ? Buffer.from(u8).toString("base64") : btoa(String.fromCharCode(...u8)));
 /** 지도를 클라이언트로 보낼 형태로 */
 export function mapPayload(m, extra = {}) {
   return {
-    w: m.w, h: m.h, tiles: Buffer.from(m.tiles).toString("base64"), kind: m.kind, doorsOpen: !!m.doorsOpen,
+    w: m.w, h: m.h, tiles: toB64(m.tiles), kind: m.kind, doorsOpen: !!m.doorsOpen,
     objects: m.objects, start: m.start, arena: m.arena ?? null, ...extra,
   };
 }

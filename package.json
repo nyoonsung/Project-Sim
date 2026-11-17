@@ -4,12 +4,19 @@
   "description": "2D 픽셀 던전 RPG — 서버 판정형 멀티플레이 웹 게임",
   "type": "module",
   "private": true,
-  "engines": { "node": ">=22.13" },
+  "engines": {
+    "node": ">=22.13"
+  },
   "scripts": {
     "start": "node --disable-warning=ExperimentalWarning server/main.js",
     "dev": "node --disable-warning=ExperimentalWarning --watch server/main.js",
     "create-gm": "node --disable-warning=ExperimentalWarning tools/create-gm.js",
     "test": "node --disable-warning=ExperimentalWarning tools/bot-test.js"
   },
-  "dependencies": { "ws": "^8.18.0" }
+  "dependencies": {
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.12"
+  }
 }

@@ -24,7 +24,7 @@ export class World {
     this.startedAt = Date.now();
     this.tickTimes = [];
     setInterval(() => this.tick(), 1000 / TICK_RATE);
-    setInterval(() => this.saveAll(), 30_000).unref();
+    setInterval(() => this.saveAll(), 30_000).unref?.();
   }
   addRoom(r) { this.rooms.set(r.id, r); return r; }
 

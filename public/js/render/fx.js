@@ -7,7 +7,7 @@ const pending = new Map();
 export function loadFx(id) {
   if (!id || !/^[a-z0-9-]+\/[a-z0-9-]+$/.test(id)) return Promise.resolve(null);
   if (mods.has(id)) return Promise.resolve(mods.get(id));
-  if (!pending.has(id)) pending.set(id, import(`../../vendor/pixelfx/fx/${id}.js`).then((m) => { mods.set(id, m); return m; }).catch((e) => { console.warn("fx load", id, e); mods.set(id, null); return null; }));
+  if (!pending.has(id)) pending.set(id, (globalThis.__FX_REGISTRY ? globalThis.__FX_REGISTRY[id]?.() ?? Promise.reject(new Error("no fx")) : import(`../../vendor/pixelfx/fx/${id}.js`)).then((m) => { mods.set(id, m); return m; }).catch((e) => { console.warn("fx load", id, e); mods.set(id, null); return null; }));
   return pending.get(id);
 }
 export const fxModule = (id) => mods.get(id);

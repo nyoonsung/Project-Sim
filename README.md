@@ -43,6 +43,11 @@ $env:INITIAL_GM_USER="관리자아이디"; $env:INITIAL_GM_PASS="비밀번호123
 | C K I P H | 캐릭터 · 스킬 · 가방 · 파티 · 도움말 |
 | Enter | 채팅 (`/p 내용` = 파티 채팅) |
 
+## 링크 데모 (혼자 플레이)
+
+`node demo/build.mjs` → `demo/dist/` 에 서버 없이 브라우저만으로 돌아가는 혼자 플레이 버전이 만들어져요.
+같은 게임 엔진을 브라우저 안에서 돌리고, 저장은 그 브라우저(localStorage)에 해요. 파티·GM·해킹 방지는 실제 서버 버전에서만 동작해요.
+
 ## 서버 배포 (GitHub Pages로는 안 됨)
 
 GitHub Pages는 정적 파일만 올리는 곳이라 이 게임 서버를 돌릴 수 없습니다. 코드는 GitHub에 두고, 서버는 Node.js를 돌릴 수 있는 호스팅에 올려야 합니다.
