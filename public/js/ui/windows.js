@@ -1,5 +1,6 @@
 // 창: 캐릭터, 스킬, 가방·장비, 파티, 도움말, 상점, 대장간(강화), 전직소, 던전 관문, 게시판, 훈련 교관
 import { G, send, canAuto, setAuto } from "../game.js";
+import { titleDesign } from "/shared/titles.js";
 import { Q, setMode, setLessOthers, preset } from "../quality.js";
 import { KEYS, keyLabel, bindKey, resetKeys, RESERVED } from "../keys.js";
 import { profLevel, profPow, profCost, isUncapped } from "/shared/prof.js";
@@ -122,7 +123,7 @@ export function openChar() {
       h("div", { class: "note", text: c.cls === "adventurer" ? "10층 보스를 처치하면 안전 구역의 전직소에서 전직할 수 있어요. 전직하면 지금까지 투자한 스탯이 전부 돌아와요." : `${info.position} · ${next}` }),
       h("h4", { text: `능력치 (남은 포인트 ${c.unspent})` }),
       ...rows,
-      h("div", { class: "flexrow" }, h("span", { class: "note", text: "칭호: " }), (() => { const tt = c.titles?.find((x) => x.id === c.title); return tt ? h("span", { class: "title-tag", style: { color: tt.color, borderColor: tt.color }, text: `「${tt.text}」` }) : h("span", { class: "note", text: "없음" }); })(), h("button", { class: "btn small", onclick: () => openTitles() }, "칭호 (T)")),
+      h("div", { class: "flexrow" }, h("span", { class: "note", text: "칭호: " }), (() => { const tt = c.titles?.find((x) => x.id === c.title); return tt ? titleTag(tt) : h("span", { class: "note", text: "없음" }); })(), h("button", { class: "btn small", onclick: () => openTitles() }, "칭호 (T)")),
       h("h4", { text: "최종 수치" }),
       h("table", {}, ...[
         ["최대 HP", st.maxHp.toLocaleString()], ["최대 MP", st.maxMp], ["공격력", Math.round(st.atk).toLocaleString()], ["방어력", st.def],
@@ -551,13 +552,19 @@ export function openCodex() {
 
 export { ENCHANTS };
 
+/** 칭호 표시 (디자인이 있으면 그림, 없으면 색 글자) */
+export function titleTag(t) {
+  const d = titleDesign(t.text);
+  if (d) return h("img", { class: "title-design", src: d.src, alt: t.text, title: t.text });
+  return h("span", { class: "title-tag", style: { color: t.color, borderColor: t.color }, text: `「${t.text}」` });
+}
 // ── 칭호 (T): 장착칸 + 보관함. 칭호는 관리자만 줄 수 있음
 export function openTitles() {
   openWin("titles", "칭호", () => {
     const c = G.char;
     const list = c?.titles ?? [];
     const cur = list.find((t) => t.id === c?.title) ?? null;
-    const tag = (t) => h("span", { class: "title-tag", style: { color: t.color, borderColor: t.color }, text: `「${t.text}」` });
+    const tag = (t) => titleTag(t);
     return [
       h("h4", { text: "장착 중" }),
       h("div", { class: "title-slot" }, cur ? tag(cur) : h("span", { class: "note", text: "비어 있음" }),

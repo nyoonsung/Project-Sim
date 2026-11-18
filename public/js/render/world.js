@@ -1,5 +1,6 @@
 // 월드 렌더러: 타일 → 바닥 표시(예고·구역) → y정렬 유닛/오브젝트 → 투사체 → 이펙트 → 조명 → 날씨 → 머리 위 UI
 import { G, localStep, moveDir } from "../game.js";
+import { titleDesign } from "/shared/titles.js";
 import { tickQuality, preset } from "../quality.js";
 import { frame as dtFrame } from "./dt2.js";
 import { weatherLoop } from "./fx.js";
@@ -109,6 +110,26 @@ export function warmSkill(id) {
   preloadFx(ids).then(() => prebake(ids));
 }
 
+// 디자인 칭호: 캔버스(640px)에 그리면 뭉개지므로, 캔버스 위 이미지 층에 원본 해상도로 띄움
+const titleImgs = new Map();
+let titleLayer = null;
+function syncTitleLayer(cv) {
+  const marks = G.titleMarks ?? [];
+  if (!marks.length && !titleImgs.size) return;
+  if (!titleLayer) { titleLayer = document.createElement("div"); titleLayer.id = "title-layer"; cv.parentNode.insertBefore(titleLayer, cv.nextSibling); }
+  const r = cv.getBoundingClientRect(), pr = cv.parentNode.getBoundingClientRect(), k = r.width / VW;
+  const seen = new Set();
+  for (const m of marks) {
+    const d = titleDesign(m.tt);
+    let img = titleImgs.get(m.id);
+    if (!img || img.dataset.tt !== m.tt) { img?.remove(); img = document.createElement("img"); img.src = d.src; img.dataset.tt = m.tt; img.className = "title-img"; titleLayer.appendChild(img); titleImgs.set(m.id, img); }
+    const w = d.w * k, h = w / d.ratio;
+    img.style.width = w + "px";
+    img.style.transform = `translate(${Math.round(r.left - pr.left + m.x * k - w / 2)}px, ${Math.round(r.top - pr.top + m.y * k - h)}px)`;
+    seen.add(m.id);
+  }
+  for (const [id, img] of titleImgs) if (!seen.has(id)) { img.remove(); titleImgs.delete(id); }
+}
 // 보스 패턴 이름과 피하는 법
 const BOSS_CALL = {
   cleave: ["휩쓸기", "뒤로 돌아가요"], slam: ["내려찍기", "멀리 떨어져요"], ring: ["고리 폭발", "보스에게 바짝 붙어요"],
@@ -269,6 +290,7 @@ export class Renderer {
       ctx.globalAlpha = 1;
     }
     this.drawTelsOver(ctx, cx, cy, t);
+    G.titleMarks = [];
     this.drawOverhead(ctx, cx, cy, t);
     if (G.hurtFlash > 0) {
       // 맞았을 때 붉은 테두리: 한 번 만든 그림을 세기만 바꿔 찍음
@@ -281,6 +303,7 @@ export class Renderer {
       ctx.globalAlpha = Math.min(1, G.hurtFlash); ctx.drawImage(this.vig, 0, 0); ctx.globalAlpha = 1;
       G.hurtFlash = Math.max(0, G.hurtFlash - dt);
     }
+    syncTitleLayer(this.cv);
     if (me && me.hp < 0.3 && !me.dead) {
       ctx.fillStyle = `rgba(160,0,20,${0.12 + Math.sin(t * 5) * 0.06})`;
       ctx.fillRect(0, 0, VW, 6); ctx.fillRect(0, VH - 6, VW, 6); ctx.fillRect(0, 0, 6, VH); ctx.fillRect(VW - 6, 0, 6, VH);
@@ -790,7 +813,9 @@ export class Renderer {
       if (e.k === "p") {
         const top = y - 48;
         this.label(ctx, info.n, x, top - 4, e.id === G.you ? "#ffffff" : "#8fd0ff");
-        if (info.tt) this.label(ctx, `「${info.tt}」`, x, top - 15, info.tc ?? "#ffd35a");
+        // 칭호: 디자인이 있으면 그림(화면 위 또렷한 이미지 층에), 없으면 색 글자
+        if (info.tt && titleDesign(info.tt)) (G.titleMarks ??= []).push({ id: e.id, tt: info.tt, x, y: top - 14 });
+        else if (info.tt) this.label(ctx, `「${info.tt}」`, x, top - 15, info.tc ?? "#ffd35a");
         if (e.id !== G.you) { ctx.fillStyle = "#000"; ctx.fillRect(x - 13, top, 26, 3); ctx.fillStyle = "#e0424e"; ctx.fillRect(x - 12, top + 1, Math.round(24 * e.hp), 1); }
         if (e.casting) {
           const k = Math.min(1, (t - e.casting.t0) / e.casting.d);

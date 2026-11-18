@@ -1,5 +1,6 @@
 // 관리자 페이지: 서버 현황, 플레이어 검색·상세·수정·지급·킥·밴·채금·이동, 공지, 감사 기록, 보안 로그
 import { h, $, tipOn } from "./ui/dom.js";
+import { TITLE_DESIGNS } from "/shared/titles.js";
 import { itemTip } from "./ui/windows.js";
 import { itemIcon } from "./ui/icons.js";
 import { CLASS_INFO } from "/shared/classes.js";
@@ -90,6 +91,7 @@ async function openPlayer(id) {
   const cons = Object.fromEntries(Object.keys(ITEMS).map((k) => [k, h("input", { type: "number", min: 0, max: ITEMS[k].max, value: c?.cons?.[k] ?? 0 })]));
   const rar = h("select", {}, ...RARITIES.map((r) => h("option", { value: r }, r)));
   const titleT = h("input", { type: "text", maxlength: 16, placeholder: "예: 던전의 정복자" });
+  const titleD = h("select", { onchange: () => { if (titleD.value) titleT.value = titleD.value; } }, h("option", { value: "" }, "디자인 없음(글자)"), ...Object.keys(TITLE_DESIGNS).map((k) => h("option", { value: k }, `🎨 ${k}`)));
   const titleC = { v: TITLE_COLORS[0] };
   const ilvl = h("input", { type: "number", min: 1, max: 100, value: Math.max(1, c?.best || 1) });
   const slot = h("select", {}, h("option", { value: "" }, "무작위"), ...Object.entries(SLOT_NAME).map(([k, v]) => h("option", { value: k }, v)));
@@ -121,7 +123,7 @@ async function openPlayer(id) {
         h("div", { class: "box" }, h("h3", { text: "아이템 지급" }), h("div", { class: "form" }, ...field("등급", rar), ...field("아이템 레벨", ilvl), ...field("부위", slot)),
           h("button", { class: "btn small primary", onclick: act("give", () => ({ rarity: rar.value, ilvl: +ilvl.value, slot: slot.value || undefined })) }, "지급")),
         h("div", { class: "box" }, h("h3", { text: "칭호 (관리자만 줄 수 있음)" }),
-          h("div", { class: "form" }, ...field("칭호", titleT), ...field("색", h("div", { class: "flexrow" }, ...TITLE_COLORS.map((col) => { const b = h("button", { class: "btn small swatch" + (titleC.v === col ? " on" : ""), style: { background: col, width: "22px", height: "18px", padding: 0 }, title: col, onclick: () => { titleC.v = col; for (const x of b.parentNode.children) x.classList.toggle("on", x === b); } }); return b; })))),
+          h("div", { class: "form" }, ...field("디자인", titleD), ...field("칭호", titleT), ...field("색", h("div", { class: "flexrow" }, ...TITLE_COLORS.map((col) => { const b = h("button", { class: "btn small swatch" + (titleC.v === col ? " on" : ""), style: { background: col, width: "22px", height: "18px", padding: 0 }, title: col, onclick: () => { titleC.v = col; for (const x of b.parentNode.children) x.classList.toggle("on", x === b); } }); return b; })))),
           h("button", { class: "btn small primary", onclick: act("give-title", () => ({ text: titleT.value, color: titleC.v })) }, "칭호 주기"),
           h("div", { class: "note" }, ...((c?.titles ?? []).length ? c.titles.map((t) => h("span", { class: "gm-title", style: { color: t.color } }, `「${t.text}」${c.title === t.id ? "(장착)" : ""} `, h("button", { class: "btn small danger", onclick: act("remove-title", () => ({ tid: t.id })) }, "회수"))) : ["가진 칭호 없음"]))),
         h("div", { class: "box" }, h("h3", { text: "제재 · 이동" }),
