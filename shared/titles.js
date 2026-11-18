@@ -2,5 +2,6 @@
 //   w: 게임 화면(640px 기준)에서 닉네임 위에 그릴 폭
 export const TITLE_DESIGNS = {
   "세계의 신": { src: "/assets/titles/world_god.png", w: 70, ratio: 300 / 104 },
+  "최초의 대적자": { src: "/assets/titles/first_rival.png", w: 64, ratio: 300 / 91 },
 };
 export const titleDesign = (text) => (text ? TITLE_DESIGNS[text] ?? null : null);

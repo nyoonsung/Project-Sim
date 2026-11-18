@@ -18,6 +18,7 @@ const filterChat = (s) => s.replace(/[\u0000-\u001f\u007f<>]/g, "").replace(/\s+
 // 관리자가 예약해 둔 칭호: 그 계정이 다음에 접속하면 한 번만 지급 (key로 중복 지급 방지)
 const RESERVED_TITLES = [
   { key: "worldgod-gm-yunseong", user: "GM_윤성", text: "세계의 신", color: "#c8a0ff" },
+  { key: "firstrival-yuminthomas", user: "yuminthomas", text: "최초의 대적자", color: "#ff5a6e" },
 ];
 function grantReserved(c, username) {
   for (const g of RESERVED_TITLES) {
