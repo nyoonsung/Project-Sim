@@ -201,17 +201,27 @@ export function updateZoneLabel() {
   else z.textContent = `${G.floor}층 · ${G.zone?.name ?? ""}`;
 }
 
+let partyKey = "";
 export function updateParty() {
   const pf = $("#party-frames");
-  pf.replaceChildren(...G.party.filter((m) => m.name !== G.name).map((m) => {
-    const ent = [...G.ents.values()].find((e) => e.k === "p" && e.info?.n === m.name);
-    const el = h("div", { class: "pf" + (ent?.dead ? " dead" : "") }, h("div", { text: `${m.leader ? "★ " : ""}${m.name}  Lv.${m.lv} ${CLASS_INFO[m.cls]?.name ?? ""}` }), h("div", { class: "pbar" }, h("div")));
-    el.querySelector(".pbar > div").style.width = `${(ent?.hp ?? 1) * 100}%`;
+  const list = G.party.filter((m) => m.name !== G.name).map((m) => {
+    let ent = null;
+    for (const e of G.ents.values()) if (e.k === "p" && e.info?.n === m.name) { ent = e; break; }
+    return { m, dead: !!ent?.dead, hp: Math.round((ent?.hp ?? 1) * 100) };
+  });
+  // 바뀐 게 없으면 화면을 건드리지 않음 (예전엔 0.2초마다 통째로 다시 만들었음)
+  const key = list.map((x) => `${x.m.name}|${x.m.leader}|${x.m.lv}|${x.m.cls}|${x.dead}|${x.hp}`).join(";");
+  if (key === partyKey) return;
+  partyKey = key;
+  pf.replaceChildren(...list.map(({ m, dead, hp }) => {
+    const el = h("div", { class: "pf" + (dead ? " dead" : "") }, h("div", { text: `${m.leader ? "★ " : ""}${m.name}  Lv.${m.lv} ${CLASS_INFO[m.cls]?.name ?? ""}` }), h("div", { class: "pbar" }, h("div")));
+    el.querySelector(".pbar > div").style.width = `${hp}%`;
     return el;
   }));
 }
 
 // ── 미니맵
+const mmCache = new WeakMap();
 export function drawMinimap() {
   drawMapOn($("#minimap"), 3);
   const big = $("#bigmap");
@@ -228,13 +238,22 @@ function drawMapOn(cv, maxS, big) {
   const s = Math.min((cv.width - (big ? 20 : 0)) / M.w, (cv.height - (big ? 40 : 0)) / M.h, maxS);
   const ox = (cv.width - M.w * s) / 2, oy = (cv.height - M.h * s) / 2;
   const town = G.mapKind === "town";
-  for (let y = 0; y < M.h; y++) for (let x = 0; x < M.w; x++) {
-    if (!town && !M.explored[y * M.w + x]) continue;
-    const t = M.tiles[y * M.w + x];
-    if (t === T.VOID) continue;
-    g.fillStyle = t === T.WALL ? (town ? "#a64a36" : "#5a5466") : t === T.WATER ? "#2a5a90" : t === T.PIT ? "#000" : town ? (t === T.GRASS ? "#3e6a30" : "#a08a68") : "#2a2634";
-    g.fillRect(ox + x * s, oy + y * s, Math.ceil(s), Math.ceil(s));
+  // 최적화: 지형(타일 수천 개)은 지도마다 한 번만 그려 두고 0.2초마다 그 그림만 붙임 (예전엔 매번 타일마다 fillRect → 주기적 끊김)
+  const key = `${cv.width}x${cv.height}|${big ? 1 : 0}|${town ? 1 : 0}`;
+  let cache = mmCache.get(M);
+  if (!cache || cache.key !== key) {
+    const c = new OffscreenCanvas(cv.width, cv.height), cg = c.getContext("2d");
+    for (let y = 0; y < M.h; y++) for (let x = 0; x < M.w; x++) {
+      if (!town && !M.explored[y * M.w + x]) continue;
+      const t = M.tiles[y * M.w + x];
+      if (t === T.VOID) continue;
+      cg.fillStyle = t === T.WALL ? (town ? "#a64a36" : "#5a5466") : t === T.WATER ? "#2a5a90" : t === T.PIT ? "#000" : town ? (t === T.GRASS ? "#3e6a30" : "#a08a68") : "#2a2634";
+      cg.fillRect(ox + x * s, oy + y * s, Math.ceil(s), Math.ceil(s));
+    }
+    cache = { key, c };
+    mmCache.set(M, cache);
   }
+  g.drawImage(cache.c, 0, 0);
   for (const o of G.objects) {
     if (o.kind === "portal") { g.fillStyle = o.id === "exit" && !G.exitOpen ? "#555" : "#7ff0ff"; g.fillRect(ox + (o.x / TILE) * s - 2, oy + (o.y / TILE) * s - 2, 4, 4); }
     if (o.kind === "npc") { g.fillStyle = "#9ef0a0"; g.fillRect(ox + (o.x / TILE) * s - 1, oy + (o.y / TILE) * s - 1, 3, 3); }
@@ -274,8 +293,11 @@ export function interactTarget() {
 export function updateInteract() {
   const t = interactTarget();
   const el = $("#interact-hint");
+  const txt = t ? `[G] ${t.name}와(과) 대화` : "";
+  if (el._t === txt) return; // 바뀔 때만 화면 갱신
+  el._t = txt;
   el.classList.toggle("hidden", !t);
-  if (t) el.textContent = `[G] ${t.name}와(과) 대화`;
+  if (t) el.textContent = txt;
 }
 
 export { tryCast };

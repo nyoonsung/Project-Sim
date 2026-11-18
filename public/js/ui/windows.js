@@ -253,7 +253,7 @@ export function openInv(pos = {}) {
 // ── 파티 (P)
 export function openParty() {
   openWin("party", "파티", () => {
-    const input = h("input", { class: "txt", placeholder: "초대할 닉네임", maxlength: 12 });
+    const input = h("input", { class: "txt", placeholder: "초대할 닉네임", maxlength: 12, onkeydown: (e) => { if (e.key === "Enter" && !e.isComposing && e.keyCode !== 229 && input.value.trim()) { send({ t: "party", op: "invite", name: input.value.trim() }); input.blur(); } } });
     const leader = G.party.find((m) => m.leader)?.name === G.name;
     return [
       G.party.length ? h("div", {}, ...G.party.map((m) => h("div", { class: "statrow" },

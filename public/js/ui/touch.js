@@ -74,10 +74,14 @@ function cdLeftOf(id) { return G.me?.cds?.[id] ? Math.max(0, G.me.cds[id] / 1000
 function joystick() {
   const zone = h("div", { id: "joy-zone" });
   const base = h("div", { id: "joy-base", class: "hidden" }, h("div", { id: "joy-knob" }));
-  let id = null, ox = 0, oy = 0;
+  let id = null, ox = 0, oy = 0, lastAt = 0;
   const knob = () => base.firstChild;
+  // 조이스틱이 '눌린 채'로 남는 문제 방지: 손가락을 뗀 신호를 놓쳐도(키보드·팝업·화면 회전 등) 풀림
+  const reset = () => { id = null; G.stick = [0, 0]; base.classList.add("hidden"); };
+  G.resetStick = reset;
   zone.addEventListener("pointerdown", (e) => {
-    if (id !== null) return;
+    if (id !== null && performance.now() - lastAt < 400) return; // 다른 손가락이 정말 쥐고 있을 때만 무시
+    lastAt = performance.now();
     id = e.pointerId; ox = e.clientX; oy = e.clientY;
     zone.setPointerCapture(id);
     base.style.left = ox + "px"; base.style.top = oy + "px";
@@ -87,6 +91,7 @@ function joystick() {
   });
   zone.addEventListener("pointermove", (e) => {
     if (e.pointerId !== id) return;
+    lastAt = performance.now();
     let dx = e.clientX - ox, dy = e.clientY - oy;
     const l = Math.hypot(dx, dy);
     if (l > STICK_R) {
@@ -106,6 +111,9 @@ function joystick() {
   };
   zone.addEventListener("pointerup", end);
   zone.addEventListener("pointercancel", end);
+  zone.addEventListener("lostpointercapture", end);
+  addEventListener("blur", reset);
+  document.addEventListener("visibilitychange", reset);
   return [zone, base];
 }
 
@@ -141,6 +149,12 @@ function skillButtons() {
     };
     el.addEventListener("pointerup", end);
     el.addEventListener("pointercancel", end);
+    el.addEventListener("lostpointercapture", end);
+    // 뗀 신호를 놓쳐 버튼이 '눌린 채' 굳는 문제 방지 (기본 공격이 멈추지 않거나 버튼이 안 눌리던 문제)
+    const reset = () => { pid = null; el.classList.remove("down"); if (i === 0) G.touchHeld.delete(0); };
+    addEventListener("blur", reset);
+    document.addEventListener("visibilitychange", reset);
+    document.addEventListener("focusin", (e) => { if (/^(INPUT|TEXTAREA)$/.test(e.target.tagName)) reset(); });
   });
 }
 

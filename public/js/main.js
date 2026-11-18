@@ -134,6 +134,7 @@ const ui = {
   async logout() { try { sessionStorage.removeItem("psim_go"); } catch {} if (!globalThis.__LOCAL_NET) await api("/api/logout"); location.reload(); },
 };
 
+const MOVE_KEYS = new Set(["KeyW", "KeyA", "KeyS", "KeyD", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"]);
 function resize() {
   const cv = $("#view");
   // 실제로 보이는 높이 (주소창·키보드 제외) — 휴대폰에서 위쪽이 잘리는 문제 방지
@@ -254,7 +255,21 @@ function bindInput() {
     if (e.code === "KeyN") $("#minimap").classList.toggle("hidden-mini");
     if (e.code === "Tab") e.preventDefault();
   });
-  addEventListener("keyup", (e) => G.keys.delete(e.code));
+  addEventListener("keyup", (e) => {
+    G.keys.delete(e.code);
+    // 한글 입력기가 켜져 있으면 keyup의 code가 비어 오는 경우가 있음 → 이동키가 눌린 채로 남지 않게 전부 뗌
+    if (!e.code || e.keyCode === 229) for (const k of [...G.keys]) if (MOVE_KEYS.has(k)) G.keys.delete(k);
+    G.keyAt?.delete(e.code);
+  });
+  // 키가 '눌린 채'로 남는 문제 방지: 진짜로 누르고 있으면 브라우저가 계속 반복 신호를 보내므로, 1.2초 넘게 신호가 없는 이동키는 뗀 것으로 봄
+  G.keyAt = new Map();
+  addEventListener("keydown", (e) => { if (MOVE_KEYS.has(e.code)) G.keyAt.set(e.code, performance.now()); }, true);
+  setInterval(() => { const t = performance.now(); for (const k of [...G.keys]) if (MOVE_KEYS.has(k) && t - (G.keyAt.get(k) ?? 0) > 1200) G.keys.delete(k); }, 300);
+  // 입력창(파티 초대·닉네임 등)을 누르면 이동 입력을 모두 멈춤, 입력창에서 나오면 화면 위치·크기 다시 맞춤 (휴대폰 키보드 때문에 밀린 화면 복구)
+  document.addEventListener("focusin", (e) => { if (/^(INPUT|TEXTAREA)$/.test(e.target.tagName)) { G.keys.clear(); G.resetStick?.(); G.stick = [0, 0]; } });
+  document.addEventListener("focusout", (e) => { if (/^(INPUT|TEXTAREA)$/.test(e.target.tagName)) for (const d of [50, 300, 700]) setTimeout(() => { scrollTo(0, 0); resize(); }, d); });
+  // 창의 버튼을 누른 뒤 포커스가 버튼에 남아 키 입력을 먹지 않게
+  document.addEventListener("pointerup", (e) => { const b = e.target.closest?.(".win button, .invite button, #vote button"); if (b) setTimeout(() => b.blur(), 0); });
   // 소리: 브라우저 정책상 처음 누를 때 켜짐
   const unlock = () => unlockAudio();
   addEventListener("pointerdown", unlock); addEventListener("keydown", unlock);
