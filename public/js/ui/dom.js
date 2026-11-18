@@ -1,4 +1,5 @@
 // DOM 도우미: 사용자 입력은 항상 textContent로 넣어 XSS를 막는다 (innerHTML 금지)
+import { pixImg, WIN_TABS } from "./pix.js";
 export function h(tag, attrs = {}, ...children) {
   const el = document.createElement(tag);
   for (const [k, v] of Object.entries(attrs ?? {})) {
@@ -54,8 +55,14 @@ export function openWin(id, title, build, { x, y, w } = {}) {
   let win = wins.get(id);
   if (!win) {
     const body = h("div", { class: "body" });
-    const head = h("header", {}, h("span", { text: title }), h("span", { class: "x", text: "✕", onclick: () => closeWin(id) }));
-    win = h("div", { class: "win" }, head, body);
+    // 주요 창(캐릭터·가방·스킬…)은 머리 줄 왼쪽에 아이콘 탭 → 눌러서 같은 자리에 다른 창으로 전환
+    const tabs = WIN_TABS.some(([t]) => t === id) ? h("div", { class: "win-tabs" }, ...WIN_TABS.map(([t, nm]) => {
+      const b = h("button", { class: "win-tab" + (t === id ? " on" : ""), title: nm, onclick: (e) => { e.stopPropagation(); switchTab(id, t); } });
+      b.append(pixImg(t));
+      return b;
+    })) : null;
+    const head = h("header", { class: tabs ? "tabbed" : "" }, tabs, h("span", { class: "wt", text: title }), h("span", { class: "x", text: "✕", onclick: () => closeWin(id) }));
+    win = h("div", { class: "win" + (tabs ? " has-tabs" : "") }, head, body);
     win.dataset.id = id;
     if (w) win.style.width = w + "px";
     $("#windows").append(win);
@@ -65,7 +72,7 @@ export function openWin(id, title, build, { x, y, w } = {}) {
     win.style.left = Math.max(8, Math.min(innerWidth - ww - 8, x ?? innerWidth / 2 - ww / 2 + (touch ? 0 : (wins.size % 4) * 24))) + "px";
     win.style.top = (y ?? Math.max(touch ? 6 : 10, innerHeight * (touch ? 0.03 : 0.12) + (touch ? 0 : (wins.size % 4) * 24))) + "px";
     let drag = null;
-    head.addEventListener("pointerdown", (e) => { if (e.target.classList.contains("x")) return; drag = [e.clientX - win.offsetLeft, e.clientY - win.offsetTop, e.pointerId]; head.setPointerCapture(e.pointerId); win.style.zIndex = bumpZ(); e.preventDefault(); });
+    head.addEventListener("pointerdown", (e) => { if (e.target.classList.contains("x") || e.target.closest(".win-tab")) return; drag = [e.clientX - win.offsetLeft, e.clientY - win.offsetTop, e.pointerId]; head.setPointerCapture(e.pointerId); win.style.zIndex = bumpZ(); e.preventDefault(); });
     head.addEventListener("pointermove", (e) => { if (drag && e.pointerId === drag[2]) { win.style.left = Math.max(-win.offsetWidth + 60, Math.min(innerWidth - 60, e.clientX - drag[0])) + "px"; win.style.top = Math.max(0, Math.min(innerHeight - 40, e.clientY - drag[1])) + "px"; } });
     head.addEventListener("pointerup", () => (drag = null));
     head.addEventListener("pointercancel", () => (drag = null));
@@ -77,6 +84,16 @@ export function openWin(id, title, build, { x, y, w } = {}) {
   win.style.zIndex = bumpZ();
   refreshWin(id);
   return win;
+}
+function switchTab(from, to) {
+  if (from === to) return;
+  const old = wins.get(from);
+  const pos = old ? [old.style.left, old.style.top] : null;
+  closeWin(from);
+  if (wins.has(to)) closeWin(to);
+  document.querySelector(`#menu-buttons [data-win="${to}"]`)?.click();
+  const nw = wins.get(to);
+  if (nw && pos) { nw.style.left = pos[0]; nw.style.top = pos[1]; }
 }
 export function refreshWin(id) {
   const win = wins.get(id);

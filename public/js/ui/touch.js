@@ -5,6 +5,7 @@
 //  - 오른쪽 대시 버튼: 이동 중인 방향으로 대시
 //  - 위쪽: 물약·메뉴·채팅·전체 화면 버튼
 import { G, tryCast, moveDir, nearestEnemy } from "../game.js";
+import { pixImg } from "./pix.js";
 import { SKILLS } from "/shared/skills.js";
 import { h, $, hideTip, retrigger } from "./dom.js";
 import { skillIconURL } from "./icons.js";
@@ -189,11 +190,10 @@ export function setupTouch({ openNpc, interactTarget, toast }) {
   skillButtons();
   ui.append(dashButton(toast));
   // 위쪽 버튼 줄: 채팅·전체 화면
-  const chatBtn = h("button", { class: "tbtn", onclick: () => { document.body.classList.toggle("chat-open"); if (document.body.classList.contains("chat-open")) $("#chat-input").focus(); } }, "💬");
-  const fsBtn = h("button", { class: "tbtn", onclick: () => toggleFullscreen() }, "⛶");
+  const chatBtn = h("button", { class: "tbtn", title: "채팅", onclick: () => { document.body.classList.toggle("chat-open"); if (document.body.classList.contains("chat-open")) $("#chat-input").focus(); } }, pixImg("chat"));
+  const fsBtn = h("button", { class: "tbtn", title: "전체 화면", onclick: () => toggleFullscreen() }, pixImg("full"));
   $("#menu-buttons").append(chatBtn, fsBtn);
-  const ICON = { char: "👤", skills: "✨", inv: "🎒", party: "👥", help: "❔", codex: "📖", keys: "⚙", titles: "🏷", who: "🟢" };
-  for (const b of document.querySelectorAll("#menu-buttons button[data-win]")) { b.title = b.textContent.replace(/\s*\S$/, "").trim(); b.textContent = ICON[b.dataset.win] ?? b.textContent; }
+  for (const b of document.querySelectorAll("#menu-buttons button[data-win]")) { b.title = b.textContent.replace(/\s*\S$/, "").trim(); b.replaceChildren(pixImg(b.dataset.win)); }
   $("#chat-input").placeholder = "채팅 ( /p 파티 채팅 )";
   $("#chat-input").addEventListener("blur", () => setTimeout(() => document.body.classList.remove("chat-open"), 150));
   // NPC 대화 안내를 누를 수 있는 버튼으로

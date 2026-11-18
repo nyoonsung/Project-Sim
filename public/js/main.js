@@ -1,5 +1,6 @@
 // 시작점: 로그인 → 게임 연결 → 입력·렌더 루프
 import { G, onMessage, inputTick, tryCast, updateMouseWorld, send, usePotion } from "./game.js";
+import { pixImg } from "./ui/pix.js";
 import { slotForCode, potionForCode, slotForMouse } from "./keys.js";
 import { isTouchDevice, setupTouch, touchAimTick } from "./ui/touch.js";
 import { unlockAudio, toggleSound, soundOn, sfx, toggleShake, shakeEnabled, addTrauma } from "./feel.js";
@@ -313,16 +314,17 @@ function bindInput() {
   const unlock = () => unlockAudio();
   addEventListener("pointerdown", unlock); addEventListener("keydown", unlock);
   const sb = $("#sound-btn");
-  const paintSound = () => { sb.textContent = G.touch ? (soundOn() ? "🔊" : "🔇") : soundOn() ? "소리 켜짐" : "소리 꺼짐"; };
+  const paintSound = () => { sb.replaceChildren(pixImg(soundOn() ? "sound" : "mute"), ...(G.touch ? [] : [soundOn() ? "소리 켜짐" : "소리 꺼짐"])); sb.classList.toggle("off", !soundOn()); };
   paintSound();
   sb.addEventListener("click", () => { unlockAudio(); toggleSound(); paintSound(); sfx("click"); });
   const kb = $("#shake-btn");
-  const paintShake = () => { kb.textContent = G.touch ? (shakeEnabled() ? "📳" : "📴") : shakeEnabled() ? "흔들림 켜짐" : "흔들림 꺼짐"; };
+  const paintShake = () => { kb.replaceChildren(pixImg(shakeEnabled() ? "shake" : "still"), ...(G.touch ? [] : [shakeEnabled() ? "흔들림 켜짐" : "흔들림 꺼짐"])); kb.classList.toggle("off", !shakeEnabled()); };
   paintShake();
   kb.addEventListener("click", () => { toggleShake(); paintShake(); sfx("click"); if (shakeEnabled()) addTrauma(0.4); });
   $("#minimap").addEventListener("click", () => HUD.toggleBigMap());
   $("#chat-btn")?.addEventListener("click", () => G.toggleChat?.());
   $("#bigmap").addEventListener("click", () => HUD.toggleBigMap());
+  if (!G.touch) { for (const b of document.querySelectorAll("#menu-buttons button[data-win]")) b.prepend(pixImg(b.dataset.win)); $("#chat-btn")?.prepend(pixImg("chat")); }
   for (const b of document.querySelectorAll("#menu-buttons button[data-win]")) {
     const map = { char: WIN.openChar, skills: WIN.openSkills, inv: WIN.openInv, party: WIN.openParty, help: WIN.openHelp, codex: WIN.openCodex, keys: WIN.openKeys, titles: WIN.openTitles, who: WIN.openWho };
     b.addEventListener("click", () => toggleWin(b.dataset.win, map[b.dataset.win]));

@@ -8,6 +8,7 @@ import { SLOT_KEYS, ITEMS, TILE, T, GRADE_COLOR } from "/shared/constants.js";
 import { xpToNext, CLASS_INFO } from "/shared/classes.js";
 import { skillTip } from "./windows.js";
 import { skillIconURL } from "./icons.js";
+import { pixImg } from "./pix.js";
 
 const RES = { sword: ["ki", "내력", 100], fist: ["ki", "내력", 100], priest: ["holy", "성광", 100], smith: ["parts", "부품", 3], rogue: ["gap", "틈", 3] };
 const BUFF_NAME = { riposte: "반격 기회", imun: "이문정주", sidestep: "횡이동", dance: "권무", acupoint: "점혈", evasion: "이베이젼", absolute: "앱솔루트", footwork: "발놀림", poison_blade: "독날", afterimage: "잔영", track: "약점 추적", precise: "정밀 시전", echo: "잔향", eo_burst: "어검발산", hymn_atk: "축복(공격)", hymn_def: "축복(방어)", zone_dr: "회랑", circuit: "회로", swift_kill: "질주", m_guard: "가호" };
@@ -25,7 +26,7 @@ export function buildHud() {
   });
   const pots = $("#potions");
   pots.replaceChildren(...["hp_potion", "mp_potion", "antidote"].map((id, i) => {
-    const el = h("div", { class: "slot", onclick: () => usePotion(id) }, h("span", { class: "key", text: keyLabel(KEYS.potions[i]) }), h("div", { class: "cd" }), h("span", { class: "nm" }), h("span", { class: "cdt" }));
+    const el = h("div", { class: "slot pot", onclick: () => usePotion(id) }, pixImg(id, "pic", 3), h("span", { class: "key", text: keyLabel(KEYS.potions[i]) }), h("div", { class: "cd" }), h("span", { class: "nm" }), h("span", { class: "cnt" }), h("span", { class: "cdt" }));
     el.dataset.item = id;
     el.classList.add("pot-" + i);
     tipOn(el, () => [h("div", { class: "tt-name", text: ITEMS[id].name }), h("div", { text: ITEMS[id].desc }), h("div", { class: "tt-sub", text: `재사용 대기 ${ITEMS[id].cd}초 · 마을 상인에게서 구입` })]);
@@ -80,7 +81,10 @@ export function updateSkillbar() {
   });
   for (const el of $("#potions").children) {
     const id = el.dataset.item;
-    setText(el.querySelector(".nm"), `${ITEMS[id].name.replace(" 물약", "")}\n${G.me?.cons?.[id] ?? G.char?.cons?.[id] ?? 0}`);
+    const n = G.me?.cons?.[id] ?? G.char?.cons?.[id] ?? 0;
+    setText(el.querySelector(".nm"), ITEMS[id].name.replace(" 물약", ""));
+    setText(el.querySelector(".cnt"), String(n));
+    toggle(el, "none", n <= 0);
     const left = Math.max(0, ((G.me?.pcd?.[id] ?? 0) / 1000) - (performance.now() / 1000 - G.meAt), (G.localPcd?.[id] ?? 0) - performance.now() / 1000);
     const pf = Math.round(Math.min(1, left / ITEMS[id].cd) * 60) / 60;
     setTf(el.querySelector(".cd"), `scaleY(${pf})`);
@@ -100,6 +104,11 @@ export function updateBars() {
   // 바뀐 것만 DOM에 씀 (같은 값을 다시 쓰면 휴대폰에서 매번 레이아웃·다시 그리기가 일어나 렉)
   const set = (sel, v, max, text) => { const b = $(sel); const w = `${Math.max(0, Math.min(100, (v / Math.max(1, max)) * 100)).toFixed(1)}%`; const f = b.querySelector(".fill"); if (f._w !== w) { f._w = w; f.style.width = w; } setText(b.querySelector("span"), text); };
   set("#orbs .hp", m.hp, m.mh, `HP ${m.hp.toLocaleString()} / ${m.mh.toLocaleString()}${m.sh ? `  (+${m.sh})` : ""}`);
+  // 체력이 30% 아래면 체력바가 깜빡이고 화면 가장자리가 붉게
+  const low = !m.dead && m.hp > 0 && m.hp / Math.max(1, m.mh) < 0.3;
+  if (document.body._low !== low) { document.body._low = low; document.body.classList.toggle("lowhp", low); }
+  const lv = $("#hud-lv");
+  if (lv) setText(lv, String(m.lv));
   const shEl = $("#orbs .hp .shield"), shW = `${Math.min(100, ((m.sh ?? 0) / m.mh) * 100).toFixed(1)}%`;
   if (shEl._w !== shW) { shEl._w = shW; shEl.style.width = shW; }
   set("#orbs .mp", m.mp, m.mm, `MP ${m.mp} / ${m.mm}`);
@@ -112,7 +121,8 @@ export function updateBars() {
   for (const it of Object.values(G.char?.equip ?? {})) if (it?.dur != null && (!wp || it.dur / it.maxDur < wp.dur / wp.maxDur)) wp = it;
   const SN = { weapon: "무기", offhand: "보조장비", helmet: "투구", armor: "갑옷", trinket: "장신구" };
   const durTxt = wp && wp.dur <= wp.maxDur * 0.2 ? (wp.dur <= 0 ? `   ⚠ ${SN[wp.slot]} 부서짐!` : `   ⚠ ${SN[wp.slot]} 내구도 ${Math.floor((wp.dur / wp.maxDur) * 100)}%`) : "";
-  const w = `💰 ${(m.gold ?? G.char?.gold ?? 0).toLocaleString()} G   ❤ ${c.hp_potion ?? 0}   💧 ${c.mp_potion ?? 0}   🌿 ${c.antidote ?? 0}${durTxt}`;
+  const w = `${(m.gold ?? G.char?.gold ?? 0).toLocaleString()} G${durTxt}`;
+  void c;
   const we = $("#wallet");
   if (we._t !== w) { we._t = w; we.textContent = w; }
   const res = RES[G.char?.cls];
