@@ -202,12 +202,12 @@ export function openInv(pos = {}) {
         h("button", { class: "btn small", onclick: () => { picked.clear(); refreshWin("inv"); } }, "선택 해제")),
       h("div", { class: "flexrow" },
         h("span", { text: `${picked.size}개 선택 · ${pickedGold.toLocaleString()}G` }),
-        h("button", { class: "btn primary small", disabled: !nearShop || !picked.size, title: nearShop ? "" : "잡화 상인 근처에서 팔 수 있어요", onclick: () => {
+        h("button", { class: "btn primary small", disabled: !picked.size, onclick: () => {
           const rare = pickedItems.filter((x) => ["영웅", "전설", "신화"].includes(x.rarity) || x.enh >= 5).length;
           if (rare && !G.sellConfirm) { G.sellConfirm = true; G.ui.toast?.(`영웅 이상·강화된 아이템 ${rare}개가 섞여 있어요. 정말 팔려면 한 번 더 누르세요.`); setTimeout(() => (G.sellConfirm = false), 4000); return; }
           G.sellConfirm = false;
           send({ t: "sellMany", uids: [...picked] }); picked.clear();
-        } }, nearShop ? "선택 판매" : "상인 근처에서 판매"),
+        } }, "선택 판매"),
         h("button", { class: "btn small", onclick: () => { G.sellMode = false; picked.clear(); refreshWin("inv"); } }, "닫기"))) : null;
     const eq = h("div", { class: "equip-slots" }, ...["weapon", "offhand", "helmet", "armor", "trinket"].map((slot) => {
       const it = c.equip[slot];
@@ -226,7 +226,10 @@ export function openInv(pos = {}) {
         it?.slot === "weapon" && it.dur != null && it.dur < it.maxDur ? h("span", { class: "dur-mini" + (it.dur <= 0 ? " broken" : it.dur <= it.maxDur * 0.2 ? " low" : "") }, h("i", { style: { width: Math.max(0, (it.dur / it.maxDur) * 100) + "%" } })) : null);
       if (it) {
         el.addEventListener("dblclick", () => !multi && send({ t: "equip", uid: it.uid }));
-        el.addEventListener("contextmenu", (e) => { e.preventDefault(); if (nearShop) send({ t: "sell", uid: it.uid }); });
+        el.addEventListener("contextmenu", (e) => { e.preventDefault(); if (multi || it.locked) return;
+          // 영웅 이상·+5 이상은 한 번 더 눌러야 팔림 (어디서든 팔 수 있어서 실수 방지)
+          if ((["영웅", "전설", "신화"].includes(it.rarity) || it.enh >= 5) && G.sellOne !== it.uid) { G.sellOne = it.uid; setTimeout(() => G.sellOne === it.uid && (G.sellOne = null), 3000); return G.ui.toast?.(`${it.name}: 한 번 더 오른쪽 클릭하면 팔아요.`); }
+          G.sellOne = null; send({ t: "sell", uid: it.uid }); });
         tipOn(el, () => itemTip(it, c.equip[it.slot]));
       }
       return el;
@@ -235,9 +238,9 @@ export function openInv(pos = {}) {
     const actions = sel ? h("div", { class: "flexrow" },
       h("b", { style: { color: RARITY_COLOR[sel.rarity] }, text: sel.name + (sel.enh ? ` +${sel.enh}` : "") }),
       c.inv.includes(sel) ? h("button", { class: "btn small", disabled: !canEquip(sel, c.cls), onclick: () => send({ t: "equip", uid: sel.uid }) }, "장착") : h("button", { class: "btn small", onclick: () => send({ t: "unequip", slot: sel.slot }) }, "해제"),
-      c.inv.includes(sel) ? h("button", { class: "btn small", disabled: !nearShop || sel.locked, onclick: () => send({ t: "sell", uid: sel.uid }) }, `판매 ${sellPrice(sel)}G`) : null,
+      c.inv.includes(sel) ? h("button", { class: "btn small", disabled: sel.locked, onclick: () => send({ t: "sell", uid: sel.uid }) }, `판매 ${sellPrice(sel)}G`) : null,
       h("button", { class: "btn small", disabled: !nearSmith, onclick: () => { G.enhSel = sel.uid; openSmithy(); } }, "강화"),
-      h("button", { class: "btn small", onclick: () => send({ t: "lock", uid: sel.uid }) }, sel.locked ? "잠금 해제" : "잠금")) : h("div", { class: "note", text: "아이템을 누르면 선택돼요. 두 번 누르면 장착/해제, 상인 근처에서 오른쪽 클릭하면 판매해요." });
+      h("button", { class: "btn small", onclick: () => send({ t: "lock", uid: sel.uid }) }, sel.locked ? "잠금 해제" : "잠금")) : h("div", { class: "note", text: "아이템을 누르면 선택돼요. 두 번 누르면 장착/해제, 오른쪽 클릭하면 어디서든 판매해요." });
     return [h("div", { class: "flexrow" }, h("span", { text: `💰 ${c.gold.toLocaleString()} G` }), h("span", { class: "note", text: `가방 ${c.inv.length}/40` }),
         multi ? null : h("button", { class: "btn small", onclick: () => { G.sellMode = true; refreshWin("inv"); } }, "여러 개 팔기")),
       h("h4", { text: "장착 중" }), eq, multi ? sellBar : actions, h("h4", { text: multi ? "가방 — 팔 아이템을 누르세요" : "가방" }), grid];

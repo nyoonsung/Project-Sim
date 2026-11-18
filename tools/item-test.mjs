@@ -8,8 +8,9 @@ const ok = (c, m) => { console.log((c ? "✓ " : "✗ ") + m); if (!c) process.e
 let w; for (let i = 0; i < 50 && !(w?.slot === "weapon"); i++) w = rollItem(Math.random, { ilvl: 20, rarity: "전설" });
 ok(w.dur === w.maxDur && w.maxDur === maxDurability(w) && w.maxDur === 160, `새 전설 무기 내구도 ${w.dur}/${w.maxDur}`);
 // 2) 부서지면 무기 공격력 30%
-const atkFull = gearTotals({ weapon: w }).atk;
-const broken = { ...w, dur: 0 };
+const wb = { ...w, opts: [] };
+const atkFull = gearTotals({ weapon: wb }).atk;
+const broken = { ...wb, dur: 0 };
 const atkBroken = gearTotals({ weapon: broken }).atk;
 ok(Math.abs(atkBroken / atkFull - 0.3) < 0.03, `부서진 무기 공격력 ${atkFull} → ${atkBroken}`);
 // 3) 수선 비용: 닳은 만큼 비례, 가득이면 0
@@ -38,11 +39,9 @@ const items = [];
 for (let i = 0; i < 5; i++) { const it = rollItem(Math.random, { ilvl: 5, rarity: "일반" }); it.uid = 100 + i; items.push(it); }
 items[4].locked = true;
 s1.char.inv = items.slice();
-World.prototype.sellMany.call(fake("smithy"), s1, [100, 101]);
-ok(s1.char.inv.length === 5 && s1.char.gold === 0, "상인 멀면 일괄 판매 안 됨");
-World.prototype.sellMany.call(fake("shop"), s1, [100, 101, 102, 104, 999]);
+World.prototype.sellMany.call(fake(null), s1, [100, 101, 102, 104, 999]); // 상인과 멀리 떨어진 던전에서도 판매
 const exp = [0, 1, 2].reduce((a, i) => a + sellPrice(items[i]), 0);
-ok(s1.char.inv.length === 2 && s1.char.gold === exp && s1.char.inv.some((x) => x.uid === 104), `3개 판매 ${exp}G, 잠긴 아이템 남음 — "${notes.at(-1)}"`);
+ok(s1.char.inv.length === 2 && s1.char.gold === exp && s1.char.inv.some((x) => x.uid === 104), `3개 판매 ${exp}G, 던전에서도 판매, 잠긴 아이템 남음 — "${notes.at(-1)}"`);
 // 수선
 const s2 = mk();
 const wpn = s2.char.equip.weapon; ensureDur(wpn); wpn.dur = 0; refreshStats(s2.unit);

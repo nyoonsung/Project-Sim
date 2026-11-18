@@ -518,7 +518,6 @@ export class World {
   }
   sell(s, uid) {
     const c = s.char;
-    if (!this.nearNpc(s, "shop")) return s.notice("상인 근처에서 팔 수 있어요.");
     const i = c.inv.findIndex((x) => x.uid === uid);
     if (i < 0) return;
     if (c.inv[i].locked) return s.notice("잠긴 아이템은 팔 수 없어요.");
@@ -532,7 +531,6 @@ export class World {
   /** 일괄 판매: 잠긴 아이템은 건너뜀 */
   sellMany(s, uids) {
     const c = s.char;
-    if (!this.nearNpc(s, "shop")) return s.notice("상인 근처에서 팔 수 있어요.");
     const want = new Set(uids);
     let n = 0, gold = 0, skipped = 0;
     c.inv = c.inv.filter((it) => {
