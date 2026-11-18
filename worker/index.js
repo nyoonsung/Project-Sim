@@ -59,6 +59,12 @@ export class GameServer extends DurableObject {
       }, a.user, ip);
       return new Response(null, { status: 101, webSocket: client });
     }
+    // 진단: 게임 서버(Durable Object)가 실제로 어느 지역 데이터센터에서 도는지
+    if (url.pathname === "/api/where") {
+      let doColo = "?";
+      try { const t = await (await fetch("https://cloudflare.com/cdn-cgi/trace")).text(); doColo = /colo=(\w+)/.exec(t)?.[1] ?? "?"; } catch {}
+      return new Response(JSON.stringify({ server: doColo, entry: headers["x-edge-colo"] ?? "?" }), { headers: { "Content-Type": "application/json", "Cache-Control": "no-store" } });
+    }
     if (url.pathname.startsWith("/api/")) {
       // 오래된 세션·보안 기록 정리 (가끔)
       if (Math.random() < 0.01) { Q.purgeSessions.run(Date.now()); Q.trimSec.run(Date.now() - 30 * 864e5); }
@@ -77,6 +83,7 @@ export default {
   async fetch(request, env) {
     const url = new URL(request.url);
     if (url.pathname === "/ws" || url.pathname.startsWith("/api/")) {
+      if (url.pathname === "/api/where") { const h = new Headers(request.headers); h.set("x-edge-colo", request.cf?.colo ?? "?"); request = new Request(request, { headers: h }); }
       const stub = env.GAME.get(env.GAME.idFromName("main"));
       return stub.fetch(request);
     }
