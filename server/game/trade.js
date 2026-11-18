@@ -1,6 +1,6 @@
 // 플레이어 간 거래 (골드 + 아이템)
-//  흐름: 신청 → 수락 → 서로 물건·골드 올리기 → 둘 다 '준비' → 둘 다 '거래 확정' → 서버가 한 번에 교환
-//  - 올린 물건·골드가 바뀌면 양쪽 준비/확정이 풀림 (몰래 바꿔치기 방지)
+//  흐름: 신청 → 수락 → 서로 물건·골드 올리기 → 한 명이 '거래하기' → 상대에게 수락/거절 창 → 수락하면 서버가 한 번에 교환
+//  - 올린 물건·골드가 바뀌면 거래 요청이 풀림 (몰래 바꿔치기 방지)
 //  - 확정 순간에 다시 전부 검사: 아이템이 그대로 가방에 있는지(올릴 때 모습과 똑같은지), 골드가 충분한지, 가방 칸이 남는지
 //  - 받은 아이템은 받는 사람 번호(uid)로 새로 매김 → 아이템 복사·충돌 없음
 //  - 마을에서만, 잠긴 아이템은 거래 불가, 접속이 끊기거나 마을을 떠나면 자동 취소
@@ -79,10 +79,17 @@ export function tradeOp(world, s, m) {
       return push(T);
     }
     case "confirm": {
-      if (!me.ready || !side(T, o).ready) return s.notice("둘 다 '준비'를 눌러야 확정할 수 있어요.");
+      // 한 명이 '거래하기'를 누르면 상대에게 수락/거절 창이 뜸 → 상대가 수락(=confirm)하면 바로 교환
+      if (!me.uids.length && !me.gold && !side(T, o).uids.length && !side(T, o).gold) return s.notice("올린 물건이나 골드가 없어요.");
       me.ok = true;
-      if (!side(T, o).ok) return push(T);
+      if (!side(T, o).ok) { push(T); return o.notice(`${s.name}님이 지금 조건으로 거래하자고 해요. 확인 후 수락해 주세요.`); }
       return execute(world, T);
+    }
+    case "reject": {
+      const them = side(T, o);
+      if (!them.ok) return;
+      unready(T); push(T);
+      return o.notice(`${s.name}님이 거래 조건을 거절했어요. 조건을 바꿔 다시 요청해 보세요.`);
     }
     case "cancel": return endTrade(s, `${s.name}님이 거래를 취소했어요.`);
   }

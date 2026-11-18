@@ -280,7 +280,7 @@ export function rollEnchant(r) {
   return "dmg";
 }
 export function enchantCost(it) {
-  return Math.round((300 + it.ilvl * 45) * (1 + RARITIES.indexOf(it.rarity) * 0.6));
+  return Math.round((150 + it.ilvl * 20) * (1 + RARITIES.indexOf(it.rarity) * 0.45)); // 인하: 예전의 약 40~50%
 }
 /** 강화 단계마다 부위별로 능력치 하나가 +1%씩 (부서지면 없음) */
 export const ENH_PCT = {

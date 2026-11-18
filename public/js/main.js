@@ -141,8 +141,23 @@ const ui = {
     const tm = setInterval(() => { n--; left.textContent = String(n); if (n <= 0) done(); }, 1000);
   },
   onTrade(msg) {
-    if (G.trade) { if (!isOpen("trade")) WIN.openTrade(); else refreshWin("trade"); }
-    else if (isOpen("trade")) closeWin("trade");
+    try {
+      if (G.trade) { if (!isOpen("trade")) WIN.openTrade(); else refreshWin("trade"); }
+      else if (isOpen("trade")) closeWin("trade");
+    } catch (e) { console.error("trade ui", e); }
+    // 상대가 '거래하기'를 눌렀으면 수락/거절 창
+    const T = G.trade, ask = document.querySelector(".invite.trade-ask");
+    if (T && T.theirs.ok && !T.mine.ok) {
+      if (!ask) {
+        const sum = `${T.theirs.items.length ? T.theirs.items.length + "개 아이템" : ""}${T.theirs.items.length && T.theirs.gold ? " + " : ""}${T.theirs.gold ? T.theirs.gold.toLocaleString() + "G" : ""}` || "아무것도 없음";
+        const give = `${T.mine.items.length ? T.mine.items.length + "개 아이템" : ""}${T.mine.items.length && T.mine.gold ? " + " : ""}${T.mine.gold ? T.mine.gold.toLocaleString() + "G" : ""}` || "아무것도 없음";
+        const answer = (ok) => { send({ t: "trade", op: ok ? "confirm" : "reject" }); box.remove(); };
+        const box = h("div", { class: "invite trade-ask" }, h("div", { text: `💰 ${T.with}님이 거래하자고 해요. 받음: ${sum} / 줌: ${give}` }),
+          h("div", { class: "flexrow" }, h("button", { class: "btn small primary", onclick: () => answer(true) }, G.touch ? "수락" : "수락 (Y)"), h("button", { class: "btn small", onclick: () => answer(false) }, G.touch ? "거절" : "거절 (N)")));
+        box._answer = answer;
+        $("#ui").append(box);
+      }
+    } else ask?.remove();
     if (msg) HUD.toast(msg, msg.includes("완료") ? "rank" : "info");
   },
   announce(text) { const a = $("#announce"); a.classList.toggle("hidden", !text); a.textContent = text ? "📢 " + text : ""; },
@@ -281,20 +296,28 @@ function bindInput() {
   addEventListener("blur", () => { G.keys.clear(); G.mouse.down = [false, false, false]; });
   chat.addEventListener("focus", () => { G.typing = true; G.keys.clear(); document.body.classList.add("chat-open"); });
   chat.addEventListener("blur", () => { G.typing = false; setTimeout(() => { if (document.activeElement !== chat) document.body.classList.remove("chat-open"); }, 150); });
+  // 보내기: 한 번만 (조합 끝 + Enter가 겹쳐도 두 번 안 감)
+  let pendingEnter = false, sentAt = 0;
+  const sendChat = () => {
+    if (performance.now() - sentAt < 120) return;
+    sentAt = G.chatSentAt = performance.now();
+    const t = chat.value.trim();
+    const tr = t.match(/^\/(?:거래|trade)\s+(\S+)/i); // /거래 닉네임
+    if (tr) send({ t: "trade", op: "request", name: tr[1] }); else if (t) send({ t: "chat", text: t });
+    chat.value = ""; chat.blur();
+  };
+  // 한글 조합 중에 누른 Enter: 윈도우 노트북 등에선 이 Enter 하나로 조합만 끝나고 Enter가 다시 오지 않음
+  // → 조합이 끝나는 순간(compositionend) 보내기. 맥처럼 Enter가 한 번 더 오면 위 120ms 막기로 중복 방지
+  chat.addEventListener("compositionend", () => { if (pendingEnter) { pendingEnter = false; setTimeout(() => { if (document.activeElement === chat) sendChat(); }, 0); } });
   chat.addEventListener("keydown", (e) => {
-    // 한글 입력 중(조합 중)에 누른 Enter는 무시: 안 그러면 마지막 글자가 한 번 더 올라감
-    if (e.key === "Enter" && (e.isComposing || e.keyCode === 229)) { e.stopPropagation(); return; }
-    if (e.key === "Enter") {
-      const t = chat.value.trim();
-      const tr = t.match(/^\/(?:거래|trade)\s+(\S+)/i); // /거래 닉네임
-      if (tr) send({ t: "trade", op: "request", name: tr[1] }); else if (t) send({ t: "chat", text: t });
-      chat.value = ""; chat.blur(); e.preventDefault();
-    }
+    if (e.key === "Enter" && (e.isComposing || e.keyCode === 229)) { pendingEnter = true; e.stopPropagation(); return; }
+    if (e.key === "Enter" || e.key === "NumpadEnter") { pendingEnter = false; sendChat(); e.preventDefault(); }
     if (e.key === "Escape") chat.blur();
     e.stopPropagation();
   });
   addEventListener("keydown", (e) => {
     if (G.typing || e.target.tagName === "INPUT") return;
+    if (e.code === "Enter" && performance.now() - (G.chatSentAt ?? -1e9) < 250) return; // 방금 보낸 Enter가 한 번 더 들어온 것 (맥 한글 입력)
     if (e.code === "Enter") { document.body.classList.add("chat-open"); $("#chat").classList.remove("collapsed-tmp"); chat.focus(); e.preventDefault(); return; }
     if (e.code === "Escape") { const w = openWins(); if (w.length) closeWin(w[w.length - 1]); return; }
     if ((e.code === "KeyY" || e.code === "KeyN") && document.querySelector("#vote .vb")) { send({ t: "vote", ok: e.code === "KeyY" }); return; }

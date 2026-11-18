@@ -756,3 +756,6 @@ body.touch .trade-cols { grid-template-columns: 1fr; }
 .trade-grid { grid-template-columns: repeat(6, minmax(0, 1fr)); }
 .trade-grid .cell { width: auto; height: auto; min-width: 0; }
 .trade-cols > .trade-col { min-width: 0; }
+/* 거래 수락 창은 화면 아래쪽(거래창의 상대 아이템을 가리지 않게) */
+.invite.trade-ask { top: auto !important; bottom: 128px; z-index: 60; }
+body.touch .invite.trade-ask { bottom: 150px; }

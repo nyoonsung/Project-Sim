@@ -1,7 +1,8 @@
 // 창: 캐릭터, 스킬, 가방·장비, 파티, 도움말, 상점, 대장간(강화), 전직소, 던전 관문, 게시판, 훈련 교관
 import { G, send, canAuto, setAuto } from "../game.js";
 import { skillDetails } from "/shared/skilltext.js";
-import { BASIC_SPEED } from "/shared/constants.js";
+import { BASIC_SPEED, CLASS_ASPD } from "/shared/constants.js";
+const basicGap = (sk) => +((sk.aspd * BASIC_SPEED) / (CLASS_ASPD[G.char?.cls] ?? 1)).toFixed(2);
 import { titleDesign } from "/shared/titles.js";
 import { Q, setMode, setLessOthers, preset } from "../quality.js";
 import { KEYS, keyLabel, bindKey, resetKeys, RESERVED } from "../keys.js";
@@ -41,7 +42,7 @@ export function profBlock(sk, long = false) {
 export function skillTip(sk) {
   if (!sk) return [];
   const cost = Object.entries(sk.cost ?? {}).map(([k, v]) => `${RES_NAME[k]} ${v}`).join(", ");
-  const cd = sk.kind === "basic" ? `공격 간격 ${+(sk.aspd * BASIC_SPEED).toFixed(2)}초` : sk.kind === "passive" ? (sk.passive?.trigger?.icd ? `발동 내부 쿨타임 ${sk.passive.trigger.icd}초` : "상시") : `쿨타임 ${sk.cd}초`;
+  const cd = sk.kind === "basic" ? `공격 간격 ${basicGap(sk)}초` : sk.kind === "passive" ? (sk.passive?.trigger?.icd ? `발동 내부 쿨타임 ${sk.passive.trigger.icd}초` : "상시") : `쿨타임 ${sk.cd}초`;
   const kind = { basic: "기본 공격", active: "액티브", passive: "패시브", ultimate: "궁극기" }[sk.kind];
   const el = h("div", {},
     h("div", { class: "tt-name", text: sk.name }),
@@ -177,7 +178,7 @@ export function openSkills() {
         return h("div", { class: `sk${locked ? " locked" : ""}${selSkill === s.id ? " sel" : ""}${equipped ? " equipped" : ""}`, onclick: () => { if (!locked) { selSkill = selSkill === s.id ? null : s.id; refreshWin("skills"); } } },
           h("div", { class: "sk-top" }, h("b", { class: "grade-" + s.grade, text: s.name }), " ", h("span", { class: "meta", text: { basic: "기본 공격", active: "액티브", passive: "패시브", ultimate: "궁극기" }[s.kind] }),
             canAuto(s) && !locked ? h("button", { class: "auto-tg" + (G.autoSkills.has(s.id) ? " on" : ""), title: "자동: 쿨타임이 돌면 가까운 적에게 알아서 사용 (회복은 체력 70% 아래일 때)", onclick: (e) => { e.stopPropagation(); setAuto(s.id, !G.autoSkills.has(s.id)); refreshWin("skills"); } }, G.autoSkills.has(s.id) ? "자동" : "수동") : null),
-          h("div", { class: "meta", text: `${s.kind === "basic" ? `공격 간격 ${+(s.aspd * BASIC_SPEED).toFixed(2)}s` : s.kind === "passive" ? "패시브" : `쿨 ${s.cd}s`}${cost ? " · " + cost : ""}${s.stance ? " · " + s.stance : ""}${locked ? ` · 🔒 ${CLASS_INFO[c.cls].ranks[need]} 필요(Lv.${stageLevel(c.cls, need)})` : ""}` }),
+          h("div", { class: "meta", text: `${s.kind === "basic" ? `공격 간격 ${basicGap(s)}s` : s.kind === "passive" ? "패시브" : `쿨 ${s.cd}s`}${cost ? " · " + cost : ""}${s.stance ? " · " + s.stance : ""}${locked ? ` · 🔒 ${CLASS_INFO[c.cls].ranks[need]} 필요(Lv.${stageLevel(c.cls, need)})` : ""}` }),
           h("div", { class: "desc", text: s.desc }),
           s.kind !== "passive" && !locked ? profBlock(s) : null);
       })));
@@ -207,6 +208,8 @@ export function openInv(pos = {}) {
       h("div", { class: "flexrow" },
         h("button", { class: "btn small", onclick: () => toggleAll((x) => x.rarity === "일반") }, "일반 전부"),
         h("button", { class: "btn small", onclick: () => toggleAll((x) => x.rarity === "일반" || x.rarity === "희귀") }, "희귀 이하"),
+        h("button", { class: "btn small", onclick: () => toggleAll((x) => ["일반", "희귀", "영웅"].includes(x.rarity)) }, "영웅 이하"),
+        h("button", { class: "btn small", onclick: () => toggleAll((x) => ["일반", "희귀", "영웅", "전설"].includes(x.rarity)) }, "전설 이하"),
         h("button", { class: "btn small", onclick: () => toggleAll((x) => !canEquip(x, c.cls)) }, "못 쓰는 장비"),
         h("button", { class: "btn small", onclick: () => { picked.clear(); refreshWin("inv"); } }, "선택 해제")),
       h("div", { class: "flexrow" },
@@ -476,7 +479,7 @@ export function openNpc(o) {
 }
 
 export function refreshAll() {
-  for (const id of ["char", "skills", "inv", "party", "shop", "smithy", "enchant", "class", "gate", "trainer", "titles"]) if (isOpen(id)) refreshWin(id);
+  for (const id of ["char", "skills", "inv", "party", "shop", "smithy", "enchant", "class", "gate", "trainer", "titles", "trade"]) if (isOpen(id)) refreshWin(id);
 }
 
 // ───────── 조작 키 설정 (O) ─────────
@@ -616,20 +619,19 @@ export function openTrade() {
     const mine = new Set(T.mine.items.map((i) => i.uid));
     const cells = (items, mineSide) => h("div", { class: "trade-grid" }, ...Array.from({ length: 12 }, (_, i) => {
       const it = items[i];
-      const el = h("div", { class: "cell" + (it ? " r-" + it.rarity : ""), onclick: () => { if (it && mineSide && !T.mine.ready) send({ t: "trade", op: "set", uids: T.mine.items.map((x) => x.uid).filter((u) => u !== it.uid) }); } },
+      const el = h("div", { class: "cell" + (it ? " r-" + it.rarity : ""), onclick: () => { if (it && mineSide) send({ t: "trade", op: "set", uids: T.mine.items.map((x) => x.uid).filter((u) => u !== it.uid) }); } },
         it ? iconEl(it) : null, it?.enh ? h("span", { class: "enh", text: "+" + it.enh }) : null, it?.ench ? h("span", { class: "ench-dot" + (it.ench === "mend" ? " mend" : ""), text: "✦" }) : null);
       if (it) tipOn(el, () => itemTip(it, mineSide ? null : c.equip[it.slot]));
       return el;
     }));
-    const badge = (sd) => h("span", { class: "trade-badge" + (sd.ok ? " ok" : sd.ready ? " ready" : ""), text: sd.ok ? "확정" : sd.ready ? "준비 완료" : "고르는 중" });
-    const goldIn = h("input", { class: "txt", type: "number", min: 0, max: c.gold, placeholder: "골드", value: tradeGold, disabled: T.mine.ready, oninput: (e) => (tradeGold = e.target.value) });
+    const badge = (sd) => h("span", { class: "trade-badge" + (sd.ok ? " ok" : ""), text: sd.ok ? "거래 요청함" : "고르는 중" });
+    const goldIn = h("input", { class: "txt", type: "number", min: 0, max: c.gold, placeholder: "골드", value: tradeGold, oninput: (e) => (tradeGold = e.target.value) });
     const setGold = () => { const g = Math.max(0, Math.min(c.gold, Math.floor(Number(tradeGold) || 0))); tradeGold = String(g); send({ t: "trade", op: "set", gold: g }); };
     goldIn.addEventListener("keydown", (e) => { e.stopPropagation(); if (e.key === "Enter") setGold(); });
     // 내 가방: 누르면 거래창에 올리기/내리기
     const bag = h("div", { class: "inv-grid trade-bag" }, ...c.inv.map((it) => {
       const on = mine.has(it.uid);
       const el = h("div", { class: "cell r-" + it.rarity + (on ? " picked" : "") + (it.locked ? " locked" : ""), onclick: () => {
-        if (T.mine.ready) return G.ui.toast?.("준비를 풀어야 바꿀 수 있어요.");
         if (it.locked) return G.ui.toast?.("잠긴 아이템은 거래할 수 없어요.");
         const list = T.mine.items.map((x) => x.uid);
         send({ t: "trade", op: "set", uids: on ? list.filter((u) => u !== it.uid) : [...list, it.uid] });
@@ -637,22 +639,23 @@ export function openTrade() {
       tipOn(el, () => itemTip(it, c.equip[it.slot]));
       return el;
     }));
-    const bothReady = T.mine.ready && T.theirs.ready;
     return [
       h("div", { class: "trade-cols" },
         h("div", { class: "trade-col" },
           h("div", { class: "flexrow" }, h("b", { text: "내가 줄 것" }), badge(T.mine)),
           cells(T.mine.items, true),
-          h("div", { class: "flexrow" }, h("span", { class: "trade-gold", text: `${T.mine.gold.toLocaleString()} G` }), goldIn, h("button", { class: "btn small", disabled: T.mine.ready, onclick: setGold }, "골드 올리기"))),
+          h("div", { class: "flexrow" }, h("span", { class: "trade-gold", text: `${T.mine.gold.toLocaleString()} G` }), goldIn, h("button", { class: "btn small", onclick: setGold }, "골드 올리기"))),
         h("div", { class: "trade-col" },
           h("div", { class: "flexrow" }, h("b", { text: `${T.with}님이 줄 것` }), badge(T.theirs)),
           cells(T.theirs.items, false),
           h("div", { class: "flexrow" }, h("span", { class: "trade-gold", text: `${T.theirs.gold.toLocaleString()} G` })))),
       h("div", { class: "flexrow trade-actions" },
-        h("button", { class: "btn" + (T.mine.ready ? "" : " primary"), disabled: T.mine.ok, onclick: () => send({ t: "trade", op: "ready" }) }, T.mine.ready ? "준비 풀기" : "준비"),
-        h("button", { class: "btn primary", disabled: !bothReady || T.mine.ok, onclick: () => send({ t: "trade", op: "confirm" }) }, T.mine.ok ? "상대 확정 기다리는 중…" : "거래 확정"),
+        T.theirs.ok && !T.mine.ok
+          ? h("button", { class: "btn primary", onclick: () => send({ t: "trade", op: "confirm" }) }, "수락하고 교환")
+          : h("button", { class: "btn primary", disabled: T.mine.ok, onclick: () => send({ t: "trade", op: "confirm" }) }, T.mine.ok ? "상대 수락 기다리는 중…" : "거래하기"),
+        T.theirs.ok && !T.mine.ok ? h("button", { class: "btn", onclick: () => send({ t: "trade", op: "reject" }) }, "거절") : null,
         h("button", { class: "btn danger", onclick: () => closeWin("trade") }, "취소")),
-      h("div", { class: "note", text: "물건이나 골드가 바뀌면 양쪽 준비가 풀려요. 둘 다 '준비' → 둘 다 '거래 확정'을 눌러야 교환돼요. 받기 전에 상대가 올린 아이템을 꼭 확인하세요." }),
+      h("div", { class: "note", text: "한 명이 '거래하기'를 누르면 상대에게 수락/거절 창이 떠요. 수락하면 바로 교환돼요. 그 전에 물건이나 골드가 바뀌면 요청이 풀려요. 상대가 올린 아이템을 꼭 확인하세요." }),
       h("h4", { text: `내 가방 — 눌러서 올리기/내리기 (💰 ${c.gold.toLocaleString()} G)` }),
       c.inv.length ? bag : h("div", { class: "note", text: "가방이 비어 있어요." }),
     ];

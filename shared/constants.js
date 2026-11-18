@@ -68,3 +68,6 @@ export const BASIC_SPEED = 0.75;
 // ── 판정 보정: 플레이어 공격은 넉넉하게, 보스 공격은 빡빡하게
 export const PLAYER_HIT = { melee: 1.3, meleeReach: 16, meleeArc: 20, proj: 4, area: 1.15 }; // 근접 사거리 ×1.3 +16px, 각도 +20°, 투사체 판정 +4px, 범위 ×1.15
 export const BOSS_HIT = { shrink: 6, proj: 5 }; // 보스 장판은 표시보다 6px 안쪽까지만, 보스 탄 판정 반지름 5
+
+// 직업별 기본 공격 속도 배율 (궁수 1.5배 빠름)
+export const CLASS_ASPD = { archer: 1.5 };

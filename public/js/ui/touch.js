@@ -10,8 +10,12 @@ import { SKILLS } from "/shared/skills.js";
 import { h, $, hideTip, retrigger } from "./dom.js";
 import { skillIconURL } from "./icons.js";
 
-export const isTouchDevice = () =>
-  (typeof matchMedia === "function" && matchMedia("(pointer: coarse)").matches) || (navigator.maxTouchPoints > 0 && "ontouchstart" in window);
+// 휴대폰·태블릿만 터치 화면. 터치스크린 노트북(마우스·터치패드가 있음)은 PC 화면 → 채팅·단축키 그대로
+export const isTouchDevice = () => {
+  const mm = (q) => typeof matchMedia === "function" && matchMedia(q).matches;
+  if (mm("(pointer: coarse)")) return true;
+  return navigator.maxTouchPoints > 0 && "ontouchstart" in window && !mm("(any-pointer: fine)");
+};
 
 const STICK_R = 46; // 조이스틱 최대 반경(px)
 let lastDir = [1, 0];

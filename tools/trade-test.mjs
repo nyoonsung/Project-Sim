@@ -72,18 +72,18 @@ try {
   // 올린 아이템 팔기 막기
   A.send({ t: "sell", uid: aw.uid }); await sleep(150);
   ok(A.char.inv.some((i) => i.uid === aw.uid), "거래에 올린 아이템 판매 막힘");
-  // 준비 후 바꾸면 준비 풀림
-  A.send({ t: "trade", op: "ready" }); B.send({ t: "trade", op: "ready" }); await sleep(150);
-  ok(A.trade.mine.ready && A.trade.theirs.ready, "둘 다 준비");
+  // 한 명이 '거래하기' → 상대에게 요청(수락 창). 그 사이 조건이 바뀌면 요청이 풀림
+  A.send({ t: "trade", op: "confirm" }); await sleep(150);
+  ok(A.trade.mine.ok && B.trade.theirs.ok, "한 명이 거래하기 → 상대 쪽에 요청 표시");
+  ok(A.char.inv.some((i) => i.uid === aw.uid), "상대가 수락하기 전엔 안 바뀜");
   B.send({ t: "trade", op: "set", gold: 400 }); await sleep(150);
-  ok(!A.trade.mine.ready && !B.trade.mine.ready, "제안이 바뀌면 준비가 풀림");
-  // 확정 전에 혼자 확정 시도 → 안 됨
+  ok(!A.trade.mine.ok && !B.trade.theirs.ok, "조건이 바뀌면 요청이 풀림");
+  // 거절
   A.send({ t: "trade", op: "confirm" }); await sleep(150);
-  ok(!A.trade.mine.ok, "준비 안 된 상태로 확정 불가");
-  // 정상 교환
-  A.send({ t: "trade", op: "ready" }); B.send({ t: "trade", op: "ready" }); await sleep(150);
+  B.send({ t: "trade", op: "reject" }); await sleep(150);
+  ok(!A.trade.mine.ok && A.trade !== null, "거절하면 요청만 풀리고 거래창은 유지");
+  // 수락 → 교환
   A.send({ t: "trade", op: "confirm" }); await sleep(150);
-  ok(A.trade?.mine.ok && !A.char.inv.some((i) => i.name === bw.name && i.uid > 2) , "한 명만 확정하면 아직 안 바뀜");
   B.send({ t: "trade", op: "confirm" }); await sleep(300);
   ok(A.trade === null && B.trade === null, "거래 종료");
   ok(A.char.gold === 50000 - 1000 + 400 && B.char.gold === 50000 - 400 + 1000, `골드 교환 (${A.char.gold}, ${B.char.gold})`);
