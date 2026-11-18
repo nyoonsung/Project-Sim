@@ -1,5 +1,6 @@
 // 시작점: 로그인 → 게임 연결 → 입력·렌더 루프
-import { G, onMessage, inputTick, tryCast, updateMouseWorld, send } from "./game.js";
+import { G, onMessage, inputTick, tryCast, updateMouseWorld, send, usePotion } from "./game.js";
+import { slotForCode, potionForCode, slotForMouse } from "./keys.js";
 import { isTouchDevice, setupTouch, touchAimTick } from "./ui/touch.js";
 import { unlockAudio, toggleSound, soundOn, sfx, toggleShake, shakeEnabled, addTrauma } from "./feel.js";
 import { loadDT2, frame } from "./render/dt2.js";
@@ -111,6 +112,7 @@ const ui = {
   onEnhance(m) { WIN.onEnhance(m); HUD.toast(m.result === "success" ? `강화 성공! ${m.name} +${m.enh}` : m.result === "fail" ? `강화 실패 (${m.name} +${m.enh} 유지)` : `${m.name}이(가) 파괴됐어요…`, m.result === "success" ? "rank" : m.result === "destroy" ? "death" : "info"); },
   toast: HUD.toast,
   center: HUD.center,
+  refreshKeys() { if (!G.touch) { HUD.buildHud(); HUD.updateSkillbar(); } },
   showVote: HUD.showVote,
   gotItem(it) { HUD.toast(`획득: ${it.name} [${it.rarity}]`, it.rarity === "신화" ? "mythic" : it.rarity === "전설" ? "legend" : "info"); },
   onBoss: HUD.updateBoss,
@@ -141,7 +143,8 @@ function resize() {
   G.renderer?.setView(VIEW_W, VIEW_H, 0.5);
   const s = Math.max(1, Math.floor(Math.min(W / VIEW_W, H / VIEW_H)));
   const fs = Math.min(W / VIEW_W, H / VIEW_H);
-  const scale = fs >= 1 && !G.touch ? s : fs;
+  // 정수 배율에 가까우면 정수(또렷), 아니면 창을 꽉 채움 (작은 창에서 화면이 작게 가운데 뜨는 문제)
+  const scale = fs >= 1 && !G.touch && fs - s < 0.15 ? s : fs;
   cv.style.width = VIEW_W * scale + "px";
   cv.style.height = VIEW_H * scale + "px";
   G.scale = scale;
@@ -198,29 +201,35 @@ function bindInput() {
     G.mouse.y = ((e.clientY - r.top) / r.height) * cv.height;
   };
   addEventListener("mousemove", toMouse);
-  cv.addEventListener("mousedown", (e) => { toMouse(e); G.mouse.down[e.button] = true; if (e.button === 0) tryCast(0); if (e.button === 2) tryCast(1); });
+  cv.addEventListener("mousedown", (e) => { toMouse(e); G.mouse.down[e.button] = true; const i = slotForMouse(e.button); if (i >= 0) tryCast(i); if (e.button === 1) e.preventDefault(); });
   addEventListener("mouseup", (e) => (G.mouse.down[e.button] = false));
   cv.addEventListener("contextmenu", (e) => e.preventDefault());
+  $("#game").addEventListener("contextmenu", (e) => { if (!e.target.closest?.("input, textarea")) e.preventDefault(); });
+  // 채팅 숨기기/보이기 (L 또는 메뉴 버튼), 기억해 둠
+  const chatHidden = () => { try { return localStorage.getItem("abyss.chatHidden") === "1"; } catch { return false; } };
+  $("#chat").classList.toggle("collapsed", chatHidden());
+  G.toggleChat = () => { const on = !$("#chat").classList.contains("collapsed"); $("#chat").classList.toggle("collapsed", on); try { localStorage.setItem("abyss.chatHidden", on ? "1" : "0"); } catch {} };
   addEventListener("blur", () => { G.keys.clear(); G.mouse.down = [false, false, false]; });
-  chat.addEventListener("focus", () => { G.typing = true; G.keys.clear(); });
-  chat.addEventListener("blur", () => (G.typing = false));
+  chat.addEventListener("focus", () => { G.typing = true; G.keys.clear(); document.body.classList.add("chat-open"); });
+  chat.addEventListener("blur", () => { G.typing = false; setTimeout(() => { if (document.activeElement !== chat) document.body.classList.remove("chat-open"); }, 150); });
   chat.addEventListener("keydown", (e) => {
+    // 한글 입력 중(조합 중)에 누른 Enter는 무시: 안 그러면 마지막 글자가 한 번 더 올라감
+    if (e.key === "Enter" && (e.isComposing || e.keyCode === 229)) { e.stopPropagation(); return; }
     if (e.key === "Enter") { const t = chat.value.trim(); if (t) send({ t: "chat", text: t }); chat.value = ""; chat.blur(); e.preventDefault(); }
     if (e.key === "Escape") chat.blur();
     e.stopPropagation();
   });
-  const SLOT = { KeyQ: 2, KeyE: 3, KeyR: 4, KeyF: 5, ShiftLeft: 6, ShiftRight: 6, KeyV: 7 };
   addEventListener("keydown", (e) => {
     if (G.typing || e.target.tagName === "INPUT") return;
-    if (e.code === "Enter") { chat.focus(); e.preventDefault(); return; }
+    if (e.code === "Enter") { document.body.classList.add("chat-open"); $("#chat").classList.remove("collapsed-tmp"); chat.focus(); e.preventDefault(); return; }
     if (e.code === "Escape") { const w = openWins(); if (w.length) closeWin(w[w.length - 1]); return; }
     if ((e.code === "KeyY" || e.code === "KeyN") && document.querySelector("#vote .vb")) { send({ t: "vote", ok: e.code === "KeyY" }); return; }
-    if (e.repeat && !SLOT[e.code]) return;
+    if (G.capturingKey) return; // 키 설정 창에서 새 키를 기다리는 중
+    const si = slotForCode(e.code), pi = potionForCode(e.code);
+    if (e.repeat && si < 0) return;
     G.keys.add(e.code);
-    if (SLOT[e.code] != null) { tryCast(SLOT[e.code]); e.preventDefault(); }
-    if (e.code === "Digit1") { send({ t: "use", item: "hp_potion" }); sfx("potion"); }
-    if (e.code === "Digit2") { send({ t: "use", item: "mp_potion" }); sfx("potion"); }
-    if (e.code === "Digit3") { send({ t: "use", item: "antidote" }); sfx("potion"); }
+    if (si >= 0) { tryCast(si); e.preventDefault(); }
+    if (pi >= 0) { usePotion(["hp_potion", "mp_potion", "antidote"][pi]); e.preventDefault(); return; }
     if (e.code === "KeyC") toggleWin("char", WIN.openChar);
     if (e.code === "KeyK") toggleWin("skills", WIN.openSkills);
     if (e.code === "KeyI") toggleWin("inv", WIN.openInv);
@@ -228,6 +237,10 @@ function bindInput() {
     if (e.code === "KeyH") toggleWin("help", WIN.openHelp);
     if (e.code === "KeyG") { const o = HUD.interactTarget(); if (o) WIN.openNpc(o); }
     if (e.code === "KeyM") HUD.toggleBigMap();
+    if (e.code === "KeyL") G.toggleChat?.();
+    if (e.code === "KeyB") toggleWin("codex", WIN.openCodex);
+    if (e.code === "KeyO") toggleWin("keys", WIN.openKeys);
+    if (e.code === "KeyN") $("#minimap").classList.toggle("hidden-mini");
     if (e.code === "Tab") e.preventDefault();
   });
   addEventListener("keyup", (e) => G.keys.delete(e.code));
@@ -243,9 +256,10 @@ function bindInput() {
   paintShake();
   kb.addEventListener("click", () => { toggleShake(); paintShake(); sfx("click"); if (shakeEnabled()) addTrauma(0.4); });
   $("#minimap").addEventListener("click", () => HUD.toggleBigMap());
+  $("#chat-btn")?.addEventListener("click", () => G.toggleChat?.());
   $("#bigmap").addEventListener("click", () => HUD.toggleBigMap());
   for (const b of document.querySelectorAll("#menu-buttons button[data-win]")) {
-    const map = { char: WIN.openChar, skills: WIN.openSkills, inv: WIN.openInv, party: WIN.openParty, help: WIN.openHelp };
+    const map = { char: WIN.openChar, skills: WIN.openSkills, inv: WIN.openInv, party: WIN.openParty, help: WIN.openHelp, codex: WIN.openCodex, keys: WIN.openKeys };
     b.addEventListener("click", () => toggleWin(b.dataset.win, map[b.dataset.win]));
   }
 }

@@ -1,5 +1,7 @@
 // 월드 렌더러: 타일 → 바닥 표시(예고·구역) → y정렬 유닛/오브젝트 → 투사체 → 이펙트 → 조명 → 날씨 → 머리 위 UI
 import { G, localStep, moveDir } from "../game.js";
+import { frame as dtFrame } from "./dt2.js";
+import { itemIcon } from "../ui/icons.js";
 import { tickFeel, drawParts, hitOffset } from "../feel.js";
 import { dtLookFor, drawDT } from "./looks.js";
 import { drawTownObject, drawStrings, spawnFolk, tickFolk, folkList, drawFolk, drawTownNpc } from "./townart.js";
@@ -41,7 +43,7 @@ export class Renderer {
     this.ctx.imageSmoothingEnabled = false;
     this.front = new FxLayer(w, h);
     this.ground = new FxLayer(w, h);
-    this.light = new OffscreenCanvas(Math.ceil(w / 2), Math.ceil(h / 2));
+    this.light = new OffscreenCanvas(Math.ceil(w / 2) + 1, Math.ceil(h / 2) + 1);
     this.lctx = this.light.getContext("2d");
   }
   constructor(canvas) {
@@ -52,7 +54,7 @@ export class Renderer {
     this.ground = new FxLayer(VW, VH);
     this.weather = new FxLayer(320, 180);
     this.weather.every = 2; // 날씨는 배경이라 30fps로 충분
-    this.light = new OffscreenCanvas(VW / 2, VH / 2);
+    this.light = new OffscreenCanvas(VW / 2 + 1, VH / 2 + 1);
     this.lctx = this.light.getContext("2d");
     this.zoneFx = new Map();
     this.focusY = 0.5;
@@ -183,22 +185,52 @@ export class Renderer {
   }
   mkWeatherCtx() { this.wcv = new OffscreenCanvas(320, 180); const c = this.wcv.getContext("2d"); return c; }
 
+  // 바닥 아이템: 실제 아이템 그림 + 등급 색 빛기둥·테두리 (예전 파란 점 대신)
   drawLoot(ctx, cx, cy, t) {
+    const RANK = { 일반: 0, 희귀: 1, 영웅: 2, 전설: 3, 신화: 4 };
     for (const l of G.loot.values()) {
-      const x = l.x - cx, y = l.y - cy;
-      if (x < -40 || y < -40 || x > VW + 40 || y > VH + 40) continue;
+      const x = Math.round(l.x - cx), y = Math.round(l.y - cy);
+      if (x < -40 || y < -60 || x > VW + 40 || y > VH + 40) continue;
       const col = l.s === "cons" ? "#ff6a7a" : RARITY_COLOR[l.r] ?? "#ccc";
-      const bob = Math.sin(t * 3 + l.id) * 1.5;
-      if (l.r === "전설" || l.r === "신화" || l.r === "영웅") {
-        ctx.globalAlpha = 0.25 + Math.sin(t * 4) * 0.1;
-        ctx.fillStyle = col;
-        ctx.fillRect(Math.round(x) - 2, Math.round(y) - 40, 4, 40);
+      const rk = RANK[l.r] ?? 0;
+      const bob = Math.round(Math.sin(t * 3 + l.id) * 1.5);
+      if (l.s !== "cons" && rk >= 1) {
+        const hgt = 18 + rk * 12;
+        const g = ctx.createLinearGradient(0, y - hgt, 0, y);
+        g.addColorStop(0, "rgba(0,0,0,0)"); g.addColorStop(1, col);
+        ctx.globalAlpha = 0.35 + Math.sin(t * 4 + l.id) * 0.1;
+        ctx.fillStyle = g; ctx.fillRect(x - 3, y - hgt, 6, hgt);
+        ctx.globalAlpha = 1;
+        addGlow(l.x, l.y - 6, 26 + rk * 10, col, 0.25 + rk * 0.06);
+      }
+      ctx.fillStyle = "#0008"; ctx.beginPath(); ctx.ellipse(x, y + 3, 8, 3, 0, 0, Math.PI * 2); ctx.fill();
+      let icon = null;
+      if (l.s === "cons") icon = dtFrame("flask_red");
+      else icon = itemIcon({ slot: l.s, type: l.ty, variant: l.v, rarity: l.r, ilvl: l.il ?? 1 });
+      if (icon) {
+        const w = l.s === "cons" ? 16 : 18;
+        // 등급 색 테두리(아이콘 뒤에 살짝 큰 사각 빛)
+        ctx.fillStyle = col; ctx.globalAlpha = 0.55;
+        ctx.fillRect(x - w / 2 - 1, y - w - 2 + bob - 1, w + 2, w + 2);
+        ctx.globalAlpha = 1; ctx.fillStyle = "#0c0a12"; ctx.fillRect(x - w / 2, y - w - 2 + bob, w, w);
+        ctx.drawImage(icon, x - w / 2, y - w - 2 + bob, w, w);
+      }
+      if (rk >= 2 && Math.sin(t * 6 + l.id * 3) > 0.9) { ctx.fillStyle = "#fff"; ctx.fillRect(x + 6, y - 20 + bob, 2, 2); }
+    }
+    // 자동 획득: 아이템이 내 쪽으로 포물선을 그리며 날아옴
+    if (G.lootFly?.length) {
+      const tn = performance.now() / 1000;
+      G.lootFly = G.lootFly.filter((f) => tn - f.t0 < 0.5);
+      for (const f of G.lootFly) {
+        const k = (tn - f.t0) / 0.5, e = k * k;
+        const to = G.ents.get(f.to);
+        const tx = to ? to.rx : f.x, ty = to ? to.ry - 14 : f.y;
+        const x = f.x + (tx - f.x) * e - cx, y = f.y + (ty - f.y) * e - Math.sin(k * Math.PI) * 30 - cy;
+        const icon = f.s === "cons" ? dtFrame("flask_red") : itemIcon({ slot: f.s, type: f.ty, variant: f.v, rarity: f.r, ilvl: f.il ?? 1 });
+        ctx.globalAlpha = 1 - k * 0.5;
+        if (icon) ctx.drawImage(icon, Math.round(x - 8), Math.round(y - 8), 16, 16);
         ctx.globalAlpha = 1;
       }
-      ctx.fillStyle = "#000a"; ctx.fillRect(Math.round(x) - 5, Math.round(y) + 2, 10, 2);
-      ctx.fillStyle = "#000"; ctx.fillRect(Math.round(x) - 4, Math.round(y - 7 + bob), 8, 8);
-      ctx.fillStyle = col; ctx.fillRect(Math.round(x) - 3, Math.round(y - 6 + bob), 6, 6);
-      ctx.fillStyle = "#fff"; ctx.fillRect(Math.round(x) - 2, Math.round(y - 5 + bob), 2, 2);
     }
   }
 
@@ -514,13 +546,19 @@ export class Renderer {
   drawLighting(ctx, cx, cy, t) {
     const town = G.kind === "town";
     const z = town ? { ambient: 0.4, light: 110 } : G.zone;
-    const L = this.lctx, W = VW / 2, H = VH / 2;
+    // 빛 지도는 절반 해상도라, 화면이 1px 움직일 때마다 빛 구멍이 0.5px씩 번갈아 어긋나 깜박였음
+    // → 빛 지도를 '월드의 짝수 좌표'에 고정하고, 그릴 때만 0~1px 밀어서 맞춤
+    const icx = Math.round(cx), icy = Math.round(cy);
+    const bx = icx - (((icx % 2) + 2) % 2), by = icy - (((icy % 2) + 2) % 2);
+    const dx = cx - bx, dy = cy - by;
+    const L = this.lctx, W = this.light.width, H = this.light.height;
     L.globalCompositeOperation = "source-over";
     L.clearRect(0, 0, W, H);
     L.fillStyle = `rgba(6,4,14,${G.mapKind === "safe" ? 0.55 : z.ambient})`;
     L.fillRect(0, 0, W, H);
     L.globalCompositeOperation = "destination-out";
-    const hole = (x, y, r, a = 1) => {
+    const hole = (x0, y0, r, a = 1) => {
+      const x = x0 + dx, y = y0 + dy;
       const g = L.createRadialGradient(x / 2, y / 2, 0, x / 2, y / 2, r / 2);
       g.addColorStop(0, `rgba(0,0,0,${a})`); g.addColorStop(0.55, `rgba(0,0,0,${a * 0.7})`); g.addColorStop(1, "rgba(0,0,0,0)");
       L.fillStyle = g; L.fillRect(x / 2 - r / 2, y / 2 - r / 2, r, r);
@@ -538,7 +576,7 @@ export class Renderer {
     // 색 빛이 있는 곳도 밝게
     forEachGlow((x, y, r, c, a) => { const sx = x - cx, sy = y - cy; if (sx > -r && sy > -r && sx < VW + r && sy < VH + r) hole(sx, sy, r * 1.3, Math.min(1, a * 1.6)); });
     ctx.imageSmoothingEnabled = true;
-    ctx.drawImage(this.light, 0, 0, VW, VH);
+    ctx.drawImage(this.light, -dx, -dy, W * 2, H * 2);
     ctx.imageSmoothingEnabled = false;
   }
 

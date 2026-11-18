@@ -25,8 +25,8 @@ export const MONSTERS = {
   // 1구역: 이끼 낀 지하묘지
   slime: { name: "이끼 슬라임", ai: "chaser", hp: 34, dmg: 7, speed: 52, range: 22, atkCd: 1.6, xp: 1, look: critter("critters/slime", GREENS) },
   bat: { name: "동굴 박쥐", ai: "swarm", hp: 18, dmg: 5, speed: 105, range: 18, atkCd: 1.1, xp: 0.7, fly: true, look: critter("critters/bat") },
-  skeleton: { name: "해골 병사", ai: "chaser", hp: 48, dmg: 9, speed: 62, range: 34, atkCd: 1.7, xp: 1.3, look: rig(P.bone, "sword") },
-  skel_archer: { name: "해골 궁수", ai: "ranged", hp: 32, dmg: 8, speed: 55, range: 220, atkCd: 2.2, xp: 1.3, proj: "projectiles/arrow", look: rig(P.bone, "bow") },
+  skeleton: { name: "해골 병사", ai: "chaser", hp: 11, dmg: 8, speed: 62, range: 34, atkCd: 1.7, xp: 1.3, look: rig(P.bone, "sword") },
+  skel_archer: { name: "해골 궁수", ai: "ranged", hp: 10, dmg: 7, speed: 55, range: 220, atkCd: 2.2, xp: 1.3, proj: "projectiles/arrow", look: rig(P.bone, "bow") },
   // 2구역: 고블린 굴
   goblin: { name: "고블린 약탈자", ai: "chaser", hp: 44, dmg: 9, speed: 78, range: 30, atkCd: 1.3, xp: 1.2, look: rig(P.goblin, "dagger", "cap", "#7a3a20", 0.85) },
   goblin_spear: { name: "고블린 창병", ai: "charger", hp: 56, dmg: 12, speed: 66, range: 44, atkCd: 2.6, xp: 1.5, look: rig(P.goblin, "spear", "helm", "#6a6f78", 0.9) },
@@ -135,7 +135,7 @@ export const BOSSES = {
 // 구역 정의: 팔레트(바닥·벽), 조명, 분위기 이펙트
 export const ZONES = [
   { name: "이끼 낀 지하묘지", floor: ["#3a4038", "#323830", "#2a2f28", "#454c40"], wall: ["#5a5e52", "#43473c", "#2c2f27", "#1a1c17"], accent: "#6fa060", light: 150, ambient: 0.82, torch: "fire/torch",
-    monsters: ["slime", "bat", "skeleton", "skel_archer"], mid: "giant_slime", boss: "skeleton_lord", weather: null, deco: ["bones", "moss", "crack"] },
+    monsters: ["slime", "bat", "slime", "bat", "skeleton", "skel_archer"], mid: "giant_slime", boss: "skeleton_lord", weather: null, deco: ["bones", "moss", "crack"] },
   { name: "고블린 굴", floor: ["#4a3a2c", "#40322a", "#362a22", "#544232"], wall: ["#6a5440", "#524030", "#3a2c20", "#221810"], accent: "#c08040", light: 145, ambient: 0.84, torch: "fire/brazier",
     monsters: ["goblin", "goblin_spear", "goblin_shaman", "wolf"], mid: "goblin_chief", boss: "ogre_king", weather: null, deco: ["bones", "crate", "crack"] },
   { name: "독버섯 늪", floor: ["#2e3a2a", "#283424", "#222c1e", "#364430"], wall: ["#3e4a34", "#2e3826", "#20281a", "#12180e"], accent: "#a0d040", light: 140, ambient: 0.86, torch: "fire/spirit-flame",

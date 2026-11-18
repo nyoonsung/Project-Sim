@@ -13,6 +13,13 @@ add("common", [
   { id: "c_thrust", name: "찌르기", grade: "일반", kind: "basic", aspd: 0.65, aim: "dir", anim: "thrust",
     desc: "빠르게 한 지점을 공격하는 기본 단일 공격.", limit: "자원 없이 계속 쓸 수 있는 기본 공격. 직업 주력기보다 피해량은 낮다.",
     fx: { hit: "impacts/hit-spark" }, steps: [{ do: "melee", range: 46, arc: 40, pow: 0.65, max: 1 }] },
+  // 모험가가 활·지팡이를 들면 기본 공격이 자동으로 바뀜 (근접으로 활을 휘두르던 문제)
+  { id: "c_shot", name: "활쏘기", grade: "일반", kind: "basic", aspd: 0.8, aim: "dir", anim: "shoot", weaponBasic: "bow",
+    desc: "활을 들었을 때의 기본 공격. 화살 한 발을 쏜다.", limit: "근접 찌르기보다 한 발 피해는 낮다.",
+    fx: { proj: "projectiles/arrow", hit: "impacts/hit-spark" }, steps: [{ do: "proj", speed: 500, range: 260, pow: 0.55, radius: 5 }] },
+  { id: "c_bolt", name: "마력탄", grade: "일반", kind: "basic", aspd: 0.85, aim: "dir", anim: "cast", weaponBasic: "staff",
+    desc: "지팡이를 들었을 때의 기본 공격. 작은 마력 구슬을 쏜다.", limit: "근접 찌르기보다 한 발 피해는 낮다.",
+    fx: { proj: "arcane/arcane-orb", scale: 0.45, hit: "arcane/mana-burst" }, steps: [{ do: "proj", speed: 400, range: 240, pow: 0.55, radius: 6 }] },
   { id: "c_slash", name: "베기", grade: "일반", kind: "active", cd: 2, cost: { mp: 2 }, aim: "dir", anim: "slash",
     desc: "전방을 가로질러 공격하는 기본 근접 기술.", limit: "찌르기보다 범위가 넓은 대신 단일 대상 피해가 낮다.",
     fx: { swing: "melee/sword-slash", hit: "impacts/hit-spark" }, steps: [{ do: "melee", range: 46, arc: 120, pow: 0.6 }] },
@@ -395,5 +402,9 @@ export function unlockStage(skill, stagesInClass) {
 }
 /** 직업의 스킬 목록 */
 export function skillsOf(cls) {
-  return S.filter((s) => s.cls === cls);
+  return S.filter((s) => s.cls === cls && !s.weaponBasic);
+}
+/** 모험가 기본 공격: 든 무기에 따라 (활 → 활쏘기, 지팡이 → 마력탄, 그 외 → 찌르기) */
+export function adventurerBasic(weaponType) {
+  return weaponType === "bow" ? "c_shot" : weaponType === "staff" ? "c_bolt" : "c_thrust";
 }

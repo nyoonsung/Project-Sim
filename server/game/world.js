@@ -2,7 +2,7 @@
 import { Q, secLog, itemLog } from "../db.js";
 import { TICK_RATE, ITEMS, MAX_PARTY, SKILL_SLOTS } from "../../shared/constants.js";
 import { CLASS_INFO, STATS } from "../../shared/classes.js";
-import { SKILLS } from "../../shared/skills.js";
+import { SKILLS, adventurerBasic } from "../../shared/skills.js";
 import { canEquip, enhanceOdds, enhanceCost, sellPrice, MAX_ENH, SLOTS, CLASS_GEAR, baseStats, itemName } from "../../shared/items.js";
 import { floorKind } from "../../shared/zones.js";
 import { Room } from "./room.js";
@@ -123,9 +123,9 @@ export class World {
     for (const [id, x] of u.status) st.push([id, Math.round((x.until - now) * 10) / 10]);
     const o = { t: "me", hp: Math.ceil(u.hp), mh: u.maxHp, mp: Math.floor(u.mp), mm: u.maxMp, ki: Math.floor(u.ki), holy: Math.floor(u.holy), parts: u.parts, gap: u.gap,
       sh: u.shield ? Math.round(u.shield.amt) : 0, cds, buffs, st, lv: s.char.level, xp: s.char.xp, gold: s.char.gold, stance: u.stance, acu: u.acupoint ?? 0,
-      dead: u.dead ? 1 : 0, cons: s.char.cons, spd: Math.round(u.stats.move * moveMul(u) * (u.guarding && now < u.guarding ? 0.35 : 1) * 10) / 10, pcd: Object.fromEntries(Object.entries(s.potionCd).map(([k, v]) => [k, Math.max(0, Math.round((v - Date.now())))])) };
+      dead: u.dead ? 1 : 0, cons: s.char.cons, cs: Math.round((u.stats.cast ?? 1) * 100) / 100, spd: Math.round(u.stats.move * moveMul(u) * (u.guarding && now < u.guarding ? 0.35 : 1) * 10) / 10, pcd: Object.fromEntries(Object.entries(s.potionCd).map(([k, v]) => [k, Math.max(0, Math.round((v - Date.now())))])) };
     // 바뀐 게 없으면 보내지 않음 (최대 1초에 한 번은 보냄)
-    const key = JSON.stringify([o.hp, o.mh, o.mp, o.mm, o.ki, o.holy, o.parts, o.gap, o.sh, o.lv, o.xp, o.gold, o.stance, o.acu, o.dead, o.cons, o.spd,
+    const key = JSON.stringify([o.cs, o.hp, o.mh, o.mp, o.mm, o.ki, o.holy, o.parts, o.gap, o.sh, o.lv, o.xp, o.gold, o.stance, o.acu, o.dead, o.cons, o.spd,
       Object.entries(o.cds).map(([k, v]) => [k, Math.round(now * 10 + v / 100)]), buffs.map((b) => [b[0], Math.round((now + b[1]) * 10), b[2]]), st.map((x) => [x[0], Math.round((now + x[1]) * 10)]), Object.keys(o.pcd).filter((k) => o.pcd[k] > 0)]);
     const tn = Date.now();
     if (s.profOut) { o.pf = s.profOut; s.profOut = null; } // 숙련 경험치 변경분
@@ -264,7 +264,9 @@ export class World {
     const maxCp = Math.min(...group.map((g) => g.char.checkpoint));
     // 한 번 깬 보스층(주요·중간)은 문지기에게서 다시 도전 가능 (파티원 모두 깬 층만)
     const bossAgain = floorKind(floor) !== "normal" && group.every((g) => g.char.best >= floor);
-    if (floor !== 1 && !bossAgain && (floor > maxCp || (floor - 1) % 10 !== 0)) return s.notice(`시작할 수 있는 층은 1층, 열린 체크포인트(최대 ${maxCp}층), 또는 모두 깬 보스층이에요.`);
+    // 이어하기: 파티원 모두가 깬 가장 높은 층의 바로 다음 층
+    const next = Math.min(100, Math.min(...group.map((g) => g.char.best ?? 0)) + 1);
+    if (floor !== 1 && floor !== next && !bossAgain && (floor > maxCp || (floor - 1) % 10 !== 0)) return s.notice(`시작할 수 있는 층은 1층, 이어하기(${next}층), 열린 체크포인트(최대 ${maxCp}층), 또는 모두 깬 보스층이에요.`);
     if (group.some((g) => g.unit.room !== this.town)) return s.notice("파티원 모두 마을에 있어야 해요.");
     this.moveGroup(group, floor, "dungeon");
   }
@@ -365,6 +367,9 @@ export class World {
         seen.add(id); out.push(id);
       } else out.push(null);
     }
+    // 무기 전용 기본 공격(활쏘기·마력탄)은 1번 칸에만, 모험가는 든 무기에 맞춰 자동
+    for (let i = 1; i < out.length; i++) if (out[i] && SKILLS[out[i]].weaponBasic) out[i] = null;
+    if (s.char.cls === "adventurer") out[0] = adventurerBasic(s.char.equip.weapon?.type);
     s.char.skills = out;
     refreshStats(s.unit);
     this.sendChar(s);
@@ -491,6 +496,7 @@ export class World {
     const old = c.equip[it.slot];
     c.equip[it.slot] = it;
     if (old) c.inv.push(old);
+    if (c.cls === "adventurer" && it.slot === "weapon") c.skills[0] = adventurerBasic(it.type);
     refreshStats(s.unit);
     s.unit.room?.ev({ e: "add", ...s.unit.room.describe(s.unit) });
     this.sendChar(s);
@@ -501,6 +507,7 @@ export class World {
     if (c.inv.length >= INV_SIZE) return s.notice("가방이 가득 찼어요.");
     c.inv.push(c.equip[slot]);
     c.equip[slot] = null;
+    if (c.cls === "adventurer" && slot === "weapon") c.skills[0] = "c_thrust";
     refreshStats(s.unit);
     s.unit.room?.ev({ e: "add", ...s.unit.room.describe(s.unit) });
     this.sendChar(s);

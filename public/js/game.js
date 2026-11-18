@@ -1,10 +1,11 @@
 // 클라이언트 게임 상태: 서버 메시지 반영, 내 캐릭터 이동 예측, 입력 전송
 import { applyInput } from "/shared/move.js";
+import { KEYS } from "./keys.js";
 import { castFx, hitFx, profUpFx } from "./render/skillfx.js";
 import { profOf, profCost } from "/shared/prof.js";
 import { onTown } from "./update.js";
 import { sfx, onEnemyHit, onEnemyDie, onMeHurt } from "./feel.js";
-import { TICK_DT, PLAYER_RADIUS, SLOT_KEYS, VIEW_W, VIEW_H } from "/shared/constants.js";
+import { TICK_DT, PLAYER_RADIUS, SLOT_KEYS, VIEW_W, VIEW_H, ITEMS } from "/shared/constants.js";
 import { SKILLS } from "/shared/skills.js";
 import { zoneOf, ZONES } from "/shared/zones.js";
 import { TileMap } from "./render/tiles.js";
@@ -67,7 +68,7 @@ function onMap(m) {
   G.arena = m.arena;
   G.ents.clear(); G.projectiles.clear(); G.tels.clear(); G.zones.clear(); G.loot.clear(); G.beams = []; G.floaters = [];
   G.boss = null;
-  G.localDash = null;
+  G.localDash = null; G.chestOpened = new Set(); G.lootFly = [];
   G.pred.x = G.pred.px = G.local.x = m.start[0]; G.pred.y = G.pred.py = G.local.y = m.start[1];
   G.pending.length = 0;
   G.renderer?.onMap();
@@ -171,7 +172,19 @@ function onEvent(e) {
     case "notice": G.ui.toast(e.text, "info"); break;
     case "lvl": if (ent) { R?.fx("ui/level-up", ent.rx, ent.ry, { follow: e.id }); if (e.id === G.you) { G.ui.center(`레벨 업! Lv.${e.l}`); sfx("level"); } } break;
     case "loot": G.loot.set(e.id, { ...e, t0: now() }); break;
-    case "lootx": G.loot.delete(e.id); break;
+    case "lootx": {
+      const l = G.loot.get(e.id);
+      if (l && e.fly) (G.lootFly ??= []).push({ ...l, to: e.fly, t0: now() }); // 층 클리어 자동 획득: 날아와서 쏙
+      G.loot.delete(e.id);
+      break;
+    }
+    case "chestopen": {
+      (G.chestOpened ??= new Set()).add(e.id);
+      sfx("item"); sfx("coin");
+      floater(e.x, e.y - 30, `+${e.gold}G`, "crit");
+      profUpFx({ x: e.x, y: e.y, lv: 5 }, null);
+      break;
+    }
     case "got": G.ui.gotItem(e.item); sfx("item"); break;
     case "boss": G.boss = { id: e.id, name: e.name, mid: e.mid }; G.ui.onBoss(); break;
     case "bossdead": G.boss = null; G.ui.onBoss(); G.ui.center("보스 처치!"); break;
@@ -216,7 +229,8 @@ export function moveDir() {
 }
 function isFrozen() {
   const me = G.ents.get(G.you);
-  return !!(me && (me.fl & (2 | 8))) || !!G.me?.dead || now() < G.forced;
+  // 내가 방금 시전한 스킬의 시전 시간은 서버 확인을 기다리지 않고 바로 멈춤(예측) → 시전 후 뒤로 끌려가는 현상 방지
+  return !!(me && (me.fl & (2 | 8))) || !!G.me?.dead || now() < G.forced || now() < (G.castFreeze ?? 0);
 }
 
 /** 매 프레임: 내 캐릭터를 키 입력대로 바로 움직임 (지연 없음).
@@ -236,8 +250,9 @@ export function localStep(dt) {
   if (hold) return;
   const ex = A.x - L.x, ey = A.y - L.y, d = Math.hypot(ex, ey);
   // 크게 어긋나면 바로 맞춤 (단, 대시 직후엔 부드럽게)
-  if (d > (tn < (G.softUntil ?? 0) ? 160 : 48)) { L.x = A.x; L.y = A.y; }
-  else if (d > 0.5) { const k = Math.min(1, dt * ((mx || my) ? 4 : d < 8 ? 1.5 : 8)); [L.x, L.y] = [L.x + ex * k, L.y + ey * k]; }
+  // 아주 크게 어긋날 때(순간이동급)만 바로 맞추고, 그 외에는 빠르게 미끄러지듯 따라감 → 툭툭 끌려가는 느낌 줄임
+  if (d > (tn < (G.softUntil ?? 0) ? 200 : 140)) { L.x = A.x; L.y = A.y; }
+  else if (d > 0.5) { const k = Math.min(1, dt * (d > 40 ? 10 : (mx || my) ? 4 : d < 8 ? 1.5 : 8)); [L.x, L.y] = [L.x + ex * k, L.y + ey * k]; }
 }
 
 export function inputTick() {
@@ -283,21 +298,42 @@ export function effCost(sk) {
   return c;
 }
 export function cdLeft(id) {
-  if (!G.me?.cds?.[id]) return 0;
-  return Math.max(0, G.me.cds[id] / 1000 - (now() - G.meAt));
+  const t = now();
+  const srv = G.me?.cds?.[id] ? Math.max(0, G.me.cds[id] / 1000 - (t - G.meAt)) : 0;
+  // 누르자마자 쿨타임 표시(예측). 서버가 확인하면 서버 값, 0.6초+핑 안에 확인이 없으면(거절) 예측 취소
+  const L = G.localCd?.[id];
+  if (L) {
+    if (srv > 0.05 && G.meAt > L.at) { delete G.localCd[id]; return srv; }
+    if (t - L.at > 0.6 + (G.rtt ?? 100) / 1000) { delete G.localCd[id]; return srv; }
+    return Math.max(srv, L.until - t);
+  }
+  return srv;
+}
+/** 물약: 누르자마자 반응(소리·쿨타임·개수), 실제 회복은 서버가 처리 */
+export function usePotion(id) {
+  const n = G.me?.cons?.[id] ?? 0;
+  const left = Math.max(0, ((G.me?.pcd?.[id] ?? 0) / 1000) - (now() - G.meAt), (G.localPcd?.[id] ?? 0) - now());
+  if (n <= 0 || left > 0.05 || G.me?.dead) return;
+  send({ t: "use", item: id });
+  sfx("potion");
+  (G.localPcd ??= {})[id] = now() + (ITEMS[id]?.cd ?? 1);
+  if (G.me?.cons) G.me.cons[id] = n - 1;
+  const me = G.ents.get(G.you);
+  if (me) floater(me.rx, me.ry - 34, id === "hp_potion" ? "+체력" : id === "mp_potion" ? "+마나" : "해독", "heal");
 }
 
-const KEYCODE = { Q: "KeyQ", E: "KeyE", R: "KeyR", F: "KeyF", SHIFT: "ShiftLeft", V: "KeyV" };
-function held(slotKey) {
-  if (slotKey === "LMB") return G.mouse.down[0] || G.touchHeld.has(0);
-  if (slotKey === "RMB") return G.mouse.down[2];
-  if (slotKey === "SHIFT") return G.keys.has("ShiftLeft") || G.keys.has("ShiftRight");
-  return G.keys.has(KEYCODE[slotKey]);
+/** i번 스킬 칸 키를 누르고 있나 (키 설정 반영) */
+function held(i) {
+  const code = KEYS.slots[i];
+  if (i === 0 && G.touchHeld.has(0)) return true;
+  if (code?.startsWith("Mouse")) return !!G.mouse.down[+code.slice(5)];
+  if (code?.startsWith("Shift")) return G.keys.has("ShiftLeft") || G.keys.has("ShiftRight");
+  return G.keys.has(code);
 }
 function tryHeldCasts() {
   if (now() < (G.holdPauseUntil ?? 0)) return; // 방금 다른 스킬을 눌렀으면 그 스킬이 먼저
   if (G.typing || G.ui.blockingWindow()) return;
-  SLOT_KEYS.forEach((k, i) => { if (held(k)) tryCast(i); });
+  for (let i = 0; i < 8; i++) if (held(i)) tryCast(i);
 }
 /** 스킬 시전. at = { x, y, tx } 를 주면 마우스 대신 그 지점(자동 조준·자동 사용·대시 버튼) */
 export function tryCast(slot, at) {
@@ -321,6 +357,10 @@ export function tryCast(slot, at) {
   }
   send(msg);
   G.lastCastAt = t;
+  // 예측: 쿨타임 바로 표시, 시전 시간이 있으면 그동안 제자리에 (서버도 똑같이 멈춤)
+  if (sk.cd && sk.kind !== "basic") (G.localCd ??= {})[id] = { until: t + sk.cd, at: t };
+  if (sk.cast) G.castFreeze = t + sk.cast / (G.me?.cs ?? 1);
+  if (sk.steps?.some((s) => s.do === "channel")) G.castFreeze = t + (sk.steps.find((s) => s.do === "channel").dur ?? 0);
   if (sk.kind !== "basic" && !at) G.holdPauseUntil = t + 0.35;
   // 대시류(이동기): 내 화면에서 바로 출발
   const dashStep = sk.moveSkill && (sk.steps ?? []).find((st) => st.do === "dash");

@@ -75,6 +75,23 @@ export function drawDungeonObject(ctx, o, x, y, t) {
       return true;
     }
     case "floorfx": return drawFloorFx(ctx, o, x, y, t);
+    case "chest": {
+      const open = G.chestOpened?.has(o.id);
+      shadow(ctx, x, y - 1, 16, 4, 0.4);
+      if (!open) {
+        const p = 0.6 + Math.sin(t * 3) * 0.25;
+        addGlow(o.x, o.y - 12, 70, "#ffd35a", 0.45 * p);
+        if (Math.sin(t * 5) > 0.7) { ctx.fillStyle = "#fff6c0"; ctx.fillRect(x + 8, y - 30, 2, 2); }
+      }
+      const c = frame(open ? "chest_full_open_anim_f2" : "chest_full_open_anim_f0");
+      if (c) ctx.drawImage(c, Math.round(x - 16), Math.round(y - 30), 32, 32);
+      if (!open) {
+        ctx.font = "10px Galmuri9"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+        ctx.lineWidth = 3; ctx.strokeStyle = "#000"; ctx.strokeText(o.label ?? "보상 상자", x, y - 40);
+        ctx.fillStyle = "#ffe08a"; ctx.fillText(o.label ?? "보상 상자", x, y - 40);
+      }
+      return true;
+    }
     case "spikes": {
       const st = G.spikes?.[o.phase] ?? 0;
       let f = 0;

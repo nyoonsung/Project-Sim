@@ -1,5 +1,6 @@
 // HUD: 체력·자원·경험치, 스킬바, 물약, 버프, 채팅, 알림, 보스바, 미니맵, 파티창
-import { G, send, cdLeft, tryCast, effCost } from "../game.js";
+import { G, send, cdLeft, tryCast, effCost, usePotion } from "../game.js";
+import { KEYS, keyLabel } from "../keys.js";
 import { profLevel, isUncapped } from "/shared/prof.js";
 import { h, $, tipOn } from "./dom.js";
 import { SKILLS } from "/shared/skills.js";
@@ -17,14 +18,14 @@ export function buildHud() {
   const bar = $("#skillbar");
   bar.replaceChildren();
   slotEls = SLOT_KEYS.map((k, i) => {
-    const el = h("div", { class: "slot", onmousedown: (e) => { e.stopPropagation(); } }, h("span", { class: "key", text: k === "SHIFT" ? "⇧" : k }), h("div", { class: "cd" }), h("span", { class: "nm" }), h("span", { class: "cdt" }));
+    const el = h("div", { class: "slot", onmousedown: (e) => { e.stopPropagation(); } }, h("span", { class: "key", text: keyLabel(KEYS.slots[i]) }), h("div", { class: "cd" }), h("span", { class: "nm" }), h("span", { class: "cdt" }));
     tipOn(el, () => { const id = G.char?.skills?.[i]; return id ? skillTip(SKILLS[id]) : [h("div", { text: "빈 칸 — 스킬 창(K)에서 장착" })]; });
     bar.append(el);
     return el;
   });
   const pots = $("#potions");
   pots.replaceChildren(...["hp_potion", "mp_potion", "antidote"].map((id, i) => {
-    const el = h("div", { class: "slot", onclick: () => { send({ t: "use", item: id }); G.ui.sfx?.("potion"); } }, h("span", { class: "key", text: String(i + 1) }), h("div", { class: "cd" }), h("span", { class: "nm" }), h("span", { class: "cdt" }));
+    const el = h("div", { class: "slot", onclick: () => usePotion(id) }, h("span", { class: "key", text: keyLabel(KEYS.potions[i]) }), h("div", { class: "cd" }), h("span", { class: "nm" }), h("span", { class: "cdt" }));
     el.dataset.item = id;
     el.classList.add("pot-" + i);
     tipOn(el, () => [h("div", { class: "tt-name", text: ITEMS[id].name }), h("div", { text: ITEMS[id].desc }), h("div", { class: "tt-sub", text: `재사용 대기 ${ITEMS[id].cd}초 · 마을 상인에게서 구입` })]);
@@ -32,15 +33,20 @@ export function buildHud() {
   }));
 }
 
+// 바뀐 값만 DOM에 씀 (매 프레임 스타일을 다시 쓰면 약한 기기에서 렉의 큰 원인)
+const setText = (el, v) => { if (el._t !== v) { el._t = v; el.textContent = v; } };
+const setVar = (el, k, v) => { const c = "_" + k; if (el[c] !== v) { el[c] = v; el.style.setProperty(k, v); } };
+const setTf = (el, v) => { if (el._tf !== v) { el._tf = v; el.style.transform = v; } };
+const toggle = (el, c, on) => { const k = "_c" + c; if (el[k] !== on) { el[k] = on; el.classList.toggle(c, on); } };
 export function updateSkillbar() {
   const skills = G.char?.skills ?? [];
   slotEls.forEach((el, i) => {
     const id = skills[i], sk = id && SKILLS[id];
     const nm = el.querySelector(".nm"), cd = el.querySelector(".cd"), cdt = el.querySelector(".cdt");
-    el.classList.toggle("empty", !sk);
-    nm.textContent = sk ? sk.name : "";
-    el.style.borderColor = sk ? GRADE_COLOR[sk.grade] : "";
-    el.style.setProperty("--gc", sk ? GRADE_COLOR[sk.grade] : "#59527a");
+    toggle(el, "empty", !sk);
+    setText(nm, sk ? sk.name : "");
+    if (el._bc !== (sk?.grade ?? "")) { el._bc = sk?.grade ?? ""; el.style.borderColor = sk ? GRADE_COLOR[sk.grade] : ""; }
+    setVar(el, "--gc", sk ? GRADE_COLOR[sk.grade] : "#59527a");
     // 숙련도 배지 (Lv.1 이상)
     const plv = sk && sk.kind !== "passive" ? profLevel(G.char?.prof?.[id] ?? 0, id).lv : 0;
     if (el._plv !== plv) {
@@ -59,25 +65,27 @@ export function updateSkillbar() {
       const total = sk.kind === "basic" ? sk.aspd : sk.cd;
       // 기본 공격은 쿨타임 표시 없음 (공격 속도만큼 자동 반복)
       const frac = sk.kind === "basic" ? 0 : Math.min(1, left / (total || 1));
-      cd.style.transform = `scaleY(${frac})`;
-      el.style.setProperty("--p", frac.toFixed(3));
+      const fq = Math.round(frac * 60) / 60; // 60단계면 눈으로 구분 안 됨
+      setTf(cd, `scaleY(${fq})`);
+      setVar(el, "--p", fq.toFixed(3));
       // 쿨타임이 끝나는 순간 반짝
       if (el._cd > 0.15 && left <= 0.02 && sk.kind !== "basic") { el.classList.remove("ready"); void el.offsetWidth; el.classList.add("ready"); }
       el._cd = left;
-      cdt.textContent = left > 0.3 && sk.kind !== "basic" ? (left >= 10 ? Math.ceil(left) : left.toFixed(1)) : "";
+      setText(cdt, left > 0.3 && sk.kind !== "basic" ? String(left >= 10 ? Math.ceil(left) : left.toFixed(1)) : "");
       // 자원 부족 표시
       let lack = false;
       for (const [k, v] of Object.entries(effCost(sk))) if ((G.me?.[k] ?? 0) < v) lack = true;
-      el.classList.toggle("nores", lack);
-    } else { cd.style.transform = "scaleY(0)"; cdt.textContent = sk ? "패시브" : ""; }
+      toggle(el, "nores", lack);
+    } else { setTf(cd, "scaleY(0)"); setText(cdt, sk ? "패시브" : ""); }
   });
   for (const el of $("#potions").children) {
     const id = el.dataset.item;
-    el.querySelector(".nm").textContent = `${ITEMS[id].name.replace(" 물약", "")}\n${G.me?.cons?.[id] ?? G.char?.cons?.[id] ?? 0}`;
-    const left = Math.max(0, ((G.me?.pcd?.[id] ?? 0) / 1000) - (performance.now() / 1000 - G.meAt));
-    el.querySelector(".cd").style.transform = `scaleY(${Math.min(1, left / ITEMS[id].cd)})`;
-    el.style.setProperty("--p", Math.min(1, left / ITEMS[id].cd).toFixed(3));
-    el.querySelector(".cdt").textContent = left > 0.3 ? Math.ceil(left) : "";
+    setText(el.querySelector(".nm"), `${ITEMS[id].name.replace(" 물약", "")}\n${G.me?.cons?.[id] ?? G.char?.cons?.[id] ?? 0}`);
+    const left = Math.max(0, ((G.me?.pcd?.[id] ?? 0) / 1000) - (performance.now() / 1000 - G.meAt), (G.localPcd?.[id] ?? 0) - performance.now() / 1000);
+    const pf = Math.round(Math.min(1, left / ITEMS[id].cd) * 60) / 60;
+    setTf(el.querySelector(".cd"), `scaleY(${pf})`);
+    setVar(el, "--p", pf.toFixed(3));
+    setText(el.querySelector(".cdt"), left > 0.3 ? String(Math.ceil(left)) : "");
   }
 }
 
@@ -95,6 +103,11 @@ export function updateBars() {
   set("#orbs .mp", m.mp, m.mm, `MP ${m.mp} / ${m.mm}`);
   const need = xpToNext(m.lv);
   set("#orbs .xp", m.xp, need, `Lv.${m.lv}  ${((m.xp / need) * 100).toFixed(1)}%`);
+  // 골드·물약 개수
+  const c = m.cons ?? G.char?.cons ?? {};
+  const w = `💰 ${(m.gold ?? G.char?.gold ?? 0).toLocaleString()} G   ❤ ${c.hp_potion ?? 0}   💧 ${c.mp_potion ?? 0}   🌿 ${c.antidote ?? 0}`;
+  const we = $("#wallet");
+  if (we._t !== w) { we._t = w; we.textContent = w; }
   const res = RES[G.char?.cls];
   const rb = $("#orbs .res");
   rb.classList.toggle("hidden", !res);
@@ -120,6 +133,8 @@ export function chatLine(m) {
   } else line.textContent = m.text;
   const atBottom = log.scrollTop + log.clientHeight >= log.scrollHeight - 10;
   log.append(line);
+  // 10초 지나면 흐려져 사라짐 (Enter로 채팅창을 열면 다시 다 보임)
+  setTimeout(() => line.classList.add("fade"), 10000);
   while (log.children.length > 120) log.firstChild.remove();
   if (atBottom) log.scrollTop = log.scrollHeight;
 }

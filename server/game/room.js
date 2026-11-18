@@ -319,7 +319,53 @@ export class Room {
     else if (this.kind === "dungeon" && !this.exitOpen && this.map.kind === "normal" && (this.wave ? this.wave.spawned >= this.total : true) && this.aliveMonsters() === 0) {
       this.exitOpen = true;
       this.ev({ e: "exit", open: 1 });
-      this.ev({ e: "msg", text: "출구 포탈이 열렸어요!", kind: "info" });
+      this.ev({ e: "msg", text: "층 클리어! 보상 상자가 나타나고 바닥 아이템을 모두 주웠어요.", kind: "info" });
+      this.schedule(0.8, () => this.collectAll());
+      this.spawnChest();
+    }
+  }
+
+  /** 층을 깨면 바닥에 남은 아이템을 주인에게 전부 자동으로 (가방이 차면 남김) */
+  collectAll() {
+    const got = new Map();
+    for (const l of [...this.loot.values()]) {
+      const p = [...this.players.values()].find((q) => q.userId === l.owner);
+      if (!p) continue;
+      if (this.world.pickup(p, l.item)) {
+        this.loot.delete(l.id);
+        p.session.send({ t: "ev", list: [{ e: "lootx", id: l.id, fly: p.id }] });
+        got.set(p, (got.get(p) ?? 0) + 1);
+      }
+    }
+  }
+  /** 층 클리어 보상 상자: 파티원 각자 한 번씩 열 수 있음 */
+  spawnChest() {
+    if (this.map.kind !== "normal" || this.chest) return;
+    let [x, y] = this.map.exit;
+    for (const [dx, dy] of [[0, 64], [48, 48], [-48, 48], [0, 40], [0, 0]]) if (!circleHitsWall(this.map, x + dx, y + dy, 12)) { x += dx; y += dy; break; }
+    this.chest = { x, y, opened: new Set() };
+    const o = { kind: "chest", id: "reward", x, y, label: "보상 상자" };
+    this.map.objects.push(o);
+    this.ev({ e: "obj", o });
+  }
+  tickChest(now) {
+    const c = this.chest;
+    if (!c) return;
+    for (const p of this.players.values()) {
+      if (p.dead || c.opened.has(p.userId) || Math.hypot(p.x - c.x, p.y - c.y) > 34) continue;
+      c.opened.add(p.userId);
+      const s = p.session, ch = s.char;
+      const gold = Math.round(12 + this.floor * 6 + Math.random() * this.floor * 3);
+      ch.gold += gold; s.meDirty = true; s.dirty = true;
+      const n = 1 + (Math.random() < 0.35 ? 1 : 0);
+      const names = [];
+      for (let i = 0; i < n; i++) {
+        const it = rollItem(secureRandom, { ilvl: Math.max(1, this.floor), cls: ch.cls, tier: "elite" });
+        if (this.world.pickup(p, it)) names.push(it.name); else this.dropLoot(p.userId, it, c.x + (Math.random() * 40 - 20), c.y + 20);
+      }
+      if (Math.random() < 0.5) this.world.pickup(p, { cons: Math.random() < 0.6 ? "hp_potion" : "mp_potion", n: 1 });
+      s.send({ t: "ev", list: [{ e: "chestopen", id: "reward", x: c.x, y: c.y, gold }, { e: "msg", text: `보상 상자: ${gold}G${names.length ? " + " + names.join(", ") : ""}`, kind: "legend" }] });
+      this.ev({ e: "fx", fx: "holy/blessing", x: c.x | 0, y: (c.y - 8) | 0, s: 0.7 });
     }
   }
 
@@ -342,7 +388,8 @@ export class Room {
     if (item.rarity === "신화" || item.rarity === "전설") this.ev({ e: "msg", text: `${p?.name ?? "?"}님에게 ${item.rarity} 아이템 [${item.name}]이(가) 떨어졌어요!`, kind: item.rarity === "신화" ? "mythic" : "legend" });
   }
   lootDesc(l) {
-    return { id: l.id, x: l.x | 0, y: l.y | 0, r: l.item.rarity ?? "일반", n: l.item.name ?? (l.item.cons ? "체력 물약" : "?"), s: l.item.slot ?? "cons" };
+    const it = l.item;
+    return { id: l.id, x: l.x | 0, y: l.y | 0, r: it.rarity ?? "일반", n: it.name ?? (it.cons ? "체력 물약" : "?"), s: it.slot ?? "cons", ty: it.type ?? undefined, v: it.variant ?? 0, il: it.ilvl ?? 1 };
   }
 
   onBossDead(b) {
@@ -357,6 +404,7 @@ export class Room {
     for (const p of this.projectiles) if (p.team === "m") this.ev({ e: "pjx", id: p.id, x: p.x | 0, y: p.y | 0 });
     this.projectiles = this.projectiles.filter((p) => p.team !== "m");
     this.exitOpen = true;
+    this.schedule(2.0, () => this.collectAll()); // 보스가 떨어뜨린 아이템도 자동으로
     const isMain = !b.mid;
     const portal = { kind: "portal", id: isMain ? "safe" : "exit", x: b.x, y: b.y, label: isMain ? (this.floor >= 100 ? "마을로 (던전 정복!)" : "안전 구역으로") : `${this.floor + 1}층으로` };
     if (this.floor >= 100) portal.id = "victory";
@@ -629,6 +677,7 @@ export class Room {
   // ── 전리품 (주인만 보이고 주인만 줍는다)
   tickLoot(now) {
     if (this.tickN % 4) return;
+    this.tickChest(now);
     for (const l of [...this.loot.values()]) {
       if (now > l.until) { this.loot.delete(l.id); continue; }
       const p = [...this.players.values()].find((q) => q.userId === l.owner);
@@ -727,6 +776,12 @@ export class Room {
       if (!on.length) continue;
       if (o.id === "town") {
         for (const p of on) {
+          // 전투 중(근처 300px 안에 살아 있는 적이 있거나 3초 안에 맞았으면)에는 귀환 불가
+          const fighting = now - (p.lastHurt ?? -99) < 3 || [...this.units.values()].some((m) => m.team === "m" && !m.dead && !m.dummy && Math.hypot(m.x - p.x, m.y - p.y) < 300);
+          if (fighting) {
+            if (now - (p.townWarn ?? -99) > 3) { p.townWarn = now; p.session.send({ t: "ev", list: [{ e: "msg", text: "전투 중에는 마을로 돌아갈 수 없어요. 주변 적을 처치하세요.", kind: "warn" }] }); }
+            continue;
+          }
           onTown.add(p);
           if (p.townAt == null) { p.townAt = now; p.session.send({ t: "ev", list: [{ e: "msg", text: "잠시 서 있으면 마을로 돌아가요.", kind: "info" }] }); }
           else if (now - p.townAt >= 1.5) { p.townAt = null; this.world.toTown(p.session, "포탈을 타고 마을로 돌아왔어요."); }

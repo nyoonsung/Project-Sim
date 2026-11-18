@@ -1,7 +1,7 @@
 // 캐릭터 데이터(저장용)와 플레이어 유닛(접속 중)
 import { deriveStats } from "../../shared/stats.js";
 import { CLASS_INFO, xpToNext, stageOf } from "../../shared/classes.js";
-import { SKILLS, unlockStage } from "../../shared/skills.js";
+import { SKILLS, unlockStage, adventurerBasic } from "../../shared/skills.js";
 import { MAX_LEVEL, STAT_POINTS_PER_LEVEL, PLAYER_RADIUS, ITEMS } from "../../shared/constants.js";
 import { starterGear } from "../../shared/items.js";
 
@@ -32,6 +32,8 @@ export function sanitizeChar(c, name) {
   const prof = {};
   if (out.prof && typeof out.prof === "object") for (const [k, v] of Object.entries(out.prof)) if (SKILLS[k] && Number.isFinite(v) && v > 0) prof[k] = Math.min(Math.floor(v), 1e7);
   out.prof = prof;
+  // 모험가 기본 공격은 든 무기에 맞춤 (활 → 활쏘기, 지팡이 → 마력탄)
+  if (out.cls === "adventurer" && Array.isArray(out.skills)) out.skills[0] = adventurerBasic(out.equip?.weapon?.type);
   out.equip = { ...d.equip, ...(out.equip ?? {}) };
   return out;
 }

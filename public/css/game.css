@@ -71,10 +71,10 @@ kbd { font-family: "GalmuriMono11", "Galmuri11", monospace; font-size: 10px; pad
 .bar { position: relative; height: 16px; background: #0a0910; border: 2px solid #000; box-shadow: 0 0 0 1px var(--line); overflow: hidden; }
 .bar .fill { height: 100%; transition: width 0.12s; }
 .bar.hp .fill { background: linear-gradient(#ff6a74, #b0202e); } .bar.mp .fill { background: linear-gradient(#6aaaff, #2050c0); }
-.bar.res .fill { background: linear-gradient(#ffe07a, #c08010); } .bar.xp { grid-column: 1 / 3; height: 8px; } .bar.xp .fill { background: linear-gradient(#d0b0ff, #7a4ad0); }
+.bar.res .fill { background: linear-gradient(#ffe07a, #c08010); } .bar.xp { grid-column: 1 / 3; height: 13px; } .bar.xp .fill { background: linear-gradient(#d0b0ff, #7a4ad0); }
 .bar .shield { position: absolute; top: 0; left: 0; height: 4px; background: #e8f0ff; }
 .bar span { position: absolute; inset: 0; display: grid; place-items: center; font-size: 11px; text-shadow: 1px 1px 0 #000; }
-.bar.xp span { font-size: 9px; }
+.bar.xp span { font-size: 9px; line-height: 9px; }
 #skillbar { display: flex; gap: 4px; }
 .slot { position: relative; width: 46px; height: 46px; background: #0e0c14; border: 2px solid var(--line2); display: grid; place-items: center; font-size: 10px; text-align: center; line-height: 1.1; overflow: hidden; cursor: pointer; }
 .slot .nm { white-space: pre-line; padding: 2px; text-shadow: 1px 1px 0 #000; z-index: 1; }
@@ -132,7 +132,7 @@ kbd { font-family: "GalmuriMono11", "Galmuri11", monospace; font-size: 10px; pad
 .cell .lbl { position: absolute; bottom: 1px; width: 100%; font-size: 9px; color: var(--dim); }
 .cell.r-희귀 { border-color: var(--rare); } .cell.r-영웅 { border-color: var(--epic); } .cell.r-전설 { border-color: var(--legend); } .cell.r-신화 { border-color: var(--mythic); box-shadow: 0 0 8px #ff5a6e88; }
 .cell.sel { outline: 2px solid var(--gold); }
-#tooltip { position: fixed; z-index: 50; max-width: 300px; padding: 8px 10px; background: #0e0c14f4; border: 2px solid var(--line2); pointer-events: none; font-size: 12px; line-height: 1.5; }
+#tooltip { position: fixed; z-index: 100000; max-width: 300px; padding: 8px 10px; background: #0e0c14f4; border: 2px solid var(--line2); pointer-events: none; font-size: 12px; line-height: 1.5; }
 #tooltip .tt-name { font-weight: bold; font-size: 13px; } #tooltip .tt-sub { color: var(--dim); font-size: 11px; } #tooltip .tt-opt { color: #8fd0ff; } #tooltip .tt-myth { color: var(--mythic); } #tooltip .tt-cmp-up { color: var(--good); } #tooltip .tt-cmp-down { color: var(--bad); }
 .class-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 8px; }
 .cc { padding: 8px; background: #0e0c14; border: 2px solid var(--line); cursor: pointer; }
@@ -170,7 +170,7 @@ body.touch #joy-knob { position: absolute; left: 50%; top: 50%; width: 46px; hei
 /* HUD 재배치 */
 body.touch #hud { position: static; transform: none; display: block; }
 body.touch #orbs { position: absolute; left: calc(8px + env(safe-area-inset-left)); top: 8px; grid-template-columns: 150px 150px; gap: 3px 4px; }
-body.touch .bar { height: 13px; } body.touch .bar span { font-size: 9px; } body.touch .bar.xp { height: 6px; } body.touch .bar.xp span { display: none; }
+body.touch .bar { height: 13px; } body.touch .bar span { font-size: 9px; } body.touch .bar.xp { height: 11px; } body.touch .bar.xp span { font-size: 8px; line-height: 8px; }
 body.touch #buffs { left: calc(8px + env(safe-area-inset-left)); top: 48px; bottom: auto; transform: none; justify-content: flex-start; flex-wrap: wrap; max-width: 300px; }
 body.touch #potions { position: absolute; left: auto; right: calc(282px + env(safe-area-inset-right)); bottom: calc(22px + env(safe-area-inset-bottom)); flex-direction: row; gap: 6px; }
 body.touch #potions .slot { width: 42px; height: 42px; border-radius: 8px; }
@@ -359,7 +359,7 @@ body.touch #rotate-msg { display: none !important; }
 body.touch.portrait #view { top: calc(66px + env(safe-area-inset-top)); left: 0; transform: none; }
 body.touch.portrait #orbs { grid-template-columns: 1fr 1fr; right: calc(8px + env(safe-area-inset-right)); width: auto; }
 body.touch.portrait #menu-buttons { top: calc(34px + env(safe-area-inset-top)); left: calc(6px + env(safe-area-inset-left)); right: auto; flex-wrap: nowrap; }
-body.touch.portrait #menu-buttons button { width: calc((100vw - 30px) / 9); max-width: 40px; height: 28px; font-size: 14px; }
+body.touch.portrait #menu-buttons button { width: calc((100vw - 30px) / 10); max-width: 40px; height: 28px; font-size: 14px; }
 body.touch.portrait #minimap { top: calc(70px + env(safe-area-inset-top)); right: 4px; width: 84px; height: 64px; opacity: 0.85; }
 body.touch.portrait #topbar { top: calc(70px + env(safe-area-inset-top)); }
 body.touch.portrait #buffs { top: calc(92px + env(safe-area-inset-top)); }
@@ -371,3 +371,41 @@ body.touch.portrait #potions { right: auto; left: 50%; transform: translateX(-50
 body.touch.portrait #dash-btn { bottom: calc(250px + env(safe-area-inset-bottom)); right: calc(14px + env(safe-area-inset-right)); }
 body.touch.portrait #center-msg { top: 28%; font-size: 16px; }
 body.touch.portrait #toasts { top: 22%; }
+
+/* ───────── 채팅: 평소엔 글자만 잠깐 떴다 사라지고, 클릭은 게임으로 통과. Enter로 열면 기록·입력창 ───────── */
+body:not(.touch) #chat { pointer-events: none; width: 340px; }
+body:not(.touch) #chat-log { background: transparent; overflow: hidden; text-shadow: 1px 1px 0 #000, 0 0 3px #000; }
+#chat-log > div { transition: opacity 1.2s; }
+#chat-log > div.fade { opacity: 0; }
+body.chat-open #chat-log > div.fade { opacity: 1; }
+body:not(.touch) #chat-input { display: none; }
+body:not(.touch).chat-open #chat { pointer-events: auto; z-index: 30; }
+body:not(.touch).chat-open #chat-log { background: #000b; overflow-y: auto; }
+body:not(.touch).chat-open #chat-input { display: block; opacity: 1; }
+#chat.collapsed #chat-log { display: none; }
+body.chat-open #chat.collapsed #chat-log { display: block; }
+#minimap.hidden-mini { display: none; }
+/* ───────── 작은 PC 창: HUD를 작게 ───────── */
+@media (max-width: 1100px), (max-height: 640px) {
+  body:not(.touch) #minimap { width: 128px; height: 100px; }
+  body:not(.touch) #chat { width: 260px; }
+  body:not(.touch) #chat-log { height: 96px; font-size: 11px; }
+  body:not(.touch) #menu-buttons button { padding: 2px 6px; font-size: 11px; }
+  body:not(.touch) #orbs { grid-template-columns: 200px 200px; }
+}
+body.touch .desk-only { display: none !important; }
+body.touch #menu-buttons [data-win=keys] { display: none; }
+  .tt-trait { color: #9ad0ff; font-size: 11px; }
+.codex-t { width: 100%; border-collapse: collapse; font-size: 11px; margin: 4px 0; }
+.codex-t th, .codex-t td { padding: 3px 4px; text-align: center; border-bottom: 1px solid #2a2440; }
+.codex-t td:first-child { text-align: left; color: var(--dim); }
+.keybtn { min-width: 64px; font-family: "GalmuriMono11", "Galmuri11", monospace; }
+.keybtn.wait { border-color: var(--gold); color: var(--gold); animation: keyblink 0.8s infinite; }
+@keyframes keyblink { 50% { opacity: 0.5; } }
+#wallet { grid-column: 1 / 3; font-size: 11px; color: #ffe08a; text-shadow: 1px 1px 0 #000; white-space: nowrap; padding-left: 2px; }
+body.touch #wallet { font-size: 10px; }
+/* 휴대폰: 지갑 줄은 물약 버튼 바로 위에 */
+body.touch #wallet { position: fixed; right: calc(282px + env(safe-area-inset-right)); bottom: calc(70px + env(safe-area-inset-bottom)); padding: 2px 6px; background: #0008; border-radius: 4px; }
+@media (max-height: 360px) { body.touch:not(.portrait) #wallet { right: calc(248px + env(safe-area-inset-right)); bottom: calc(60px + env(safe-area-inset-bottom)); } }
+body.touch.portrait #wallet { right: auto; left: calc(8px + env(safe-area-inset-left)); transform: none; bottom: calc(64px + env(safe-area-inset-bottom)); }
+.continue-btn { display: block; width: 100%; margin: 6px 0 2px; padding: 8px; font-size: 14px; font-family: var(--display); }

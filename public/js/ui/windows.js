@@ -1,5 +1,6 @@
 // 창: 캐릭터, 스킬, 가방·장비, 파티, 도움말, 상점, 대장간(강화), 전직소, 던전 관문, 게시판, 훈련 교관
 import { G, send, canAuto, setAuto } from "../game.js";
+import { KEYS, keyLabel, bindKey, resetKeys, RESERVED } from "../keys.js";
 import { profLevel, profPow, profCost, isUncapped } from "/shared/prof.js";
 import { h, openWin, refreshWin, closeWin, isOpen, tipOn } from "./dom.js";
 import { itemIcon } from "./icons.js";
@@ -7,7 +8,7 @@ import { CLASS_INFO, STATS, stageOf, stageLevel, xpToNext } from "/shared/classe
 import { SKILLS, skillsOf, unlockStage } from "/shared/skills.js";
 import { deriveStats } from "/shared/stats.js";
 import { SKILL_SLOTS, SLOT_KEYS, ITEMS, GRADE_COLOR } from "/shared/constants.js";
-import { RARITY_COLOR, SLOT_NAME, OPTIONS, MYTHIC_EFFECTS, WEAPON_TYPES, OFFHAND_TYPES, enhanceOdds, enhanceCost, enhMul, sellPrice, canEquip, MAX_ENH } from "/shared/items.js";
+import { RARITY_COLOR, SLOT_NAME, OPTIONS, MYTHIC_EFFECTS, WEAPON_TYPES, OFFHAND_TYPES, VARIANT_TRAITS, RARITIES, RARITY_WEIGHTS, MATERIALS, ARMOR_NAMES, enhanceOdds, enhanceCost, enhMul, sellPrice, canEquip, MAX_ENH } from "/shared/items.js";
 import { sprite, playerLook } from "../render/sprites.js";
 
 const fmtPct = (v) => (v * 100).toFixed(1) + "%";
@@ -53,14 +54,17 @@ export function itemTip(it, compare) {
   els.push(h("div", { class: "tt-sub", text: `${it.rarity} ${SLOT_NAME[it.slot]} · ${type} · 아이템 레벨 ${it.ilvl}` }));
   const m = enhMul(it.enh);
   const names = { atk: "공격력", def: "방어력", hp: "최대 HP", mp: "최대 MP", crit: "치명타 확률", aspd: "공격 속도" };
+  const trait = VARIANT_TRAITS[it.slot]?.[it.variant ?? 1];
+  if (trait && it.slot !== "weapon" && it.slot !== "offhand") els.push(h("div", { class: "tt-trait", text: `특징 · ${trait.desc}` }));
   for (const [k, v] of Object.entries(it.base)) {
-    const val = k === "crit" || k === "aspd" ? `+${fmtPct(v)}` : `+${Math.round(v * m)}`;
+    const pct = OPTIONS[k] && !["atk", "def", "hp", "mp", "hpRegen"].includes(k);
+    const val = pct ? OPTIONS[k].fmt(v) : `+${Math.round(v * m)}`;
     let cmp = "";
-    if (compare && compare !== it && compare.base[k] != null && !(k === "crit" || k === "aspd")) {
+    if (compare && compare !== it && compare.base[k] != null && !pct) {
       const d = Math.round(v * m) - Math.round(compare.base[k] * enhMul(compare.enh));
       if (d) cmp = d > 0 ? ` ▲${d}` : ` ▼${-d}`;
     }
-    els.push(h("div", {}, `${names[k] ?? k} ${val}`, cmp ? h("span", { class: cmp.includes("▲") ? "tt-cmp-up" : "tt-cmp-down", text: cmp }) : ""));
+    els.push(h("div", {}, `${names[k] ?? OPTIONS[k]?.name ?? k} ${val}`, cmp ? h("span", { class: cmp.includes("▲") ? "tt-cmp-up" : "tt-cmp-down", text: cmp }) : ""));
   }
   for (const o of it.opts) els.push(h("div", { class: "tt-opt", text: `${OPTIONS[o.k].name} ${OPTIONS[o.k].fmt(o.v)}` }));
   if (it.mythic) els.push(h("div", { class: "tt-myth", text: `◆ ${MYTHIC_EFFECTS[it.mythic].name}: ${MYTHIC_EFFECTS[it.mythic].desc}` }));
@@ -135,7 +139,7 @@ export function openSkills() {
         if (selSkill) { const j = next.indexOf(selSkill); if (j >= 0) next[j] = null; next[i] = selSkill; selSkill = null; }
         else next[i] = null;
         send({ t: "skills", list: next });
-      } }, h("span", { class: "key", text: SLOT_KEYS[i] === "SHIFT" ? "⇧" : SLOT_KEYS[i] }), h("span", { class: "nm", text: sk?.name ?? "" }), sk && G.autoSkills.has(sk.id) && canAuto(sk) ? h("span", { class: "auto-dot", text: "A" }) : null);
+      } }, h("span", { class: "key", text: keyLabel(KEYS.slots[i]) }), h("span", { class: "nm", text: sk?.name ?? "" }), sk && G.autoSkills.has(sk.id) && canAuto(sk) ? h("span", { class: "auto-dot", text: "A" }) : null);
       if (sk) el.style.borderColor = GRADE_COLOR[sk.grade];
       if (sk) tipOn(el, () => skillTip(sk));
       return el;
@@ -169,7 +173,7 @@ export function openSkills() {
 
 // ── 가방·장비 (I)
 let selItem = null;
-export function openInv() {
+export function openInv(pos = {}) {
   openWin("inv", "가방 · 장비", () => {
     const c = G.char;
     if (!c) return [];
@@ -201,7 +205,7 @@ export function openInv() {
       h("button", { class: "btn small", disabled: !nearSmith, onclick: () => { G.enhSel = sel.uid; openSmithy(); } }, "강화"),
       h("button", { class: "btn small", onclick: () => send({ t: "lock", uid: sel.uid }) }, sel.locked ? "잠금 해제" : "잠금")) : h("div", { class: "note", text: "아이템을 누르면 선택돼요. 두 번 누르면 장착/해제, 상인 근처에서 오른쪽 클릭하면 판매해요." });
     return [h("div", { class: "flexrow" }, h("span", { text: `💰 ${c.gold.toLocaleString()} G` }), h("span", { class: "note", text: `가방 ${c.inv.length}/40` })), h("h4", { text: "장착 중" }), eq, actions, h("h4", { text: "가방" }), grid];
-  }, { w: 420 });
+  }, { w: 420, ...pos });
 }
 
 // ── 파티 (P)
@@ -247,7 +251,7 @@ function nearNpc(id) {
   return !!(me && o && Math.hypot(o.x - me.rx, o.y - me.ry) < 90);
 }
 
-export function openShop() {
+export function openShop(pos = {}) {
   openWin("shop", "잡화 상인 미라", () => {
     const c = G.char;
     return [
@@ -258,11 +262,11 @@ export function openShop() {
         h("button", { class: "btn small", onclick: () => send({ t: "buy", item: id, n: 5 }) }, `×5`))),
       h("div", { class: "flexrow" }, h("span", { text: `💰 ${c.gold.toLocaleString()} G` }), h("button", { class: "btn small", onclick: () => openInv() }, "가방 열기")),
     ];
-  }, { w: 440 });
+  }, { w: 440, ...pos });
 }
 
 let lastEnh = null;
-export function openSmithy() {
+export function openSmithy(pos = {}) {
   openWin("smithy", "대장장이 브론 — 강화", () => {
     const c = G.char;
     const all = [...Object.values(c.equip).filter(Boolean), ...c.inv];
@@ -283,7 +287,7 @@ export function openSmithy() {
         h("button", { class: "btn primary", disabled: sel.enh >= MAX_ENH || c.gold < cost, onclick: () => send({ t: "enhance", uid: sel.uid }) }, `강화하기 (+${sel.enh} → +${sel.enh + 1})`));
     }
     return [box, h("h4", { text: "장비 선택" }), pick];
-  }, { w: 420 });
+  }, { w: 420, ...pos });
 }
 export function onEnhance(m) {
   lastEnh = m;
@@ -333,12 +337,13 @@ export function openGate() {
     for (let f = 5; f <= Math.min(100, best); f += 5) bosses.push(f);
     return [
       h("div", { class: "note", text: G.party.length ? `파티 ${G.party.length}명 · 파티장 ${leaderName}` : "혼자 입장해요. (파티는 P)" }),
+      best >= 1 && !floors.includes(Math.min(100, best + 1)) ? h("button", { class: "btn primary continue-btn", disabled: !isLeader, onclick: () => { send({ t: "enter", floor: Math.min(100, best + 1) }); closeWin("gate"); } }, `▶ 이어하기: ${Math.min(100, best + 1)}층부터`) : null,
       h("h4", { text: "시작 층" }),
       h("div", { class: "floors" }, ...floors.map((f) => h("button", { class: "btn small primary", disabled: !isLeader, onclick: () => { send({ t: "enter", floor: f }); closeWin("gate"); } }, `${f}층`))),
       bosses.length ? h("h4", { text: "보스 재도전" }) : null,
       bosses.length ? h("div", { class: "floors" }, ...bosses.map((f) => h("button", { class: "btn small" + (f % 10 === 0 ? " boss" : ""), disabled: !isLeader, title: f % 10 === 0 ? "주요 보스" : "중간보스", onclick: () => { send({ t: "enter", floor: f }); closeWin("gate"); } }, `${f}층 ${f % 10 === 0 ? "보스" : "중보"}`))) : null,
       !isLeader ? h("div", { class: "note", text: "파티장만 입장할 수 있어요." }) : null,
-      h("div", { class: "note", text: "10층 보스를 쓰러뜨리면 다음 체크포인트가 열려요. 한 번 깬 보스층은 언제든 다시 도전할 수 있어요. 파티는 모든 파티원이 열어 둔 층·깬 보스층만 고를 수 있어요." }),
+      h("div", { class: "note", text: "깬 층의 바로 다음 층부터 이어서 할 수 있어요. 한 번 깬 보스층은 언제든 다시 도전할 수 있어요. 파티는 모든 파티원이 깬 층 기준이에요." }),
     ];
   }, { w: 360 });
 }
@@ -366,9 +371,79 @@ export function openTrainer() {
 }
 
 export function openNpc(o) {
-  ({ gate: openGate, shop: () => { openShop(); openInv(); }, smithy: () => { openSmithy(); openInv(); }, trainer: openTrainer, board: openBoard, class_master: openClass })[o.id]?.();
+  // 상점·대장간: 화면이 넓으면 왼쪽엔 상점, 오른쪽엔 가방을 나란히(겹치지 않게). 좁으면 상점만 (가방은 버튼으로)
+  const pair = (open, w) => {
+    const W = innerWidth, two = W >= w + 420 + 40;
+    if (two) { const x0 = Math.max(8, (W - (w + 420 + 12)) / 2); open({ x: x0 }); openInv({ x: x0 + w + 12 }); }
+    else open();
+  };
+  ({ gate: openGate, shop: () => pair(openShop, 440), smithy: () => pair(openSmithy, 420), trainer: openTrainer, board: openBoard, class_master: openClass })[o.id]?.();
 }
 
 export function refreshAll() {
   for (const id of ["char", "skills", "inv", "party", "shop", "smithy", "class", "gate", "trainer"]) if (isOpen(id)) refreshWin(id);
+}
+
+// ───────── 조작 키 설정 (O) ─────────
+export function openKeys() {
+  const names = ["1번 칸 (기본 공격)", "2번 칸", "3번 칸", "4번 칸", "5번 칸", "6번 칸", "7번 칸 (대시)", "8번 칸"];
+  const pots = ["체력 물약", "마나 물약", "해독제"];
+  const row = (label, kind, i) => {
+    const code = KEYS[kind][i];
+    const sid = kind === "slots" ? G.char?.skills?.[i] : null;
+    return h("div", { class: "statrow" },
+      h("span", { class: "sn", text: label }),
+      h("span", { class: "sd", text: sid ? SKILLS[sid]?.name ?? "" : "" }),
+      h("button", { class: "btn small keybtn" + (G.capturingKey?.kind === kind && G.capturingKey.i === i ? " wait" : ""), onclick: () => captureKey(kind, i) },
+        G.capturingKey?.kind === kind && G.capturingKey.i === i ? "누르세요…" : keyLabel(code)));
+  };
+  openWin("keys", "조작 키 설정", () => [
+    h("div", { class: "note", text: "바꿀 칸을 누르고 원하는 키(또는 마우스 버튼)를 누르세요. 이미 쓰는 키면 서로 바뀌어요. Esc: 취소" }),
+    h("h4", { text: "스킬" }), ...names.map((n, i) => row(n, "slots", i)),
+    h("h4", { text: "물약" }), ...pots.map((n, i) => row(n, "potions", i)),
+    h("div", { class: "note", text: "이동 WASD/방향키 · 캐릭터 C · 스킬 K · 가방 I · 파티 P · 도움말 H · 도감 B · 대화 G · 지도 M · 미니맵 N · 채팅 숨기기 L 은 고정이에요." }),
+    h("div", { class: "flexrow" }, h("button", { class: "btn small", onclick: () => { resetKeys(); G.ui.refreshKeys?.(); refreshWin("keys"); } }, "기본값으로")),
+  ], { w: 400 });
+}
+function captureKey(kind, i) {
+  if (G.capturingKey) return;
+  G.capturingKey = { kind, i };
+  refreshWin("keys");
+  const done = (code) => {
+    removeEventListener("keydown", onKey, true); removeEventListener("mousedown", onMouse, true);
+    setTimeout(() => { G.capturingKey = null; refreshWin("keys"); }, 0);
+    if (!code) return;
+    if (RESERVED.has(code)) { G.ui.toast?.("그 키는 이동·창 단축키라서 쓸 수 없어요."); return; }
+    bindKey(kind, i, code);
+    G.ui.refreshKeys?.();
+  };
+  const onKey = (e) => { e.preventDefault(); e.stopPropagation(); done(e.code === "Escape" ? null : e.code); };
+  const onMouse = (e) => { if (e.target.closest?.(".keybtn") && e.button === 0) return; e.preventDefault(); e.stopPropagation(); done("Mouse" + e.button); };
+  setTimeout(() => { addEventListener("keydown", onKey, true); addEventListener("mousedown", onMouse, true); }, 0);
+}
+
+// ───────── 아이템 도감 (B): 등급·드롭 확률·장비 종류 ─────────
+export function openCodex() {
+  const pct = (v) => (Number.isInteger(v) ? v : v.toFixed(1)) + "%";
+  const tierName = { normal: "일반 몬스터", elite: "정예 몬스터", boss: "보스" };
+  const dropCount = { normal: "7% 확률로 1개", elite: "35% 확률로 1개", boss: "중간보스 1~2개 · 주요 보스 2~3개" };
+  openWin("codex", "아이템 도감", () => [
+    h("h4", { text: "등급별 드롭 확률" }),
+    h("div", { class: "note", text: "장비가 하나 떨어질 때 등급이 정해지는 확률이에요. 신화는 어디서나 0.5%." }),
+    h("table", { class: "codex-t" },
+      h("tr", {}, h("th", { text: "" }), ...RARITIES.map((r) => h("th", { style: { color: RARITY_COLOR[r] }, text: r }))),
+      ...Object.keys(RARITY_WEIGHTS).map((t) => h("tr", {}, h("td", { text: tierName[t] }), ...RARITY_WEIGHTS[t].map((w) => h("td", { text: pct(w) }))))),
+    h("div", { class: "note" }, ...Object.keys(dropCount).map((t) => h("div", { text: `• ${tierName[t]}: 장비 ${dropCount[t]}` })), h("div", { text: "• 층을 깨면 보상 상자에서 장비 1~2개 + 골드" })),
+    h("h4", { text: "등급별 성능" }),
+    h("div", { class: "note" }, ...RARITIES.map((r, i) => h("div", { style: { color: RARITY_COLOR[r] }, text: `${r}: 기본 능력치 ×${[1, 1.12, 1.26, 1.42, 1.6][i]} · 추가 옵션 ${i}개${i === 4 ? " + 신화 고유 효과" : ""}` }))),
+    h("h4", { text: "재료 (아이템 레벨 = 떨어진 층)" }),
+    h("div", { class: "note", text: MATERIALS.map((m, i) => `${m} ${i * 10 + 1}~${i * 10 + 10}층`).join(" · ") }),
+    h("h4", { text: "무기" }),
+    h("div", { class: "note" }, ...Object.values(WEAPON_TYPES).map((w) => h("div", { text: `${w.name}: 공격력 ×${w.mul} · ${w.cls.map((c) => CLASS_INFO[c]?.name ?? c).join("·")}` }))),
+    h("h4", { text: "방어구·장신구 종류별 특징" }),
+    ...["armor", "helmet", "trinket"].map((slot) => h("div", { class: "note" }, h("b", { text: SLOT_NAME[slot] }),
+      ...VARIANT_TRAITS[slot].map((tr, v) => h("div", { text: `• ${ARMOR_NAMES[slot][v]}: ${tr.desc}` })))),
+    h("h4", { text: "신화 고유 효과" }),
+    h("div", { class: "note" }, ...Object.values(MYTHIC_EFFECTS).map((m) => h("div", { text: `◆ ${m.name}: ${m.desc}` }))),
+  ], { w: 520 });
 }

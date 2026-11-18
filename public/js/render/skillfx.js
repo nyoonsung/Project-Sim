@@ -10,7 +10,7 @@ import { addTrauma } from "../feel.js";
 
 const now = () => performance.now() / 1000;
 const GT = { 일반: 0, 희귀: 1, 영웅: 2, 전설: 3 };
-const FX = { rings: [], runes: [], pillars: [], streaks: [], motes: [], stars: [] };
+const FX = { rings: [], runes: [], pillars: [], streaks: [], motes: [], stars: [], sweeps: [] };
 const MAX_MOTES = 420;
 
 /** 스킬의 연출 등급 0~4 */
@@ -42,6 +42,9 @@ export function castFx(e, ent) {
   const sk = SKILLS[e.s];
   if (!sk) return;
   const tier = fxTier(sk), pt = profTier(e.pl ?? 0);
+  // 근접 공격: 실제로 닿는 거리(사거리 + 적 몸 크기)에 휘두름 궤적을 그림 → 보이는 것 = 맞는 범위
+  const mel = (sk.steps ?? []).find((s) => s.do === "melee");
+  if (mel && ent) FX.sweeps.push({ id: e.id, r: mel.range + 10, arc: mel.arc ?? 60, a: (e.a ?? 0) / 1000, t0: now(), life: 0.18, col: sk.kind === "basic" ? "#ffffff" : skillColor(sk) });
   if (tier === 0 && pt === 0) return;
   const col = skillColor(sk), hi = lighten(col, 0.55);
   const x = ent?.rx ?? e.x, y = ent?.ry ?? e.y;
@@ -109,14 +112,34 @@ export function tickSkillFx(dt) {
   for (const p of FX.motes) { p.t += dt; p.x += p.vx * dt; p.y += p.vy * dt; p.vy += p.g * dt; p.vx *= 1 - 3 * dt; }
   if (FX.motes.length) FX.motes = FX.motes.filter((p) => p.t < p.life);
   const t = now();
-  for (const k of ["rings", "runes", "pillars", "streaks", "stars"]) if (FX[k].length) FX[k] = FX[k].filter((o) => t - o.t0 < o.life);
+  for (const k of ["rings", "runes", "pillars", "streaks", "stars", "sweeps"]) if (FX[k].length) FX[k] = FX[k].filter((o) => t - o.t0 < o.life);
 }
 
 export function drawSkillFx(ctx, cx, cy) {
   const t = now();
-  if (!FX.rings.length && !FX.motes.length && !FX.runes.length && !FX.pillars.length && !FX.streaks.length && !FX.stars.length) return;
+  if (!FX.rings.length && !FX.motes.length && !FX.runes.length && !FX.pillars.length && !FX.streaks.length && !FX.stars.length && !FX.sweeps.length) return;
   ctx.save();
   ctx.globalCompositeOperation = "lighter";
+  // 근접 휘두름 궤적 (초승달 모양, 시전자를 따라감)
+  for (const w of FX.sweeps) {
+    const u = G.ents.get(w.id);
+    if (!u) continue;
+    const k = (t - w.t0) / w.life, x = u.rx - cx, y = u.ry - cy - 4;
+    const half = (w.arc * Math.PI) / 360, a0 = w.a - half, a1 = w.a + half;
+    ctx.globalAlpha = (1 - k) * 0.55;
+    ctx.fillStyle = w.col;
+    ctx.beginPath();
+    if (w.arc <= 50) {
+      // 찌르기: 앞으로 뻗는 창끝 모양
+      const ca = Math.cos(w.a), sa = Math.sin(w.a), px = -sa, py = ca, len = w.r * (0.6 + k * 0.4);
+      ctx.moveTo(x + px * 4, y + py * 4); ctx.lineTo(x + ca * len, y + sa * len); ctx.lineTo(x - px * 4, y - py * 4);
+    } else {
+      ctx.arc(x, y, w.r, a0, a1); ctx.arc(x, y, w.r * 0.62, a1, a0, true);
+    }
+    ctx.closePath(); ctx.fill();
+    ctx.globalAlpha = (1 - k) * 0.9; ctx.strokeStyle = "#ffffff"; ctx.lineWidth = 1;
+    ctx.beginPath(); if (w.arc > 50) ctx.arc(x, y, w.r, a0, a1); else { ctx.moveTo(x, y); ctx.lineTo(x + Math.cos(w.a) * w.r, y + Math.sin(w.a) * w.r); } ctx.stroke();
+  }
   // 바닥 고리
   for (const r of FX.rings) {
     const k = (t - r.t0) / r.life, e = 1 - Math.pow(1 - k, 3);

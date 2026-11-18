@@ -25,6 +25,8 @@ export function drawGlows(ctx, cx, cy, W, H) {
   if (!list.length) return;
   ctx.save();
   ctx.globalCompositeOperation = "lighter";
+  // 부드럽게 늘려 그림: 픽셀 그대로 늘리면 64px 그림이 계단처럼 보이고, 화면이 움직일 때 계단이 번갈아 바뀌어 깜박였음
+  ctx.imageSmoothingEnabled = true;
   for (let i = 0; i < list.length; i += 5) {
     const x = list[i] - cx, y = list[i + 1] - cy, r = list[i + 2];
     if (x < -r || y < -r || x > W + r || y > H + r) continue;

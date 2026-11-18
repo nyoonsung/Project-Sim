@@ -203,7 +203,7 @@ function normalFloor(floor, seed, party) {
     const edge = Math.min(x - ax, ax + iw - 1 - x, y - ay, ay + ih - 1 - y);
     if (edge <= 3 && Math.hypot(x - startX, y - startY) > 8 && (x + y * 3) % 3 === 0) pts.push([px(x), px(y)]);
   }
-  const total = Math.min(60, Math.round((24 + floor * 0.3) * (party > 1 ? 1 + (party - 1) * 0.35 : 1)));
+  const total = Math.min(60, Math.round((20 + floor * 0.3) * (party > 1 ? 1 + (party - 1) * 0.35 : 1)));
   m.waves = { total, waves: Math.max(3, Math.min(6, 3 + Math.floor(floor / 20))), points: pts, pool: zone.monsters, elite: 0.06 + floor * 0.0015 };
   m.style = style;
   m.spawns = [];
@@ -310,7 +310,7 @@ export function makeTown() {
   bld("lodge2", 24, 23, 4, 5, { win: "#ffd08a" });
   // 던전 관문: 돌 아치 + 양쪽 수호상 + 깃발
   set(m, 18, 3, T.WALL); set(m, 18, 4, T.WALL); set(m, 21, 3, T.WALL); set(m, 21, 4, T.WALL);
-  objs.push({ kind: "prop", s: "arch", x: P(20), y: P(5), glow: "#b07aff" });
+  objs.push({ kind: "prop", s: "arch", x: P(20) + 16, y: P(5), glow: "#b07aff" }); // 아치 그림이 왼쪽으로 16px 치우쳐 그려져서 보정 → 포탈이 아치 한가운데
   objs.push({ kind: "portal", id: "dungeon", x: P(20), y: P(4) + 12, label: "던전 입구", color: "dungeon" });
   for (const tx of [15, 23]) { bld("statue", tx, 2, 2, 2); objs[objs.length - 1].glow = "#9a7aff"; }
   for (const tx of [17, 22]) objs.push({ kind: "flag", c: tx === 17 ? "flag_red" : "flag_blue", x: P(tx) + 16, y: P(7) });

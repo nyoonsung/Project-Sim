@@ -68,3 +68,44 @@ tick(r2, 25);
 ok(world.town === 1 && r2.players.has(d.id) && !r2.players.has(c.id), "1.5초 서 있으면 그 사람만 마을로");
 const bf = makeFloor(10, 3, 1);
 ok(bf.objects.some((o) => o.id === "town"), "보스 층에도 마을 귀환 포탈 있음");
+
+// ───────── 추가 규칙 (2026-11 개선 목록) ─────────
+{
+  const { rollItem, baseStats, VARIANT_TRAITS } = await import("../shared/items.js");
+  const { adventurerBasic, SKILLS } = await import("../shared/skills.js");
+  // 층 클리어: 바닥 아이템 자동 획득 + 보상 상자
+  const picked = [];
+  const w2 = { ...world, pickup: (p, it) => { picked.push([p.id, it]); return true; } };
+  const r3 = new Room(w2, { id: "r3", kind: "dungeon", floor: 6, map: makeFloor(6, 11, 1), partySize: 1 });
+  const e = player(9, "마"); r3.addPlayer(e);
+  r3.dropLoot(e.session.userId, rollItem(Math.random, { ilvl: 5 }), e.x + 200, e.y);
+  r3.dropLoot(e.session.userId, rollItem(Math.random, { ilvl: 5 }), e.x - 200, e.y);
+  r3.wave.spawned = r3.total; r3.timers = r3.timers.filter((t) => !t.spawn);
+  for (const m of [...r3.units.values()].filter((u) => u.type === "m")) r3.kill(m, e, r3.now);
+  for (let k = 0; k < 4; k++) { w2.clock += 0.05; r3.tick(); }
+  // 아무 몬스터도 없으면 kill이 호출되지 않으므로, 직접 클리어 경로 확인용 처치 1마리
+  if (!r3.exitOpen) { r3.spawnMonster(r3.map.waves.pool[0], e.x + 300, e.y); const m = [...r3.units.values()].find((u) => u.type === "m"); r3.kill(m, e, r3.now); }
+  for (let k = 0; k < 25; k++) { w2.clock += 0.05; r3.tick(); }
+  ok(r3.exitOpen && r3.loot.size === 0 && picked.length >= 2, `층 클리어 시 바닥 아이템 자동 획득 (${picked.length}개)`);
+  ok(!!r3.chest && r3.map.objects.some((o) => o.kind === "chest"), "층 클리어 시 보상 상자 등장");
+  const g0 = e.session.char.gold, n0 = picked.length;
+  e.x = r3.chest.x; e.y = r3.chest.y;
+  for (let k = 0; k < 8; k++) { w2.clock += 0.05; r3.tick(); }
+  ok(e.session.char.gold > g0 && picked.length > n0, `보상 상자: 골드 +${e.session.char.gold - g0}, 장비 ${picked.length - n0}개`);
+  const g1 = e.session.char.gold;
+  for (let k = 0; k < 8; k++) { w2.clock += 0.05; r3.tick(); }
+  ok(e.session.char.gold === g1, "상자는 한 사람당 한 번만");
+  // 전투 중 마을 귀환 막기
+  const r4 = new Room(w2, { id: "r4", kind: "dungeon", floor: 4, map: makeFloor(4, 13, 1), partySize: 1 });
+  const f = player(10, "바"); r4.addPlayer(f);
+  const tp4 = r4.map.objects.find((o) => o.id === "town");
+  r4.spawnMonster(r4.map.waves.pool[0], tp4.x + 60, tp4.y);
+  w2.town = 0; f.x = tp4.x; f.y = tp4.y;
+  for (let k = 0; k < 40; k++) { w2.clock += 0.05; r4.tick(); [...r4.units.values()].filter((u) => u.type === "m").forEach((m) => { m.x = tp4.x + 60; m.y = tp4.y; }); }
+  ok(!w2.town && r4.players.has(f.id), "근처에 적이 있으면(전투 중) 마을 귀환 포탈이 안 탐");
+  // 활 = 활쏘기, 지팡이 = 마력탄
+  ok(adventurerBasic("bow") === "c_shot" && adventurerBasic("staff") === "c_bolt" && adventurerBasic("sword") === "c_thrust" && SKILLS.c_shot.steps[0].do === "proj", "모험가가 활을 들면 기본 공격이 활쏘기(원거리)");
+  // 방어구 종류별 차이
+  const a0 = baseStats("armor", null, 10, 0, 0), a2 = baseStats("armor", null, 10, 0, 2);
+  ok(a2.def > a0.def && a0.move > 0 && a2.move < 0 && VARIANT_TRAITS.armor.length === 4, `가죽(방어 ${a0.def}, 이속 +4%) ≠ 판금(방어 ${a2.def}, 이속 -3%)`);
+}
