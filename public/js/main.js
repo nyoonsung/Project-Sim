@@ -129,7 +129,7 @@ const ui = {
   announce(text) { const a = $("#announce"); a.classList.toggle("hidden", !text); a.textContent = text ? "📢 " + text : ""; },
   kicked(why) { G.kickedWhy = why; },
   onEnchant(m) { WIN.onEnchant(m); const { ENCHANTS } = WIN; HUD.toast(`인챈트: ✦ ${ENCHANTS[m.ench].name} (${ENCHANTS[m.ench].desc})`, m.ench === "mend" ? "mythic" : "rank"); },
-  onEnhance(m) { WIN.onEnhance(m); HUD.toast(m.result === "success" ? `강화 성공! ${m.name} +${m.enh}` : m.result === "fail" ? `강화 실패 (${m.name} +${m.enh} 유지)` : `${m.name}이(가) 파괴됐어요…`, m.result === "success" ? "rank" : m.result === "destroy" ? "death" : "info"); },
+  onEnhance(m) { WIN.onEnhance(m); HUD.toast(m.result === "success" ? `강화 성공! ${m.name} +${m.enh}` : m.result === "fail" ? `강화 실패 (${m.name} +${m.enh} 유지)` : m.result === "reset" ? `강화 폭발! 신화라 사라지지 않고 ${m.name} +0이 됐어요` : `${m.name}이(가) 파괴됐어요…`, m.result === "success" ? "rank" : m.result === "destroy" || m.result === "reset" ? "death" : "info"); },
   toast: HUD.toast,
   center: HUD.center,
   refreshKeys() { if (!G.touch) { HUD.buildHud(); HUD.updateSkillbar(); } },

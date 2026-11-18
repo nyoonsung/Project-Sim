@@ -230,7 +230,7 @@ try {
   await sleep(150);
   ok(!b1.msgs.some((m) => m.t === "enh"), "대장장이에게서 멀면 강화 불가");
   await b1.walkTo(smithy.x, smithy.y + 30, 15000);
-  let res = { success: 0, fail: 0, destroy: 0 };
+  let res = { success: 0, fail: 0, destroy: 0, reset: 0 };
   for (let i = 0; i < 10; i++) { b1.send({ t: "enhance", uid: 1 }); await sleep(120); }
   for (const m of b1.msgs) if (m.t === "enh") res[m.result]++;
   // 파괴(1%)되면 그 뒤 요청은 없는 아이템이라 응답이 없음 — 정상

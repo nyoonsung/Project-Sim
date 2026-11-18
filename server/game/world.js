@@ -638,7 +638,12 @@ export class World {
     const odds = enhanceOdds(it.enh);
     const r = secureRandom();
     let result;
-    if (r < odds.destroy) {
+    if (r < odds.destroy && it.rarity === "신화") {
+      // 신화는 터져도 사라지지 않고 강화 단계만 +0으로
+      result = "reset";
+      it.enh = 0;
+      if (where === "equip") refreshStats(s.unit);
+    } else if (r < odds.destroy) {
       result = "destroy";
       if (where === "inv") c.inv = c.inv.filter((x) => x !== it);
       else for (const k of SLOTS) if (c.equip[k] === it) c.equip[k] = null;

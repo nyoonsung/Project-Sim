@@ -120,3 +120,14 @@ ok(evs9.some((e) => e.e === "dmg" && e.id === m9.id), "찌르기 조준이 50° 
   for (let i = 0; i < 50; i++) wearOnHit(roomW, sw.unit);
   ok(sw.char.equip.armor.dur === 100, "수선 인챈트 장비는 맞아도 내구도가 안 닳음");
 }
+
+// 12) 신화는 강화 폭발 시 사라지지 않고 +0
+{
+  const se = mk(); se.char.gold = 1e15;
+  let it; for (let i = 0; i < 60 && it?.slot !== "armor"; i++) it = rollItem(Math.random, { ilvl: 5, rarity: "신화" });
+  it.uid = 888; se.char.inv = [it];
+  const fakeW = { nearNpc: () => true, sendChar() {}, broadcastSys() {}, save() {} };
+  let res = null; se.send = (m) => { if (m.t === "enh") res = m; };
+  for (let k = 0; k < 3000 && res?.result !== "reset"; k++) { it.enh = 98; World.prototype.enhance.call(fakeW, se, 888); }
+  ok(res?.result === "reset" && se.char.inv.includes(it) && it.enh === 0, `신화 강화 폭발 → 아이템 유지, +${it.enh}`);
+}
