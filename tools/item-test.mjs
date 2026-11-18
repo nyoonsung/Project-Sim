@@ -93,7 +93,7 @@ R9.cast(u9, { slot: 0, ax: u9.x + Math.cos(aimAng) * 60, ay: u9.y + Math.sin(aim
 W9.clock += 0.05; R9.tick(); R9.flush();
 ok(evs9.some((e) => e.e === "dmg" && e.id === m9.id), "찌르기 조준이 50° 빗나가도 근처 적에 맞음 (조준 보정)");
 
-// 10) 강화 실패 → 1단계 하락
+// 10) 강화 실패 → 단계 유지
 {
   const se = mk(); se.char.gold = 1e12;
   let it; for (let i = 0; i < 60 && it?.slot !== "armor"; i++) it = rollItem(Math.random, { ilvl: 5, rarity: "일반" });
@@ -102,5 +102,5 @@ ok(evs9.some((e) => e.e === "dmg" && e.id === m9.id), "찌르기 조준이 50° 
   let seen = null;
   se.send = (m) => { if (m.t === "enh") seen = m; };
   for (let k = 0; k < 40 && seen?.result !== "fail"; k++) { it.enh = 98; World.prototype.enhance.call(fakeW, se, 777); }
-  ok(seen?.result === "fail" && it.enh === 97, `강화 실패 시 +98 → +${it.enh} (1단계 하락)`);
+  ok(seen?.result === "fail" && it.enh === 98, `강화 실패 시 +98 → +${it.enh} (단계 유지)`);
 }

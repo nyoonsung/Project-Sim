@@ -243,7 +243,7 @@ export function canEquip(it, cls) {
   return true;
 }
 
-// ── 강화: +n → +n+1 성공 (99-n)%, 파괴 항상 1%, 나머지 실패(1단계 하락)
+// ── 강화: +n → +n+1 성공 (99-n)%, 파괴 항상 1%, 나머지 실패(유지)
 export const MAX_ENH = 99;
 export function enhanceOdds(n) {
   const success = Math.max(0, 99 - n) / 100;

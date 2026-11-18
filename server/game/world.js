@@ -564,7 +564,7 @@ export class World {
     s.unit.room?.ev({ e: "fx", fx: "impacts/hit-spark", x: s.unit.x | 0, y: (s.unit.y - 10) | 0 });
     s.notice(`장비 ${list.length}개를 ${cost.toLocaleString()}G에 수선했어요. 내구도 가득!`);
   }
-  // 강화: 성공 (99-n)%, 파괴 1%, 나머지 실패(1단계 하락). 서버 보안 난수로 판정
+  // 강화: 성공 (99-n)%, 파괴 1%, 나머지 실패(단계 유지). 서버 보안 난수로 판정
   enhance(s, uid) {
     const c = s.char;
     if (!this.nearNpc(s, "smithy")) return s.notice("대장장이 브론 근처에서 강화할 수 있어요.");
@@ -589,12 +589,8 @@ export class World {
       result = "success";
       it.enh++;
       if (where === "equip") refreshStats(s.unit);
-    } else {
-      // 실패: 강화 1단계 하락 (+0이면 그대로)
-      result = "fail";
-      if (it.enh > 0) { it.enh--; if (where === "equip") refreshStats(s.unit); }
-    }
-    itemLog(s.userId, "enhance", { name: it.name, rarity: it.rarity, from: result === "success" ? it.enh - 1 : result === "fail" ? it.enh + 1 : it.enh, result, cost });
+    } else result = "fail"; // 실패: 단계 유지
+    itemLog(s.userId, "enhance", { name: it.name, rarity: it.rarity, from: result === "success" ? it.enh - 1 : it.enh, result, cost });
     if (result === "success" && it.enh >= 20) this.broadcastSys(`${s.name}님이 [${it.name}] +${it.enh} 강화에 성공했어요!`, "legend");
     s.send({ t: "enh", result, uid, enh: it.enh, name: it.name, cost });
     this.sendChar(s);

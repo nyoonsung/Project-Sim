@@ -279,7 +279,7 @@ export function openHelp() {
     h("h4", { text: "던전" }),
     h("div", { class: "note", text: "1~100층. 5층마다 중간보스, 10층마다 주요 보스가 나와요. 일반층은 큰 투기장에서 몬스터가 웨이브로 몰려와요. 웨이브를 모두 물리치면(90% 처치) 출구 포탈이 열려요. 미니맵을 누르면(M) 큰 지도. 10층 보스를 쓰러뜨리면 안전 구역의 전직소에 갈 수 있고, 다음부터 그 다음 층(11, 21…)에서 바로 시작할 수 있어요." }),
     h("h4", { text: "장비 · 강화" }),
-    h("div", { class: "note", text: "등급: 일반 < 희귀 < 영웅 < 전설 < 신화(드롭 0.5%). 쿨타임 감소 효과는 없어요. 강화는 최대 +99, +n→+n+1 성공 확률 (99−n)%, 파괴 확률은 항상 1%예요. 실패하면 1단계 내려가요." }),
+    h("div", { class: "note", text: "등급: 일반 < 희귀 < 영웅 < 전설 < 신화(드롭 0.5%). 쿨타임 감소 효과는 없어요. 강화는 최대 +99, +n→+n+1 성공 확률 (99−n)%, 파괴 확률은 항상 1%예요. 실패하면 단계가 그대로예요." }),
     h("h4", { text: "전직" }),
     h("div", { class: "note", text: "모험가로 시작해 10층 전직소에서 검사·권투사·궁수·도적·마법사·성직자·대장장이 중 하나를 고르거나 보류할 수 있어요. 첫 전직을 확정하면 직업이 고정돼요." }),
     h("div", { class: "flexrow" }, h("button", { class: "btn small danger", onclick: () => G.ui.logout() }, "로그아웃 · 다른 계정으로")),
@@ -334,9 +334,9 @@ export function openSmithy(pos = {}) {
       const o = enhanceOdds(sel.enh), cost = enhanceCost(sel);
       box = h("div", { class: "enh-box" },
         h("div", { style: { color: RARITY_COLOR[sel.rarity] }, text: `${sel.name} +${sel.enh}` }),
-        sel.enh >= MAX_ENH ? h("div", { text: "최대 강화 +99" }) : h("div", { class: "enh-odds" }, h("span", { class: "s", text: `성공 ${fmtPct(o.success)}` }), h("span", { class: "f", text: `실패(-1) ${fmtPct(o.fail)}` }), h("span", { class: "d", text: `파괴 ${fmtPct(o.destroy)}` })),
+        sel.enh >= MAX_ENH ? h("div", { text: "최대 강화 +99" }) : h("div", { class: "enh-odds" }, h("span", { class: "s", text: `성공 ${fmtPct(o.success)}` }), h("span", { class: "f", text: `실패 ${fmtPct(o.fail)}` }), h("span", { class: "d", text: `파괴 ${fmtPct(o.destroy)}` })),
         h("div", { class: "note", text: `강화 단계마다 기본 능력치 +2%, ${ENH_PCT[sel.slot]?.name ?? "능력치"} +1% · 비용 ${cost.toLocaleString()}G (보유 ${c.gold.toLocaleString()}G)` }),
-        h("div", { class: "enh-result " + (lastEnh?.result ?? ""), text: lastEnh ? { success: `성공! +${lastEnh.enh}`, fail: `실패… 1단계 하락 (+${lastEnh.enh})`, destroy: "파괴됐어요…" }[lastEnh.result] : "" }),
+        h("div", { class: "enh-result " + (lastEnh?.result ?? ""), text: lastEnh ? { success: `성공! +${lastEnh.enh}`, fail: "실패… (단계 유지)", destroy: "파괴됐어요…" }[lastEnh.result] : "" }),
         h("button", { class: "btn primary", disabled: sel.enh >= MAX_ENH || c.gold < cost, onclick: () => send({ t: "enhance", uid: sel.uid }) }, `강화하기 (+${sel.enh} → +${sel.enh + 1})`));
     }
     return [repairBox, h("h4", { text: "강화" }), box, h("h4", { text: "장비 선택" }), pick];
