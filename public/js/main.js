@@ -123,8 +123,24 @@ const ui = {
 
 function resize() {
   const cv = $("#view");
-  const s = Math.max(1, Math.floor(Math.min(innerWidth / VIEW_W, innerHeight / VIEW_H)));
-  const fs = Math.min(innerWidth / VIEW_W, innerHeight / VIEW_H);
+  // 실제로 보이는 높이 (주소창·키보드 제외) — 휴대폰에서 위쪽이 잘리는 문제 방지
+  const vv = globalThis.visualViewport;
+  const W = vv?.width ?? innerWidth, H = vv?.height ?? innerHeight;
+  document.documentElement.style.setProperty("--vh", H + "px");
+  const portrait = G.touch && H > W;
+  document.body.classList.toggle("portrait", portrait);
+  if (scrollY || scrollX) scrollTo(0, 0); // 입력창 때문에 페이지가 밀려 올라간 채로 남지 않게
+  if (portrait) {
+    // 세로: 폭 400 기준으로 위 메뉴(66px) 아래 화면 끝까지 게임 화면, 캐릭터는 위쪽 40% 지점
+    const top = 66, scale = W / 400, vh = Math.round((H - top) / scale);
+    G.renderer?.setView(400, vh, 0.4);
+    cv.style.width = W + "px"; cv.style.height = vh * scale + "px";
+    G.scale = scale;
+    return;
+  }
+  G.renderer?.setView(VIEW_W, VIEW_H, 0.5);
+  const s = Math.max(1, Math.floor(Math.min(W / VIEW_W, H / VIEW_H)));
+  const fs = Math.min(W / VIEW_W, H / VIEW_H);
   const scale = fs >= 1 && !G.touch ? s : fs;
   cv.style.width = VIEW_W * scale + "px";
   cv.style.height = VIEW_H * scale + "px";
@@ -141,6 +157,9 @@ async function startGame() {
   if (isTouchDevice()) setupTouch({ openNpc: WIN.openNpc, interactTarget: HUD.interactTarget, toast: (t) => HUD.toast(t, "info") });
   resize();
   addEventListener("resize", resize);
+  globalThis.visualViewport?.addEventListener("resize", resize);
+  globalThis.visualViewport?.addEventListener("scroll", () => { if (scrollY) scrollTo(0, 0); });
+  addEventListener("orientationchange", () => setTimeout(resize, 250));
   await Promise.all([loadDT2().catch((e) => console.warn("아틀라스 로드 실패", e)), document.fonts.load("12px Galmuri11").catch(() => {})]);
   await document.fonts.load("10px Galmuri9").catch(() => {});
   document.fonts.load("14px Galmuri14").catch(() => {}); // 제목·데미지 숫자용 (기다리지 않음)
@@ -175,8 +194,8 @@ function bindInput() {
   const chat = $("#chat-input");
   const toMouse = (e) => {
     const r = cv.getBoundingClientRect();
-    G.mouse.x = ((e.clientX - r.left) / r.width) * VIEW_W;
-    G.mouse.y = ((e.clientY - r.top) / r.height) * VIEW_H;
+    G.mouse.x = ((e.clientX - r.left) / r.width) * cv.width;
+    G.mouse.y = ((e.clientY - r.top) / r.height) * cv.height;
   };
   addEventListener("mousemove", toMouse);
   cv.addEventListener("mousedown", (e) => { toMouse(e); G.mouse.down[e.button] = true; if (e.button === 0) tryCast(0); if (e.button === 2) tryCast(1); });

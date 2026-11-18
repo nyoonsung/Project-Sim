@@ -339,3 +339,35 @@ body.touch .slot.tb .plv { right: 11%; top: 11%; }
 #vote .vt { font-family: var(--display); font-size: 14px; }
 body.touch #center-msg { font-size: 21px; }
 body.touch #zone-label { font-size: 12px; }
+
+/* ───────── 휴대폰: 보이는 높이에 맞춤 (주소창 때문에 위아래 잘림 방지) ───────── */
+body.touch #game { position: fixed; left: 0; top: 0; width: 100vw; height: var(--vh, 100vh); overflow: hidden; }
+body.touch #ui { height: var(--vh, 100vh); }
+body.touch #rotate-msg { display: none !important; }
+/* 좁은 가로 화면: 메뉴 버튼이 미니맵과 겹치지 않게 작게 */
+@media (max-width: 760px) {
+  body.touch #menu-buttons { right: calc(100px + env(safe-area-inset-right)); gap: 2px; }
+  body.touch #menu-buttons button { width: 30px; height: 30px; font-size: 14px; }
+  body.touch #minimap { width: 90px; height: 70px; }
+}
+/* 낮은 가로 화면: 대시 버튼이 미니맵을 가리지 않게 스킬 버튼 왼쪽 위로 */
+@media (max-height: 360px) {
+  body.touch:not(.portrait) #dash-btn { bottom: calc(150px + env(safe-area-inset-bottom)); right: calc(150px + env(safe-area-inset-right)); width: 50px; height: 50px; }
+}
+
+/* ───────── 휴대폰 세로: 위 메뉴 아래로 게임 화면이 꽉 차고, 조작 버튼은 아래쪽에 겹쳐 놓임 ───────── */
+body.touch.portrait #view { top: calc(66px + env(safe-area-inset-top)); left: 0; transform: none; }
+body.touch.portrait #orbs { grid-template-columns: 1fr 1fr; right: calc(8px + env(safe-area-inset-right)); width: auto; }
+body.touch.portrait #menu-buttons { top: calc(34px + env(safe-area-inset-top)); left: calc(6px + env(safe-area-inset-left)); right: auto; flex-wrap: nowrap; }
+body.touch.portrait #menu-buttons button { width: calc((100vw - 30px) / 9); max-width: 40px; height: 28px; font-size: 14px; }
+body.touch.portrait #minimap { top: calc(70px + env(safe-area-inset-top)); right: 4px; width: 84px; height: 64px; opacity: 0.85; }
+body.touch.portrait #topbar { top: calc(70px + env(safe-area-inset-top)); }
+body.touch.portrait #buffs { top: calc(92px + env(safe-area-inset-top)); }
+body.touch.portrait #chat { top: calc(112px + env(safe-area-inset-top)); left: 6px; right: auto; width: 62vw; transform: none; }
+body.touch.portrait #party-frames { top: calc(170px + env(safe-area-inset-top)); }
+body.touch.portrait #joy-zone { width: 55%; height: 45%; }
+body.touch.portrait #skillbar { right: calc(66px + env(safe-area-inset-right)); bottom: calc(96px + env(safe-area-inset-bottom)); }
+body.touch.portrait #potions { right: auto; left: 50%; transform: translateX(-50%); bottom: calc(12px + env(safe-area-inset-bottom)); }
+body.touch.portrait #dash-btn { bottom: calc(250px + env(safe-area-inset-bottom)); right: calc(14px + env(safe-area-inset-right)); }
+body.touch.portrait #center-msg { top: 28%; font-size: 16px; }
+body.touch.portrait #toasts { top: 22%; }

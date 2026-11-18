@@ -160,8 +160,7 @@ export function setupTouch({ openNpc, interactTarget, toast }) {
   hint.addEventListener("click", () => { const o = interactTarget(); if (o) openNpc(o); });
   // 바깥을 누르면 툴팁 닫기
   addEventListener("pointerdown", (e) => { if (!e.target.closest?.(".win .slot, .win .cell, .win .item")) hideTip(); }, true);
-  // 세로 화면 안내
-  ui.append(h("div", { id: "rotate-msg" }, h("div", { text: "📱↻" }), h("div", { text: "가로로 돌려서 플레이해 주세요" })));
+  // 세로 화면도 그대로 플레이 (위: 게임 화면, 아래: 조작 버튼). 가로 고정 안 되는 폰·카톡 인앱 브라우저 대응
   // 처음 화면을 누르면 전체 화면 + 가로 고정 시도 (지원하는 기기만)
   addEventListener("pointerdown", function once() { removeEventListener("pointerdown", once); toggleFullscreen(true); }, { once: true });
   // 핀치 확대·더블탭 확대 막기

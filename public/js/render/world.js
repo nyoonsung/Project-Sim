@@ -8,6 +8,9 @@ import { drawDungeonObject } from "./dungeonart.js";
 import { tickSkillFx, drawSkillFx } from "./skillfx.js";
 import { shakeEnabled } from "../feel.js";
 import { VIEW_W, VIEW_H, TILE } from "/shared/constants.js";
+// 화면(논리 해상도): 가로 640×360, 휴대폰 세로면 400×(세로 길이에 맞춤)
+let VW = VIEW_W, VH = VIEW_H;
+export const viewSize = () => [VW, VH];
 import { MONSTERS, BOSSES, ZONES } from "/shared/zones.js";
 import { SKILLS } from "/shared/skills.js";
 import { CLASS_INFO } from "/shared/classes.js";
@@ -29,17 +32,30 @@ const NPC_LOOK = {
 };
 
 export class Renderer {
+  /** 화면 크기 바꾸기 (휴대폰 세로·가로 전환). focusY: 캐릭터가 화면 높이의 어디쯤 오게 할지 */
+  setView(w, h, focusY = 0.5) {
+    this.focusY = focusY;
+    if (w === VW && h === VH) return;
+    VW = w; VH = h;
+    this.cv.width = w; this.cv.height = h;
+    this.ctx.imageSmoothingEnabled = false;
+    this.front = new FxLayer(w, h);
+    this.ground = new FxLayer(w, h);
+    this.light = new OffscreenCanvas(Math.ceil(w / 2), Math.ceil(h / 2));
+    this.lctx = this.light.getContext("2d");
+  }
   constructor(canvas) {
     this.cv = canvas;
     this.ctx = canvas.getContext("2d");
     this.ctx.imageSmoothingEnabled = false;
-    this.front = new FxLayer(VIEW_W, VIEW_H);
-    this.ground = new FxLayer(VIEW_W, VIEW_H);
+    this.front = new FxLayer(VW, VH);
+    this.ground = new FxLayer(VW, VH);
     this.weather = new FxLayer(320, 180);
     this.weather.every = 2; // 날씨는 배경이라 30fps로 충분
-    this.light = new OffscreenCanvas(VIEW_W / 2, VIEW_H / 2);
+    this.light = new OffscreenCanvas(VW / 2, VH / 2);
     this.lctx = this.light.getContext("2d");
     this.zoneFx = new Map();
+    this.focusY = 0.5;
     this.white = new WeakMap();
     this.last = now();
     this.fps = 60;
@@ -88,7 +104,7 @@ export class Renderer {
     this.last = t;
     this.fps = this.fps * 0.95 + (1 / Math.max(dt, 1e-3)) * 0.05;
     const ctx = this.ctx;
-    if (!G.map) { ctx.fillStyle = "#000"; ctx.fillRect(0, 0, VIEW_W, VIEW_H); return; }
+    if (!G.map) { ctx.fillStyle = "#000"; ctx.fillRect(0, 0, VW, VH); return; }
     // 위치: 나는 매 프레임 즉시 이동, 다른 유닛은 보간
     localStep(dt);
     tickFeel(dt);
@@ -109,9 +125,9 @@ export class Renderer {
     const me = G.ents.get(G.you);
     // 카메라: 캐릭터에 고정 (지도 밖은 안 보이게)
     const mw = G.map.w * TILE, mh = G.map.h * TILE;
-    const tx = (me?.rx ?? G.local.x) - VIEW_W / 2, ty = (me?.ry ?? G.local.y) - VIEW_H / 2 - 10;
-    G.cam.x = Math.round(mw <= VIEW_W ? (mw - VIEW_W) / 2 : Math.max(0, Math.min(mw - VIEW_W, tx)));
-    G.cam.y = Math.round(mh <= VIEW_H ? (mh - VIEW_H) / 2 : Math.max(0, Math.min(mh - VIEW_H, ty)));
+    const tx = (me?.rx ?? G.local.x) - VW / 2, ty = (me?.ry ?? G.local.y) - VH * (this.focusY ?? 0.5) - 10;
+    G.cam.x = Math.round(mw <= VW ? (mw - VW) / 2 : Math.max(0, Math.min(mw - VW, tx)));
+    G.cam.y = Math.round(mh <= VH ? (mh - VH) / 2 : Math.max(0, Math.min(mh - VH, ty)));
     let sx = 0, sy = 0;
     // 화면 흔들림: 충격량^1.5 × 최대 10px, 부드러운 진동(무작위 덜덜이 대신)
     const tr = G.trauma ?? 0, amp = shakeEnabled() ? Math.max(G.shake, Math.pow(tr, 1.5) * 10) : 0;
@@ -130,8 +146,8 @@ export class Renderer {
     this.weather.update(dt, G.ents);
 
     ctx.fillStyle = "#08070b";
-    ctx.fillRect(0, 0, VIEW_W, VIEW_H);
-    G.map.draw(ctx, cx, cy, VIEW_W, VIEW_H);
+    ctx.fillRect(0, 0, VW, VH);
+    G.map.draw(ctx, cx, cy, VW, VH);
     this.drawLoot(ctx, cx, cy, t);
     this.drawZones(ctx, cx, cy, t);
     this.drawTels(ctx, cx, cy, t);
@@ -142,7 +158,7 @@ export class Renderer {
     this.front.render(ctx, cx, cy);
     if (G.kind === "town") drawStrings(ctx, cx, cy, t);
     this.drawLighting(ctx, cx, cy, t);
-    drawGlows(ctx, cx, cy, VIEW_W, VIEW_H);
+    drawGlows(ctx, cx, cy, VW, VH);
     drawSkillFx(ctx, cx, cy);
     if (this.weather.list.length) {
       const wc = this.wctx ?? (this.wctx = this.mkWeatherCtx());
@@ -150,19 +166,19 @@ export class Renderer {
       this.weather.render(wc, 0, 0);
       ctx.globalAlpha = G.kind === "town" ? 0.5 : 0.45;
       const ox = -(((cx % 320) + 320) % 320), oy = -(((cy % 180) + 180) % 180);
-      for (let yy = oy; yy < VIEW_H; yy += 180) for (let xx = ox; xx < VIEW_W; xx += 320) ctx.drawImage(this.wcv, xx, yy);
+      for (let yy = oy; yy < VH; yy += 180) for (let xx = ox; xx < VW; xx += 320) ctx.drawImage(this.wcv, xx, yy);
       ctx.globalAlpha = 1;
     }
     this.drawOverhead(ctx, cx, cy, t);
     if (G.hurtFlash > 0) {
-      const g = ctx.createRadialGradient(VIEW_W / 2, VIEW_H / 2, 120, VIEW_W / 2, VIEW_H / 2, 380);
+      const g = ctx.createRadialGradient(VW / 2, VH / 2, 120, VW / 2, VH / 2, 380);
       g.addColorStop(0, "rgba(200,0,20,0)"); g.addColorStop(1, `rgba(200,0,20,${G.hurtFlash})`);
-      ctx.fillStyle = g; ctx.fillRect(0, 0, VIEW_W, VIEW_H);
+      ctx.fillStyle = g; ctx.fillRect(0, 0, VW, VH);
       G.hurtFlash = Math.max(0, G.hurtFlash - dt);
     }
     if (me && me.hp < 0.3 && !me.dead) {
       ctx.fillStyle = `rgba(160,0,20,${0.12 + Math.sin(t * 5) * 0.06})`;
-      ctx.fillRect(0, 0, VIEW_W, 6); ctx.fillRect(0, VIEW_H - 6, VIEW_W, 6); ctx.fillRect(0, 0, 6, VIEW_H); ctx.fillRect(VIEW_W - 6, 0, 6, VIEW_H);
+      ctx.fillRect(0, 0, VW, 6); ctx.fillRect(0, VH - 6, VW, 6); ctx.fillRect(0, 0, 6, VH); ctx.fillRect(VW - 6, 0, 6, VH);
     }
   }
   mkWeatherCtx() { this.wcv = new OffscreenCanvas(320, 180); const c = this.wcv.getContext("2d"); return c; }
@@ -170,7 +186,7 @@ export class Renderer {
   drawLoot(ctx, cx, cy, t) {
     for (const l of G.loot.values()) {
       const x = l.x - cx, y = l.y - cy;
-      if (x < -40 || y < -40 || x > VIEW_W + 40 || y > VIEW_H + 40) continue;
+      if (x < -40 || y < -40 || x > VW + 40 || y > VH + 40) continue;
       const col = l.s === "cons" ? "#ff6a7a" : RARITY_COLOR[l.r] ?? "#ccc";
       const bob = Math.sin(t * 3 + l.id) * 1.5;
       if (l.r === "전설" || l.r === "신화" || l.r === "영웅") {
@@ -234,7 +250,7 @@ export class Renderer {
   // y 정렬해서 그릴 것들
   drawSorted(ctx, cx, cy, t) {
     const list = [];
-    const inView = (x, y, m = 80) => x - cx > -m && y - cy > -m && x - cx < VIEW_W + m && y - cy < VIEW_H + m * 1.5;
+    const inView = (x, y, m = 80) => x - cx > -m && y - cy > -m && x - cx < VW + m && y - cy < VH + m * 1.5;
     for (const o of G.objects) if (inView(o.x, o.y, 160)) list.push({ y: o.flatY ?? (o.kind === "torch" ? o.y - 20 : o.flat ? o.y - 14 : o.y), o });
     for (const e of G.ents.values()) if (inView(e.rx, e.ry)) list.push({ y: e.ry, e });
     if (G.kind === "town") for (const f of folkList()) if (inView(f.x, f.y)) list.push({ y: f.y, f });
@@ -498,7 +514,7 @@ export class Renderer {
   drawLighting(ctx, cx, cy, t) {
     const town = G.kind === "town";
     const z = town ? { ambient: 0.4, light: 110 } : G.zone;
-    const L = this.lctx, W = VIEW_W / 2, H = VIEW_H / 2;
+    const L = this.lctx, W = VW / 2, H = VH / 2;
     L.globalCompositeOperation = "source-over";
     L.clearRect(0, 0, W, H);
     L.fillStyle = `rgba(6,4,14,${G.mapKind === "safe" ? 0.55 : z.ambient})`;
@@ -513,16 +529,16 @@ export class Renderer {
     for (const o of G.objects) {
       if (!["torch", "campfire", "portal", "lamp", "npc"].includes(o.kind)) continue;
       const x = o.x - cx, y = o.y - cy;
-      if (x < -150 || y < -150 || x > VIEW_W + 150 || y > VIEW_H + 150) continue;
+      if (x < -150 || y < -150 || x > VW + 150 || y > VH + 150) continue;
       hole(x, y - 14, (o.kind === "torch" ? 120 : o.kind === "campfire" ? 200 : o.kind === "npc" ? 110 : 140) * (0.92 + Math.sin(t * 9 + o.x) * 0.06), 0.85);
     }
     for (const p of G.projectiles.values()) { const d = (t - p.t0) * p.v; hole(p.x + Math.cos(p.a) * d - cx, p.y + Math.sin(p.a) * d - cy, 60, 0.6); }
     for (const e of G.ents.values()) if (e.k === "b") hole(e.rx - cx, e.ry - cy - 20, 160, 0.7);
     for (const l of G.loot.values()) hole(l.x - cx, l.y - cy, 30, 0.5);
     // 색 빛이 있는 곳도 밝게
-    forEachGlow((x, y, r, c, a) => { const sx = x - cx, sy = y - cy; if (sx > -r && sy > -r && sx < VIEW_W + r && sy < VIEW_H + r) hole(sx, sy, r * 1.3, Math.min(1, a * 1.6)); });
+    forEachGlow((x, y, r, c, a) => { const sx = x - cx, sy = y - cy; if (sx > -r && sy > -r && sx < VW + r && sy < VH + r) hole(sx, sy, r * 1.3, Math.min(1, a * 1.6)); });
     ctx.imageSmoothingEnabled = true;
-    ctx.drawImage(this.light, 0, 0, VIEW_W, VIEW_H);
+    ctx.drawImage(this.light, 0, 0, VW, VH);
     ctx.imageSmoothingEnabled = false;
   }
 
@@ -542,7 +558,7 @@ export class Renderer {
       const info = e.info ?? {};
       if (info.m === "dummy") continue;
       const x = Math.round(e.rx - cx), y = Math.round(e.ry - cy);
-      if (x < -60 || x > VIEW_W + 60 || y < -40 || y > VIEW_H + 80) continue;
+      if (x < -60 || x > VW + 60 || y < -40 || y > VH + 80) continue;
       if (e.k === "p") {
         const top = y - 48;
         this.label(ctx, info.n, x, top - 4, e.id === G.you ? "#ffffff" : "#8fd0ff");
