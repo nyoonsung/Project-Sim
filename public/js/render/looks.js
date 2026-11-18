@@ -11,7 +11,7 @@ const TINT = {
 
 // 직업 → 몸
 const HERO = {
-  adventurer: { body: "knight_m" }, sword: { body: "hero_sword", custom: true }, // 검사: 받은 디자인 시트의 도트(1배 크기) fist: { body: "lizard_m" }, archer: { body: "elf_m" },
+  adventurer: { body: "knight_m" }, sword: { body: "knight_m", tint: TINT.blue }, fist: { body: "lizard_m" }, archer: { body: "elf_m" },
   rogue: { body: "elf_f", tint: TINT.night }, mage: { body: "wizzard_m" }, priest: { body: "wizzard_f", tint: TINT.cream }, smith: { body: "knight_f", tint: TINT.bronze },
 };
 // 무기 종류 → 스프라이트 (bow는 직접 그림, knuckle은 맨손)
@@ -39,7 +39,7 @@ const BOSS = {
 export function dtLookFor(e) {
   if (!dtReady()) return null;
   const info = e.info ?? {};
-  if (e.k === "p") { const h = HERO[info.c] ?? HERO.adventurer; return { body: h.body, tint: h.tint ?? null, scale: 2, hero: true, custom: !!h.custom, weapon: info.w, off: info.o }; }
+  if (e.k === "p") { const h = HERO[info.c] ?? HERO.adventurer; return { body: h.body, tint: h.tint ?? null, scale: 2, hero: true, weapon: info.w, off: info.o }; }
   if (e.k === "m") { const m = MON[info.m]; if (!m || !has(m[0] + "_idle_anim_f0")) return null; return { body: m[0], tint: m[1] ?? null, scale: info.el ? 2.3 : 2 }; }
   if (e.k === "b") { const b = BOSS[info.b]; if (!b) return null; return { body: b[0], tint: b[1] ?? null, scale: b[2] }; }
   return null;
@@ -61,9 +61,8 @@ export function drawDT(ctx, e, L, x, y, st) {
   const behind = w && Math.sin(w.rot - Math.PI / 2) < -0.35 && !w.front;
   if (w && behind) drawWeapon(ctx, w, st);
   if (L.hero && L.off === "shield") drawShield(ctx, x, y, flip); // 방패는 등 뒤 팔에 (몸 뒤)
-  const bs = L.custom ? L.scale / 2 : L.scale; // 디자인 도트는 1배 크기로 그려져 있음
-  drawFoot(ctx, name, Math.round(x + lx), Math.round(y + ly), { tint: L.tint, white: hurt, scale: bs, flip });
-  if (st.glow) { ctx.globalAlpha = st.glow; drawFoot(ctx, name, Math.round(x + lx), Math.round(y + ly), { white: true, scale: bs, flip }); ctx.globalAlpha = 1; }
+  drawFoot(ctx, name, Math.round(x + lx), Math.round(y + ly), { tint: L.tint, white: hurt, scale: L.scale, flip });
+  if (st.glow) { ctx.globalAlpha = st.glow; drawFoot(ctx, name, Math.round(x + lx), Math.round(y + ly), { white: true, scale: L.scale, flip }); ctx.globalAlpha = 1; }
   if (w && !behind) drawWeapon(ctx, w, st);
 }
 
@@ -72,8 +71,8 @@ function weaponPose(L, x, y, st) {
   const type = L.weapon;
   const dir = flip ? -1 : 1;
   const k = L.scale / 2;
-  const hx = x + dir * (L.custom ? 10 : 7) * k, hy = y - (L.custom ? 21 : 22) * k + (st.moving ? Math.round(Math.sin(t * 22) * 1) : 0);
-  const pose = { type, hx, hy, rot: aim + Math.PI / 2, ox: 0, oy: 0, trail: null, glow: 0, front: false, k, custom: L.custom };
+  const hx = x + dir * 7 * k, hy = y - 22 * k + (st.moving ? Math.round(Math.sin(t * 22) * 1) : 0);
+  const pose = { type, hx, hy, rot: aim + Math.PI / 2, ox: 0, oy: 0, trail: null, glow: 0, front: false, k };
   if (type === "bow") { pose.rot = aim; pose.hx = x + Math.cos(aim) * 10; pose.hy = y - 22 + Math.sin(aim) * 6; pose.pull = anim?.name === "shoot" ? Math.sin(Math.min(1, anim.p) * Math.PI) : 0; return pose; }
   if (!anim) {
     // 평소: 조준 방향으로 비스듬히 듦
@@ -115,7 +114,6 @@ function weaponPose(L, x, y, st) {
 }
 
 function drawWeapon(ctx, w, st) {
-  if (w.custom && (w.type === "knuckle" || !w.type) && Math.hypot(w.ox, w.oy) < 2) return; // 디자인 도트는 손이 그려져 있음 (주먹 지를 때만 표시)
   if (w.type === "knuckle" || !w.type) {
     // 맨손: 주먹 하나
     ctx.fillStyle = "#e8c8a0"; ctx.fillRect(Math.round(w.hx + w.ox - 3), Math.round(w.hy + w.oy - 3), 6, 6);
