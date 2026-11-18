@@ -200,3 +200,32 @@ export class FxLayer {
   }
   clear() { this.list = []; this.scaled = []; this.bk = []; }
 }
+
+// ── 날씨 굽기: 10~12초짜리 반복 화면 효과를 초당 8장, 절반 해상도로 미리 구워 두고 이미지로만 재생
+//    (예전엔 화면 전체를 매 프레임 픽셀 계산 → 성역 구역(빛줄기) 등에서 큰 렉)
+const weatherLoops = new Map();
+export function weatherLoop(id) {
+  if (weatherLoops.has(id)) return weatherLoops.get(id);
+  const mod = mods.get(id);
+  if (!mod) { loadFx(id); return null; }
+  const [w, h] = mod.meta.size, [ox, oy] = mod.meta.origin;
+  const fps = 8, n = Math.max(1, Math.round(mod.meta.duration * fps));
+  const inst = createFx(mod, { x: ox, y: oy, seed: 11 });
+  if (mod.create) for (let i = 0; i < n; i++) inst.update(1 / fps); // 시뮬레이션형은 한 바퀴 돌려 안정화
+  const frame = createFrame(w, h), img = new ImageData(w, h), full = new OffscreenCanvas(w, h), fctx = full.getContext("2d");
+  const L = { frames: [], n, fps, w, h, done: false };
+  weatherLoops.set(id, L);
+  const step = () => {
+    for (let k = 0; k < 4 && L.frames.length < n; k++) {
+      clearFrame(frame); inst.draw(frame); composite(frame, img.data, null); fctx.putImageData(img, 0, 0);
+      const c = new OffscreenCanvas(w / 2, h / 2), g = c.getContext("2d");
+      g.imageSmoothingEnabled = true; g.drawImage(full, 0, 0, w / 2, h / 2);
+      L.frames.push(c);
+      inst.update(1 / fps);
+    }
+    if (L.frames.length < n) (globalThis.requestIdleCallback ? requestIdleCallback(step, { timeout: 200 }) : setTimeout(step, 30));
+    else L.done = true;
+  };
+  step();
+  return L;
+}

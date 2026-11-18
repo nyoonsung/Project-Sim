@@ -25,7 +25,7 @@ export function drawDungeonObject(ctx, o, x, y, t) {
       drawFoot(ctx, "wall_fountain_top", x, y - 32);
       drawFoot(ctx, animName(`wall_fountain_mid_${c}_anim`, t, 6), x, y);
       drawFoot(ctx, animName(`wall_fountain_basin_${c}_anim`, t, 6), x, y + 32);
-      addGlow(o.x, o.y + 10, 110, c === "red" ? "#ff6a2a" : "#3a9aff", 0.45 + Math.sin(t * 3) * 0.05);
+      addGlow(o.x, o.y + 10, 110, c === "red" ? "#ff6a2a" : "#3a9aff", 0.45 + Math.sin(t * 3) * 0.05, o);
       return true;
     }
     case "circle": {
@@ -49,7 +49,7 @@ export function drawDungeonObject(ctx, o, x, y, t) {
       for (let i = 0; i <= 5; i++) { const q = -a * 1.5 + (i * 2 * Math.PI * 2) / 5; const px = x + Math.cos(q) * R * 0.62, py = y + Math.sin(q) * R * 0.62 * k; i ? ctx.lineTo(px, py) : ctx.moveTo(px, py); }
       ctx.stroke();
       ctx.restore();
-      addGlow(o.x, o.y, 120, col, 0.28 * pulse);
+      addGlow(o.x, o.y, 120, col, 0.28 * pulse, o);
       return true;
     }
     case "crystal": {
@@ -64,14 +64,14 @@ export function drawDungeonObject(ctx, o, x, y, t) {
       const tw = 0.75 + Math.sin(t * 2.3 + o.x) * 0.25;
       // 반짝임
       if (Math.sin(t * 5 + o.y) > 0.92) { ctx.fillStyle = "#fff"; ctx.fillRect(x - 3, y - 26, 2, 2); }
-      addGlow(o.x, o.y - 14, 85, CRYSTAL_COL[v], 0.5 * tw);
+      addGlow(o.x, o.y - 14, 85, CRYSTAL_COL[v], 0.5 * tw, o);
       return true;
     }
     case "dprop": {
       const name = o.s === "chest" ? "chest_full_open_anim_f0" : o.s;
       shadow(ctx, x, y - 1, 12, 3, 0.3);
       drawFoot(ctx, name, x, y);
-      if (FLASK[o.s]) addGlow(o.x, o.y - 14, 40, FLASK[o.s], 0.35 + Math.sin(t * 3 + o.x) * 0.1);
+      if (FLASK[o.s]) addGlow(o.x, o.y - 14, 40, FLASK[o.s], 0.35 + Math.sin(t * 3 + o.x) * 0.1, o);
       return true;
     }
     case "floorfx": return drawFloorFx(ctx, o, x, y, t);
@@ -118,7 +118,7 @@ function drawFloorFx(ctx, o, x, y, t) {
       const path = () => { ctx.beginPath(); pts.forEach(([a, b], i) => (i ? ctx.lineTo(a, b) : ctx.moveTo(a, b))); };
       path(); ctx.stroke();
       ctx.strokeStyle = `rgba(255,${120 + glow * 80},40,${0.85 * glow})`; ctx.lineWidth = 1.5; path(); ctx.stroke();
-      addGlow(o.x, o.y, 46, "#ff7a2a", 0.35 * glow);
+      addGlow(o.x, o.y, 46, "#ff7a2a", 0.35 * glow, o);
       return true;
     }
     case "frost": {
@@ -133,7 +133,7 @@ function drawFloorFx(ctx, o, x, y, t) {
       ctx.fillStyle = "rgba(140,230,60,0.55)"; ctx.beginPath(); ctx.ellipse(x - 2, y - 1, 11, 4, 0, 0, Math.PI * 2); ctx.fill();
       const b = (t * 0.8 + rnd(3)) % 1;
       ctx.fillStyle = `rgba(200,255,140,${1 - b})`; ctx.fillRect(Math.round(x - 6 + rnd(4) * 12), Math.round(y - b * 6), 2, 2);
-      addGlow(o.x, o.y, 40, "#8aff3a", 0.22);
+      addGlow(o.x, o.y, 40, "#8aff3a", 0.22, o);
       return true;
     }
     case "moss": {
@@ -145,7 +145,7 @@ function drawFloorFx(ctx, o, x, y, t) {
       const a = 0.18 + Math.sin(t * 1.4 + v) * 0.08;
       ctx.fillStyle = `rgba(120,60,200,${a})`; ctx.beginPath(); ctx.ellipse(x, y, 20, 8, Math.sin(t * 0.5 + v) * 0.3, 0, Math.PI * 2); ctx.fill();
       ctx.fillStyle = `rgba(200,150,255,${a + 0.2})`; ctx.fillRect(Math.round(x + Math.cos(t + v) * 10), Math.round(y + Math.sin(t + v) * 4), 2, 2);
-      addGlow(o.x, o.y, 40, "#a050ff", 0.2);
+      addGlow(o.x, o.y, 40, "#a050ff", 0.2, o);
       return true;
     }
     case "spark": {
@@ -161,7 +161,7 @@ function drawFloorFx(ctx, o, x, y, t) {
       const a = 0.5 + Math.sin(t * 2 + v) * 0.3;
       ctx.fillStyle = `rgba(255,230,140,${a})`;
       for (let i = 0; i < 4; i++) { const q = t * 0.6 + i * Math.PI / 2 + v; ctx.fillRect(Math.round(x + Math.cos(q) * 9), Math.round(y + Math.sin(q) * 4), 2, 2); }
-      addGlow(o.x, o.y, 36, "#ffe08a", 0.22 * a);
+      addGlow(o.x, o.y, 36, "#ffe08a", 0.22 * a, o);
       return true;
     }
     case "gear": {

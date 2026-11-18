@@ -2,11 +2,12 @@
 import { G, localStep, moveDir } from "../game.js";
 import { tickQuality, preset } from "../quality.js";
 import { frame as dtFrame } from "./dt2.js";
+import { weatherLoop } from "./fx.js";
 import { itemIcon } from "../ui/icons.js";
 import { tickFeel, drawParts, hitOffset } from "../feel.js";
 import { dtLookFor, drawDT } from "./looks.js";
 import { drawTownObject, drawStrings, spawnFolk, tickFolk, folkList, drawFolk, drawTownNpc } from "./townart.js";
-import { beginGlows, addGlow, drawGlows, forEachGlow } from "./glow.js";
+import { beginGlows, addGlow, drawGlows, forEachGlow, forEachChunk, staticList, lightChunks, resetStaticGlows, CH } from "./glow.js";
 import { drawDungeonObject } from "./dungeonart.js";
 import { tickSkillFx, drawSkillFx } from "./skillfx.js";
 import { shakeEnabled } from "../feel.js";
@@ -79,6 +80,26 @@ function lootBeam(col) {
   lootBeams.set(col, c);
   return c;
 }
+/** 고정 빛 어둠 조각: 어둠을 깔고 고정 빛 자리를 미리 뚫어 둠 (절반 해상도 128×128) */
+function lightChunk(cx, cy, amb) {
+  const k = cx + "," + cy;
+  const hit = lightChunks.get(k);
+  if (hit) return hit;
+  const x0 = cx * CH, y0 = cy * CH, S = CH / 2;
+  const cv = new OffscreenCanvas(S, S), g = cv.getContext("2d");
+  g.fillStyle = amb; g.fillRect(0, 0, S, S);
+  g.globalCompositeOperation = "destination-out"; g.imageSmoothingEnabled = true;
+  const spr = holeSprite();
+  const hole = (x, y, r, a) => {
+    if (x + r < x0 || y + r < y0 || x - r > x0 + CH || y - r > y0 + CH) return;
+    g.globalAlpha = Math.min(1, a);
+    g.drawImage(spr, (x - x0) / 2 - r / 2, (y - y0) / 2 - r / 2, r, r);
+  };
+  for (const [x, y, r, , a] of staticList()) hole(x, y, r * 1.3, a * 1.6);
+  for (const o of G.objects) if (o.kind === "lamp" || o.kind === "npc" || o.kind === "portal") hole(o.x, o.y - 14, o.kind === "npc" ? 110 : 140, 0.85);
+  lightChunks.set(k, cv);
+  return cv;
+}
 const seenSkills = new Set();
 /** 다른 사람(파티원) 스킬을 처음 보면 그 이펙트도 미리 구워 둠 */
 export function warmSkill(id) {
@@ -122,6 +143,7 @@ export class Renderer {
   onMap() {
     spawnFolk();
     this.front.clear(); this.ground.clear(); this.weather.clear(); this.zoneFx.clear();
+    resetStaticGlows(); // 새 지도: 고정 빛 캐시 비우기
     const z = G.zone;
     const ids = ["arcane/portal", "fire/torch", "fire/campfire", "water/fountain", "fire/candle", "impacts/hit-spark", "impacts/hit-flash", "spawn/poof", "ui/level-up", "spawn/soul-rise", "status/stunned", "status/burning", "status/poisoned", "status/frozen", "status/slowed", "pickups/loot-beam"];
     if (G.kind !== "town") {
@@ -205,7 +227,7 @@ export class Renderer {
     if (G.kind === "town") tickFolk(dt);
     this.front.update(dt, G.ents);
     this.ground.update(dt, G.ents);
-    if (preset().weather) this.weather.update(dt, G.ents);
+    if (preset().weather && !(G.zone?.weather && weatherLoop(G.zone.weather)?.done)) this.weather.update(dt, G.ents);
 
     ctx.fillStyle = "#08070b";
     ctx.fillRect(0, 0, VW, VH);
@@ -222,7 +244,15 @@ export class Renderer {
     this.drawLighting(ctx, cx, cy, t);
     drawGlows(ctx, cx, cy, VW, VH);
     drawSkillFx(ctx, cx, cy);
-    if (this.weather.list.length && preset().weather) {
+    const wl = G.kind !== "town" && G.zone?.weather && preset().weather ? weatherLoop(G.zone.weather) : null;
+    if (wl?.done) {
+      // 구워 둔 날씨 프레임을 2배로 늘려 바둑판처럼 깔기 (계산 없음)
+      const f = wl.frames[Math.floor(t * wl.fps) % wl.n];
+      ctx.globalAlpha = 0.45; ctx.imageSmoothingEnabled = true;
+      const ox = -(((cx % 320) + 320) % 320), oy = -(((cy % 180) + 180) % 180);
+      for (let yy = oy; yy < VH; yy += 180) for (let xx = ox; xx < VW; xx += 320) ctx.drawImage(f, xx, yy, 320, 180);
+      ctx.imageSmoothingEnabled = false; ctx.globalAlpha = 1;
+    } else if (this.weather.list.length && preset().weather) {
       const wc = this.wctx ?? (this.wctx = this.mkWeatherCtx());
       wc.clearRect(0, 0, 320, 180);
       this.weather.render(wc, 0, 0);
@@ -377,7 +407,7 @@ export class Renderer {
           ctx.drawImage(f, Math.round(x - b.ox * s), Math.round(y - b.oy * s - (o.kind === "lamp" ? 18 : 0)), Math.round(b.w * s), Math.round(b.h * s));
         }
         // 불빛 색 번짐
-        if (o.kind === "torch" || o.kind === "campfire" || o.kind === "lamp") addGlow(o.x, o.y - 18, o.kind === "campfire" ? 130 : 95, G.zone?.torchColor ?? "#ff9a3a", (o.kind === "campfire" ? 0.45 : 0.35) * (0.9 + Math.sin(t * 11 + o.x) * 0.1));
+        if (o.kind === "torch" || o.kind === "campfire" || o.kind === "lamp") addGlow(o.x, o.y - 18, o.kind === "campfire" ? 130 : 95, G.zone?.torchColor ?? "#ff9a3a", (o.kind === "campfire" ? 0.45 : 0.35) * (0.9 + Math.sin(t * 11 + o.x) * 0.1), o.kind === "lamp" ? o : null);
         break;
       }
       case "portal": {
@@ -385,7 +415,7 @@ export class Renderer {
         const pal = o.color === "town" ? ["#062010", "#0e4a1e", "#1f8a34", "#4fd060", "#b0ff9a", "#f0fff0"] : o.id === "safe" || o.id === "victory" ? ["#201808", "#806018", "#d0a830", "#ffe080", "#fff8d0", "#ffffff"] : null;
         const b = baked_("arcane/portal", pal);
         const f = bakedFrame(b, t);
-        if (!locked) addGlow(o.x, o.y - 20, 120, pal ? (o.color === "town" ? "#6aff7a" : "#ffd35a") : "#b07aff", 0.5);
+        if (!locked) addGlow(o.x, o.y - 20, 120, pal ? (o.color === "town" ? "#6aff7a" : "#ffd35a") : "#b07aff", 0.5, o);
         if (f) { ctx.globalAlpha = locked ? 0.25 : 1; const s = 0.55; ctx.drawImage(f, Math.round(x - b.ox * s), Math.round(y - b.oy * s), Math.round(b.w * s), Math.round(b.h * s)); ctx.globalAlpha = 1; }
         if (o.label || locked) this.label(ctx, locked ? "출구 (몬스터를 모두 처치하면 열림)" : o.label, x, y - 44, locked ? "#888" : "#ffe08a");
         break;
@@ -616,9 +646,13 @@ export class Renderer {
     const dx = cx - bx, dy = cy - by;
     const L = this.lctx, W = this.light.width, H = this.light.height;
     L.globalCompositeOperation = "source-over";
+    L.globalAlpha = 1;
     L.clearRect(0, 0, W, H);
-    L.fillStyle = `rgba(6,4,14,${G.mapKind === "safe" ? 0.55 : z.ambient})`;
+    const amb = `rgba(6,4,14,${G.mapKind === "safe" ? 0.55 : z.ambient})`;
+    L.fillStyle = amb;
     L.fillRect(0, 0, W, H);
+    // 고정 빛(가로등·창문·수정·포탈 등)은 미리 뚫어 둔 조각을 붙이기만
+    forEachChunk(bx, by, VW + 2, VH + 2, (x, y) => { const c = lightChunk(x, y, amb); const px = (x * CH - bx) / 2, py = (y * CH - by) / 2; L.clearRect(px, py, CH / 2, CH / 2); L.drawImage(c, px, py); });
     L.globalCompositeOperation = "destination-out";
     // 빛 구멍: 매번 그라디언트를 새로 만들지 않고, 미리 만든 둥근 빛 그림 한 장을 크기·세기만 바꿔 찍음 (훨씬 가벼움)
     L.imageSmoothingEnabled = true;
@@ -632,7 +666,7 @@ export class Renderer {
     };
     for (const e of G.ents.values()) if (e.k === "p" && !e.dead) hole(e.rx - cx, e.ry - cy - 14, e.id === G.you ? z.light * 1.6 : z.light * 1.1);
     for (const o of G.objects) {
-      if (!["torch", "campfire", "portal", "lamp", "npc"].includes(o.kind)) continue;
+      if (o.kind !== "torch" && o.kind !== "campfire") continue; // 깜박이는 불만 매 프레임 (나머지는 조각에)
       const x = o.x - cx, y = o.y - cy;
       if (x < -150 || y < -150 || x > VW + 150 || y > VH + 150) continue;
       hole(x, y - 14, (o.kind === "torch" ? 120 : o.kind === "campfire" ? 200 : o.kind === "npc" ? 110 : 140) * (0.92 + Math.sin(t * 9 + o.x) * 0.06), 0.85);

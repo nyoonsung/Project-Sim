@@ -65,10 +65,10 @@ export function drawTownObject(ctx, o, x, y, t) {
         ctx.globalAlpha = flick;
         ctx.drawImage(sc, Math.round(x - sc.width / 2), Math.round(y - c.height * S - 6));
         ctx.globalAlpha = 1;
-        addGlow(o.x, o.y - c.height * S + 8, 90, o.sign.color, 0.45 * flick);
+        addGlow(o.x, o.y - c.height * S + 8, 90, o.sign.color, 0.45 * flick, "sign|"+o.x+","+o.y);
       }
-      if (o.win) addGlow(o.x, o.y - 26, 64, o.win, 0.2);
-      if (o.glow) addGlow(o.x, o.y - 50, 140, o.glow, 0.5 + Math.sin(t * 2) * 0.1);
+      if (o.win) addGlow(o.x, o.y - 26, 64, o.win, 0.2, "win|"+o.x+","+o.y);
+      if (o.glow) addGlow(o.x, o.y - 50, 140, o.glow, 0.5 + Math.sin(t * 2) * 0.1, "pglow|"+o.x+","+o.y);
       return true;
     }
     case "flag": {
@@ -86,7 +86,7 @@ export function drawTownObject(ctx, o, x, y, t) {
       ctx.fillStyle = "#3a2010"; ctx.fillRect(x - 44, y - 6, 88, 3);
       (o.goods ?? []).forEach((s, i) => draw(ctx, s, x - 28 + i * 28, y - 18));
       draw(ctx, "awning", x, y - 46);
-      addGlow(o.x, o.y - 30, 70, o.win ?? "#ffd35a", 0.25);
+      addGlow(o.x, o.y - 30, 70, o.win ?? "#ffd35a", 0.25, "w2|"+o.x+","+o.y);
       return true;
     }
     case "mosaic": {
@@ -141,7 +141,7 @@ export function drawTownObject(ctx, o, x, y, t) {
       const fl = 0.85 + Math.sin(t * 7 + x * 0.3) * 0.1;
       ctx.fillStyle = `rgba(255,214,140,${fl})`; ctx.fillRect(x - 4, y - 53, 8, 6);
       ctx.fillStyle = "#fff6d8"; ctx.fillRect(x - 2, y - 52, 4, 3);
-      addGlow(o.x, o.y - 50, 90, "#ffc870", 0.32 * fl);
+      addGlow(o.x, o.y - 50, 90, "#ffc870", 0.32 * fl, "lamp|"+o.x+","+o.y);
       return true;
     }
   }
@@ -172,7 +172,7 @@ export function drawStrings(ctx, cx, cy, t) {
         ctx.fillRect(Math.round(px) - 1, Math.round(py), 3, 4);
         ctx.fillStyle = "#ffffff"; ctx.globalAlpha = tw * 0.8; ctx.fillRect(Math.round(px), Math.round(py) + 1, 1, 1);
         ctx.globalAlpha = 1;
-        if (j % 2 === 0) addGlow(px + cx, py + cy, 30, col, 0.45 * tw);
+        if (j % 2 === 0) addGlow(px + cx, py + cy, 30, col, 0.45 * tw, "bulb|"+o.pts[0][0]+","+o.pts[0][1]+","+k);
       }
     }
   }
