@@ -448,4 +448,4 @@ body.touch.portrait #wallet { right: auto; left: calc(8px + env(safe-area-inset-
 
 #title-layer { position: absolute; left: 0; top: 0; width: 0; height: 0; pointer-events: none; z-index: 1; }
 #title-layer .title-img { position: absolute; left: 0; top: 0; image-rendering: auto; filter: drop-shadow(0 0 4px #6a5aff88); }
-.title-design { height: 30px; vertical-align: middle; }
+.title-design { height: 24px; vertical-align: middle; }
