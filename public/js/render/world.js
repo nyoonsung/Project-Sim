@@ -4,6 +4,8 @@ import { titleDesign } from "/shared/titles.js";
 import { tickQuality, preset } from "../quality.js";
 import { frame as dtFrame } from "./dt2.js";
 import { weatherLoop } from "./fx.js";
+// 바둑판으로 이어 붙일 수 없는 한 장짜리 날씨(빛줄기): 화면에 한 번만
+const WHOLE_SCREEN = new Set(["weather/god-rays"]);
 import { itemIcon } from "../ui/icons.js";
 import { tickFeel, drawParts, hitOffset } from "../feel.js";
 import { dtLookFor, drawDT } from "./looks.js";
@@ -284,17 +286,31 @@ export class Renderer {
     if (wl?.done) {
       // 구워 둔 날씨 프레임을 2배로 늘려 바둑판처럼 깔기 (계산 없음)
       const f = wl.frames[Math.floor(t * wl.fps) % wl.n];
-      ctx.globalAlpha = 0.45; ctx.imageSmoothingEnabled = true;
-      const ox = -(((cx % 320) + 320) % 320), oy = -(((cy % 180) + 180) % 180);
-      for (let yy = oy; yy < VH; yy += 180) for (let xx = ox; xx < VW; xx += 320) ctx.drawImage(f, xx, yy, 320, 180);
+      ctx.imageSmoothingEnabled = true;
+      if (WHOLE_SCREEN.has(G.zone.weather)) {
+        // 빛줄기처럼 한 장짜리 장면은 바둑판으로 깔면 네모 경계가 생김 → 화면 전체에 한 번, 밝게만 더함(어두운 배경은 안 덮음)
+        ctx.globalCompositeOperation = "screen"; ctx.globalAlpha = 0.5;
+        ctx.drawImage(f, 0, 0, VW, VH);
+        ctx.globalCompositeOperation = "source-over";
+      } else {
+        ctx.globalAlpha = 0.45;
+        const ox = -(((cx % 320) + 320) % 320), oy = -(((cy % 180) + 180) % 180);
+        for (let yy = oy; yy < VH; yy += 180) for (let xx = ox; xx < VW; xx += 320) ctx.drawImage(f, xx, yy, 320, 180);
+      }
       ctx.imageSmoothingEnabled = false; ctx.globalAlpha = 1;
     } else if (this.weather.list.length && preset().weather) {
       const wc = this.wctx ?? (this.wctx = this.mkWeatherCtx());
       wc.clearRect(0, 0, 320, 180);
       this.weather.render(wc, 0, 0);
-      ctx.globalAlpha = G.kind === "town" ? 0.5 : 0.45;
-      const ox = -(((cx % 320) + 320) % 320), oy = -(((cy % 180) + 180) % 180);
-      for (let yy = oy; yy < VH; yy += 180) for (let xx = ox; xx < VW; xx += 320) ctx.drawImage(this.wcv, xx, yy);
+      if (WHOLE_SCREEN.has(G.zone?.weather)) {
+        ctx.globalCompositeOperation = "screen"; ctx.globalAlpha = 0.5; ctx.imageSmoothingEnabled = true;
+        ctx.drawImage(this.wcv, 0, 0, VW, VH);
+        ctx.globalCompositeOperation = "source-over"; ctx.imageSmoothingEnabled = false;
+      } else {
+        ctx.globalAlpha = G.kind === "town" ? 0.5 : 0.45;
+        const ox = -(((cx % 320) + 320) % 320), oy = -(((cy % 180) + 180) % 180);
+        for (let yy = oy; yy < VH; yy += 180) for (let xx = ox; xx < VW; xx += 320) ctx.drawImage(this.wcv, xx, yy);
+      }
       ctx.globalAlpha = 1;
     }
     this.drawTelsOver(ctx, cx, cy, t);
