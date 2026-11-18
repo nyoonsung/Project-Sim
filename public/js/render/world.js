@@ -835,7 +835,7 @@ export class Renderer {
       const x = Math.round(e.rx - cx), y = Math.round(e.ry - cy);
       if (x < -60 || x > VW + 60 || y < -40 || y > VH + 80) continue;
       if (e.k === "p") {
-        const top = y - 54; // 직접 그린 주인공 키(52) 위
+        const top = y - 48;
         this.label(ctx, info.n, x, top - 4, e.id === G.you ? "#ffffff" : "#8fd0ff");
         // 칭호: 디자인이 있으면 그림(화면 위 또렷한 이미지 층에), 없으면 색 글자
         if (info.tt && titleDesign(info.tt)) (G.titleMarks ??= []).push({ id: e.id, tt: info.tt, x, y: top - 14 });
