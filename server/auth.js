@@ -35,15 +35,8 @@ export async function verifyPassword(pw, stored) {
 }
 let DUMMY = null; // 없는 계정도 같은 시간이 걸리도록
 
-/** 관리자 비밀번호: 8자 이상 (관리자 페이지 보안) */
 export function validatePassword(pw) {
   if (typeof pw !== "string" || pw.length < 8 || pw.length > 72) return "비밀번호는 8~72자여야 해요.";
-  if (!/[A-Za-z]/.test(pw) || !/[0-9]/.test(pw)) return "비밀번호에 영문과 숫자를 모두 넣어 주세요.";
-  return null;
-}
-/** 플레이어 비밀번호: 길이 제한 없음(최대 72자), 영문+숫자 */
-export function validatePlayerPassword(pw) {
-  if (typeof pw !== "string" || pw.length < 1 || pw.length > 72) return "비밀번호를 넣어 주세요. (최대 72자)";
   if (!/[A-Za-z]/.test(pw) || !/[0-9]/.test(pw)) return "비밀번호에 영문과 숫자를 모두 넣어 주세요.";
   return null;
 }
@@ -110,7 +103,7 @@ export async function login(username, password, ip) {
 export async function register(username, password, ip) {
   if (!CONFIG.registrationOpen) return { error: "지금은 가입을 받지 않아요.", status: 403 };
   if (typeof username !== "string" || !USERNAME_RE.test(username)) return { error: "아이디는 2~12자, 한글·영문·숫자·_ 만 쓸 수 있어요." };
-  const pwErr = validatePlayerPassword(password);
+  const pwErr = validatePassword(password);
   if (pwErr) return { error: pwErr };
   if (locked("reg:" + ip)) return { error: "가입 시도가 너무 많아요. 잠시 뒤에 다시 시도해 주세요.", status: 429 };
   hit("reg:" + ip, 300, 3600e3, 3600e3); // 한 사람이 계정 여러 개 + 학교처럼 한 IP에서 여러 명이 가입해도 되도록 넉넉하게
