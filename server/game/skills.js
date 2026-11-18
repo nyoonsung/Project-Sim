@@ -6,6 +6,7 @@ import { CLASS_INFO, stageOf } from "../../shared/classes.js";
 import { moveCircle, circleHitsWall, lineOfSight } from "../../shared/move.js";
 import { dealDamage, heal, giveShield, applyStatus, addGroggy, isHardCC, buffSum, angDiff } from "./combat.js";
 
+import { BASIC_SPEED } from "../../shared/constants.js";
 const RES_NAME = { mp: "MP", ki: "내력", holy: "성광", parts: "부품", gap: "틈" };
 const RES_MAX = { ki: 100, holy: 100, parts: 3, gap: 3 };
 
@@ -83,9 +84,10 @@ export function castSkill(room, u, slot, ax, ay, tx, now, exp) {
     }
   }
   // 쿨타임 (쿨타임 감소 효과는 없음. 기본 공격만 공격 속도 적용)
-  const cd = sk.kind === "basic" ? sk.aspd / (u.stats.aspd + buffSum(u, "aspd")) : sk.cd;
+  // 기본 공격 사이 딜레이 25% 단축 (BASIC_SPEED), 기본 공격 뒤 다른 스킬 잠금도 짧게
+  const cd = sk.kind === "basic" ? (sk.aspd * BASIC_SPEED) / (u.stats.aspd + buffSum(u, "aspd")) : sk.cd;
   u.cds.set(id, now + cd);
-  u.lockUntil = now + (sk.kind === "basic" ? Math.min(0.2, cd * 0.5) : 0.18 + (sk.recover ?? 0));
+  u.lockUntil = now + (sk.kind === "basic" ? Math.min(0.12, cd * 0.4) : 0.18 + (sk.recover ?? 0));
   for (const [k, v] of Object.entries(cost)) if (k !== "gap") u[k] -= v;
   u.lastAction = now;
   const aim = Math.atan2(ay - u.y, ax - u.x);

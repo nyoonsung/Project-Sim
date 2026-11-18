@@ -680,7 +680,7 @@ export class Room {
     z.until = this.now + z.dur;
     z.next = this.now;
     this.zones.push(z);
-    this.ev({ e: "zone", id: z.id, x: z.x | 0, y: z.y | 0, r: Math.round(z.r), d: z.dur, fx: z.fx ?? null, tm: z.team === "p" ? 1 : 0, fol: z.follow ?? 0, pal: z.pal ?? null });
+    this.ev({ e: "zone", id: z.id, x: z.x | 0, y: z.y | 0, r: Math.round(z.r), d: z.dur, fx: z.fx ?? null, tm: z.team === "p" ? 1 : 0, fol: z.follow ?? 0, pal: z.pal ?? null, own: z.owner ?? 0 });
     return z;
   }
   tickZones(now) {

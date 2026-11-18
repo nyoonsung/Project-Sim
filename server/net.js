@@ -39,6 +39,7 @@ const SCHEMA = {
   repair: (m) => m.uid === undefined || isInt(m.uid, 1, 2 ** 31),
   enchant: (m) => isInt(m.uid, 1, 2 ** 31),
   title: (m) => m.id === null || isInt(m.id, 1, 1e6),
+  who: () => true,
   lock: (m) => isInt(m.uid, 1, 2 ** 31),
   ping: (m) => isNum(m.c, 0, 1e15),
   dummy: (m) => ["reset"].includes(m.op),

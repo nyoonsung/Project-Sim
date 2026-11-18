@@ -192,7 +192,7 @@ export function setupTouch({ openNpc, interactTarget, toast }) {
   const chatBtn = h("button", { class: "tbtn", onclick: () => { document.body.classList.toggle("chat-open"); if (document.body.classList.contains("chat-open")) $("#chat-input").focus(); } }, "💬");
   const fsBtn = h("button", { class: "tbtn", onclick: () => toggleFullscreen() }, "⛶");
   $("#menu-buttons").append(chatBtn, fsBtn);
-  const ICON = { char: "👤", skills: "✨", inv: "🎒", party: "👥", help: "❔", codex: "📖", keys: "⚙", titles: "🏷" };
+  const ICON = { char: "👤", skills: "✨", inv: "🎒", party: "👥", help: "❔", codex: "📖", keys: "⚙", titles: "🏷", who: "🟢" };
   for (const b of document.querySelectorAll("#menu-buttons button[data-win]")) { b.title = b.textContent.replace(/\s*\S$/, "").trim(); b.textContent = ICON[b.dataset.win] ?? b.textContent; }
   $("#chat-input").placeholder = "채팅 ( /p 파티 채팅 )";
   $("#chat-input").addEventListener("blur", () => setTimeout(() => document.body.classList.remove("chat-open"), 150));

@@ -56,6 +56,7 @@ export function onMessage(m) {
     case "kick": G.ui.kicked(m.why); break;
     case "enh": G.ui.onEnhance(m); break;
     case "ench": G.ui.onEnchant?.(m); break;
+    case "who": G.who = m; G.ui.onWho?.(); break;
     case "renamed": G.name = m.name; G.ui.toast(`닉네임을 ${m.name}(으)로 바꿨어요. 다음 로그인부터 새 닉네임으로 로그인하세요.`, "rank"); break;
     case "renameFail": G.ui.toast(m.text, "info"); break;
     case "tp": G.localDash = null; G.pred.x = G.pred.px = G.local.x = m.x; G.pred.y = G.pred.py = G.local.y = m.y; G.pending.length = 0; break;
@@ -154,7 +155,8 @@ function onEvent(e) {
     case "gold": if (e.own === G.you) { floater(e.x, e.y - 20, `+${e.v}G`, "gold"); sfx("coin"); } break;
     case "fx": {
       // 사람이 많을 때: 내 것·내 근처 것은 다 보여 주고, 남의 이펙트는 일부만 (메이플처럼 붐비면 남의 이펙트를 줄임)
-      const me = G.ents.get(G.you), mine = e.at === G.you || (me && Math.hypot(e.x - me.rx, e.y - me.ry) < 140);
+      // 내 것: 내가 낸 이펙트, 또는 붐비지 않을 때 내 근처 이펙트
+      const me = G.ents.get(G.you), mine = e.at === G.you || ((G.crowdK ?? 1) >= 1 && me && Math.hypot(e.x - me.rx, e.y - me.ry) < 140);
       if (!mine && (G.crowdK ?? 1) < 1 && Math.random() > G.crowdK) break;
       R?.fx(e.fx, e.x, e.y, { a: e.a != null ? e.a / 1000 : undefined, pal: e.pal ?? undefined, s: e.s ?? undefined, follow: e.at ?? undefined, other: !mine });
       break;

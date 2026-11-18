@@ -196,12 +196,13 @@ export class Renderer {
   }
   zone(e) {
     if (!e.fx) return;
-    const me = G.ents.get(G.you), other = !(me && Math.hypot(e.x - me.rx, e.y - me.ry) < 160);
+    // 내 장판인지는 주인으로 판단 (예전엔 거리로 판단해서, 붐비는 곳에선 남의 장판도 다 내 것처럼 무겁게 그렸음)
+    const other = e.own ? e.own !== G.you : e.tm !== 1 ? false : true;
     if (other && (G.crowdK ?? 1) < 1 && Math.random() > G.crowdK) return;
     const f = (GROUND_FX.has(e.fx) ? this.ground : this.front).spawn(e.fx, e.x, e.y, { life: e.d, follow: e.fol || undefined, pal: e.pal ?? undefined, s: e.r < 70 ? 0.7 : 1, other });
     if (f) this.zoneFx.set(e.id, f);
   }
-  zoneEnd(id) { const f = this.zoneFx.get(id); if (f) f.inst.stop(); this.zoneFx.delete(id); }
+  zoneEnd(id) { const f = this.zoneFx.get(id); if (f) { const t = performance.now() / 1000; if (f.swapped) f.swapped.until = t; if (f.inst) f.inst.stop(); else f.until = t; } this.zoneFx.delete(id); }
   statusFx(ent, s, d) {
     const id = STATUS_FX[s];
     if (!id) return;

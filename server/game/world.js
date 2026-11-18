@@ -220,6 +220,7 @@ export class World {
       case "repair": this.repair(s, m.uid); break;
       case "enchant": this.enchant(s, m.uid); break;
       case "title": this.equipTitle(s, m.id); break;
+      case "who": this.who(s); break;
       case "enhance": this.enhance(s, m.uid); break;
       case "lock": { const it = s.char.inv.find((i) => i.uid === m.uid) ?? Object.values(s.char.equip).find((i) => i?.uid === m.uid); if (it) { it.locked = !it.locked; this.sendChar(s); } break; }
       case "ping": s.send({ t: "pong", c: m.c, s: Date.now() }); break;
@@ -605,6 +606,19 @@ export class World {
     c.gold += gold;
     this.sendChar(s);
     s.notice(`${n}개를 ${gold.toLocaleString()}G에 팔았어요.${skipped ? ` (잠긴 ${skipped}개 제외)` : ""}`);
+  }
+  /** 접속자 목록 (2초에 한 번만) */
+  who(s) {
+    const t = Date.now();
+    if (t - (s.whoAt ?? 0) < 2000) return;
+    s.whoAt = t;
+    const list = [...this.sessions.values()].map((o) => {
+      const r = o.unit?.room;
+      const where = !r ? "-" : r === this.town ? "마을" : r.map?.safe ? `${r.floor}층 안전 구역` : `${r.floor}층`;
+      const tt = o.char.title != null ? o.char.titles?.find((x) => x.id === o.char.title)?.text ?? null : null;
+      return { n: o.name, lv: o.char.level, c: o.char.cls, w: where, tt, p: o.partyId && o.partyId === s.partyId ? 1 : 0, ld: o.linkdead ? 1 : 0 };
+    }).sort((a, b) => b.p - a.p || b.lv - a.lv);
+    s.send({ t: "who", list, n: list.length });
   }
   /** 칭호 장착/해제 (보관함에 있는 것만) */
   equipTitle(s, id) {

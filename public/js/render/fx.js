@@ -226,7 +226,8 @@ export class FxLayer {
       const b = e.bkey && bakedReady.get(e.bkey);
       if (!b) return true;
       const x = e.s === 1 ? e.inst.options.x : e.wx, y = e.s === 1 ? e.inst.options.y : e.wy;
-      this.bk.push({ b, t0: e.t0, x, y, s: e.s, flip: e.flip, angle: e.angle, follow: e.follow, dy: e.dy, until: e.until });
+      const nb = { b, t0: e.t0, x, y, s: e.s, flip: e.flip, angle: e.angle, follow: e.follow, dy: e.dy, until: e.until };
+      this.bk.push(nb); e.swapped = nb; // 장판이 일찍 끝나면 구운 쪽도 같이 끝내려고
       return false;
     });
     if (this.list.length) this.list = swap(this.list);

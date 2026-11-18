@@ -128,6 +128,7 @@ const ui = {
   },
   announce(text) { const a = $("#announce"); a.classList.toggle("hidden", !text); a.textContent = text ? "📢 " + text : ""; },
   kicked(why) { G.kickedWhy = why; },
+  onWho() { if (isOpen("who")) refreshWin("who"); },
   onEnchant(m) { WIN.onEnchant(m); const { ENCHANTS } = WIN; HUD.toast(`인챈트: ✦ ${ENCHANTS[m.ench].name} (${ENCHANTS[m.ench].desc})`, m.ench === "mend" ? "mythic" : "rank"); },
   onEnhance(m) { WIN.onEnhance(m); HUD.toast(m.result === "success" ? `강화 성공! ${m.name} +${m.enh}` : m.result === "fail" ? `강화 실패 (${m.name} +${m.enh} 유지)` : m.result === "reset" ? `강화 폭발! 신화라 사라지지 않고 ${m.name} +0이 됐어요` : `${m.name}이(가) 파괴됐어요…`, m.result === "success" ? "rank" : m.result === "destroy" || m.result === "reset" ? "death" : "info"); },
   toast: HUD.toast,
@@ -291,6 +292,7 @@ function bindInput() {
     if (e.code === "KeyB") toggleWin("codex", WIN.openCodex);
     if (e.code === "KeyO") toggleWin("keys", WIN.openKeys);
     if (e.code === "KeyT" && si < 0) toggleWin("titles", WIN.openTitles);
+    if (e.code === "KeyU" && si < 0) toggleWin("who", WIN.openWho);
     if (e.code === "KeyN") $("#minimap").classList.toggle("hidden-mini");
     if (e.code === "Tab") e.preventDefault();
   });
@@ -322,7 +324,7 @@ function bindInput() {
   $("#chat-btn")?.addEventListener("click", () => G.toggleChat?.());
   $("#bigmap").addEventListener("click", () => HUD.toggleBigMap());
   for (const b of document.querySelectorAll("#menu-buttons button[data-win]")) {
-    const map = { char: WIN.openChar, skills: WIN.openSkills, inv: WIN.openInv, party: WIN.openParty, help: WIN.openHelp, codex: WIN.openCodex, keys: WIN.openKeys, titles: WIN.openTitles };
+    const map = { char: WIN.openChar, skills: WIN.openSkills, inv: WIN.openInv, party: WIN.openParty, help: WIN.openHelp, codex: WIN.openCodex, keys: WIN.openKeys, titles: WIN.openTitles, who: WIN.openWho };
     b.addEventListener("click", () => toggleWin(b.dataset.win, map[b.dataset.win]));
   }
 }

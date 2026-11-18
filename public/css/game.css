@@ -362,7 +362,7 @@ body.touch #rotate-msg { display: none !important; }
 body.touch.portrait #view { top: calc(66px + env(safe-area-inset-top)); left: 0; transform: none; }
 body.touch.portrait #orbs { grid-template-columns: 1fr 1fr; right: calc(8px + env(safe-area-inset-right)); width: auto; }
 body.touch.portrait #menu-buttons { top: calc(34px + env(safe-area-inset-top)); left: calc(6px + env(safe-area-inset-left)); right: auto; flex-wrap: nowrap; }
-body.touch.portrait #menu-buttons button { width: calc((100vw - 32px) / 11); max-width: 40px; height: 28px; font-size: 14px; }
+body.touch.portrait #menu-buttons button { width: calc((100vw - 40px) / 13); max-width: 40px; height: 28px; font-size: 14px; }
 body.touch.portrait #minimap { top: calc(70px + env(safe-area-inset-top)); right: 4px; width: 84px; height: 64px; opacity: 0.85; }
 body.touch.portrait #topbar { top: calc(70px + env(safe-area-inset-top)); }
 body.touch.portrait #buffs { top: calc(92px + env(safe-area-inset-top)); }
@@ -450,3 +450,14 @@ body.touch.portrait #wallet { right: auto; left: calc(8px + env(safe-area-inset-
 #game > #ui { z-index: 2; }
 #title-layer .title-img { position: absolute; left: 0; top: 0; image-rendering: auto; filter: drop-shadow(0 0 4px #6a5aff88); }
 .title-design { height: 24px; vertical-align: middle; }
+
+.tt-detail { margin: 4px 0; padding: 4px 6px; background: #ffffff0a; border-left: 2px solid var(--gold); font-size: 11px; color: #e6dcc0; line-height: 1.5; }
+
+/* 접속자 */
+.who-list { max-height: 50vh; overflow-y: auto; }
+.who-list .statrow { align-items: center; gap: 6px; }
+.who-list .statrow.me .sn { color: var(--gold); }
+.who-dot { width: 8px; height: 8px; border-radius: 50%; background: #4ae06a; box-shadow: 0 0 6px #4ae06a; flex: none; }
+.who-dot.away { background: #ffb347; box-shadow: 0 0 6px #ffb347; }
+.who-tt { color: #c8a0ff; font-size: 11px; margin-right: 3px; }
+.who-party { color: #7ad0ff; font-size: 11px; }

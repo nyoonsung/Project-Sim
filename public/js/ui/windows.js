@@ -1,5 +1,7 @@
 // 창: 캐릭터, 스킬, 가방·장비, 파티, 도움말, 상점, 대장간(강화), 전직소, 던전 관문, 게시판, 훈련 교관
 import { G, send, canAuto, setAuto } from "../game.js";
+import { skillDetails } from "/shared/skilltext.js";
+import { BASIC_SPEED } from "/shared/constants.js";
 import { titleDesign } from "/shared/titles.js";
 import { Q, setMode, setLessOthers, preset } from "../quality.js";
 import { KEYS, keyLabel, bindKey, resetKeys, RESERVED } from "../keys.js";
@@ -39,12 +41,13 @@ export function profBlock(sk, long = false) {
 export function skillTip(sk) {
   if (!sk) return [];
   const cost = Object.entries(sk.cost ?? {}).map(([k, v]) => `${RES_NAME[k]} ${v}`).join(", ");
-  const cd = sk.kind === "basic" ? `공격 속도 ${sk.aspd}초` : sk.kind === "passive" ? (sk.passive?.trigger?.icd ? `발동 내부 쿨타임 ${sk.passive.trigger.icd}초` : "상시") : `쿨타임 ${sk.cd}초`;
+  const cd = sk.kind === "basic" ? `공격 간격 ${+(sk.aspd * BASIC_SPEED).toFixed(2)}초` : sk.kind === "passive" ? (sk.passive?.trigger?.icd ? `발동 내부 쿨타임 ${sk.passive.trigger.icd}초` : "상시") : `쿨타임 ${sk.cd}초`;
   const kind = { basic: "기본 공격", active: "액티브", passive: "패시브", ultimate: "궁극기" }[sk.kind];
   const el = h("div", {},
     h("div", { class: "tt-name", text: sk.name }),
     h("div", { class: "tt-sub" }, h("span", { class: "grade-" + sk.grade, text: sk.grade }), ` · ${kind} · ${cd}${cost ? " · " + cost : ""}${sk.cast ? ` · 시전 ${sk.cast}초` : ""}${sk.stance ? ` · ${sk.stance} 자세` : ""}`),
     h("div", { text: sk.desc }),
+    h("div", { class: "tt-detail" }, ...skillDetails(sk).map((l) => h("div", { text: l }))),
     h("div", { class: "tt-sub", text: "제한: " + sk.limit }),
     sk.kind !== "passive" ? profBlock(sk, true) : null);
   return [el];
@@ -174,7 +177,7 @@ export function openSkills() {
         return h("div", { class: `sk${locked ? " locked" : ""}${selSkill === s.id ? " sel" : ""}${equipped ? " equipped" : ""}`, onclick: () => { if (!locked) { selSkill = selSkill === s.id ? null : s.id; refreshWin("skills"); } } },
           h("div", { class: "sk-top" }, h("b", { class: "grade-" + s.grade, text: s.name }), " ", h("span", { class: "meta", text: { basic: "기본 공격", active: "액티브", passive: "패시브", ultimate: "궁극기" }[s.kind] }),
             canAuto(s) && !locked ? h("button", { class: "auto-tg" + (G.autoSkills.has(s.id) ? " on" : ""), title: "자동: 쿨타임이 돌면 가까운 적에게 알아서 사용 (회복은 체력 70% 아래일 때)", onclick: (e) => { e.stopPropagation(); setAuto(s.id, !G.autoSkills.has(s.id)); refreshWin("skills"); } }, G.autoSkills.has(s.id) ? "자동" : "수동") : null),
-          h("div", { class: "meta", text: `${s.kind === "basic" ? `공격 속도 ${s.aspd}s` : s.kind === "passive" ? "패시브" : `쿨 ${s.cd}s`}${cost ? " · " + cost : ""}${s.stance ? " · " + s.stance : ""}${locked ? ` · 🔒 ${CLASS_INFO[c.cls].ranks[need]} 필요(Lv.${stageLevel(c.cls, need)})` : ""}` }),
+          h("div", { class: "meta", text: `${s.kind === "basic" ? `공격 간격 ${+(s.aspd * BASIC_SPEED).toFixed(2)}s` : s.kind === "passive" ? "패시브" : `쿨 ${s.cd}s`}${cost ? " · " + cost : ""}${s.stance ? " · " + s.stance : ""}${locked ? ` · 🔒 ${CLASS_INFO[c.cls].ranks[need]} 필요(Lv.${stageLevel(c.cls, need)})` : ""}` }),
           h("div", { class: "desc", text: s.desc }),
           s.kind !== "passive" && !locked ? profBlock(s) : null);
       })));
@@ -278,7 +281,7 @@ export function openHelp() {
     h("h4", { text: "조작" }),
     h("div", { class: "help-grid" }, ...[
       ["WASD / 방향키", "이동"], ["마우스", "조준"], ["좌클릭 · 우클릭", "스킬 1 · 2"], ["Q E R F ⇧ V", "스킬 3~8"], ["1 2 3", "체력 물약 · 마나 물약 · 해독제"],
-      ["G", "NPC와 대화"], ["C / K / I / P / H / T", "캐릭터 / 스킬 / 가방 / 파티 / 도움말 / 칭호"], ["Enter", "채팅"], ["Esc", "창 닫기"],
+      ["G", "NPC와 대화"], ["C / K / I / P / H / T / U", "캐릭터 / 스킬 / 가방 / 파티 / 도움말 / 칭호 / 접속자"], ["Enter", "채팅"], ["Esc", "창 닫기"],
     ].flatMap(([a, b]) => [h("kbd", { text: a }), h("span", { text: b })])),
     h("h4", { text: "던전" }),
     h("div", { class: "note", text: "1~100층. 5층마다 중간보스, 10층마다 주요 보스가 나와요. 일반층은 큰 투기장에서 몬스터가 웨이브로 몰려와요. 웨이브를 모두 물리치면(90% 처치) 출구 포탈이 열려요. 미니맵을 누르면(M) 큰 지도. 10층 보스를 쓰러뜨리면 안전 구역의 전직소에 갈 수 있고, 다음부터 그 다음 층(11, 21…)에서 바로 시작할 수 있어요." }),
@@ -577,4 +580,28 @@ export function openTitles() {
         : h("div", { class: "note", text: "아직 칭호가 없어요. 관리자가 준 칭호만 여기에 보관돼요." }),
     ];
   }, { w: 340 });
+}
+
+// ── 접속자 (U): 지금 온라인인 플레이어와 위치
+let whoQ = "";
+export function openWho() {
+  send({ t: "who" });
+  clearInterval(openWho.tm);
+  openWho.tm = setInterval(() => { if (!isOpen("who")) return clearInterval(openWho.tm); send({ t: "who" }); }, 5000);
+  openWin("who", "접속자", () => {
+    const d = G.who;
+    const input = h("input", { class: "txt", placeholder: "닉네임 검색", value: whoQ, oninput: (e) => { whoQ = e.target.value; const pos = e.target.selectionStart; refreshWin("who"); const el = document.querySelector(".win[data-id=who] input"); el?.focus(); el?.setSelectionRange(pos, pos); } });
+    if (!d) return [input, h("div", { class: "note", text: "불러오는 중..." })];
+    const q = whoQ.trim().toLowerCase();
+    const list = d.list.filter((p) => !q || p.n.toLowerCase().includes(q));
+    return [
+      h("div", { class: "flexrow" }, h("span", { text: `🟢 온라인 ${d.n}명` }), input),
+      h("div", { class: "who-list" }, ...list.map((p) => h("div", { class: "statrow" + (p.n === G.name ? " me" : "") },
+        h("span", { class: "who-dot" + (p.ld ? " away" : ""), title: p.ld ? "잠깐 끊김" : "온라인" }),
+        h("span", { class: "sn" }, p.tt ? h("span", { class: "who-tt", text: `「${p.tt}」` }) : null, p.n, p.p ? h("span", { class: "who-party", text: " 파티" }) : null),
+        h("span", { class: "sd", text: `Lv.${p.lv} ${CLASS_INFO[p.c]?.name ?? ""} · ${p.w}` }),
+        p.n !== G.name && !p.p ? h("button", { class: "btn small", title: "파티 초대 (마을에서)", onclick: () => send({ t: "party", op: "invite", name: p.n }) }, "초대") : null))),
+      list.length ? null : h("div", { class: "note", text: q ? "그 닉네임은 지금 접속해 있지 않아요." : "아무도 없어요." }),
+    ];
+  }, { w: 420 });
 }
