@@ -26,7 +26,7 @@ export function setMode(mode) { Q.mode = mode; Q.level = mode === "high" ? 2 : m
 export function setLessOthers(on) { Q.lessOthers = on; apply(); save(); }
 export const preset = () => PRESET[Q.level];
 /** 다른 사람 이펙트를 얼마나 보여줄지 (0~1) */
-export const othersScale = () => (Q.lessOthers ? Math.min(0.25, PRESET[Q.level].others) : PRESET[Q.level].others);
+export const othersScale = () => (Q.lessOthers ? Math.min(0.25, PRESET[Q.level].others) : PRESET[Q.level].others) * (globalThis.__crowdK ?? 1);
 
 export function apply() {
   const p = PRESET[Q.level];

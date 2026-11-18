@@ -13,6 +13,9 @@ import { mapPayload } from "./dungeon.js";
 import { secureRandom } from "./secure.js";
 
 const VIEW = 600;
+// 근처 사람에게만 보내는 화면 효과 이벤트와 그 범위
+const NEAR_ONLY = new Set(["fx", "anim", "cast", "casting", "cx", "st", "stx", "heal", "miss", "shake", "buff", "shield", "dmg", "pj", "tel", "zone", "beam", "dash", "parryup", "spk", "trap", "gap", "stance"]);
+const EV_RANGE_X = 1000, EV_RANGE_Y = 760, CROWD_EV_CAP = 24;
 
 const XP_RATE = 0.4; // 경험치 배율 (성장 속도)
 /** 몸 두께(반지름)를 고려한 직선 통로: 가운데와 양옆 선이 모두 벽에 안 막힘 */
@@ -827,7 +830,16 @@ export class Room {
 
   // ── 스냅샷 전송
   flush() {
-    const evs = this.events.length ? JSON.stringify(this.events) : null;
+    // 관심 범위: 화면 효과(이펙트·피해 숫자·시전 등)는 근처 사람에게만 보냄 → 사람이 많아도 각자 받는 양이 거의 그대로
+    let evAll = null, evParts = null;
+    if (this.events.length) {
+      evParts = this.events.map((e) => {
+        let x = e.x, y = e.y;
+        if (x == null && NEAR_ONLY.has(e.e)) { const o = this.units.get(e.id ?? e.at ?? e.src); if (o) { x = o.x; y = o.y; } }
+        return { s: JSON.stringify(e), x: NEAR_ONLY.has(e.e) && x != null ? x : null, y, who: e.b ?? e.src ?? e.at ?? e.id, dmg: e.e === "dmg" };
+      });
+      if (this.players.size <= 1 || evParts.every((p) => p.x == null)) { evAll = evParts.map((p) => p.s).join(","); evParts = null; }
+    }
     this.events.length = 0;
     const parts = new Map();
     for (const u of this.units.values()) {
@@ -843,6 +855,7 @@ export class Room {
       const hp = u.maxHp ? Math.ceil((u.hp / u.maxHp) * 1000) : 1000;
       parts.set(u, `[${u.id},${u.x | 0},${u.y | 0},${Math.round((u.facing ?? 0) * 100)},${hp},${flags}]`);
     }
+    const crowd = this.players.size > 8;
     for (const p of this.players.values()) {
       const s = p.session;
       // 플레이어마다 '마지막으로 보낸 상태'를 기억해서 바뀐 유닛만 보냄 (2초마다 전체)
@@ -850,11 +863,29 @@ export class Room {
       const sent = s.sent, full = (this.tickN + p.id) % 40 === 0;
       const near = [];
       for (const [u, str] of parts) {
-        if (u === p || u.type === "p" || u.type === "b" || Math.abs(u.x - p.x) < VIEW + 100 && Math.abs(u.y - p.y) < VIEW) {
+        // 사람이 많으면(8명 초과) 다른 플레이어 위치는 0.1초마다(번갈아) — 화면에선 부드럽게 이어 그려서 티가 거의 안 남
+        if (crowd && u.type === "p" && u !== p && !full && (this.tickN + u.id + p.id) % 2) continue;
+        if (u === p || u.type === "b" || (u.type === "p" && this.partyId) || Math.abs(u.x - p.x) < VIEW + 100 && Math.abs(u.y - p.y) < VIEW) {
           if (full || sent.get(u.id) !== str) { near.push(str); sent.set(u.id, str); }
         } else if (sent.has(u.id)) sent.delete(u.id);
       }
       if (full) for (const id of sent.keys()) if (!this.units.has(id)) sent.delete(id);
+      let evs = evAll;
+      if (evParts) {
+        const mine = [];
+        let others = 0;
+        for (const q of evParts) {
+          if (q.x == null || q.who === p.id) { mine.push(q.s); continue; } // 전체 알림·나와 관련된 것은 항상
+          const dx = Math.abs(q.x - p.x), dy = Math.abs(q.y - p.y);
+          if (dx >= EV_RANGE_X || dy >= EV_RANGE_Y) continue;
+          // 붐빌 때: 남의 피해 숫자는 가까운 것만, 남의 화면 효과는 틱당 최대 개수까지
+          if (crowd && q.dmg && (dx > 420 || dy > 300)) continue;
+          if (crowd && ++others > CROWD_EV_CAP) continue;
+          mine.push(q.s);
+        }
+        evs = mine.length ? mine.join(",") : null;
+      }
+      if (evs) evs = "[" + evs + "]";
       // 이벤트와 위치를 한 메시지로 (틱당 1개). 바뀐 게 하나도 없으면 아예 안 보냄
       if (evs || near.length || s.sentAck !== p.lastSeq) {
         s.sentAck = p.lastSeq;

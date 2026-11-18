@@ -149,6 +149,7 @@ export function dealDamage(room, src, t, o, now) {
   if (t.type === "p" && real > 0 && !o.dot) wearOnHit(room, t);
   const ev = { e: "dmg", id: t.id, v: dmg, c: crit ? 1 : 0, a: absorbed > 0 ? 1 : 0, d: o.dot ? 1 : 0, p: t.team === "p" ? 1 : 0 };
   if (o.skill && !o.dot && src?.type === "p") ev.sk = o.skill; // 스킬별 적중 연출용
+  if (src?.type === "p") ev.b = src.id; // 누가 때렸는지 (사람이 많을 때 내 피해 숫자는 꼭 보내려고)
   room.ev(ev);
   // 위협 (몬스터가 맞을 때)
   if (t.team === "m" && src?.team === "p") {

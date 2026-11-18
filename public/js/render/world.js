@@ -110,6 +110,8 @@ export function warmSkill(id) {
   preloadFx(ids).then(() => prebake(ids));
 }
 
+const labelCache = new Map();
+let labelMeasure = null;
 // 디자인 칭호: 캔버스(640px)에 그리면 뭉개지므로, 캔버스 위 이미지 층에 원본 해상도로 띄움
 const titleImgs = new Map();
 let titleLayer = null;
@@ -194,7 +196,9 @@ export class Renderer {
   }
   zone(e) {
     if (!e.fx) return;
-    const f = (GROUND_FX.has(e.fx) ? this.ground : this.front).spawn(e.fx, e.x, e.y, { life: e.d, follow: e.fol || undefined, pal: e.pal ?? undefined, s: e.r < 70 ? 0.7 : 1 });
+    const me = G.ents.get(G.you), other = !(me && Math.hypot(e.x - me.rx, e.y - me.ry) < 160);
+    if (other && (G.crowdK ?? 1) < 1 && Math.random() > G.crowdK) return;
+    const f = (GROUND_FX.has(e.fx) ? this.ground : this.front).spawn(e.fx, e.x, e.y, { life: e.d, follow: e.fol || undefined, pal: e.pal ?? undefined, s: e.r < 70 ? 0.7 : 1, other });
     if (f) this.zoneFx.set(e.id, f);
   }
   zoneEnd(id) { const f = this.zoneFx.get(id); if (f) f.inst.stop(); this.zoneFx.delete(id); }
@@ -291,6 +295,12 @@ export class Renderer {
     }
     this.drawTelsOver(ctx, cx, cy, t);
     G.titleMarks = [];
+    {
+      let n = 0;
+      for (const e of G.ents.values()) if (e.k === "p" && e.id !== G.you && Math.abs(e.rx - cx - VW / 2) < VW && Math.abs(e.ry - cy - VH / 2) < VH) n++;
+      G.crowdN = n;
+      G.crowdK = globalThis.__crowdK = n <= 6 ? 1 : n <= 15 ? 0.5 : n <= 30 ? 0.3 : 0.15;
+    }
     this.drawOverhead(ctx, cx, cy, t);
     if (G.hurtFlash > 0) {
       // 맞았을 때 붉은 테두리: 한 번 만든 그림을 세기만 바꿔 찍음
@@ -793,13 +803,23 @@ export class Renderer {
     ctx.imageSmoothingEnabled = false;
   }
 
+  /** 글자 그리기: 같은 글자·색은 그림으로 한 번 만들어 재사용 (사람이 많을 때 글자 그리기가 무거움) */
   label(ctx, text, x, y, col = "#fff", font = "10px Galmuri9") {
-    ctx.font = font;
-    ctx.textAlign = "center";
-    ctx.fillStyle = "#000";
-    ctx.fillText(text, x + 1, y + 1);
-    ctx.fillStyle = col;
-    ctx.fillText(text, x, y);
+    const key = text + "|" + col + "|" + font;
+    let c = labelCache.get(key);
+    if (!c) {
+      const m = (labelMeasure ??= new OffscreenCanvas(1, 1).getContext("2d"));
+      m.font = font;
+      const w = Math.ceil(m.measureText(text).width) + 3, h = parseInt(font) + 5;
+      c = new OffscreenCanvas(w, h);
+      const g = c.getContext("2d");
+      g.font = font; g.textAlign = "left"; g.textBaseline = "alphabetic";
+      g.fillStyle = "#000"; g.fillText(text, 2, h - 3);
+      g.fillStyle = col; g.fillText(text, 1, h - 4);
+      if (labelCache.size > 600) labelCache.clear();
+      labelCache.set(key, c);
+    }
+    ctx.drawImage(c, Math.round(x - (c.width - 3) / 2 - 1), Math.round(y - c.height + 4));
   }
 
   drawOverhead(ctx, cx, cy, t) {

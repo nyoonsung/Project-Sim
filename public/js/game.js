@@ -152,7 +152,13 @@ function onEvent(e) {
     case "heal": if (ent) floater(ent.rx, ent.ry - 34, "+" + e.v, "heal"); break;
     case "miss": if (ent) floater(ent.rx, ent.ry - 34, "회피", "miss"); break;
     case "gold": if (e.own === G.you) { floater(e.x, e.y - 20, `+${e.v}G`, "gold"); sfx("coin"); } break;
-    case "fx": R?.fx(e.fx, e.x, e.y, { a: e.a != null ? e.a / 1000 : undefined, pal: e.pal ?? undefined, s: e.s ?? undefined, follow: e.at ?? undefined }); break;
+    case "fx": {
+      // 사람이 많을 때: 내 것·내 근처 것은 다 보여 주고, 남의 이펙트는 일부만 (메이플처럼 붐비면 남의 이펙트를 줄임)
+      const me = G.ents.get(G.you), mine = e.at === G.you || (me && Math.hypot(e.x - me.rx, e.y - me.ry) < 140);
+      if (!mine && (G.crowdK ?? 1) < 1 && Math.random() > G.crowdK) break;
+      R?.fx(e.fx, e.x, e.y, { a: e.a != null ? e.a / 1000 : undefined, pal: e.pal ?? undefined, s: e.s ?? undefined, follow: e.at ?? undefined, other: !mine });
+      break;
+    }
     case "anim": if (ent) {
       // 내가 방금 미리 보여 준 동작이면 처음부터 다시 그리지 않음
       if (ent.anim?.local && ent.anim.name === e.a && now() - ent.anim.t0 < 0.45) { ent.anim.local = false; ent.anim.n = e.n ?? 1; }

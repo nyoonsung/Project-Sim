@@ -187,6 +187,8 @@ export class FxLayer {
     }
     if (!id.startsWith("weather/")) scheduleBake(id, o.pal ?? null, bkey, true);
     if (!id.startsWith("weather/") && this.list.length + this.scaled.length >= FX_LIMITS.live) return null;
+    // 붐빌 때 남의 이펙트는 다 구워진 것만 (매 프레임 픽셀 계산하는 실시간 이펙트는 내 것에만)
+    if (o.other && (globalThis.__crowdK ?? 1) < 1) return null;
     const opts = { x, y, flip, angle, seed: (Math.random() * 1e6) | 0 };
     if (o.pal) opts.palette = o.pal;
     const inst = createFx(mod, opts);
