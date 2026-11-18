@@ -138,6 +138,8 @@ const BOSS_CALL = {
   rain: ["낙하 공격", "빨간 원 밖으로"], barrage: ["마력탄 난사", "멀리 떨어져서 선 사이 틈으로"], beam: ["회전 광선", "분홍 부채꼴 밖으로"],
   charge: ["돌진", "빨간 줄 옆으로"], aimed: ["조준 사격", "옆으로 움직여요"], pools: ["독 장판", "장판 밟지 마요"],
   pull: ["끌어당기기", "반대로 버텨요"], summon: ["소환", "졸개부터 처리"],
+  chase: ["추적 폭격", "멈추지 말고 계속 움직여요"], cross: ["십자 베기", "선 사이 대각선으로, 곧 X자"], donut: ["안팎 폭발", "밖으로 피했다가 다시 안으로"],
+  spiral: ["나선 탄막", "탄 사이 틈을 따라 돌아요"], lanes: ["줄 공격", "비어 있는 줄로"],
 };
 export class Renderer {
   /** 화면 크기 바꾸기 (휴대폰 세로·가로 전환). focusY: 캐릭터가 화면 높이의 어디쯤 오게 할지 */
@@ -180,6 +182,7 @@ export class Renderer {
       ids.push(z.torch);
       for (const id of z.monsters) { const m = MONSTERS[id]; if (m.look.critter) ids.push(m.look.critter); if (m.proj) ids.push(m.proj); if (m.aoe) ids.push(m.aoe); if (m.ai === "bomber") ids.push("explosions/small-explosion"); }
       for (const b of [z.mid, z.boss]) { const d = BOSSES[b]; if (d.look.critter) ids.push(d.look.critter); for (const p of d.patterns) if (p.fx) ids.push(p.fx); }
+      if (G.mapKind === "boss" || G.floor % 5 === 0) ids.push("impacts/ground-slam", "melee/spear-sweep", "lightning/zap-hit", "arcane/arcane-orb", "shadow/dark-explosion"); // 공용 고급 보스 패턴
       if (z.weather) ids.push(z.weather);
     }
     // 내 직업의 모든 스킬 이펙트(장착 안 한 것 포함) + 흔한 타격 이펙트를 미리 구워 둠
@@ -450,7 +453,7 @@ export class Renderer {
       if (age > w.d) return false;
       const k = age / w.d, x = w.x - cx, y = w.y - cy, L = 520;
       ctx.lineWidth = 2;
-      for (let wave = 0; wave < Math.min(2, w.w); wave++) {
+      if (w.k !== "spiral") for (let wave = 0; wave < Math.min(2, w.w); wave++) {
         const off = (wave * Math.PI) / w.n;
         ctx.strokeStyle = wave ? `rgba(255,200,80,${0.25 + 0.35 * k})` : `rgba(255,70,200,${0.35 + 0.5 * k})`;
         if (k > 0.8 && Math.floor(t * 14) % 2) ctx.strokeStyle = "rgba(255,255,255,0.9)";

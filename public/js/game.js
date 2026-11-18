@@ -23,6 +23,8 @@ export const G = {
 };
 
 const now = () => performance.now() / 1000;
+/** 서버 → 나 전송 지연(초): 핑의 절반 + 한 틱 */
+const lag = () => Math.min(0.25, ((G.net?.rtt || 80) / 2) / 1000 + 0.05);
 
 export function send(o) { G.net.send(o); }
 
@@ -176,7 +178,8 @@ function onEvent(e) {
     case "cx": if (ent) ent.casting = null; if (e.id === G.you) G.casting = null; break;
     case "pj": G.projectiles.set(e.id, { ...e, a: e.a / 1000, t0: now() }); break;
     case "pjx": { const p = G.projectiles.get(e.id); if (p) { G.projectiles.delete(e.id); } break; }
-    case "tel": G.tels.set(e.id, { ...e, a: e.a / 1000, t0: now() }); setTimeout(() => G.tels.delete(e.id), (e.d + 0.25) * 1000); break;
+    // 예고는 서버에서 이미 조금 전에 시작됨(전송 지연) → 그만큼 앞당겨 그려서 '표시가 다 차는 순간 = 실제로 터지는 순간'이 되게
+    case "tel": G.tels.set(e.id, { ...e, a: e.a / 1000, t0: now() - lag() }); setTimeout(() => G.tels.delete(e.id), Math.max(0, e.d - lag() + 0.25) * 1000); break;
     case "zone": G.zones.set(e.id, { ...e, t0: now() }); R?.zone(e); break;
     case "zonex": G.zones.delete(e.id); R?.zoneEnd(e.id); break;
     case "st":
@@ -204,7 +207,7 @@ function onEvent(e) {
     case "got": G.ui.gotItem(e.item); sfx("item"); break;
     case "boss": G.boss = { id: e.id, name: e.name, mid: e.mid }; G.ui.onBoss(); break;
     case "bpat": G.bossCall = { id: e.id, p: e.p, t0: now() }; break; // 보스 패턴 이름 표시
-    case "warn": (G.warns ??= []).push({ ...e, t0: now() }); if (e.k === "barrage") G.bossCall = { id: e.id, p: "barrage", t0: now(), hold: e.d }; sfx("wave"); break;
+    case "warn": (G.warns ??= []).push({ ...e, t0: now() - lag() }); if (e.k === "barrage" || e.k === "spiral") G.bossCall = { id: e.id, p: e.k, t0: now(), hold: e.d }; sfx("wave"); break;
     case "bossdead": G.boss = null; G.ui.onBoss(); G.ui.center("보스 처치!"); break;
     case "exit": G.exitOpen = !!e.open; break;
     case "vote": G.ui.showVote?.(e); if (!e.end && !e.yes.includes(G.you)) sfx("wave"); break;
@@ -225,7 +228,7 @@ function onEvent(e) {
     case "stance": if (e.id === G.you) G.ui.toast(`${e.s} 자세`, "self"); break;
     case "nores": if (e.id === G.you) G.ui.noRes(e.k); break;
     case "beam": G.beams.push({ ...e, t0: now(), d: e.d ?? 0.25 }); break;
-    case "bbeam": G.beams.push({ boss: e.id, a: e.a / 1000, rot: e.rot / 1000, d: e.d, w: e.w, l: e.l, at: e.at, fx: e.fx, t0: now() }); break;
+    case "bbeam": G.beams.push({ boss: e.id, a: e.a / 1000, rot: e.rot / 1000, d: e.d, w: e.w, l: e.l, at: e.at, fx: e.fx, t0: now() - lag() }); break;
     case "parryup": if (ent) ent.parryUntil = now() + e.d; break;
     case "buff": if (e.id === G.you) G.ui.onMe(); break;
   }

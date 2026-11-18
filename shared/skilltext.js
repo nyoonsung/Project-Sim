@@ -1,3 +1,4 @@
+import { PLAYER_HIT } from "./constants.js";
 // 스킬 상세 설명: 스킬 데이터(steps)를 읽어서 피해 배율·범위·지속시간·상태이상 등을 사람이 읽는 문장으로
 const pct = (v) => `${Math.round(v * 100)}%`;
 const sec = (v) => `${+(+v).toFixed(2)}초`;
@@ -38,11 +39,11 @@ function stepLine(st) {
   const tail = extra.length ? ` · ${extra.join(", ")}` : "";
   const crit = st.critBonus ? ` · 치명타 확률 +${pct(st.critBonus)}` : "";
   switch (st.do) {
-    case "melee": return `근접 부채꼴(사거리 ${st.range}, ${st.arc ?? 60}°) ${tgt(st.max)}에게 ${pow}${st.hits > 1 ? ` × ${st.hits}회` : ""}${crit}${st.chain ? ` · 주변 적에게 연쇄` : ""}${st.execute ? " · 체력 낮은 적에게 추가 피해" : ""}${tail}`;
+    case "melee": return `근접 부채꼴(사거리 ${Math.round(st.range * PLAYER_HIT.melee + PLAYER_HIT.meleeReach)}, ${(st.arc ?? 60) + PLAYER_HIT.meleeArc}°) ${tgt(st.max)}에게 ${pow}${st.hits > 1 ? ` × ${st.hits}회` : ""}${crit}${st.chain ? ` · 주변 적에게 연쇄` : ""}${st.execute ? " · 체력 낮은 적에게 추가 피해" : ""}${tail}`;
     case "proj": return `투사체${st.count > 1 ? ` ${st.count}발` : ""}(사거리 ${st.range}${st.pierce ? `, ${st.pierce === true ? "관통" : `${st.pierce}명 관통`}` : ""}${st.explode ? `, 폭발 반경 ${st.explode.radius ?? st.explode}` : ""}): ${pow}${st.burst > 1 ? ` × ${st.burst}연발` : ""}${crit}${st.pen ? ` · 방어 관통 ${pct(st.pen)}` : ""}${tail}`;
     case "line": return `직선(길이 ${st.length}, 폭 ${st.width}): ${pow}${st.telegraph ? ` · ${sec(st.telegraph)} 뒤 발동` : ""}${tail}`;
-    case "circle": return `자기 주변 반경 ${st.radius} ${tgt(st.max)}에게 ${pow || "효과"}${tail}`;
-    case "area": return `지정한 곳 반경 ${st.radius}: ${pow}${st.ticks > 1 ? ` × ${st.ticks}회(${sec(st.interval ?? 0.5)}마다)` : ""}${st.telegraph ? ` · ${sec(st.telegraph)} 뒤 발동` : ""}${st.healAllies ? " · 아군 회복" : ""}${tail}`;
+    case "circle": return `자기 주변 반경 ${Math.round(st.radius * PLAYER_HIT.area)} ${tgt(st.max)}에게 ${pow || "효과"}${tail}`;
+    case "area": return `지정한 곳 반경 ${Math.round(st.radius * PLAYER_HIT.area)}: ${pow}${st.ticks > 1 ? ` × ${st.ticks}회(${sec(st.interval ?? 0.5)}마다)` : ""}${st.telegraph ? ` · ${sec(st.telegraph)} 뒤 발동` : ""}${st.healAllies ? " · 아군 회복" : ""}${tail}`;
     case "zone": return `장판 반경 ${st.radius}, ${sec(st.dur)} 동안${st.pow ? ` ${sec(st.interval ?? 0.5)}마다 공격력 ${pct(st.pow)} 피해` : ""}${st.heal ? ` · 아군 회복` : ""}${st.dr ? ` · 받는 피해 -${pct(st.dr)}` : ""}${tail}`;
     case "dash": return `${st.dist}만큼 ${st.side ? "옆으로" : "앞으로"} 돌진${st.hit?.pow ? ` · 부딪힌 적에게 공격력 ${pct(st.hit.pow)} 피해` : ""}${st.through ? " · 적을 통과" : ""}`;
     case "blink": return `${st.dist}만큼 순간이동`;

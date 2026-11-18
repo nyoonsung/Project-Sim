@@ -640,7 +640,7 @@ export class Room {
         if (end) break;
         for (const t of this.units.values()) {
           if (t.dead || t.team === p.team || p.hit.has(t.id) || (t.type === "d" && !t.targetable)) continue;
-          if (Math.hypot(t.x - p.x, t.y - (p.team === "m" ? p.y : p.y) - (t.fly ? 0 : 0)) > t.r + p.r) continue;
+          if (Math.hypot(t.x - p.x, t.y - p.y) > (p.team === "m" && t.type === "p" ? t.r * 0.6 : t.r) + p.r) continue; // 적 탄은 플레이어 몸 가운데에 맞아야 함
           p.hit.add(t.id);
           p.onHit?.(t, now, p);
           if (p.pierce-- <= 0) { end = true; break; }

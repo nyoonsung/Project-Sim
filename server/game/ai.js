@@ -1,5 +1,7 @@
 // 몬스터·보스 AI (강한 공격은 바닥 예고 표시 후 발동)
 import { moveCircle, lineOfSight, circleHitsWall } from "../../shared/move.js";
+import { BOSS_HIT } from "../../shared/constants.js";
+const SH = BOSS_HIT.shrink; // 보스 공격은 표시된 범위보다 살짝 안쪽까지만 맞음 (가장자리에 걸치면 안 맞음)
 import { dealDamage, applyStatus, isHardCC, moveMul, angDiff } from "./combat.js";
 
 const TAU = Math.PI * 2;
@@ -209,10 +211,17 @@ export function tickBoss(room, b, now) {
   b.facing = ang;
   // 패턴 시작
   if (now >= b.patternAt) {
-    const pats = def.patterns.filter((p) => !p.phase2 || b.phase === 2);
-    const p = pats[(b.patIdx++ + Math.floor(Math.random() * 2)) % pats.length];
+    // 보스 고유 패턴 + 층에 따라 추가되는 공용 고급 패턴(추적 폭격·십자·안팎 폭발·나선 탄막·줄 공격)
+    const extra = EXTRA_PATTERNS.filter((x) => room.floor >= x.from).map((x) => x.p);
+    const pats = [...def.patterns.filter((p) => !p.phase2 || b.phase === 2), ...extra];
+    const p = pats[(b.patIdx++ * 7 + Math.floor(Math.random() * pats.length)) % pats.length];
     startPattern(room, b, p, t, now);
-    b.patternAt = now + (b.phase === 2 ? 2.6 : 3.4) + Math.random() * 0.8;
+    // 2페이즈: 가끔 고급 패턴을 겹쳐서 연계 (예: 십자 + 추적 폭격)
+    if (b.phase === 2 && extra.length && Math.random() < 0.35) {
+      const p2 = extra[Math.floor(Math.random() * extra.length)];
+      room.schedule(0.8, () => { if (!b.dead) { const keep = b.pattern; startPattern(room, b, p2, pickTarget(room, b, room.now) ?? t, room.now); if (keep && keep.end > (b.pattern?.end ?? 0)) b.pattern = keep; } });
+    }
+    b.patternAt = now + (b.phase === 2 ? 2.1 : 2.9) + Math.random() * 0.7;
     return;
   }
   // 평타 (가까우면)
@@ -221,7 +230,7 @@ export function tickBoss(room, b, now) {
     const a = ang;
     room.addArea({ team: "m", shape: "cone", x: b.x, y: b.y, r: 70 + b.r * 0.5, ang: a, arc: 100, tel: 0.5, fire: (t0) => {
       room.ev({ e: "anim", id: b.id, a: "slash" });
-      for (const p of bossTargets(room)) if (Math.hypot(p.x - b.x, p.y - b.y) <= 70 + b.r * 0.5 + p.r && angDiff(Math.atan2(p.y - b.y, p.x - b.x), a) <= (50 * Math.PI) / 180) hitTarget(room, b, p, 1, t0);
+      for (const p of bossTargets(room)) if (Math.hypot(p.x - b.x, p.y - b.y) <= 70 + b.r * 0.5 - SH && angDiff(Math.atan2(p.y - b.y, p.x - b.x), a) <= (46 * Math.PI) / 180) hitTarget(room, b, p, 1, t0);
     } });
     b.pattern = { end: now + 0.6 };
     return;
@@ -229,6 +238,14 @@ export function tickBoss(room, b, now) {
   if (dist > 40 + b.r) moveToward(room, b, room.pathDir(b, t), b.speed * moveMul(b), dt);
 }
 
+// 층이 오르면 모든 보스에 추가되는 고급 패턴
+const EXTRA_PATTERNS = [
+  { from: 10, p: { type: "chase", n: 4, gap: 0.45, radius: 46, tel: 0.75, pow: 0.8, fx: "impacts/ground-slam" } },
+  { from: 20, p: { type: "cross", len: 360, width: 36, tel: 1.0, pow: 1.0, fx: "melee/spear-sweep" } },
+  { from: 30, p: { type: "donut", inner: 110, outer: 250, tel: 1.1, pow: 1.1, fx: "shadow/dark-explosion" } },
+  { from: 50, p: { type: "spiral", arms: 3, dur: 2.2, speed: 170, pow: 0.7, fx: "arcane/arcane-orb" } },
+  { from: 70, p: { type: "lanes", n: 5, width: 56, len: 460, tel: 1.1, pow: 1.0, fx: "lightning/zap-hit" } },
+];
 function startPattern(room, b, p, t, now) {
   const def = b.def_;
   const ply = bossTargets(room);
@@ -243,7 +260,7 @@ function startPattern(room, b, p, t, now) {
       room.addArea({ team: "m", shape: "cone", x: b.x, y: b.y, r: p.range, ang: a, arc: p.arc, tel: p.tel, fire: (t0) => {
         room.ev({ e: "anim", id: b.id, a: "slash" });
         fxAt(p.fx ?? "melee/heavy-cleave", b.x + Math.cos(a) * 30, b.y + Math.sin(a) * 30);
-        hitIn((q) => Math.hypot(q.x - b.x, q.y - b.y) <= p.range + q.r && angDiff(Math.atan2(q.y - b.y, q.x - b.x), a) <= (p.arc * Math.PI) / 360, pw, t0);
+        hitIn((q) => Math.hypot(q.x - b.x, q.y - b.y) <= p.range - SH && angDiff(Math.atan2(q.y - b.y, q.x - b.x), a) <= (p.arc * Math.PI) / 360 - 0.06, pw, t0);
       } });
       break;
     }
@@ -252,7 +269,7 @@ function startPattern(room, b, p, t, now) {
         room.ev({ e: "anim", id: b.id, a: "smash" });
         fxAt(p.fx ?? "impacts/ground-slam", b.x, b.y);
         room.ev({ e: "shake", v: 4 });
-        hitIn((q) => Math.hypot(q.x - b.x, q.y - b.y) <= p.radius + q.r, pw, t0, { unblockable: true, status: p.freeze ? { type: "freeze", dur: 0.8 } : null });
+        hitIn((q) => Math.hypot(q.x - b.x, q.y - b.y) <= p.radius - SH, pw, t0, { unblockable: true, status: p.freeze ? { type: "freeze", dur: 0.8 } : null });
       } });
       break;
     }
@@ -260,7 +277,7 @@ function startPattern(room, b, p, t, now) {
       room.addArea({ team: "m", shape: "ring", x: b.x, y: b.y, r: p.inner, r2: p.outer, tel: p.tel, fire: (t0) => {
         fxAt(p.fx ?? "impacts/ground-slam", b.x, b.y, 1.2);
         room.ev({ e: "shake", v: 5 });
-        hitIn((q) => { const d = Math.hypot(q.x - b.x, q.y - b.y); return d >= p.inner - q.r && d <= p.outer + q.r; }, pw, t0, { unblockable: true });
+        hitIn((q) => { const d = Math.hypot(q.x - b.x, q.y - b.y); return d >= p.inner + SH && d <= p.outer - SH; }, pw, t0, { unblockable: true });
       } });
       break;
     }
@@ -276,7 +293,7 @@ function startPattern(room, b, p, t, now) {
           const ox = b.x, oy = b.y;
           moveToward(room, b, a, d / 0.05, 0.05);
           left -= d;
-          for (const q of bossTargets(room)) if (!hit.has(q.id) && Math.hypot(q.x - b.x, q.y - b.y) < q.r + b.r + p.width / 3) { hit.add(q.id); hitTarget(room, b, q, pw, room.now); }
+          for (const q of bossTargets(room)) if (!hit.has(q.id) && Math.hypot(q.x - b.x, q.y - b.y) < b.r * 0.8 + p.width / 4) { hit.add(q.id); hitTarget(room, b, q, pw, room.now); }
           if (left > 0 && Math.hypot(b.x - ox, b.y - oy) > 2) room.schedule(0.05, step);
           else { fxAt("impacts/heavy-landing", b.x, b.y); room.ev({ e: "shake", v: 3 }); }
         };
@@ -298,7 +315,7 @@ function startPattern(room, b, p, t, now) {
           const off = (w * Math.PI) / p.count;
           for (let k = 0; k < p.count; k++) {
             const a = (k / p.count) * TAU + off;
-            room.addProjectile({ team: "m", src: b.id, x: b.x, y: b.y - 10, vx: Math.cos(a) * p.speed, vy: Math.sin(a) * p.speed, range: 520, r: 7, pierce: 0, fx: p.fx, scale: 0.45, onHit: (q, t1) => hitTarget(room, b, q, pw, t1) });
+            room.addProjectile({ team: "m", src: b.id, x: b.x, y: b.y - 10, vx: Math.cos(a) * p.speed, vy: Math.sin(a) * p.speed, range: 520, r: BOSS_HIT.proj, pierce: 0, fx: p.fx, scale: 0.45, onHit: (q, t1) => hitTarget(room, b, q, pw, t1) });
           }
         });
       }
@@ -313,7 +330,7 @@ function startPattern(room, b, p, t, now) {
           const base = Math.atan2(q.y - b.y, q.x - b.x);
           for (let k = 0; k < p.count; k++) {
             const a = base + ((p.spread * Math.PI) / 180) * (p.count > 1 ? k / (p.count - 1) - 0.5 : 0);
-            room.addProjectile({ team: "m", src: b.id, x: b.x, y: b.y - 10, vx: Math.cos(a) * p.speed, vy: Math.sin(a) * p.speed, range: 560, r: 7, pierce: 0, fx: p.fx, scale: 0.5, onHit: (q2, t1) => hitTarget(room, b, q2, pw, t1) });
+            room.addProjectile({ team: "m", src: b.id, x: b.x, y: b.y - 10, vx: Math.cos(a) * p.speed, vy: Math.sin(a) * p.speed, range: 560, r: BOSS_HIT.proj, pierce: 0, fx: p.fx, scale: 0.5, onHit: (q2, t1) => hitTarget(room, b, q2, pw, t1) });
           }
         }
       });
@@ -332,7 +349,7 @@ function startPattern(room, b, p, t, now) {
       pts.forEach(([x, y], i) => {
         room.schedule(i * 0.12, () => !b.dead && room.addArea({ team: "m", shape: "c", x, y, r: p.radius, tel: p.tel, fire: (t0) => {
           fxAt(p.fx, x, y, 0.5);
-          hitIn((q) => Math.hypot(q.x - x, q.y - y) <= p.radius + q.r, pw, t0, { unblockable: true });
+          hitIn((q) => Math.hypot(q.x - x, q.y - y) <= p.radius - SH, pw, t0, { unblockable: true });
         } }));
       });
       b.pattern.end = now + 1.2;
@@ -360,7 +377,7 @@ function startPattern(room, b, p, t, now) {
         if (circleHitsWall(room.map, x, y, 6)) continue;
         room.addArea({ team: "m", shape: "c", x, y, r: p.radius, tel: 0.9, fire: () => {
           room.addZone({ team: "m", owner: b.id, x, y, r: p.radius, dur: p.dur, interval: 0.5, fx: p.fx, tick: (t0, z) => {
-            for (const q2 of bossTargets(room)) if (Math.hypot(q2.x - z.x, q2.y - z.y) <= z.r) hitTarget(room, b, q2, p.pow, t0, { unblockable: true });
+            for (const q2 of bossTargets(room)) if (Math.hypot(q2.x - z.x, q2.y - z.y) <= z.r - SH) hitTarget(room, b, q2, p.pow, t0, { unblockable: true });
           } });
         } });
       }
@@ -379,10 +396,91 @@ function startPattern(room, b, p, t, now) {
         }
         room.addArea({ team: "m", shape: "c", x: b.x, y: b.y, r: 90, tel: 0.7, fire: (t1) => {
           fxAt("shadow/dark-explosion", b.x, b.y, 0.6);
-          hitIn((q) => Math.hypot(q.x - b.x, q.y - b.y) <= 90 + q.r, pw, t1, { unblockable: true });
+          hitIn((q) => Math.hypot(q.x - b.x, q.y - b.y) <= 90 - SH, pw, t1, { unblockable: true });
         } });
       } });
       b.pattern.end = now + p.tel + 1.0;
+      break;
+    }
+    case "chase": {
+      // 추적 폭격: 각 플레이어 발밑에 연속으로 폭발 → 계속 움직여야 함
+      room.ev({ e: "anim", id: b.id, a: "cast" });
+      for (let k = 0; k < p.n; k++) {
+        room.schedule(k * p.gap, () => {
+          if (b.dead) return;
+          for (const q of bossTargets(room)) {
+            const x = q.x, y = q.y;
+            room.addArea({ team: "m", shape: "c", x, y, r: p.radius, tel: p.tel, fire: (t0) => {
+              fxAt(p.fx, x, y, 0.55);
+              hitIn((q2) => Math.hypot(q2.x - x, q2.y - y) <= p.radius - SH, pw, t0, { unblockable: true });
+            } });
+          }
+        });
+      }
+      b.pattern.end = now + p.n * p.gap + 0.3;
+      break;
+    }
+    case "cross": {
+      // 십자 베기 → 곧이어 X자 베기 (안전한 곳이 바뀜)
+      room.ev({ e: "anim", id: b.id, a: "cast" });
+      const wave = (rot, delay) => room.schedule(delay, () => {
+        if (b.dead) return;
+        for (let k = 0; k < 4; k++) {
+          const a = rot + (k * Math.PI) / 2;
+          room.addArea({ team: "m", shape: "r", x: b.x, y: b.y, ang: a, l: p.len, w: p.width, tel: p.tel, fire: (t0) => {
+            fxAt(p.fx, b.x + Math.cos(a) * p.len * 0.5, b.y + Math.sin(a) * p.len * 0.5, 0.7);
+            hitIn((q) => { const dx = q.x - b.x, dy = q.y - b.y, al = dx * Math.cos(a) + dy * Math.sin(a), ac = Math.abs(-dx * Math.sin(a) + dy * Math.cos(a)); return al > 0 && al < p.len && ac < p.width / 2 - 2; }, pw, t0, { unblockable: true });
+          } });
+        }
+      });
+      const r0 = Math.random() * Math.PI / 2;
+      wave(r0, 0); wave(r0 + Math.PI / 4, 0.75);
+      b.pattern.end = now + 0.75 + p.tel + 0.3;
+      break;
+    }
+    case "donut": {
+      // 안팎 폭발: 먼저 가운데 큰 원(밖으로) → 이어서 바깥 고리(다시 안으로)
+      room.addArea({ team: "m", shape: "c", x: b.x, y: b.y, r: p.inner, tel: p.tel, fire: (t0) => {
+        room.ev({ e: "anim", id: b.id, a: "smash" }); fxAt("impacts/ground-slam", b.x, b.y); room.ev({ e: "shake", v: 4 });
+        hitIn((q) => Math.hypot(q.x - b.x, q.y - b.y) <= p.inner - SH, pw, t0, { unblockable: true });
+      } });
+      room.schedule(p.tel * 0.55, () => !b.dead && room.addArea({ team: "m", shape: "ring", x: b.x, y: b.y, r: p.inner, r2: p.outer, tel: p.tel, fire: (t0) => {
+        fxAt(p.fx ?? "shadow/dark-explosion", b.x, b.y, 1.2); room.ev({ e: "shake", v: 5 });
+        hitIn((q) => { const d = Math.hypot(q.x - b.x, q.y - b.y); return d >= p.inner + SH && d <= p.outer - SH; }, pw, t0, { unblockable: true });
+      } }));
+      b.pattern.end = now + p.tel * 1.55 + 0.3;
+      break;
+    }
+    case "spiral": {
+      // 나선 탄막: 경고 뒤 팔 3개로 도는 탄
+      const delay = 1.0;
+      room.ev({ e: "anim", id: b.id, a: "cast" });
+      room.ev({ e: "warn", id: b.id, k: "spiral", d: delay, n: p.arms * 4, w: 1, x: b.x | 0, y: (b.y - 10) | 0 });
+      const base = Math.random() * TAU, dir = Math.random() < 0.5 ? 1 : -1, n = Math.round(p.dur / 0.12);
+      for (let k = 0; k < n; k++) room.schedule(delay + k * 0.12, () => {
+        if (b.dead) return;
+        for (let arm = 0; arm < p.arms; arm++) {
+          const a = base + dir * k * 0.33 + (arm * TAU) / p.arms;
+          room.addProjectile({ team: "m", src: b.id, x: b.x, y: b.y - 10, vx: Math.cos(a) * p.speed, vy: Math.sin(a) * p.speed, range: 480, r: BOSS_HIT.proj, pierce: 0, fx: p.fx, scale: 0.4, onHit: (q, t1) => hitTarget(room, b, q, pw, t1) });
+        }
+      });
+      b.pattern.end = now + delay + p.dur + 0.2;
+      break;
+    }
+    case "lanes": {
+      // 줄 공격: 보스 앞쪽으로 평행한 줄 여러 개, 한 줄만 비어 있음
+      const a = Math.atan2(t.y - b.y, t.x - b.x), nx = -Math.sin(a), ny = Math.cos(a);
+      const safe = Math.floor(Math.random() * p.n);
+      for (let k = 0; k < p.n; k++) {
+        if (k === safe) continue;
+        const off = (k - (p.n - 1) / 2) * p.width;
+        const sx = b.x + nx * off - Math.cos(a) * 60, sy = b.y + ny * off - Math.sin(a) * 60;
+        room.addArea({ team: "m", shape: "r", x: sx, y: sy, ang: a, l: p.len, w: p.width - 4, tel: p.tel, fire: (t0) => {
+          fxAt(p.fx, sx + Math.cos(a) * p.len * 0.5, sy + Math.sin(a) * p.len * 0.5, 0.6);
+          hitIn((q) => { const dx = q.x - sx, dy = q.y - sy, al = dx * Math.cos(a) + dy * Math.sin(a), ac = Math.abs(-dx * Math.sin(a) + dy * Math.cos(a)); return al > 0 && al < p.len && ac < (p.width - 4) / 2 - 2; }, pw, t0, { unblockable: true });
+        } });
+      }
+      b.pattern.end = now + p.tel + 0.3;
       break;
     }
     case "beam": {
@@ -398,7 +496,7 @@ function startPattern(room, b, p, t, now) {
           hitIn((q) => {
             const dx = q.x - b.x, dy = q.y - b.y;
             const along = dx * Math.cos(a) + dy * Math.sin(a), across = Math.abs(-dx * Math.sin(a) + dy * Math.cos(a));
-            return along > 0 && along < len && across < p.width / 2 + q.r;
+            return along > 0 && along < len && across < p.width / 2 - 2;
           }, pw, tn, { unblockable: true });
         });
       }

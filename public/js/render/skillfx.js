@@ -4,6 +4,7 @@
 import { G } from "../game.js";
 import { othersScale } from "../quality.js";
 import { SKILLS } from "/shared/skills.js";
+import { PLAYER_HIT } from "/shared/constants.js";
 import { profTier } from "/shared/prof.js";
 import { skillColor } from "../ui/icons.js";
 import { addGlow } from "./glow.js";
@@ -74,7 +75,7 @@ export function castFx(e, ent) {
   if (e.id !== G.you) { const k = othersScale(); if (k < 0.5) { tier = Math.min(tier, k < 0.3 ? 1 : 2); pt = 0; } if (Math.random() > k + 0.2) return; }
   // 근접 공격: 실제로 닿는 거리(사거리 + 적 몸 크기)에 휘두름 궤적을 그림 → 보이는 것 = 맞는 범위
   const mel = (sk.steps ?? []).find((s) => s.do === "melee");
-  if (mel && ent) FX.sweeps.push({ id: e.id, r: mel.range + 10, arc: mel.arc ?? 60, a: (e.a ?? 0) / 1000, t0: now(), life: 0.18, col: sk.kind === "basic" ? "#ffffff" : skillColor(sk) });
+  if (mel && ent) FX.sweeps.push({ id: e.id, r: mel.range * PLAYER_HIT.melee + PLAYER_HIT.meleeReach, arc: (mel.arc ?? 60) + PLAYER_HIT.meleeArc, a: (e.a ?? 0) / 1000, t0: now(), life: 0.18, col: sk.kind === "basic" ? "#ffffff" : skillColor(sk) });
   const el = elemColors(sk);
   const col = el?.[0] ?? skillColor(sk), hi = el?.[1] ?? lighten(col, 0.55);
   const x = ent?.rx ?? e.x, y = ent?.ry ?? e.y;

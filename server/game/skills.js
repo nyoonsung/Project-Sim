@@ -6,7 +6,7 @@ import { CLASS_INFO, stageOf } from "../../shared/classes.js";
 import { moveCircle, circleHitsWall, lineOfSight } from "../../shared/move.js";
 import { dealDamage, heal, giveShield, applyStatus, addGroggy, isHardCC, buffSum, angDiff } from "./combat.js";
 
-import { BASIC_SPEED } from "../../shared/constants.js";
+import { BASIC_SPEED, PLAYER_HIT } from "../../shared/constants.js";
 const RES_NAME = { mp: "MP", ki: "내력", holy: "성광", parts: "부품", gap: "틈" };
 const RES_MAX = { ki: 100, holy: 100, parts: 3, gap: 3 };
 
@@ -281,18 +281,18 @@ function strike(room, u, t, st, ctx, now, extra = {}) {
 }
 
 // 근접 판정 여유: 몬스터는 화면에서 약간 늦게 보이므로(보간) 사거리 +10px, 각도는 몸 두께만큼 넓게
-const MELEE_REACH = 10;
+const MELEE_REACH = PLAYER_HIT.meleeReach;
 function inArc(u, t, range, arc, aim, extraDeg = 0) {
   const d = Math.hypot(t.x - u.x, t.y - u.y);
   if (d - t.r > range + MELEE_REACH) return false;
   if (d < t.r + 10) return true;
   const body = Math.asin(Math.min(1, (t.r + 6) / d)); // 몸의 가장자리만 걸려도 맞음
-  return angDiff(Math.atan2(t.y - u.y, t.x - u.x), aim) <= (arc * Math.PI) / 360 + body + (extraDeg * Math.PI) / 180;
+  return angDiff(Math.atan2(t.y - u.y, t.x - u.x), aim) <= ((arc + PLAYER_HIT.meleeArc) * Math.PI) / 360 + body + (extraDeg * Math.PI) / 180;
 }
 
 const STEP = {
   melee(room, u, ctx, st, now) {
-    const range = st.range * (1 + buffSum(u, "range") * 0.3);
+    const range = st.range * PLAYER_HIT.melee * (1 + buffSum(u, "range") * 0.3); // 근접 사거리 대폭 상향
     const fire = (t0, hitIdx) => {
       const near = (a, b) => Math.hypot(a.x - u.x, a.y - u.y) - Math.hypot(b.x - u.x, b.y - u.y);
       const foes = enemies(room, u).filter((t) => lineOfSight(room.map, u.x, u.y, t.x, t.y));
@@ -311,7 +311,7 @@ const STEP = {
     if (st.grantStanceShift) u.stanceShift = true;
   },
   circle(room, u, ctx, st, now) {
-    const list = enemies(room, u).filter((t) => Math.hypot(t.x - u.x, t.y - u.y) - t.r <= st.radius).slice(0, st.max ?? 99);
+    const list = enemies(room, u).filter((t) => Math.hypot(t.x - u.x, t.y - u.y) - t.r <= st.radius * PLAYER_HIT.area).slice(0, st.max ?? 99);
     room.ev({ e: "anim", id: u.id, a: ctx.sk.anim ?? "spin" });
     if (ctx.sk.fx?.swing) room.ev({ e: "fx", fx: ctx.sk.fx.swing, x: u.x | 0, y: u.y | 0, a: Math.round(ctx.aim * 1000), at: u.id });
     if (ctx.sk.fx?.area) room.ev({ e: "fx", fx: ctx.sk.fx.area, x: u.x | 0, y: u.y | 0, s: st.radius > 80 ? null : 0.7, pal: ctx.sk.fx.palette ?? null });
@@ -331,7 +331,7 @@ const STEP = {
       const a = (st.burst ? Math.atan2(ctx.ay - u.y, ctx.ax - u.x) : ctx.aim) + spread + (st.burst && k ? (Math.random() - 0.5) * 0.06 : 0);
       room.addProjectile({
         team: u.team, src: u.id, x: u.x + Math.cos(a) * 10, y: u.y - 8 + Math.sin(a) * 10, vx: Math.cos(a) * st.speed, vy: Math.sin(a) * st.speed,
-        range, r: st.radius ?? 5, pierce: st.pierce ?? 0, fx: ctx.sk.fx?.proj, pal: ctx.sk.fx?.palette ?? null, scale: ctx.sk.fx?.scale ?? null,
+        range, r: (st.radius ?? 5) + PLAYER_HIT.proj, pierce: st.pierce ?? 0, fx: ctx.sk.fx?.proj, pal: ctx.sk.fx?.palette ?? null, scale: ctx.sk.fx?.scale ?? null,
         onHit: (t, t1, p) => {
           strike(room, u, t, st, ctx, t1, { travel: p.travelled / p.range });
           if (st.explode) explode(room, u, ctx, st, p.x, p.y, t1, t.id);
@@ -357,7 +357,7 @@ const STEP = {
         if (ctx.sk.fx?.area && (first || st.scatter || (ctx.sk.fx.tick == null))) room.ev({ e: "fx", fx: ctx.sk.fx.area, x: cx | 0, y: cy | 0, s: ctx.sk.fx.scale ?? null, pal: ctx.sk.fx.palette ?? null });
         else if (ctx.sk.fx?.tick) room.ev({ e: "fx", fx: "impacts/hit-spark", x: (cx + (Math.random() - 0.5) * st.radius) | 0, y: (cy + (Math.random() - 0.5) * st.radius) | 0 });
         first = false;
-        const list = enemies(room, u).filter((t) => Math.hypot(t.x - cx, t.y - cy) - t.r <= st.radius).slice(0, st.max ?? 99);
+        const list = enemies(room, u).filter((t) => Math.hypot(t.x - cx, t.y - cy) - t.r <= st.radius * PLAYER_HIT.area).slice(0, st.max ?? 99);
         for (const t of list) strike(room, u, t, st, ctx, t0);
         if (st.healAllies) for (const p of allies(room, u)) if (Math.hypot(p.x - cx, p.y - cy) <= st.radius + 20) heal(room, u, p, healPower(u) * st.healAllies, t0);
       },
