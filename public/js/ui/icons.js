@@ -67,6 +67,8 @@ function kindOf(sk) {
 const urls = new Map();
 /** 스킬 아이콘 이미지 주소 (버튼용) */
 export function skillIconURL(sk) {
+  // 무기별 기본 공격은 그 무기 그림으로
+  if (!urls.has(sk.id) && sk.weaponBasic) urls.set(sk.id, itemIcon({ slot: "weapon", type: sk.weaponBasic, variant: 0, rarity: "일반", ilvl: 21 }).toDataURL());
   if (!urls.has(sk.id)) urls.set(sk.id, skillIcon(sk).toDataURL());
   return urls.get(sk.id);
 }

@@ -104,7 +104,7 @@ ok(bf.objects.some((o) => o.id === "town"), "보스 층에도 마을 귀환 포�
   for (let k = 0; k < 40; k++) { w2.clock += 0.05; r4.tick(); [...r4.units.values()].filter((u) => u.type === "m").forEach((m) => { m.x = tp4.x + 60; m.y = tp4.y; }); }
   ok(!w2.town && r4.players.has(f.id), "근처에 적이 있으면(전투 중) 마을 귀환 포탈이 안 탐");
   // 활 = 활쏘기, 지팡이 = 마력탄
-  ok(adventurerBasic("bow") === "c_shot" && adventurerBasic("staff") === "c_bolt" && adventurerBasic("sword") === "c_thrust" && SKILLS.c_shot.steps[0].do === "proj", "모험가가 활을 들면 기본 공격이 활쏘기(원거리)");
+  ok(adventurerBasic("bow") === "c_shot" && adventurerBasic("staff") === "c_bolt" && adventurerBasic("sword") === "c_thrust" && adventurerBasic("club") === "c_bash" && adventurerBasic("dagger") === "c_stab" && adventurerBasic(null) === "c_thrust" && SKILLS.c_shot.steps[0].do === "proj", "모험가가 활을 들면 기본 공격이 활쏘기(원거리)");
   // 방어구 종류별 차이
   const a0 = baseStats("armor", null, 10, 0, 0), a2 = baseStats("armor", null, 10, 0, 2);
   ok(a2.def > a0.def && a0.move > 0 && a2.move < 0 && VARIANT_TRAITS.armor.length === 4, `가죽(방어 ${a0.def}, 이속 +4%) ≠ 판금(방어 ${a2.def}, 이속 -3%)`);

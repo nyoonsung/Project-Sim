@@ -20,6 +20,22 @@ add("common", [
   { id: "c_bolt", name: "마력탄", grade: "일반", kind: "basic", aspd: 0.85, aim: "dir", anim: "cast", weaponBasic: "staff",
     desc: "지팡이를 들었을 때의 기본 공격. 작은 마력 구슬을 쏜다.", limit: "근접 찌르기보다 한 발 피해는 낮다.",
     fx: { proj: "arcane/arcane-orb", scale: 0.45, hit: "arcane/mana-burst" }, steps: [{ do: "proj", speed: 400, range: 240, pow: 0.55, radius: 6 }] },
+  // 근접 무기별 기본 공격 (장검·맨손은 찌르기)
+  { id: "c_bash", name: "몽둥이 휘두르기", grade: "일반", kind: "basic", aspd: 0.8, aim: "dir", anim: "smash", weaponBasic: "club",
+    desc: "몽둥이를 들었을 때의 기본 공격. 앞쪽을 넓게 휘둘러 최대 2명을 때리고 살짝 밀어낸다.", limit: "찌르기보다 느리고 한 대 피해는 조금 낮다.",
+    fx: { swing: "melee/spear-sweep", hit: "impacts/blunt-hit" }, steps: [{ do: "melee", range: 44, arc: 90, pow: 0.62, max: 2, knock: 8 }] },
+  { id: "c_smite", name: "메이스 강타", grade: "일반", kind: "basic", aspd: 0.85, aim: "dir", anim: "smash", weaponBasic: "mace",
+    desc: "메이스를 들었을 때의 기본 공격. 한 대상을 묵직하게 내려친다.", limit: "느린 대신 한 방이 세다. 한 명만 맞힌다.",
+    fx: { hit: "impacts/blunt-hit", hitScale: 0.8 }, steps: [{ do: "melee", range: 42, arc: 50, pow: 0.82, max: 1 }] },
+  { id: "c_jab", name: "너클 연타", grade: "일반", kind: "basic", aspd: 0.55, aim: "dir", anim: "punch", weaponBasic: "knuckle",
+    desc: "너클을 들었을 때의 기본 공격. 빠르게 두 번 주먹을 꽂는다.", limit: "사거리가 가장 짧다.",
+    fx: { hit: "impacts/hit-spark" }, steps: [{ do: "melee", range: 36, arc: 50, pow: 0.33, max: 1, hits: 2, gap: 0.12 }] },
+  { id: "c_stab", name: "단검 찌르기", grade: "일반", kind: "basic", aspd: 0.5, aim: "dir", anim: "stab", weaponBasic: "dagger",
+    desc: "단검을 들었을 때의 기본 공격. 아주 빠르게 찌르고 치명타 확률이 10%p 높다.", limit: "사거리가 짧고 한 대 피해가 낮다.",
+    fx: { swing: "melee/thrust", hit: "impacts/hit-spark" }, steps: [{ do: "melee", range: 38, arc: 40, pow: 0.5, max: 1, critBonus: 0.1 }] },
+  { id: "c_pound", name: "망치 내려찍기", grade: "일반", kind: "basic", aspd: 0.95, aim: "dir", anim: "smash", weaponBasic: "hammer",
+    desc: "망치를 들었을 때의 기본 공격. 앞쪽 바닥을 내려찍어 최대 3명을 맞힌다.", limit: "가장 느린 기본 공격.",
+    fx: { hit: "impacts/ground-slam", hitScale: 0.5 }, steps: [{ do: "melee", range: 50, arc: 110, pow: 0.85, max: 3 }] },
   { id: "c_slash", name: "베기", grade: "일반", kind: "active", cd: 2, cost: { mp: 2 }, aim: "dir", anim: "slash",
     desc: "전방을 가로질러 공격하는 기본 근접 기술.", limit: "찌르기보다 범위가 넓은 대신 단일 대상 피해가 낮다.",
     fx: { swing: "melee/sword-slash", hit: "impacts/hit-spark" }, steps: [{ do: "melee", range: 46, arc: 120, pow: 0.6 }] },
@@ -404,7 +420,8 @@ export function unlockStage(skill, stagesInClass) {
 export function skillsOf(cls) {
   return S.filter((s) => s.cls === cls && !s.weaponBasic);
 }
-/** 모험가 기본 공격: 든 무기에 따라 (활 → 활쏘기, 지팡이 → 마력탄, 그 외 → 찌르기) */
+/** 모험가 기본 공격: 든 무기에 따라 달라짐 (장검·맨손 → 찌르기) */
+export const WEAPON_BASIC = { bow: "c_shot", staff: "c_bolt", club: "c_bash", mace: "c_smite", knuckle: "c_jab", dagger: "c_stab", hammer: "c_pound", sword: "c_thrust" };
 export function adventurerBasic(weaponType) {
-  return weaponType === "bow" ? "c_shot" : weaponType === "staff" ? "c_bolt" : "c_thrust";
+  return WEAPON_BASIC[weaponType] ?? "c_thrust";
 }

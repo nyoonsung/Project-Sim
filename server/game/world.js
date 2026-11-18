@@ -511,7 +511,7 @@ export class World {
     if (c.inv.length >= INV_SIZE) return s.notice("가방이 가득 찼어요.");
     c.inv.push(c.equip[slot]);
     c.equip[slot] = null;
-    if (c.cls === "adventurer" && slot === "weapon") c.skills[0] = "c_thrust";
+    if (c.cls === "adventurer" && slot === "weapon") c.skills[0] = adventurerBasic(null);
     refreshStats(s.unit);
     s.unit.room?.ev({ e: "add", ...s.unit.room.describe(s.unit) });
     this.sendChar(s);
