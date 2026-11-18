@@ -170,11 +170,13 @@ export function floorKind(floor) {
 const bend = (base, late, f) => f <= 60 ? Math.pow(base, f - 1) : Math.pow(base, 59) * Math.pow(late, f - 60);
 // 추가 난이도: 층마다 체력 +2.5%·공격력 +1.6%씩 더 강해짐 (1층 그대로, 10층 ×1.23/×1.14, 50층 ×2.2/×1.8, 100층 ×3.5/×2.6), 이동 속도 최대 +25%
 export const diffMul = (f) => ({ hp: 1 + 0.025 * (f - 1), dmg: 1 + 0.016 * (f - 1), speed: Math.min(1.25, 1 + 0.003 * (f - 1)) });
+// 95층부터는 너무 어렵다는 의견 → 체력·공격력 75%
+export const LATE_EASE = (f) => (f >= 95 ? 0.75 : 1);
 export function floorScale(floor) {
-  const d = diffMul(floor);
+  const d = diffMul(floor), e = LATE_EASE(floor);
   return {
-    hp: bend(1.05, 1.04, floor) * d.hp,
-    dmg: bend(1.04, 1.027, floor) * d.dmg,
+    hp: bend(1.05, 1.04, floor) * d.hp * e,
+    dmg: bend(1.04, 1.027, floor) * d.dmg * e,
     speed: d.speed,
     xp: Math.pow(1.045, floor - 1),
     gold: Math.pow(1.04, floor - 1),
