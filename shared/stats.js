@@ -5,7 +5,7 @@ import { gearTotals } from "./items.js";
 import { SKILLS } from "./skills.js";
 
 // 직업 피해 배율 (궁수 2.5배 상향)
-export const CLASS_DMG = { archer: 2.5 };
+export const CLASS_DMG = { archer: 1.8 }; // 궁수 상향 2.5배 → 1.8배로 조정
 const MOVE_MUL = { adventurer: 1, sword: 1, fist: 1.02, archer: 1.02, rogue: 1.12, mage: 0.97, priest: 0.98, smith: 0.92 };
 
 /** 장착한 패시브 스킬의 상시 능력치 */

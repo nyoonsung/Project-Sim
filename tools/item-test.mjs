@@ -55,7 +55,7 @@ World.prototype.repair.call(fake("smithy"), s2);
 ok(wpn.dur === wpn.maxDur && s2.char.gold === 5, `수선 완료 — "${notes.at(-1)}"`);
 ok((s2.unit.atk ?? s2.unit.stats?.atk) >= atkB2, "수선 후 공격력 회복");
 
-// 7) 모든 장비 내구도, 강화 1단계당 부위별 +1%, 궁수 2.5배
+// 7) 모든 장비 내구도, 강화 1단계당 부위별 +1%, 궁수 1.8배
 for (const slot of ["weapon", "offhand", "helmet", "armor", "trinket"]) {
   let it; for (let i = 0; i < 80 && it?.slot !== slot; i++) it = rollItem(Math.random, { ilvl: 10, rarity: "영웅" });
   ok(it.dur === it.maxDur && it.maxDur === 140, `${slot} 새 장비 내구도 ${it.dur}/${it.maxDur}`);
@@ -65,7 +65,7 @@ for (const slot of ["weapon", "offhand", "helmet", "armor", "trinket"]) {
 }
 const { deriveStats } = await import("../shared/stats.js");
 const arch = deriveStats({ ...newCharacter("궁"), cls: "archer", level: 10 }), swd = deriveStats({ ...newCharacter("검"), cls: "sword", level: 10 });
-ok(arch.classDmg === 2.5 && swd.classDmg === 1, "궁수 피해 배율 ×2.5");
+ok(arch.classDmg === 1.8 && swd.classDmg === 1, "궁수 피해 배율 ×1.8");
 const hpA = deriveStats({ ...newCharacter("h"), equip: { helmet: { slot: "helmet", variant: 1, rarity: "일반", ilvl: 1, enh: 0, base: { def: 2, hp: 10 }, opts: [] } } }).maxHp;
 const hpB = deriveStats({ ...newCharacter("h"), equip: { helmet: { slot: "helmet", variant: 1, rarity: "일반", ilvl: 1, enh: 20, base: { def: 2, hp: 10 }, opts: [] } } }).maxHp;
 ok(hpB / hpA > 1.19, `투구 +20강 최대 HP ${hpA} → ${hpB}`);
@@ -92,3 +92,15 @@ W9.clock += 1; R9.tick();
 R9.cast(u9, { slot: 0, ax: u9.x + Math.cos(aimAng) * 60, ay: u9.y + Math.sin(aimAng) * 60 });
 W9.clock += 0.05; R9.tick(); R9.flush();
 ok(evs9.some((e) => e.e === "dmg" && e.id === m9.id), "찌르기 조준이 50° 빗나가도 근처 적에 맞음 (조준 보정)");
+
+// 10) 강화 실패 → 1단계 하락
+{
+  const se = mk(); se.char.gold = 1e12;
+  let it; for (let i = 0; i < 60 && it?.slot !== "armor"; i++) it = rollItem(Math.random, { ilvl: 5, rarity: "일반" });
+  it.uid = 777; it.enh = 98; se.char.inv = [it];
+  const fakeW = { nearNpc: () => true, sendChar() {}, broadcastSys() {}, save() {} };
+  let seen = null;
+  se.send = (m) => { if (m.t === "enh") seen = m; };
+  for (let k = 0; k < 40 && seen?.result !== "fail"; k++) { it.enh = 98; World.prototype.enhance.call(fakeW, se, 777); }
+  ok(seen?.result === "fail" && it.enh === 97, `강화 실패 시 +98 → +${it.enh} (1단계 하락)`);
+}
