@@ -140,6 +140,9 @@ export class World {
   }
   sendChar(s) {
     if (syncMythic(s.char) && s.unit) refreshStats(s.unit); // 새로 얻은 신화도 내 레벨로
+    // 파티원 정보(레벨·직업·체크포인트)도 최신으로
+    const pp = this.partyOf(s);
+    if (pp) { const k = `${s.char.level}|${s.char.cls}|${s.char.checkpoint}|${s.char.best}`; if (k !== s.partyKey) { s.partyKey = k; this.sendParty(pp); } }
     s.dirty = true; s.send({ t: "char", char: this.publicChar(s) });
   }
   sendMe(s) {
@@ -245,13 +248,18 @@ export class World {
       if (p && p.members.size >= MAX_PARTY) return s.notice("파티는 최대 4명이에요.");
       if (s.unit.room !== this.town || o.unit.room !== this.town) return s.notice("파티 초대는 마을에서만 할 수 있어요.");
       if (p && p.leader !== s.userId) return s.notice("파티장만 초대할 수 있어요.");
+      // 같은 사람에게 연달아 초대 금지(5초), 초대는 60초 뒤 만료
+      const at = o.inviteAt?.get(s.userId) ?? 0;
+      if (Date.now() - at < 5000) return s.notice("방금 초대했어요. 잠시 기다려 주세요.");
+      (o.inviteAt ??= new Map()).set(s.userId, Date.now());
       o.invites.add(s.userId);
       o.send({ t: "invite", from: s.name });
       s.notice(`${o.name}님에게 파티 초대를 보냈어요.`);
     } else if (op === "accept" || op === "decline") {
       const from = [...this.sessions.values()].find((x) => x.name.toLowerCase() === String(name ?? "").toLowerCase());
-      if (!from || !s.invites.has(from.userId)) return;
+      if (!from || !s.invites.has(from.userId)) return s.notice("초대가 만료됐거나 상대가 접속해 있지 않아요.");
       s.invites.delete(from.userId);
+      if (Date.now() - (s.inviteAt?.get(from.userId) ?? 0) > 60_000) return s.notice("초대가 만료됐어요. (60초)");
       if (op === "decline") return from.notice(`${s.name}님이 초대를 거절했어요.`);
       if (s.partyId) return s.notice("이미 파티에 있어요.");
       if (s.unit.room !== this.town || from.unit.room !== this.town) return s.notice("마을에서만 파티에 들어갈 수 있어요.");
@@ -260,7 +268,9 @@ export class World {
       if (party.members.size >= MAX_PARTY) return s.notice("파티가 가득 찼어요.");
       party.members.add(s.userId);
       s.partyId = party.id;
+      s.invites.clear(); // 다른 초대들은 정리
       this.sendParty(party);
+      for (const id of party.members) this.sessions.get(id)?.notice(id === s.userId ? `${from.name}님의 파티에 들어갔어요.` : `${s.name}님이 파티에 들어왔어요.`);
     } else if (op === "leave") this.leaveParty(s);
     else if (op === "kick" && p && p.leader === s.userId) {
       const o = [...p.members].map((id) => this.sessions.get(id)).find((x) => x?.name === name);

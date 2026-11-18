@@ -113,10 +113,18 @@ const ui = {
   chat: HUD.chatLine,
   onParty() { HUD.updateParty(); WIN.refreshAll(); },
   invite(from) {
-    const box = h("div", { class: "invite" }, h("div", { text: `${from}님이 파티에 초대했어요.` }),
-      h("div", { class: "flexrow" }, h("button", { class: "btn small primary", onclick: () => { send({ t: "party", op: "accept", name: from }); box.remove(); } }, "수락"), h("button", { class: "btn small", onclick: () => { send({ t: "party", op: "decline", name: from }); box.remove(); } }, "거절")));
+    // 같은 사람의 초대는 하나만, 화면 위쪽 가운데(스킬 버튼·미니맵을 가리지 않게), 30초 카운트다운, PC는 Y/N
+    document.querySelector(`.invite[data-from="${CSS.escape(from)}"]`)?.remove();
+    const left = h("span", { class: "inv-left", text: "30" });
+    const done = () => { clearInterval(tm); box.remove(); };
+    const answer = (ok) => { send({ t: "party", op: ok ? "accept" : "decline", name: from }); done(); };
+    const box = h("div", { class: "invite" }, h("div", { text: `${from}님이 파티에 초대했어요. ` }, left, "초"),
+      h("div", { class: "flexrow" }, h("button", { class: "btn small primary", onclick: () => answer(true) }, G.touch ? "수락" : "수락 (Y)"), h("button", { class: "btn small", onclick: () => answer(false) }, G.touch ? "거절" : "거절 (N)")));
+    box.dataset.from = from;
+    box._answer = answer;
     $("#ui").append(box);
-    setTimeout(() => box.remove(), 30000);
+    let n = 30;
+    const tm = setInterval(() => { n--; left.textContent = String(n); if (n <= 0) done(); }, 1000);
   },
   announce(text) { const a = $("#announce"); a.classList.toggle("hidden", !text); a.textContent = text ? "📢 " + text : ""; },
   kicked(why) { G.kickedWhy = why; },
@@ -265,6 +273,7 @@ function bindInput() {
     if (e.code === "Enter") { document.body.classList.add("chat-open"); $("#chat").classList.remove("collapsed-tmp"); chat.focus(); e.preventDefault(); return; }
     if (e.code === "Escape") { const w = openWins(); if (w.length) closeWin(w[w.length - 1]); return; }
     if ((e.code === "KeyY" || e.code === "KeyN") && document.querySelector("#vote .vb")) { send({ t: "vote", ok: e.code === "KeyY" }); return; }
+    if ((e.code === "KeyY" || e.code === "KeyN") && document.querySelector(".invite")) { const b = [...document.querySelectorAll(".invite")].at(-1); b._answer?.(e.code === "KeyY"); return; }
     if (G.capturingKey) return; // 키 설정 창에서 새 키를 기다리는 중
     const si = slotForCode(e.code), pi = potionForCode(e.code);
     if (e.repeat && si < 0) return;
