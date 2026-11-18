@@ -1,5 +1,6 @@
 // 클라이언트 게임 상태: 서버 메시지 반영, 내 캐릭터 이동 예측, 입력 전송
 import { applyInput } from "/shared/move.js";
+import { warmSkill } from "./render/world.js";
 import { KEYS } from "./keys.js";
 import { castFx, hitFx, profUpFx } from "./render/skillfx.js";
 import { profOf, profCost } from "/shared/prof.js";
@@ -150,7 +151,7 @@ function onEvent(e) {
       if (ent.anim?.local && ent.anim.name === e.a && now() - ent.anim.t0 < 0.45) { ent.anim.local = false; ent.anim.n = e.n ?? 1; }
       else ent.anim = { name: e.a, t0: now(), n: e.n ?? 1 };
     } break;
-    case "cast": if (ent) { ent.castAng = e.a / 1000; } if (e.id === G.you) G.ui.flashSkill(e.s); castFx(e, ent); break;
+    case "cast": if (ent) { ent.castAng = e.a / 1000; } if (e.id === G.you) G.ui.flashSkill(e.s); else warmSkill(e.s); castFx(e, ent); break;
     case "proflv": {
       profUpFx(e, ent);
       if (e.id === G.you) { floater((ent?.rx ?? e.x), (ent?.ry ?? e.y) - 50, `${SKILLS[e.s]?.name ?? ""} 숙련 Lv.${e.lv}!`, "crit"); sfx("level"); G.ui.onProf?.(e.s); }

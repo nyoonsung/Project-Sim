@@ -2,6 +2,7 @@
 //  - 바닥 충격파 고리, 회전하는 룬 진, 빛 기둥, 궤적 섬광, 가산 합성 불꽃, 숙련 오라
 //  - 모두 월드 좌표, 'lighter' 합성으로 어둠 속에서 빛나게, 입자 수 상한으로 최적화
 import { G } from "../game.js";
+import { othersScale } from "../quality.js";
 import { SKILLS } from "/shared/skills.js";
 import { profTier } from "/shared/prof.js";
 import { skillColor } from "../ui/icons.js";
@@ -11,8 +12,19 @@ import { addTrauma } from "../feel.js";
 const now = () => performance.now() / 1000;
 const GT = { 일반: 0, 희귀: 1, 영웅: 2, 전설: 3 };
 const FX = { rings: [], runes: [], pillars: [], streaks: [], motes: [], stars: [], sweeps: [] };
-const MAX_MOTES = 420;
+export const SFX_LIMITS = { motes: 420 };
 
+const beams = new Map();
+function beam(col) {
+  let c = beams.get(col);
+  if (c) return c;
+  c = new OffscreenCanvas(32, 1);
+  const g = c.getContext("2d"), gr = g.createLinearGradient(0, 0, 32, 0);
+  gr.addColorStop(0, "rgba(0,0,0,0)"); gr.addColorStop(0.5, col); gr.addColorStop(1, "rgba(0,0,0,0)");
+  g.fillStyle = gr; g.fillRect(0, 0, 32, 1);
+  beams.set(col, c);
+  return c;
+}
 /** 스킬의 연출 등급 0~4 */
 export function fxTier(sk) {
   if (!sk) return 0;
@@ -28,7 +40,7 @@ function lighten(hex, k) {
 }
 function burst(x, y, n, cols, spd = 140, opt = {}) {
   for (let i = 0; i < n; i++) {
-    if (FX.motes.length >= MAX_MOTES) FX.motes.shift();
+    if (FX.motes.length >= SFX_LIMITS.motes) FX.motes.shift();
     const a = opt.dir != null ? opt.dir + (Math.random() - 0.5) * (opt.spread ?? 1.4) : Math.random() * Math.PI * 2;
     const v = spd * (0.35 + Math.random() * 0.9);
     FX.motes.push({ x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v * (opt.flat ?? 0.6) - (opt.lift ?? 30), g: opt.g ?? 60, t: 0,
@@ -41,7 +53,9 @@ function ring(x, y, r0, r1, col, life, w = 2, k = 0.5) { FX.rings.push({ x, y, r
 export function castFx(e, ent) {
   const sk = SKILLS[e.s];
   if (!sk) return;
-  const tier = fxTier(sk), pt = profTier(e.pl ?? 0);
+  let tier = fxTier(sk), pt = profTier(e.pl ?? 0);
+  // 다른 사람 스킬: 품질·설정에 따라 연출 줄임 (내 스킬은 그대로)
+  if (e.id !== G.you) { const k = othersScale(); if (k < 0.5) { tier = Math.min(tier, k < 0.3 ? 1 : 2); pt = 0; } if (Math.random() > k + 0.2) return; }
   // 근접 공격: 실제로 닿는 거리(사거리 + 적 몸 크기)에 휘두름 궤적을 그림 → 보이는 것 = 맞는 범위
   const mel = (sk.steps ?? []).find((s) => s.do === "melee");
   if (mel && ent) FX.sweeps.push({ id: e.id, r: mel.range + 10, arc: mel.arc ?? 60, a: (e.a ?? 0) / 1000, t0: now(), life: 0.18, col: sk.kind === "basic" ? "#ffffff" : skillColor(sk) });
@@ -90,6 +104,7 @@ export function castFx(e, ent) {
 export function hitFx(ent, e) {
   const sk = e.sk && SKILLS[e.sk];
   if (!sk || !ent) return;
+  if (FX.motes.length > SFX_LIMITS.motes * 0.8) return; // 입자가 많으면 적중 불꽃은 생략
   const tier = fxTier(sk);
   if (tier < 2 && !e.c) return;
   const col = skillColor(sk), hi = lighten(col, 0.6);
@@ -179,12 +194,9 @@ export function drawSkillFx(ctx, cx, cy) {
   for (const p of FX.pillars) {
     const k = (t - p.t0) / p.life, a = k < 0.12 ? k / 0.12 : 1 - (k - 0.12) / 0.88;
     const x = p.x - cx, y = p.y - cy, w = p.w * (1 - k * 0.4), h = 190;
-    const g = ctx.createLinearGradient(x - w, 0, x + w, 0);
-    g.addColorStop(0, "rgba(0,0,0,0)"); g.addColorStop(0.5, p.col); g.addColorStop(1, "rgba(0,0,0,0)");
-    ctx.globalAlpha = a * 0.7; ctx.fillStyle = g; ctx.fillRect(x - w, y - h, w * 2, h);
-    const g2 = ctx.createLinearGradient(x - w * 0.35, 0, x + w * 0.35, 0);
-    g2.addColorStop(0, "rgba(0,0,0,0)"); g2.addColorStop(0.5, p.hi); g2.addColorStop(1, "rgba(0,0,0,0)");
-    ctx.globalAlpha = a; ctx.fillStyle = g2; ctx.fillRect(x - w * 0.35, y - h, w * 0.7, h);
+    // 색마다 한 번 만든 빛줄기 그림을 늘려 찍음 (매 프레임 그라디언트 생성 X)
+    ctx.globalAlpha = a * 0.7; ctx.drawImage(beam(p.col), x - w, y - h, w * 2, h);
+    ctx.globalAlpha = a; ctx.drawImage(beam(p.hi), x - w * 0.35, y - h, w * 0.7, h);
   }
   // 빛살 별
   for (const s of FX.stars) {

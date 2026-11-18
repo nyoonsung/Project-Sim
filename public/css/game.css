@@ -359,7 +359,7 @@ body.touch #rotate-msg { display: none !important; }
 body.touch.portrait #view { top: calc(66px + env(safe-area-inset-top)); left: 0; transform: none; }
 body.touch.portrait #orbs { grid-template-columns: 1fr 1fr; right: calc(8px + env(safe-area-inset-right)); width: auto; }
 body.touch.portrait #menu-buttons { top: calc(34px + env(safe-area-inset-top)); left: calc(6px + env(safe-area-inset-left)); right: auto; flex-wrap: nowrap; }
-body.touch.portrait #menu-buttons button { width: calc((100vw - 30px) / 10); max-width: 40px; height: 28px; font-size: 14px; }
+body.touch.portrait #menu-buttons button { width: calc((100vw - 32px) / 11); max-width: 40px; height: 28px; font-size: 14px; }
 body.touch.portrait #minimap { top: calc(70px + env(safe-area-inset-top)); right: 4px; width: 84px; height: 64px; opacity: 0.85; }
 body.touch.portrait #topbar { top: calc(70px + env(safe-area-inset-top)); }
 body.touch.portrait #buffs { top: calc(92px + env(safe-area-inset-top)); }
@@ -394,7 +394,6 @@ body.chat-open #chat.collapsed #chat-log { display: block; }
   body:not(.touch) #orbs { grid-template-columns: 200px 200px; }
 }
 body.touch .desk-only { display: none !important; }
-body.touch #menu-buttons [data-win=keys] { display: none; }
   .tt-trait { color: #9ad0ff; font-size: 11px; }
 .codex-t { width: 100%; border-collapse: collapse; font-size: 11px; margin: 4px 0; }
 .codex-t th, .codex-t td { padding: 3px 4px; text-align: center; border-bottom: 1px solid #2a2440; }
@@ -409,3 +408,5 @@ body.touch #wallet { position: fixed; right: calc(282px + env(safe-area-inset-ri
 @media (max-height: 360px) { body.touch:not(.portrait) #wallet { right: calc(248px + env(safe-area-inset-right)); bottom: calc(60px + env(safe-area-inset-bottom)); } }
 body.touch.portrait #wallet { right: auto; left: calc(8px + env(safe-area-inset-left)); transform: none; bottom: calc(64px + env(safe-area-inset-bottom)); }
 .continue-btn { display: block; width: 100%; margin: 6px 0 2px; padding: 8px; font-size: 14px; font-family: var(--display); }
+.seg { display: flex; gap: 4px; margin: 4px 0; } .seg .btn { flex: 1; }
+.chk { display: flex; align-items: center; gap: 6px; font-size: 12px; margin: 6px 0; cursor: pointer; }

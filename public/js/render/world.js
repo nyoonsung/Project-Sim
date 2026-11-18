@@ -1,5 +1,6 @@
 // 월드 렌더러: 타일 → 바닥 표시(예고·구역) → y정렬 유닛/오브젝트 → 투사체 → 이펙트 → 조명 → 날씨 → 머리 위 UI
 import { G, localStep, moveDir } from "../game.js";
+import { tickQuality, preset } from "../quality.js";
 import { frame as dtFrame } from "./dt2.js";
 import { itemIcon } from "../ui/icons.js";
 import { tickFeel, drawParts, hitOffset } from "../feel.js";
@@ -33,6 +34,60 @@ const NPC_LOOK = {
   class_master: { armor: ["#fff6d8", "#e8d4a0", "#c0a060", "#806838"], core: ["#5a2a8a", "#401c66", "#281040"], mark: "#ffffff", weapon: "staff", head: "mitre", headColor: "#fff6d8" },
 };
 
+/** 스킬 정의 안의 모든 이펙트 이름 (fx 객체 + 단계별 fx) */
+const FXID = /^[a-z-]+\/[a-z0-9-]+$/;
+export function skillFxIds(sk) {
+  const out = [];
+  const walk = (v) => { if (typeof v === "string") { if (FXID.test(v)) out.push(v); } else if (Array.isArray(v)) v.forEach(walk); else if (v && typeof v === "object") Object.values(v).forEach(walk); };
+  walk(sk?.fx); walk(sk?.steps);
+  return out;
+}
+// 조명용 둥근 빛 그림 (가운데 진하고 가장자리로 갈수록 투명)
+let HOLE = null;
+function holeSprite() {
+  if (HOLE) return HOLE;
+  HOLE = new OffscreenCanvas(64, 64);
+  const g = HOLE.getContext("2d"), gr = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+  gr.addColorStop(0, "rgba(0,0,0,1)"); gr.addColorStop(0.55, "rgba(0,0,0,0.7)"); gr.addColorStop(1, "rgba(0,0,0,0)");
+  g.fillStyle = gr; g.fillRect(0, 0, 64, 64);
+  return HOLE;
+}
+/** 치명타 숫자 그림 (28px로 그려 0.75배로 찍음) */
+function critImage(text) {
+  const m = new OffscreenCanvas(1, 1).getContext("2d");
+  m.font = "28px Galmuri14";
+  const w = Math.ceil(m.measureText(text).width) + 24, h = 48;
+  const c = new OffscreenCanvas(w, h), g = c.getContext("2d");
+  g.font = "28px Galmuri14"; g.textAlign = "center"; g.textBaseline = "middle";
+  g.lineJoin = "round"; g.lineWidth = 6; g.strokeStyle = "#4a1800";
+  g.shadowColor = "#ff9a3a"; g.shadowBlur = 8;
+  g.strokeText(text, w / 2, h / 2);
+  g.shadowBlur = 0;
+  const gr = g.createLinearGradient(0, h / 2 - 12, 0, h / 2 + 12);
+  gr.addColorStop(0, "#fff8d0"); gr.addColorStop(0.45, "#ffd35a"); gr.addColorStop(1, "#ff7a1a");
+  g.fillStyle = gr; g.fillText(text, w / 2, h / 2);
+  return c;
+}
+const lootBeams = new Map();
+function lootBeam(col) {
+  let c = lootBeams.get(col);
+  if (c) return c;
+  c = new OffscreenCanvas(1, 32);
+  const g = c.getContext("2d"), gr = g.createLinearGradient(0, 0, 0, 32);
+  gr.addColorStop(0, "rgba(0,0,0,0)"); gr.addColorStop(1, col);
+  g.fillStyle = gr; g.fillRect(0, 0, 1, 32);
+  lootBeams.set(col, c);
+  return c;
+}
+const seenSkills = new Set();
+/** 다른 사람(파티원) 스킬을 처음 보면 그 이펙트도 미리 구워 둠 */
+export function warmSkill(id) {
+  if (seenSkills.has(id)) return;
+  seenSkills.add(id);
+  const ids = skillFxIds(SKILLS[id]);
+  preloadFx(ids).then(() => prebake(ids));
+}
+
 export class Renderer {
   /** 화면 크기 바꾸기 (휴대폰 세로·가로 전환). focusY: 캐릭터가 화면 높이의 어디쯤 오게 할지 */
   setView(w, h, focusY = 0.5) {
@@ -58,6 +113,7 @@ export class Renderer {
     this.lctx = this.light.getContext("2d");
     this.zoneFx = new Map();
     this.focusY = 0.5;
+    this.maxHoles = 120;
     this.white = new WeakMap();
     this.last = now();
     this.fps = 60;
@@ -74,7 +130,8 @@ export class Renderer {
       for (const b of [z.mid, z.boss]) { const d = BOSSES[b]; if (d.look.critter) ids.push(d.look.critter); for (const p of d.patterns) if (p.fx) ids.push(p.fx); }
       if (z.weather) ids.push(z.weather);
     }
-    for (const id of G.char?.skills ?? []) { const s = SKILLS[id]; if (s?.fx) ids.push(...Object.values(s.fx).filter((v) => typeof v === "string")); }
+    // 내 직업의 모든 스킬 이펙트(장착 안 한 것 포함) + 흔한 타격 이펙트를 미리 구워 둠
+    for (const s of Object.values(SKILLS)) if (s.cls === G.char?.cls || s.cls === "common") ids.push(...skillFxIds(s));
     preloadFx(ids).then(() => {
       prebake(ids.filter((id) => id && !id.startsWith("weather/")));
       if (G.kind !== "town" && z.weather) { const m = this.weather; m.clear(); loadFx(z.weather).then((mod) => mod && m.spawn(z.weather, mod.meta.origin[0], mod.meta.origin[1])); }
@@ -94,7 +151,9 @@ export class Renderer {
   statusFx(ent, s, d) {
     const id = STATUS_FX[s];
     if (!id) return;
-    if (ent.stFx?.[s] && !ent.stFx[s].inst.done()) { ent.stFx[s].until = now() + d; return; }
+    const cur = ent.stFx?.[s];
+    // 이미 떠 있으면 시간만 연장 (구운 이펙트는 inst가 없음 — 예전엔 여기서 오류)
+    if (cur && (cur.inst ? !cur.inst.done() : !cur.until || cur.until > now())) { cur.until = now() + d; return; }
     ent.stFx = ent.stFx ?? {};
     ent.stFx[s] = this.front.spawn(id, ent.rx, ent.ry, { follow: ent.id, life: d, s: ent.k === "b" ? 1.4 : ent.info?.m && MONSTERS[ent.info.m]?.look.critter ? 0.6 : 1, dy: s === "root" || s === "vitalmark" || s === "huntmark" ? 0 : 0 });
   }
@@ -105,6 +164,7 @@ export class Renderer {
     const dt = Math.min(0.1, t - this.last);
     this.last = t;
     this.fps = this.fps * 0.95 + (1 / Math.max(dt, 1e-3)) * 0.05;
+    tickQuality(dt, this);
     const ctx = this.ctx;
     if (!G.map) { ctx.fillStyle = "#000"; ctx.fillRect(0, 0, VW, VH); return; }
     // 위치: 나는 매 프레임 즉시 이동, 다른 유닛은 보간
@@ -145,7 +205,7 @@ export class Renderer {
     if (G.kind === "town") tickFolk(dt);
     this.front.update(dt, G.ents);
     this.ground.update(dt, G.ents);
-    this.weather.update(dt, G.ents);
+    if (preset().weather) this.weather.update(dt, G.ents);
 
     ctx.fillStyle = "#08070b";
     ctx.fillRect(0, 0, VW, VH);
@@ -162,7 +222,7 @@ export class Renderer {
     this.drawLighting(ctx, cx, cy, t);
     drawGlows(ctx, cx, cy, VW, VH);
     drawSkillFx(ctx, cx, cy);
-    if (this.weather.list.length) {
+    if (this.weather.list.length && preset().weather) {
       const wc = this.wctx ?? (this.wctx = this.mkWeatherCtx());
       wc.clearRect(0, 0, 320, 180);
       this.weather.render(wc, 0, 0);
@@ -173,9 +233,14 @@ export class Renderer {
     }
     this.drawOverhead(ctx, cx, cy, t);
     if (G.hurtFlash > 0) {
-      const g = ctx.createRadialGradient(VW / 2, VH / 2, 120, VW / 2, VH / 2, 380);
-      g.addColorStop(0, "rgba(200,0,20,0)"); g.addColorStop(1, `rgba(200,0,20,${G.hurtFlash})`);
-      ctx.fillStyle = g; ctx.fillRect(0, 0, VW, VH);
+      // 맞았을 때 붉은 테두리: 한 번 만든 그림을 세기만 바꿔 찍음
+      if (!this.vig || this.vig.width !== VW || this.vig.height !== VH) {
+        this.vig = new OffscreenCanvas(VW, VH);
+        const vg = this.vig.getContext("2d"), gr = vg.createRadialGradient(VW / 2, VH / 2, 120, VW / 2, VH / 2, 380);
+        gr.addColorStop(0, "rgba(200,0,20,0)"); gr.addColorStop(1, "rgba(200,0,20,1)");
+        vg.fillStyle = gr; vg.fillRect(0, 0, VW, VH);
+      }
+      ctx.globalAlpha = Math.min(1, G.hurtFlash); ctx.drawImage(this.vig, 0, 0); ctx.globalAlpha = 1;
       G.hurtFlash = Math.max(0, G.hurtFlash - dt);
     }
     if (me && me.hp < 0.3 && !me.dead) {
@@ -196,10 +261,8 @@ export class Renderer {
       const bob = Math.round(Math.sin(t * 3 + l.id) * 1.5);
       if (l.s !== "cons" && rk >= 1) {
         const hgt = 18 + rk * 12;
-        const g = ctx.createLinearGradient(0, y - hgt, 0, y);
-        g.addColorStop(0, "rgba(0,0,0,0)"); g.addColorStop(1, col);
         ctx.globalAlpha = 0.35 + Math.sin(t * 4 + l.id) * 0.1;
-        ctx.fillStyle = g; ctx.fillRect(x - 3, y - hgt, 6, hgt);
+        ctx.drawImage(lootBeam(col), x - 3, y - hgt, 6, hgt);
         ctx.globalAlpha = 1;
         addGlow(l.x, l.y - 6, 26 + rk * 10, col, 0.25 + rk * 0.06);
       }
@@ -557,11 +620,15 @@ export class Renderer {
     L.fillStyle = `rgba(6,4,14,${G.mapKind === "safe" ? 0.55 : z.ambient})`;
     L.fillRect(0, 0, W, H);
     L.globalCompositeOperation = "destination-out";
+    // 빛 구멍: 매번 그라디언트를 새로 만들지 않고, 미리 만든 둥근 빛 그림 한 장을 크기·세기만 바꿔 찍음 (훨씬 가벼움)
+    L.imageSmoothingEnabled = true;
+    const spr = holeSprite();
+    let holes = 0;
     const hole = (x0, y0, r, a = 1) => {
+      if (holes++ > this.maxHoles) return;
       const x = x0 + dx, y = y0 + dy;
-      const g = L.createRadialGradient(x / 2, y / 2, 0, x / 2, y / 2, r / 2);
-      g.addColorStop(0, `rgba(0,0,0,${a})`); g.addColorStop(0.55, `rgba(0,0,0,${a * 0.7})`); g.addColorStop(1, "rgba(0,0,0,0)");
-      L.fillStyle = g; L.fillRect(x / 2 - r / 2, y / 2 - r / 2, r, r);
+      L.globalAlpha = Math.min(1, a);
+      L.drawImage(spr, x / 2 - r / 2, y / 2 - r / 2, r, r);
     };
     for (const e of G.ents.values()) if (e.k === "p" && !e.dead) hole(e.rx - cx, e.ry - cy - 14, e.id === G.you ? z.light * 1.6 : z.light * 1.1);
     for (const o of G.objects) {
@@ -575,6 +642,7 @@ export class Renderer {
     for (const l of G.loot.values()) hole(l.x - cx, l.y - cy, 30, 0.5);
     // 색 빛이 있는 곳도 밝게
     forEachGlow((x, y, r, c, a) => { const sx = x - cx, sy = y - cy; if (sx > -r && sy > -r && sx < VW + r && sy < VH + r) hole(sx, sy, r * 1.3, Math.min(1, a * 1.6)); });
+    L.globalAlpha = 1;
     ctx.imageSmoothingEnabled = true;
     ctx.drawImage(this.light, -dx, -dy, W * 2, H * 2);
     ctx.imageSmoothingEnabled = false;
@@ -645,20 +713,18 @@ export class Renderer {
       ctx.save();
       ctx.translate(x + (f.vx ?? 0) * age, y);
       ctx.scale(pop, pop);
-      ctx.font = crit ? "28px Galmuri14" : style[1];
-      if (crit) ctx.scale(0.75, 0.75); // 28px로 그려 또렷하게 → 21px 크기
-      ctx.textAlign = "center"; ctx.textBaseline = "middle";
-      ctx.lineJoin = "round"; ctx.lineWidth = crit ? 6 : 3; ctx.strokeStyle = crit ? "#4a1800" : "#000";
-      const text = crit ? f.text + "!" : f.text;
-      ctx.strokeText(text, 0, 0);
       if (crit) {
-        // 치명타: 위는 밝은 금색 → 아래는 주황 그라데이션 + 빛
-        const g = ctx.createLinearGradient(0, -12, 0, 12);
-        g.addColorStop(0, "#fff8d0"); g.addColorStop(0.45, "#ffd35a"); g.addColorStop(1, "#ff7a1a");
-        ctx.shadowColor = "#ff9a3a"; ctx.shadowBlur = 8;
-        ctx.fillStyle = g;
-      } else ctx.fillStyle = style[0];
-      ctx.fillText(text, 0, 0);
+        // 치명타 숫자는 처음 한 번만 (그라데이션·빛 번짐까지) 그려 두고, 이후엔 이미지로 찍기만 → 숫자가 쏟아져도 가벼움
+        const img = f.img ??= critImage(f.text + "!");
+        ctx.drawImage(img, -img.width * 0.375, -img.height * 0.375, img.width * 0.75, img.height * 0.75);
+      } else {
+        ctx.font = style[1];
+        ctx.textAlign = "center"; ctx.textBaseline = "middle";
+        ctx.lineJoin = "round"; ctx.lineWidth = 3; ctx.strokeStyle = "#000";
+        ctx.strokeText(f.text, 0, 0);
+        ctx.fillStyle = style[0];
+        ctx.fillText(f.text, 0, 0);
+      }
       ctx.restore();
       ctx.globalAlpha = 1;
       return true;

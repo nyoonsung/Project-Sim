@@ -21,17 +21,32 @@ export function beginGlows() { list = []; }
 /** 월드 좌표 (x, y)에 반지름 r, 색, 세기 a(0~1) */
 export function addGlow(x, y, r, color, a = 0.5) { if (list.length < 400) list.push(x, y, r, norm(color), a); }
 export function forEachGlow(fn) { for (let i = 0; i < list.length; i += 5) fn(list[i], list[i + 1], list[i + 2], list[i + 3], list[i + 4]); }
+/** 빛 번짐 그리기. 절반 해상도 버퍼에 모아 그린 뒤 한 번에 '더하기' 합성 → 큰 빛이 많아도 칠하는 픽셀이 1/4.
+ *  버퍼는 월드 짝수 좌표에 고정해서 화면이 1px 움직여도 빛이 깜박이지 않음. */
+let buf = null, bctx = null;
+export const GLOW_LIMITS = { max: 400 };
 export function drawGlows(ctx, cx, cy, W, H) {
   if (!list.length) return;
+  const icx = Math.round(cx), icy = Math.round(cy);
+  const bx = icx - (((icx % 2) + 2) % 2), by = icy - (((icy % 2) + 2) % 2);
+  const bw = Math.ceil(W / 2) + 1, bh = Math.ceil(H / 2) + 1;
+  if (!buf || buf.width !== bw || buf.height !== bh) { buf = new OffscreenCanvas(bw, bh); bctx = buf.getContext("2d"); }
+  bctx.globalCompositeOperation = "source-over";
+  bctx.globalAlpha = 1;
+  bctx.clearRect(0, 0, bw, bh);
+  bctx.globalCompositeOperation = "lighter";
+  bctx.imageSmoothingEnabled = true;
+  let n = 0;
+  for (let i = 0; i < list.length && n < GLOW_LIMITS.max; i += 5) {
+    const x = list[i] - bx, y = list[i + 1] - by, r = list[i + 2];
+    if (x < -r || y < -r || x > W + r || y > H + r) continue;
+    n++;
+    bctx.globalAlpha = Math.min(1, list[i + 4]);
+    bctx.drawImage(sprite(list[i + 3]), (x - r) / 2, (y - r) / 2, r, r);
+  }
   ctx.save();
   ctx.globalCompositeOperation = "lighter";
-  // 부드럽게 늘려 그림: 픽셀 그대로 늘리면 64px 그림이 계단처럼 보이고, 화면이 움직일 때 계단이 번갈아 바뀌어 깜박였음
   ctx.imageSmoothingEnabled = true;
-  for (let i = 0; i < list.length; i += 5) {
-    const x = list[i] - cx, y = list[i + 1] - cy, r = list[i + 2];
-    if (x < -r || y < -r || x > W + r || y > H + r) continue;
-    ctx.globalAlpha = Math.min(1, list[i + 4]);
-    ctx.drawImage(sprite(list[i + 3]), x - r, y - r, r * 2, r * 2);
-  }
+  ctx.drawImage(buf, bx - cx, by - cy, bw * 2, bh * 2);
   ctx.restore();
 }

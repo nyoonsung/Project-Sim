@@ -80,7 +80,9 @@ function scheduleBake(id, pal, key) {
 function pump() {
   if (baking || !bakeQueue.size) return;
   baking = true;
-  const idle = globalThis.requestIdleCallback ?? ((f) => setTimeout(f, 30));
+  // 한가할 때 굽되, 이펙트가 쏟아져 한가할 틈이 없어도 0.12초 안에는 반드시 구움
+  // (예전엔 바쁠수록 굽기가 밀려서, 모든 이펙트가 매 프레임 픽셀 계산으로 그려져 렉이 커지는 악순환)
+  const idle = globalThis.requestIdleCallback ? (f) => requestIdleCallback(f, { timeout: 120 }) : (f) => setTimeout(f, 30);
   idle(() => {
     const [key, [id, pal]] = bakeQueue.entries().next().value;
     bakeQueue.delete(key);
@@ -90,6 +92,8 @@ function pump() {
   });
 }
 export function prebake(ids) { for (const id of ids) if (id && mods.get(id)) scheduleBake(id, null, id + "|"); }
+/** 아직 안 구운(매 프레임 픽셀 계산하는) 이펙트가 동시에 이만큼 넘으면 새로 띄우지 않음 → 최악의 경우에도 프레임 유지 */
+export const FX_LIMITS = { live: 8 };
 
 // ── 실시간 이펙트 레이어 (카메라 크기 프레임 하나에 모아 그림)
 export class FxLayer {
@@ -120,6 +124,7 @@ export class FxLayer {
       return e;
     }
     if (!id.startsWith("weather/")) scheduleBake(id, o.pal ?? null, bkey);
+    if (!id.startsWith("weather/") && this.list.length + this.scaled.length >= FX_LIMITS.live) return null;
     const opts = { x, y, flip, angle, seed: (Math.random() * 1e6) | 0 };
     if (o.pal) opts.palette = o.pal;
     const inst = createFx(mod, opts);

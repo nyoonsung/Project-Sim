@@ -1,5 +1,6 @@
 // 창: 캐릭터, 스킬, 가방·장비, 파티, 도움말, 상점, 대장간(강화), 전직소, 던전 관문, 게시판, 훈련 교관
 import { G, send, canAuto, setAuto } from "../game.js";
+import { Q, setMode, setLessOthers, preset } from "../quality.js";
 import { KEYS, keyLabel, bindKey, resetKeys, RESERVED } from "../keys.js";
 import { profLevel, profPow, profCost, isUncapped } from "/shared/prof.js";
 import { h, openWin, refreshWin, closeWin, isOpen, tipOn } from "./dom.js";
@@ -397,12 +398,20 @@ export function openKeys() {
       h("button", { class: "btn small keybtn" + (G.capturingKey?.kind === kind && G.capturingKey.i === i ? " wait" : ""), onclick: () => captureKey(kind, i) },
         G.capturingKey?.kind === kind && G.capturingKey.i === i ? "누르세요…" : keyLabel(code)));
   };
-  openWin("keys", "조작 키 설정", () => [
-    h("div", { class: "note", text: "바꿀 칸을 누르고 원하는 키(또는 마우스 버튼)를 누르세요. 이미 쓰는 키면 서로 바뀌어요. Esc: 취소" }),
-    h("h4", { text: "스킬" }), ...names.map((n, i) => row(n, "slots", i)),
-    h("h4", { text: "물약" }), ...pots.map((n, i) => row(n, "potions", i)),
-    h("div", { class: "note", text: "이동 WASD/방향키 · 캐릭터 C · 스킬 K · 가방 I · 파티 P · 도움말 H · 도감 B · 대화 G · 지도 M · 미니맵 N · 채팅 숨기기 L 은 고정이에요." }),
-    h("div", { class: "flexrow" }, h("button", { class: "btn small", onclick: () => { resetKeys(); G.ui.refreshKeys?.(); refreshWin("keys"); } }, "기본값으로")),
+  const modes = [["auto", "자동"], ["high", "높음"], ["mid", "보통"], ["low", "낮음"]];
+  openWin("keys", "설정", () => [
+    h("h4", { text: "그래픽" }),
+    h("div", { class: "seg" }, ...modes.map(([m, n]) => h("button", { class: "btn small" + (Q.mode === m ? " primary" : ""), onclick: () => { setMode(m); refreshWin("keys"); } }, n))),
+    h("div", { class: "note", text: Q.mode === "auto" ? `자동: 지금 ${preset().name} (느려지면 알아서 낮추고, 넉넉하면 다시 올려요)` : "낮을수록 빛 번짐·입자·날씨 효과가 줄어 가벼워져요." }),
+    h("label", { class: "chk" }, h("input", { type: "checkbox", checked: Q.lessOthers, onchange: (e) => setLessOthers(e.target.checked) }), " 다른 사람 스킬 이펙트 줄이기 (파티 사냥 때 렉 줄이기)"),
+    ...(G.touch ? [] : [
+      h("h4", { text: "조작 키" }),
+      h("div", { class: "note", text: "바꿀 칸을 누르고 원하는 키(또는 마우스 버튼)를 누르세요. 이미 쓰는 키면 서로 바뀌어요. Esc: 취소" }),
+      ...names.map((n, i) => row(n, "slots", i)),
+      h("h4", { text: "물약" }), ...pots.map((n, i) => row(n, "potions", i)),
+      h("div", { class: "note", text: "이동 WASD/방향키 · 캐릭터 C · 스킬 K · 가방 I · 파티 P · 도움말 H · 도감 B · 대화 G · 지도 M · 미니맵 N · 채팅 숨기기 L 은 고정이에요." }),
+      h("div", { class: "flexrow" }, h("button", { class: "btn small", onclick: () => { resetKeys(); G.ui.refreshKeys?.(); refreshWin("keys"); } }, "키 기본값으로")),
+    ]),
   ], { w: 400 });
 }
 function captureKey(kind, i) {
