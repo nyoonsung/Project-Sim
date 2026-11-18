@@ -190,6 +190,20 @@ export const isBroken = (it) => it?.dur != null && it.dur <= 0;
 export const DUR_DEATH = 0.1;
 export const BROKEN_MUL = 0.3;
 export function maxDurability(it) { return 100 + RARITIES.indexOf(it.rarity) * 20; }
+/** 신화 장비는 아이템 레벨이 캐릭터 레벨을 따라 같이 성장 (능력치·재료 이름 다시 계산). 바뀌었으면 true */
+export function syncMythic(ch) {
+  let changed = false;
+  for (const it of [...Object.values(ch.equip ?? {}), ...(ch.inv ?? [])]) {
+    if (!it || it.rarity !== "신화" || it.ilvl === ch.level) continue;
+    it.ilvl = Math.max(1, ch.level);
+    it.base = baseStats(it.slot, it.type, it.ilvl, 4, it.variant ?? 1);
+    if (it.slot === "weapon") Object.assign(it.base, MYTHIC_WEAPON_BONUS);
+    it.name = itemName(it);
+    it.mythicV = 2;
+    changed = true;
+  }
+  return changed;
+}
 /** 예전에 얻은 신화 장비도 상향된 능력치로 다시 계산 */
 export function upgradeMythic(it) {
   if (!it || it.rarity !== "신화" || it.mythicV >= 2) return it;

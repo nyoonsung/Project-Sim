@@ -91,3 +91,9 @@ export function isOpen(id) { return wins.has(id); }
 export function toggleWin(id, open) { if (wins.has(id)) closeWin(id); else open(); }
 export function openWins() { return [...wins.keys()]; }
 export function closeAll() { for (const id of [...wins.keys()]) closeWin(id); }
+
+/** CSS 애니메이션 다시 재생: 강제 레이아웃(offsetWidth 읽기) 없이 다음 프레임에 클래스를 다시 붙임 */
+export function retrigger(el, cls) {
+  el.classList.remove(cls);
+  requestAnimationFrame(() => el.classList.add(cls));
+}

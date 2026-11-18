@@ -124,7 +124,7 @@ export class Renderer {
   }
   constructor(canvas) {
     this.cv = canvas;
-    this.ctx = canvas.getContext("2d");
+    this.ctx = canvas.getContext("2d", { alpha: false });
     this.ctx.imageSmoothingEnabled = false;
     this.front = new FxLayer(VW, VH);
     this.ground = new FxLayer(VW, VH);
@@ -148,7 +148,7 @@ export class Renderer {
     const ids = ["arcane/portal", "fire/torch", "fire/campfire", "water/fountain", "fire/candle", "impacts/hit-spark", "impacts/hit-flash", "spawn/poof", "ui/level-up", "spawn/soul-rise", "status/stunned", "status/burning", "status/poisoned", "status/frozen", "status/slowed", "pickups/loot-beam"];
     if (G.kind !== "town") {
       ids.push(z.torch);
-      for (const id of z.monsters) { const m = MONSTERS[id]; if (m.look.critter) ids.push(m.look.critter); if (m.proj) ids.push(m.proj); if (m.aoe) ids.push(m.aoe); }
+      for (const id of z.monsters) { const m = MONSTERS[id]; if (m.look.critter) ids.push(m.look.critter); if (m.proj) ids.push(m.proj); if (m.aoe) ids.push(m.aoe); if (m.ai === "bomber") ids.push("explosions/small-explosion"); }
       for (const b of [z.mid, z.boss]) { const d = BOSSES[b]; if (d.look.critter) ids.push(d.look.critter); for (const p of d.patterns) if (p.fx) ids.push(p.fx); }
       if (z.weather) ids.push(z.weather);
     }

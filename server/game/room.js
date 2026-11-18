@@ -820,7 +820,6 @@ export class Room {
     }
     for (const p of this.players.values()) {
       const s = p.session;
-      if (evs) s.send(`{"t":"ev","list":${evs}}`);
       // 플레이어마다 '마지막으로 보낸 상태'를 기억해서 바뀐 유닛만 보냄 (2초마다 전체)
       if (s.sentRoom !== this) { s.sentRoom = this; s.sent = new Map(); }
       const sent = s.sent, full = (this.tickN + p.id) % 40 === 0;
@@ -831,7 +830,11 @@ export class Room {
         } else if (sent.has(u.id)) sent.delete(u.id);
       }
       if (full) for (const id of sent.keys()) if (!this.units.has(id)) sent.delete(id);
-      s.send(`{"t":"s","k":${this.tickN},"a":${p.lastSeq},"e":[${near.join(",")}]}`);
+      // 이벤트와 위치를 한 메시지로 (틱당 1개). 바뀐 게 하나도 없으면 아예 안 보냄
+      if (evs || near.length || s.sentAck !== p.lastSeq) {
+        s.sentAck = p.lastSeq;
+        s.send(`{"t":"s","k":${this.tickN},"a":${p.lastSeq},"e":[${near.join(",")}]${evs ? `,"v":${evs}` : ""}}`);
+      }
       if (s.meDirty || this.tickN % 4 === 0) { s.sendMe(); s.meDirty = false; }
     }
   }

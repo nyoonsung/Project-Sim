@@ -6,7 +6,7 @@
 //  - 위쪽: 물약·메뉴·채팅·전체 화면 버튼
 import { G, tryCast, moveDir, nearestEnemy } from "../game.js";
 import { SKILLS } from "/shared/skills.js";
-import { h, $, hideTip } from "./dom.js";
+import { h, $, hideTip, retrigger } from "./dom.js";
 import { skillIconURL } from "./icons.js";
 
 export const isTouchDevice = () =>
@@ -15,30 +15,57 @@ export const isTouchDevice = () =>
 const STICK_R = 46; // 조이스틱 최대 반경(px)
 let lastDir = [1, 0];
 
+/** 이동 방향 앞쪽 부채꼴 안에서 가장 가까운 적 */
+function enemyAhead(me, dir, deg, range = 320) {
+  let best = null, bd = range;
+  const c = Math.cos((deg * Math.PI) / 180);
+  for (const e of G.ents.values()) {
+    if ((e.k !== "m" && e.k !== "b") || e.dead) continue;
+    const dx = e.rx - me.rx, dy = e.ry - me.ry, d = Math.hypot(dx, dy);
+    if (d >= bd || (d > 30 && (dx * dir[0] + dy * dir[1]) / d < c)) continue;
+    bd = d; best = e;
+  }
+  return best;
+}
 /** 매 프레임: 조준점(마우스 대신) = 가장 가까운 적, 없으면 이동하던 방향 */
 export function touchAimTick() {
   const me = G.ents.get(G.you);
   if (!me) return;
   const [mx, my] = moveDir();
   if (Math.hypot(mx, my) > 0.2) { const l = Math.hypot(mx, my); lastDir = [mx / l, my / l]; }
-  const t = nearestEnemy();
-  if (t) { G.mouse.wx = t.rx; G.mouse.wy = t.ry; }
-  else { G.mouse.wx = me.rx + lastDir[0] * 80; G.mouse.wy = me.ry + lastDir[1] * 80; }
+  // 스킬 조준점(가장 가까운 적)과 캐릭터가 보는 방향을 분리:
+  //  움직이는 중에는 이동 방향을 보고, 공격한 직후(0.5초)나 멈춰 서서 적이 있으면 적을 봄
+  const moving = Math.hypot(mx, my) > 0.2;
+  // 움직이는 중엔 조이스틱 방향 앞쪽(±75°)의 적만 노림 → 가고 싶은 방향으로 공격·스킬이 나감. 멈추면 가장 가까운 적
+  const t = moving ? enemyAhead(me, lastDir, 75) : nearestEnemy();
+  const ahead = { x: me.rx + lastDir[0] * 80, y: me.ry + lastDir[1] * 80 };
+  G.touchTarget = t ? { x: t.rx, y: t.ry } : ahead;
+  G.touchAhead = ahead; G.touchMoving = moving;
+  const faceTarget = t && (!moving || performance.now() / 1000 < (G.faceTargetUntil ?? 0));
+  const f = faceTarget ? G.touchTarget : ahead;
+  G.mouse.wx = f.x; G.mouse.wy = f.y;
   // 대시가 들어 있는 칸은 원호에서 숨김(오른쪽 대시 버튼으로 사용), 자동 사용 표시
   const skills = G.char?.skills ?? [];
-  [...$("#skillbar").children].forEach((el, i) => {
-    el.classList.toggle("is-dash", skills[i] === "c_dash");
-    el.classList.toggle("auto", !!skills[i] && G.autoSkills.has(skills[i]));
-  });
+  // 칸 표시는 스킬 구성·자동 설정이 바뀔 때만 다시
+  const key = skills.join(",") + "|" + [...G.autoSkills].join(",");
+  if (key !== touchAimTick._k) {
+    touchAimTick._k = key;
+    [...$("#skillbar").children].forEach((el, i) => {
+      el.classList.toggle("is-dash", skills[i] === "c_dash");
+      el.classList.toggle("auto", !!skills[i] && G.autoSkills.has(skills[i]));
+    });
+  }
   const dash = $("#dash-btn");
   if (dash) {
     const i = skills.indexOf("c_dash");
-    dash.classList.toggle("off", i < 0);
+    if (dash._off !== i < 0) { dash._off = i < 0; dash.classList.toggle("off", i < 0); }
     const left = i >= 0 ? cdLeftOf("c_dash") : 0;
-    dash.querySelector(".cdt").textContent = left > 0.3 ? left.toFixed(1) : "";
+    const txt = left > 0.3 ? left.toFixed(1) : "", cdt = dash.querySelector(".cdt");
+    if (cdt._t !== txt) { cdt._t = txt; cdt.textContent = txt; }
     const total = SKILLS.c_dash.cd;
-    dash.style.setProperty("--p", Math.min(1, left / total).toFixed(3));
-    if (dash._cd > 0.15 && left <= 0.02) { dash.classList.remove("ready"); void dash.offsetWidth; dash.classList.add("ready"); }
+    const p = (Math.round(Math.min(1, left / total) * 60) / 60).toFixed(3);
+    if (dash._p !== p) { dash._p = p; dash.style.setProperty("--p", p); }
+    if (dash._cd > 0.15 && left <= 0.02) { retrigger(dash, "ready"); }
     dash._cd = left;
   }
 }

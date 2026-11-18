@@ -69,3 +69,26 @@ ok(arch.classDmg === 2.5 && swd.classDmg === 1, "궁수 피해 배율 ×2.5");
 const hpA = deriveStats({ ...newCharacter("h"), equip: { helmet: { slot: "helmet", variant: 1, rarity: "일반", ilvl: 1, enh: 0, base: { def: 2, hp: 10 }, opts: [] } } }).maxHp;
 const hpB = deriveStats({ ...newCharacter("h"), equip: { helmet: { slot: "helmet", variant: 1, rarity: "일반", ilvl: 1, enh: 20, base: { def: 2, hp: 10 }, opts: [] } } }).maxHp;
 ok(hpB / hpA > 1.19, `투구 +20강 최대 HP ${hpA} → ${hpB}`);
+
+// 8) 신화 장비는 캐릭터 레벨을 따라 성장
+const { syncMythic } = await import("../shared/items.js");
+let my; for (let i = 0; i < 60 && my?.slot !== "weapon"; i++) my = rollItem(Math.random, { ilvl: 5, rarity: "신화" });
+const chM = { ...newCharacter("신"), level: 40, equip: { weapon: my }, inv: [] };
+const atk5 = my.base.atk;
+ok(syncMythic(chM) && my.ilvl === 40 && my.base.atk > atk5 * 3 && my.base.dmg === 0.06, `신화 무기 Lv5 → 캐릭터 Lv40 따라 성장 (공격력 ${atk5} → ${my.base.atk})`);
+ok(!syncMythic(chM), "레벨이 같으면 다시 계산 안 함");
+
+// 9) 근접 판정: 조준이 살짝(50°) 빗나가도 가까운 적을 맞힘
+const { Room } = await import("../server/game/room.js");
+const { safeZone } = await import("../server/game/dungeon.js");
+const W9 = { clock: 0 }; const R9 = new Room(W9, { id: "m9", kind: "dungeon", floor: 1, map: safeZone(1) });
+const evs9 = [];
+const s9 = { userId: 99, char: { ...newCharacter("근") }, send: (o) => { if (typeof o === "string") o = JSON.parse(o); if (o.v) evs9.push(...o.v); }, notice() {}, sendMe() {} };
+const u9 = makePlayerUnit(s9); s9.unit = u9; refreshStats(u9); R9.addPlayer(u9);
+const m9 = R9.spawnMonster("slime", u9.x + 40, u9.y + 10, false, {});
+m9.hp = m9.maxHp = 9999;
+const aimAng = Math.atan2(10, 40) + (50 * Math.PI) / 180;
+W9.clock += 1; R9.tick();
+R9.cast(u9, { slot: 0, ax: u9.x + Math.cos(aimAng) * 60, ay: u9.y + Math.sin(aimAng) * 60 });
+W9.clock += 0.05; R9.tick(); R9.flush();
+ok(evs9.some((e) => e.e === "dmg" && e.id === m9.id), "찌르기 조준이 50° 빗나가도 근처 적에 맞음 (조준 보정)");

@@ -42,6 +42,7 @@ class Bot {
         if (m.t === "map") { this.map = m; this.you = m.you; }
         if (m.t === "s") for (const e of m.e) this.ents.set(e[0], e);
         if (m.t === "ev") this.events.push(...m.list);
+        if (m.t === "s" && m.v) this.events.push(...m.v);
         if (m.t === "me") this.me = m;
         if (m.t === "hello" || m.t === "char") this.char = m.char;
       });

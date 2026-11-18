@@ -278,19 +278,25 @@ function strike(room, u, t, st, ctx, now, extra = {}) {
   return r;
 }
 
-function inArc(u, t, range, arc, aim) {
+// 근접 판정 여유: 몬스터는 화면에서 약간 늦게 보이므로(보간) 사거리 +10px, 각도는 몸 두께만큼 넓게
+const MELEE_REACH = 10;
+function inArc(u, t, range, arc, aim, extraDeg = 0) {
   const d = Math.hypot(t.x - u.x, t.y - u.y);
-  if (d - t.r > range) return false;
-  if (d < t.r + 6) return true;
-  return angDiff(Math.atan2(t.y - u.y, t.x - u.x), aim) <= (arc * Math.PI) / 360;
+  if (d - t.r > range + MELEE_REACH) return false;
+  if (d < t.r + 10) return true;
+  const body = Math.asin(Math.min(1, (t.r + 6) / d)); // 몸의 가장자리만 걸려도 맞음
+  return angDiff(Math.atan2(t.y - u.y, t.x - u.x), aim) <= (arc * Math.PI) / 360 + body + (extraDeg * Math.PI) / 180;
 }
 
 const STEP = {
   melee(room, u, ctx, st, now) {
     const range = st.range * (1 + buffSum(u, "range") * 0.3);
     const fire = (t0, hitIdx) => {
-      const list = enemies(room, u).filter((t) => inArc(u, t, range, st.arc, ctx.aim) && lineOfSight(room.map, u.x, u.y, t.x, t.y))
-        .sort((a, b) => Math.hypot(a.x - u.x, a.y - u.y) - Math.hypot(b.x - u.x, b.y - u.y)).slice(0, st.max ?? 99);
+      const near = (a, b) => Math.hypot(a.x - u.x, a.y - u.y) - Math.hypot(b.x - u.x, b.y - u.y);
+      const foes = enemies(room, u).filter((t) => lineOfSight(room.map, u.x, u.y, t.x, t.y));
+      let list = foes.filter((t) => inArc(u, t, range, st.arc, ctx.aim)).sort(near).slice(0, st.max ?? 99);
+      // 조준 보정: 부채꼴 안에 아무도 없으면 조금 옆(±35°)에 있는 가장 가까운 적을 맞힘
+      if (!list.length) list = foes.filter((t) => inArc(u, t, range, st.arc, ctx.aim, 35)).sort(near).slice(0, 1);
       for (const t of list) {
         const r = strike(room, u, t, st, ctx, t0, { melee: true });
         if (st.chain && hitIdx === 0 && r?.dmg) chain(room, u, t, st, ctx, t0);

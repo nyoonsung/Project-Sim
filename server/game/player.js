@@ -3,7 +3,7 @@ import { deriveStats } from "../../shared/stats.js";
 import { CLASS_INFO, xpToNext, stageOf } from "../../shared/classes.js";
 import { SKILLS, unlockStage, adventurerBasic } from "../../shared/skills.js";
 import { MAX_LEVEL, STAT_POINTS_PER_LEVEL, PLAYER_RADIUS, ITEMS } from "../../shared/constants.js";
-import { starterGear, ensureDur, upgradeMythic } from "../../shared/items.js";
+import { starterGear, ensureDur, upgradeMythic, syncMythic } from "../../shared/items.js";
 
 export const INV_SIZE = 40;
 
@@ -38,6 +38,7 @@ export function sanitizeChar(c, name) {
   // 무기 내구도 (예전 무기엔 없던 값 → 가득으로)
   for (const it of out.inv) { ensureDur(it); upgradeMythic(it); }
   for (const it of Object.values(out.equip)) { ensureDur(it); upgradeMythic(it); }
+  syncMythic(out);
   return out;
 }
 
@@ -124,7 +125,9 @@ export function gainXp(room, u, amount) {
     }
   }
   if (leveled) {
+    const myth = syncMythic(ch); // 신화 장비도 같이 성장
     refreshStats(u);
+    if (myth) room.world?.sendChar?.(u.session);
     u.hp = u.maxHp;
     u.mp = u.maxMp;
     room.ev({ e: "lvl", id: u.id, l: ch.level });

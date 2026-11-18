@@ -3,7 +3,7 @@ import { Q, secLog, itemLog } from "../db.js";
 import { TICK_RATE, ITEMS, MAX_PARTY, SKILL_SLOTS } from "../../shared/constants.js";
 import { CLASS_INFO, STATS } from "../../shared/classes.js";
 import { SKILLS, adventurerBasic } from "../../shared/skills.js";
-import { canEquip, enhanceOdds, enhanceCost, sellPrice, MAX_ENH, SLOTS, CLASS_GEAR, baseStats, itemName, ensureDur, repairCost } from "../../shared/items.js";
+import { canEquip, enhanceOdds, enhanceCost, sellPrice, MAX_ENH, SLOTS, CLASS_GEAR, baseStats, itemName, ensureDur, repairCost, syncMythic } from "../../shared/items.js";
 import { floorKind } from "../../shared/zones.js";
 import { Room } from "./room.js";
 import { makeFloor, makeTown, safeZone } from "./dungeon.js";
@@ -111,7 +111,10 @@ export class World {
     const c = s.char;
     return { name: c.name, level: c.level, xp: c.xp, cls: c.cls, stats: c.stats, unspent: c.unspent, skills: c.skills, equip: c.equip, inv: c.inv, cons: c.cons, gold: c.gold, best: c.best, checkpoint: c.checkpoint, cleared: c.cleared, kills: c.kills, deaths: c.deaths, prof: c.prof ?? {} };
   }
-  sendChar(s) { s.dirty = true; s.send({ t: "char", char: this.publicChar(s) }); }
+  sendChar(s) {
+    if (syncMythic(s.char) && s.unit) refreshStats(s.unit); // 새로 얻은 신화도 내 레벨로
+    s.dirty = true; s.send({ t: "char", char: this.publicChar(s) });
+  }
   sendMe(s) {
     const u = s.unit;
     const now = u.room?.now ?? 0;

@@ -5,7 +5,7 @@ const ok = (c, m) => console.log((c ? "✓ " : "✗ ") + m);
 const log = [];
 const world = { clock: 0, pickup: () => true, onBossCleared() {}, used: null, usePortal(r, id) { this.used = id; }, partyFailed() {}, toTown(s) { this.town = (this.town ?? 0) + 1; s.unit.room.removePlayer(s.unit); } };
 function player(id, name) {
-  const s = { userId: id, char: newCharacter(name), name, send: (o) => { if (typeof o === "string") o = JSON.parse(o); if (o.t === "ev") log.push(...o.list); }, notice() {}, sendMe() {}, meDirty: false };
+  const s = { userId: id, char: newCharacter(name), name, send: (o) => { if (typeof o === "string") o = JSON.parse(o); if (o.t === "ev") log.push(...o.list); if (o.t === "s" && o.v) log.push(...o.v); }, notice() {}, sendMe() {}, meDirty: false };
   const u = makePlayerUnit(s); s.unit = u; refreshStats(u); u.hp = u.maxHp; return u;
 }
 const tick = (r, n = 1) => { for (let i = 0; i < n; i++) { world.clock += 0.05; r.tick(); r.flush(); } };

@@ -2,7 +2,7 @@
 import { G, send, cdLeft, tryCast, effCost, usePotion } from "../game.js";
 import { KEYS, keyLabel } from "../keys.js";
 import { profLevel, isUncapped } from "/shared/prof.js";
-import { h, $, tipOn } from "./dom.js";
+import { h, $, tipOn, retrigger } from "./dom.js";
 import { SKILLS } from "/shared/skills.js";
 import { SLOT_KEYS, ITEMS, TILE, T, GRADE_COLOR } from "/shared/constants.js";
 import { xpToNext, CLASS_INFO } from "/shared/classes.js";
@@ -69,7 +69,7 @@ export function updateSkillbar() {
       setTf(cd, `scaleY(${fq})`);
       setVar(el, "--p", fq.toFixed(3));
       // 쿨타임이 끝나는 순간 반짝
-      if (el._cd > 0.15 && left <= 0.02 && sk.kind !== "basic") { el.classList.remove("ready"); void el.offsetWidth; el.classList.add("ready"); }
+      if (el._cd > 0.15 && left <= 0.02 && sk.kind !== "basic") { retrigger(el, "ready"); }
       el._cd = left;
       setText(cdt, left > 0.3 && sk.kind !== "basic" ? String(left >= 10 ? Math.ceil(left) : left.toFixed(1)) : "");
       // 자원 부족 표시
@@ -91,15 +91,17 @@ export function updateSkillbar() {
 
 export function flashSkill(id) {
   const i = G.char?.skills?.indexOf(id);
-  if (i >= 0 && slotEls[i]) { slotEls[i].classList.remove("flash"); void slotEls[i].offsetWidth; slotEls[i].classList.add("flash"); }
+  if (i >= 0 && slotEls[i]) { retrigger(slotEls[i], "flash"); }
 }
 
 export function updateBars() {
   const m = G.me;
   if (!m) return;
-  const set = (sel, v, max, text) => { const b = $(sel); b.querySelector(".fill").style.width = `${Math.max(0, Math.min(100, (v / Math.max(1, max)) * 100))}%`; b.querySelector("span").textContent = text; };
+  // 바뀐 것만 DOM에 씀 (같은 값을 다시 쓰면 휴대폰에서 매번 레이아웃·다시 그리기가 일어나 렉)
+  const set = (sel, v, max, text) => { const b = $(sel); const w = `${Math.max(0, Math.min(100, (v / Math.max(1, max)) * 100)).toFixed(1)}%`; const f = b.querySelector(".fill"); if (f._w !== w) { f._w = w; f.style.width = w; } setText(b.querySelector("span"), text); };
   set("#orbs .hp", m.hp, m.mh, `HP ${m.hp.toLocaleString()} / ${m.mh.toLocaleString()}${m.sh ? `  (+${m.sh})` : ""}`);
-  $("#orbs .hp .shield").style.width = `${Math.min(100, (m.sh / m.mh) * 100)}%`;
+  const shEl = $("#orbs .hp .shield"), shW = `${Math.min(100, ((m.sh ?? 0) / m.mh) * 100).toFixed(1)}%`;
+  if (shEl._w !== shW) { shEl._w = shW; shEl.style.width = shW; }
   set("#orbs .mp", m.mp, m.mm, `MP ${m.mp} / ${m.mm}`);
   const need = xpToNext(m.lv);
   set("#orbs .xp", m.xp, need, `Lv.${m.lv}  ${((m.xp / need) * 100).toFixed(1)}%`);
@@ -115,7 +117,7 @@ export function updateBars() {
   if (we._t !== w) { we._t = w; we.textContent = w; }
   const res = RES[G.char?.cls];
   const rb = $("#orbs .res");
-  rb.classList.toggle("hidden", !res);
+  if (rb._hid !== !res) { rb._hid = !res; rb.classList.toggle("hidden", !res); }
   if (res) {
     let text = `${res[1]} ${m[res[0]]} / ${res[2]}`;
     if (G.char.cls === "sword") text += `  · ${m.stance} 자세`;
@@ -124,9 +126,12 @@ export function updateBars() {
   }
   // 버프·상태
   const bf = $("#buffs");
-  bf.replaceChildren(...(m.buffs ?? []).filter(([id]) => !id.startsWith("hot_")).map(([id, left, n]) => h("span", { class: "buff", text: `${BUFF_NAME[id] ?? id}${n ? " " + n : ""} ${left > 0 && left < 60 ? Math.ceil(left) + "s" : ""}` })),
-    ...(m.st ?? []).map(([id, left]) => h("span", { class: "buff debuff", text: `${ST_NAME[id] ?? id} ${Math.ceil(left)}s` })));
-  $("#dead-overlay").classList.toggle("hidden", !m.dead);
+  const bl = [...(m.buffs ?? []).filter(([id]) => !id.startsWith("hot_")).map(([id, left, n]) => ["buff", `${BUFF_NAME[id] ?? id}${n ? " " + n : ""} ${left > 0 && left < 60 ? Math.ceil(left) + "s" : ""}`]),
+    ...(m.st ?? []).map(([id, left]) => ["buff debuff", `${ST_NAME[id] ?? id} ${Math.ceil(left)}s`])];
+  const bk = bl.map((x) => x.join("|")).join("~");
+  if (bf._k !== bk) { bf._k = bk; bf.replaceChildren(...bl.map(([c, t]) => h("span", { class: c, text: t }))); }
+  const dov = $("#dead-overlay");
+  if (dov._d !== !!m.dead) { dov._d = !!m.dead; dov.classList.toggle("hidden", !m.dead); }
 }
 
 // ── 채팅
@@ -180,11 +185,13 @@ export function center(text) {
 
 export function updateBoss() {
   const bb = $("#bossbar");
-  if (!G.boss) return bb.classList.add("hidden");
+  // 매 프레임 불리므로 바뀐 것만 씀
+  if (!G.boss) { if (bb._on !== false) { bb._on = false; bb.classList.add("hidden"); } return; }
   const e = G.ents.get(G.boss.id);
-  bb.classList.remove("hidden");
-  bb.querySelector(".bname").textContent = `${G.boss.mid ? "중간보스" : "보스"} · ${G.boss.name}`;
-  bb.querySelector(".bfill").style.width = `${(e?.hp ?? 1) * 100}%`;
+  if (bb._on !== true) { bb._on = true; bb.classList.remove("hidden"); }
+  setText(bb.querySelector(".bname"), `${G.boss.mid ? "중간보스" : "보스"} · ${G.boss.name}`);
+  const f = bb.querySelector(".bfill"), w = `${((e?.hp ?? 1) * 100).toFixed(1)}%`;
+  if (f._w !== w) { f._w = w; f.style.width = w; }
 }
 
 export function updateZoneLabel() {

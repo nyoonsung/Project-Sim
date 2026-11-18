@@ -35,7 +35,7 @@ export function onMessage(m) {
       break;
     case "map": onMap(m); break;
     case "ents": for (const d of m.list) addEnt(d); break;
-    case "s": onSnapshot(m); break;
+    case "s": if (m.v) for (const e of m.v) onEvent(e); onSnapshot(m); break;
     case "ev": for (const e of m.list) onEvent(e); break;
     case "me":
       G.me = m; G.meAt = now(); G.ui.onMe();
@@ -353,6 +353,8 @@ export function tryCast(slot, at) {
   const t = now();
   if (t - G.lastCastTry < 0.05) return false;
   G.lastCastTry = t;
+  // 모바일: 따로 조준점을 안 줬으면 자동 조준 대상(가장 가까운 적)으로 쏘고, 잠깐 그쪽을 봄
+  if (!at && G.touch && G.touchTarget) { at = sk.moveSkill && G.touchMoving ? G.touchAhead : G.touchTarget; G.faceTargetUntil = now() + 0.5; G.mouse.wx = at.x; G.mouse.wy = at.y; }
   const ax = at ? at.x : G.mouse.wx, ay = at ? at.y : G.mouse.wy;
   flushInputs();
   const msg = { t: "cast", slot, ax: Math.round(ax), ay: Math.round(ay), s: G.seq };

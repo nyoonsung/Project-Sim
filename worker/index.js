@@ -5,12 +5,15 @@ import { initDb, doSqlDriver, Q } from "../server/db.js";
 import { handleApi, wsAuth } from "../server/api.js";
 import { setAdminKey } from "../server/admin.js";
 import { attachSocket, initWorld } from "../server/net.js";
+import { CLASS_DMG } from "../shared/stats.js";
+let BOOT = 0; // 진단: 게임 서버 코드가 언제 시작됐는지 (배포 뒤 새 코드로 돌고 있는지 확인용)
 
 const lower = (headers) => { const o = {}; for (const [k, v] of headers) o[k.toLowerCase()] = v; return o; };
 
 export class GameServer extends DurableObject {
   constructor(ctx, env) {
     super(ctx, env);
+    BOOT ||= Date.now();
     applyEnv({ ADMIN_KEY: env.ADMIN_KEY, ALLOWED_ORIGINS: env.ALLOWED_ORIGINS, REGISTRATION_OPEN: env.REGISTRATION_OPEN, MAX_CONN_PER_IP: env.MAX_CONN_PER_IP, NODE_ENV: "production" });
     initDb(doSqlDriver(ctx.storage.sql));
     setAdminKey(env.ADMIN_KEY || null);
@@ -63,7 +66,7 @@ export class GameServer extends DurableObject {
     if (url.pathname === "/api/where") {
       let doColo = "?";
       try { const t = await (await fetch("https://cloudflare.com/cdn-cgi/trace")).text(); doColo = /colo=(\w+)/.exec(t)?.[1] ?? "?"; } catch {}
-      return new Response(JSON.stringify({ server: doColo, entry: headers["x-edge-colo"] ?? "?" }), { headers: { "Content-Type": "application/json", "Cache-Control": "no-store" } });
+      return new Response(JSON.stringify({ server: doColo, entry: headers["x-edge-colo"] ?? "?", boot: new Date(BOOT).toISOString(), archer: CLASS_DMG.archer ?? 1 }), { headers: { "Content-Type": "application/json", "Cache-Control": "no-store" } });
     }
     if (url.pathname.startsWith("/api/")) {
       // 오래된 세션·보안 기록 정리 (가끔)
