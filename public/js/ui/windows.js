@@ -14,6 +14,7 @@ import { deriveStats } from "/shared/stats.js";
 import { SKILL_SLOTS, SLOT_KEYS, ITEMS, GRADE_COLOR } from "/shared/constants.js";
 import { RARITY_COLOR, SLOT_NAME, OPTIONS, MYTHIC_EFFECTS, WEAPON_TYPES, OFFHAND_TYPES, VARIANT_TRAITS, RARITIES, RARITY_WEIGHTS, RARITY_MUL, MATERIALS, ARMOR_NAMES, repairCost, ENH_PCT, ENCHANTS, enchantOdds, enchantCost, enhanceOdds, enhanceCost, enhMul, sellPrice, canEquip, MAX_ENH } from "/shared/items.js";
 import { sprite, playerLook } from "../render/sprites.js";
+import { frame as dtFrame } from "../render/dt2.js";
 
 const fmtPct = (v) => (v * 100).toFixed(1) + "%";
 const RES_NAME = { mp: "MP", ki: "내력", holy: "성광", parts: "부품", gap: "틈" };
@@ -399,7 +400,9 @@ export function openClass() {
       const { look, key } = playerLook(k, null, null);
       const s = sprite({ ...look, weapon: info.look.weapon }, key + ":card", "idle", 0, 0.6, 1);
       cv.width = 36; cv.height = 48;
-      cv.getContext("2d").drawImage(s.canvas, 18 - s.ox, 46 - s.oy);
+      const hc = k === "sword" ? dtFrame("hero_sword_idle_anim_f0") : null; // 검사는 디자인 도트
+      if (hc) { cv.width = 60; cv.height = 66; const g = cv.getContext("2d"); g.imageSmoothingEnabled = false; g.drawImage(hc, 0, 0); cv.style.width = "60px"; cv.style.height = "66px"; }
+      else cv.getContext("2d").drawImage(s.canvas, 18 - s.ox, 46 - s.oy);
       return h("div", { class: "cc", onclick: () => { if (confirmClass(info.name)) send({ t: "class", cls: k }); } },
         cv, h("b", { text: info.name }), h("div", { class: "role", text: info.role }), h("p", { text: info.desc }),
         h("p", { text: "전용 능력치: " + info.stats.map((s) => STATS[s].name).join(", ") }), h("p", { text: `성장 ${info.ranks.length}단계: ${info.ranks[0]} → ${info.ranks[info.ranks.length - 1]}` }));

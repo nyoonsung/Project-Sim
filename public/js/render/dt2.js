@@ -13,7 +13,7 @@ let loading = null;
 export function loadDT2() {
   if (!loading) loading = (async () => {
     POS = {};
-    await Promise.all([loadSheet("/assets/dt2.png", "/assets/dt2.json", ""), loadSheet("/assets/town.png", "/assets/town.json", "t:")]);
+    await Promise.all([loadSheet("/assets/dt2.png", "/assets/dt2.json", ""), loadSheet("/assets/town.png", "/assets/town.json", "t:"), loadSheet("/assets/hero_sword.png", "/assets/hero_sword.json", "")]);
     IMG = true;
   })();
   return loading;

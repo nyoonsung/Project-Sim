@@ -43,7 +43,7 @@ function loginArt() {
         const e = { id: i + 1, info: { c, w, o: null }, k: "p" };
         const L = dtLookFor(e);
         if (!L) return;
-        L.scale = 1.6;
+        L.scale = L.custom ? 2 : 1.6;
         const cyc = (t + i * 0.45) % 2.4, p = cyc / 0.4;
         const anim = p < 1 ? { name: ATT[c], p } : null;
         g.fillStyle = "rgba(0,0,0,0.35)"; g.beginPath(); g.ellipse(26 + i * 44, 104, 9, 3, 0, 0, Math.PI * 2); g.fill();
