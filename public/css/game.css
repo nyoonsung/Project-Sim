@@ -427,3 +427,5 @@ body.touch.portrait #wallet { right: auto; left: calc(8px + env(safe-area-inset-
 .repair-box .statrow .sd { display: flex; align-items: center; gap: 4px; }
 
 .tt-opt.off { color: #777; text-decoration: line-through; }
+
+.continue-login { width: 100%; margin: 6px 0 2px; padding: 10px; font-size: 15px; }

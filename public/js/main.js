@@ -77,17 +77,27 @@ async function boot() {
     return;
   }
   const me = await fetch("/api/me", { credentials: "same-origin" });
-  if (me.ok) return startGame();
+  // 같은 탭에서 이미 시작했으면(업데이트 새로고침 등) 바로 이어서. 새로 들어오면 '계속하기' 또는 다른 계정 선택
+  const ss = { get: () => { try { return sessionStorage.getItem("psim_go"); } catch { return null; } }, set: (v) => { try { v ? sessionStorage.setItem("psim_go", "1") : sessionStorage.removeItem("psim_go"); } catch {} } };
+  const start = () => { ss.set(true); startGame(); };
+  if (me.ok && ss.get()) return startGame();
   $("#login").classList.remove("hidden");
   loginArt();
   const msg = $("#lf-msg");
+  if (me.ok) {
+    const { name } = await me.json().catch(() => ({}));
+    const cont = h("button", { type: "button", class: "btn primary continue-login", onclick: start }, `▶ ${name ?? "내 계정"}(으)로 계속하기`);
+    const hint = h("p", { class: "note", text: "다른 계정으로 로그인하거나 새 계정을 만들려면 아래에 입력하세요." });
+    $("#login-form").before(cont, hint);
+    $("#lf-login").classList.remove("primary");
+  }
   const go = async (path) => {
     msg.textContent = "";
     const name = $("#lf-user").value.trim(), pw = $("#lf-pass").value;
     if (!name || !pw) { msg.textContent = "닉네임과 비밀번호를 넣어 주세요."; return; }
     const r = await api(path, { username: name, password: pw });
     if (!r.ok) { msg.textContent = r.j.error ?? "실패했어요."; return; }
-    startGame();
+    start();
   };
   $("#login-form").addEventListener("submit", (e) => { e.preventDefault(); go("/api/login"); });
   $("#lf-register").addEventListener("click", () => go("/api/register"));
@@ -121,7 +131,7 @@ const ui = {
   flashSkill: HUD.flashSkill,
   sfx,
   blockingWindow: () => false,
-  async logout() { if (!globalThis.__LOCAL_NET) await api("/api/logout"); location.reload(); },
+  async logout() { try { sessionStorage.removeItem("psim_go"); } catch {} if (!globalThis.__LOCAL_NET) await api("/api/logout"); location.reload(); },
 };
 
 function resize() {
