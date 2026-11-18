@@ -39,6 +39,7 @@ export class World {
     this.clock = 0; // 월드 시계(초): 모든 방이 공유
     this.parties = new Map();
     this.town = this.addRoom(new Room(this, { id: "town", kind: "town", floor: 0, map: makeTown() }));
+    this.resumes = new Map(); // 서버 재시작 뒤 던전 복귀: 파티(멤버·층)별로 다시 만든 방
     this.announcement = null;
     this.startedAt = Date.now();
     this.tickTimes = [];
@@ -115,7 +116,7 @@ export class World {
     grantReserved(char, u.username);
     s.unit = makePlayerUnit(s);
     s.send({ t: "hello", name: u.username, char: this.publicChar(s), announce: this.announcement, serverTime: Date.now() });
-    this.town.addPlayer(s.unit);
+    if (!this.tryResume(s)) this.town.addPlayer(s.unit);
     this.save(s);
     this.broadcastSys(`${u.username}님이 접속했어요.`, "join");
   }
@@ -132,7 +133,49 @@ export class World {
     }
     this.finishClose(s);
   }
+  // ── 서버 재시작(업데이트 배포) 뒤 던전 복귀
+  //  던전에 들어갈 때 '어느 층에, 누구와' 를 저장해 두고, 마을로 돌아오거나 정상적으로 나가면 지움.
+  //  배포로 서버가 갑자기 꺼지면 이 기록이 남아 있으므로, 다시 접속하는 순간 같은 층(처음부터)으로 보내 주고 파티도 다시 묶어 줌.
+  markResume(group, floor, kind) {
+    const ids = group.map((g) => g.userId);
+    for (const g of group) { g.char.resume = { floor, kind, party: ids, leader: this.partyOf(g)?.leader ?? g.userId, at: Date.now() }; this.save(g); }
+  }
+  tryResume(s) {
+    const r = s.char.resume;
+    delete s.char.resume;
+    if (!r || !Number.isInteger(r.floor) || r.floor < 1 || r.floor > 100 || !(Date.now() - r.at < 6 * 3600_000)) return false; // 이상하거나 오래된 기록은 무시
+    const ids = [...new Set(r.party ?? [s.userId])].sort((a, b) => a - b);
+    const key = `${r.kind}|${r.floor}|${ids.join(",")}`;
+    let e = this.resumes.get(key);
+    if (e && (!this.rooms.has(e.room.id) || Date.now() - e.at > 10 * 60_000)) { this.resumes.delete(key); e = null; }
+    if (ids.length > 1) {
+      // 파티 다시 묶기 (먼저 돌아온 사람 기준, 원래 파티장이 돌아오면 파티장으로)
+      let p = e ? this.parties.get(e.partyId) : null;
+      if (!p) { p = { id: "p" + roomSeq++, leader: s.userId, members: new Set() }; this.parties.set(p.id, p); }
+      if (p.members.size < MAX_PARTY) { p.members.add(s.userId); s.partyId = p.id; if (r.leader === s.userId) p.leader = s.userId; }
+      if (!e) {
+        const room = this.moveGroup([s], r.floor, r.kind === "safe" ? "safe" : "dungeon", { partySize: ids.length, keepResume: true });
+        this.resumes.set(key, (e = { room, partyId: p.id, at: Date.now() }));
+      } else this.joinRoom(s, e.room);
+      this.sendParty(p);
+    } else {
+      this.moveGroup([s], r.floor, r.kind === "safe" ? "safe" : "dungeon", { keepResume: true });
+    }
+    s.char.resume = { ...r, at: Date.now() }; // 원래 파티 정보 그대로 (또 재시작돼도 같은 방으로)
+    this.save(s);
+    s.notice(`서버 업데이트로 잠깐 끊겼어요. ${r.floor}층으로 돌아왔어요. (층은 처음부터 다시 시작해요)`);
+    return true;
+  }
+  joinRoom(s, room) {
+    const u = s.unit;
+    u.room?.removePlayer(u);
+    if (u.cls === "sword" || u.cls === "fist") u.ki = Math.max(u.ki, 30);
+    if (u.cls === "priest") u.holy = Math.max(u.holy, 30);
+    if (u.cls === "smith") u.parts = Math.max(u.parts, 1);
+    room.addPlayer(u);
+  }
   finishClose(s) {
+    delete s.char.resume; // 정상적으로 나감 → 다음 접속은 마을에서
     if (s.trade) endTrade(s, `${s.name}님의 접속이 끊겨 거래가 취소됐어요.`);
     this.leaveParty(s, true);
     s.unit.room?.removePlayer(s.unit);
@@ -338,10 +381,11 @@ export class World {
     if (group.some((g) => g.unit.room !== this.town)) return s.notice("파티원 모두 마을에 있어야 해요.");
     this.moveGroup(group, floor, "dungeon");
   }
-  moveGroup(group, floor, kind) {
+  moveGroup(group, floor, kind, opt = {}) {
     const seed = (secureRandom() * 2 ** 31) | 0;
-    const map = kind === "safe" ? safeZone(floor) : makeFloor(floor, seed, group.length);
-    const room = this.addRoom(new Room(this, { id: "r" + roomSeq++, kind, floor, map, partyId: group[0].partyId, partySize: group.length }));
+    const size = opt.partySize ?? group.length;
+    const map = kind === "safe" ? safeZone(floor) : makeFloor(floor, seed, size);
+    const room = this.addRoom(new Room(this, { id: "r" + roomSeq++, kind, floor, map, partyId: group[0].partyId, partySize: size }));
     for (const g of group) {
       if (g.trade) endTrade(g, `${g.name}님이 마을을 떠나서 거래가 취소됐어요.`);
       const u = g.unit;
@@ -356,6 +400,8 @@ export class World {
       if (u.cls === "smith") u.parts = Math.max(u.parts, 1);
       room.addPlayer(u);
     }
+    // 서버가 갑자기 재시작돼도 이 층으로 돌아올 수 있게 기록 (파티원 전원)
+    if (!opt.keepResume) { const party = this.partyOf(group[0]); this.markResume(party ? [...party.members].map((id) => this.sessions.get(id)).filter(Boolean) : group, floor, kind); }
     if (kind === "dungeon") {
       const k = floorKind(floor);
       room.ev({ e: "msg", text: `${floor}층 ${k === "boss" ? "— 주요 보스" : k === "mid" ? "— 중간보스" : ""}`, kind: "floor" });
@@ -392,6 +438,7 @@ export class World {
     for (const p of [...room.players.values()]) this.toTown(p.session, "패배했어요. 마을에서 정비하고 다시 도전해요.");
   }
   toTown(s, text) {
+    delete s.char.resume;
     const u = s.unit;
     u.room?.removePlayer(u);
     if (u.dead) u.dead = false;

@@ -4,6 +4,7 @@ import { Q, secLog } from "./db.js";
 import { login, register, parseCookies, sessionCookie, sessionUser, destroySession, hashPassword, validatePassword } from "./auth.js";
 import { isAdmin, adminLogin, adminLogout, adminStatus, adminSetup, adminChangePassword } from "./admin.js";
 import { handleGm } from "./gm.js";
+import { initWorld } from "./net.js";
 
 export const reply = (status, body, headers = {}) => ({ status, body, headers });
 
@@ -71,6 +72,12 @@ export async function handleApi(req) {
     if (path === "/api/admin/logout" && method === "POST") return adminLogout(req);
     if (path === "/api/admin/me" && method === "GET") return adminStatus(req);
     if (path === "/api/ranking" && method === "GET") return reply(200, { list: Q.ranking.all() });
+    // 배포 전에 확인용: 지금 접속자 수와 던전 안에 있는 사람 수 (이름 등 개인 정보 없음)
+    if (path === "/api/status" && method === "GET") {
+      const w = initWorld(); let online = 0, dungeon = 0;
+      for (const s of w.sessions.values()) { online++; if (s.unit.room && s.unit.room !== w.town) dungeon++; }
+      return reply(200, { online, dungeon });
+    }
     if (path.startsWith("/api/gm/")) return await handleGm(req, null, path, { readJson: () => req.readJson(), send: (_res, s, b, h) => reply(s, b, h), isAdmin, ip, url: req.url });
     return reply(404, { error: "없는 API예요." });
   } catch (e) {

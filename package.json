@@ -10,7 +10,7 @@
   "scripts": {
     "start": "node --disable-warning=ExperimentalWarning server/main.js",
     "dev": "node --disable-warning=ExperimentalWarning --watch server/main.js",
-    "test": "node --disable-warning=ExperimentalWarning tools/bot-test.js && node --disable-warning=ExperimentalWarning tools/trade-test.mjs",
+    "test": "node --disable-warning=ExperimentalWarning tools/bot-test.js && node --disable-warning=ExperimentalWarning tools/trade-test.mjs && node --disable-warning=ExperimentalWarning tools/resume-test.mjs",
     "build:demo": "node demo/build.mjs",
     "new-admin-key": "node tools/new-admin-key.js",
     "build:cf": "node tools/build-cf.mjs",
