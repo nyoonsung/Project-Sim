@@ -258,6 +258,30 @@ export function enhanceCost(it) {
 export function enhMul(enh) {
   return 1 + 0.02 * enh;
 }
+// ── 인챈트(마법 부여): 장비 하나에 하나. 다시 하면 새로 뽑아 바뀜. 수선은 0.1%, 나머지는 같은 확률
+export const ENCHANTS = {
+  dmg: { name: "파괴", desc: "주는 피해 +3%", mods: { dmg: 0.03 } },
+  move: { name: "질풍", desc: "이동 속도 +15%", mods: { move: 0.15 } },
+  crit: { name: "예리함", desc: "치명타 확률 +5%p", mods: { crit: 0.05 } },
+  critDmg: { name: "치명", desc: "치명타 피해 +15%p", mods: { critDmg: 0.15 } },
+  hp: { name: "생명", desc: "최대 HP +10%", mods: { hpPct: 0.1 } },
+  mend: { name: "수선", desc: "내구도가 닳지 않음", mods: {}, rare: true },
+};
+export const MEND_CHANCE = 0.001;
+/** 인챈트 확률표 */
+export function enchantOdds() {
+  const keys = Object.keys(ENCHANTS).filter((k) => !ENCHANTS[k].rare);
+  const each = (1 - MEND_CHANCE) / keys.length;
+  return [...keys.map((k) => [k, each]), ["mend", MEND_CHANCE]];
+}
+export function rollEnchant(r) {
+  let acc = 0;
+  for (const [k, p] of enchantOdds()) { acc += p; if (r < acc) return k; }
+  return "dmg";
+}
+export function enchantCost(it) {
+  return Math.round((300 + it.ilvl * 45) * (1 + RARITIES.indexOf(it.rarity) * 0.6));
+}
 /** 강화 단계마다 부위별로 능력치 하나가 +1%씩 (부서지면 없음) */
 export const ENH_PCT = {
   weapon: { k: "dmg", name: "주는 피해" },
@@ -285,6 +309,8 @@ export function gearTotals(equip) {
     for (const [k, v] of Object.entries(it.base)) t[k] += PCT_KEYS.has(k) ? v * (broken ? BROKEN_MUL : 1) : v * m; // 비율 능력치는 강화로 안 커짐
     const ep = ENH_PCT[it.slot];
     if (ep && it.enh && !broken) t[ep.k] += it.enh * ENH_PCT_PER;
+    const en = it.ench && ENCHANTS[it.ench];
+    if (en && !broken) for (const [k, v] of Object.entries(en.mods)) t[k] += v;
     for (const o of it.opts) t[o.k] += o.v;
     if (it.mythic) t.mythic.push(it.mythic);
   }

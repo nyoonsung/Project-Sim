@@ -104,3 +104,19 @@ ok(evs9.some((e) => e.e === "dmg" && e.id === m9.id), "찌르기 조준이 50° 
   for (let k = 0; k < 40 && seen?.result !== "fail"; k++) { it.enh = 98; World.prototype.enhance.call(fakeW, se, 777); }
   ok(seen?.result === "fail" && it.enh === 98, `강화 실패 시 +98 → +${it.enh} (단계 유지)`);
 }
+
+// 11) 인챈트: 확률·능력치·수선(안 닳음)
+{
+  const { ENCHANTS, rollEnchant, enchantOdds } = await import("../shared/items.js");
+  const cnt = {}; for (let i = 0; i < 200000; i++) { const k = rollEnchant(Math.random()); cnt[k] = (cnt[k] ?? 0) + 1; }
+  const mendP = (cnt.mend ?? 0) / 200000, other = ["dmg", "move", "crit", "critDmg", "hp"].map((k) => cnt[k] / 200000);
+  ok(Math.abs(enchantOdds().reduce((a, [, p]) => a + p, 0) - 1) < 1e-9 && mendP < 0.002 && other.every((p) => Math.abs(p - 0.1998) < 0.006), `인챈트 확률: 수선 ${(mendP * 100).toFixed(2)}%, 나머지 ${other.map((p) => (p * 100).toFixed(1)).join("/")}%`);
+  let ar; for (let i = 0; i < 60 && ar?.slot !== "armor"; i++) ar = rollItem(Math.random, { ilvl: 5, rarity: "일반" });
+  const t0 = gearTotals({ armor: { ...ar, opts: [] } }), t1 = gearTotals({ armor: { ...ar, opts: [], ench: "move" } });
+  ok(Math.abs(t1.move - t0.move - 0.15) < 1e-9 && gearTotals({ armor: { ...ar, opts: [], ench: "hp" } }).hpPct === 0.1, "인챈트 이동 속도 +15%, 체력 +10%");
+  const { wearOnHit } = await import("../server/game/wear.js");
+  const sw = mk(); sw.char.equip.armor = { ...ar, uid: 5555, dur: 100, maxDur: 100, ench: "mend" };
+  const roomW = { kind: "dungeon", map: { safe: false }, world: {} };
+  for (let i = 0; i < 50; i++) wearOnHit(roomW, sw.unit);
+  ok(sw.char.equip.armor.dur === 100, "수선 인챈트 장비는 맞아도 내구도가 안 닳음");
+}

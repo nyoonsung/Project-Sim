@@ -429,3 +429,8 @@ body.touch.portrait #wallet { right: auto; left: calc(8px + env(safe-area-inset-
 .tt-opt.off { color: #777; text-decoration: line-through; }
 
 .continue-login { width: 100%; margin: 6px 0 2px; padding: 10px; font-size: 15px; }
+
+/* 인챈트 */
+.tt-ench { color: #c8a0ff; font-size: 11px; } .tt-ench.mend { color: #ffd35a; text-shadow: 0 0 6px #ffb34788; } .tt-ench.off { color: #777; text-decoration: line-through; }
+.cell .ench-dot { position: absolute; left: 2px; top: 0; font-size: 10px; color: #c8a0ff; text-shadow: 1px 1px 0 #000; z-index: 3; } .cell .ench-dot.mend { color: #ffd35a; }
+.ench-mend { color: #ffd35a; } .note.warn { color: #ffb347; }

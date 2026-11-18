@@ -55,6 +55,7 @@ export function onMessage(m) {
     case "announce": G.ui.announce(m.text); break;
     case "kick": G.ui.kicked(m.why); break;
     case "enh": G.ui.onEnhance(m); break;
+    case "ench": G.ui.onEnchant?.(m); break;
     case "renamed": G.name = m.name; G.ui.toast(`닉네임을 ${m.name}(으)로 바꿨어요. 다음 로그인부터 새 닉네임으로 로그인하세요.`, "rank"); break;
     case "renameFail": G.ui.toast(m.text, "info"); break;
     case "tp": G.localDash = null; G.pred.x = G.pred.px = G.local.x = m.x; G.pred.y = G.pred.py = G.local.y = m.y; G.pending.length = 0; break;

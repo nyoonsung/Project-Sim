@@ -9,7 +9,7 @@ import { CLASS_INFO, STATS, stageOf, stageLevel, xpToNext } from "/shared/classe
 import { SKILLS, skillsOf, unlockStage } from "/shared/skills.js";
 import { deriveStats } from "/shared/stats.js";
 import { SKILL_SLOTS, SLOT_KEYS, ITEMS, GRADE_COLOR } from "/shared/constants.js";
-import { RARITY_COLOR, SLOT_NAME, OPTIONS, MYTHIC_EFFECTS, WEAPON_TYPES, OFFHAND_TYPES, VARIANT_TRAITS, RARITIES, RARITY_WEIGHTS, RARITY_MUL, MATERIALS, ARMOR_NAMES, repairCost, ENH_PCT, enhanceOdds, enhanceCost, enhMul, sellPrice, canEquip, MAX_ENH } from "/shared/items.js";
+import { RARITY_COLOR, SLOT_NAME, OPTIONS, MYTHIC_EFFECTS, WEAPON_TYPES, OFFHAND_TYPES, VARIANT_TRAITS, RARITIES, RARITY_WEIGHTS, RARITY_MUL, MATERIALS, ARMOR_NAMES, repairCost, ENH_PCT, ENCHANTS, enchantOdds, enchantCost, enhanceOdds, enhanceCost, enhMul, sellPrice, canEquip, MAX_ENH } from "/shared/items.js";
 import { sprite, playerLook } from "../render/sprites.js";
 
 const fmtPct = (v) => (v * 100).toFixed(1) + "%";
@@ -76,6 +76,7 @@ export function itemTip(it, compare) {
     }
     els.push(h("div", {}, `${names[k] ?? OPTIONS[k]?.name ?? k} ${val}`, cmp ? h("span", { class: cmp.includes("▲") ? "tt-cmp-up" : "tt-cmp-down", text: cmp }) : ""));
   }
+  if (it.ench && ENCHANTS[it.ench]) els.push(h("div", { class: "tt-ench" + (it.ench === "mend" ? " mend" : "") + (broken && it.ench !== "mend" ? " off" : ""), text: `✦ 인챈트 · ${ENCHANTS[it.ench].name}: ${ENCHANTS[it.ench].desc}` }));
   const ep = ENH_PCT[it.slot];
   if (ep && it.enh) els.push(h("div", { class: "tt-opt" + (broken ? " off" : ""), text: `강화 보너스 · ${ep.name} +${it.enh}%${broken ? " (부서져서 꺼짐)" : ""}` }));
   for (const o of it.opts) els.push(h("div", { class: "tt-opt", text: `${OPTIONS[o.k].name} ${OPTIONS[o.k].fmt(o.v)}` }));
@@ -225,6 +226,7 @@ export function openInv(pos = {}) {
       const el = h("div", { class: "cell" + (it ? " r-" + it.rarity : "") + (it && selItem === it.uid && !multi ? " sel" : "") + (it && picked.has(it.uid) ? " picked" : ""),
         onclick: () => { if (!it) return; if (multi) { if (it.locked) return G.ui.toast?.("잠긴 아이템은 팔 수 없어요."); picked.has(it.uid) ? picked.delete(it.uid) : picked.add(it.uid); refreshWin("inv"); } else { selItem = it.uid; refreshWin("inv"); } } },
         it ? iconEl(it) : null, it?.enh ? h("span", { class: "enh", text: "+" + it.enh }) : null, it?.locked ? h("span", { class: "lock", text: "🔒" }) : null,
+        it?.ench ? h("span", { class: "ench-dot" + (it.ench === "mend" ? " mend" : ""), text: "✦" }) : null,
         it && multi && picked.has(it.uid) ? h("span", { class: "pick", text: "✓" }) : null,
         it?.dur != null && it.dur < it.maxDur ? h("span", { class: "dur-mini" + (it.dur <= 0 ? " broken" : it.dur <= it.maxDur * 0.2 ? " low" : "") }, h("i", { style: { width: Math.max(0, (it.dur / it.maxDur) * 100) + "%" } })) : null);
       if (it) {
@@ -342,6 +344,41 @@ export function openSmithy(pos = {}) {
     return [repairBox, h("h4", { text: "강화" }), box, h("h4", { text: "장비 선택" }), pick];
   }, { w: 420, ...pos });
 }
+// ── 마법부여사 (인챈트)
+let lastEnch = null;
+export function openEnchant(pos = {}) {
+  openWin("enchant", "마법부여사 엘라 — 인챈트", () => {
+    const c = G.char;
+    const all = [...Object.values(c.equip).filter(Boolean), ...c.inv];
+    const sel = all.find((x) => x.uid === G.enchSel) ?? null;
+    const pick = h("div", { class: "inv-grid" }, ...all.map((it) => {
+      const el = h("div", { class: "cell r-" + it.rarity + (sel === it ? " sel" : ""), onclick: () => { G.enchSel = it.uid; lastEnch = null; refreshWin("enchant"); } },
+        iconEl(it), it.enh ? h("span", { class: "enh", text: "+" + it.enh }) : null, it.ench ? h("span", { class: "ench-dot" + (it.ench === "mend" ? " mend" : ""), text: "✦" }) : null);
+      tipOn(el, () => itemTip(it));
+      return el;
+    }));
+    const odds = h("div", { class: "note" }, "확률: ", ...enchantOdds().map(([k, p], i) => h("span", { class: k === "mend" ? "ench-mend" : "", text: `${i ? " · " : ""}${ENCHANTS[k].name}(${ENCHANTS[k].desc}) ${(p * 100).toFixed(p < 0.01 ? 1 : 2)}%` })));
+    let box = h("div", { class: "note", text: "인챈트할 장비를 고르세요. 장비 하나에 인챈트 하나, 다시 하면 새로 뽑아서 바뀌어요." });
+    if (sel) {
+      const cost = enchantCost(sel), cur = sel.ench && ENCHANTS[sel.ench];
+      box = h("div", { class: "enh-box" },
+        h("div", { style: { color: RARITY_COLOR[sel.rarity] }, text: `${sel.name}${sel.enh ? " +" + sel.enh : ""}` }),
+        h("div", { class: cur ? "tt-ench" + (sel.ench === "mend" ? " mend" : "") : "note", text: cur ? `지금: ✦ ${cur.name} — ${cur.desc}` : "지금: 인챈트 없음" }),
+        sel.ench === "mend" ? h("div", { class: "note warn", text: "⚠ 0.1% 수선 인챈트예요. 다시 하면 사라질 수 있어요!" }) : null,
+        h("div", { class: "enh-result " + (lastEnch ? "success" : ""), text: lastEnch ? `✦ ${ENCHANTS[lastEnch.ench].name}: ${ENCHANTS[lastEnch.ench].desc}${lastEnch.ench === "mend" ? " — 대박!" : ""}` : "" }),
+        h("div", { class: "note", text: `비용 ${cost.toLocaleString()}G (보유 ${c.gold.toLocaleString()}G)` }),
+        h("button", { class: "btn primary", disabled: c.gold < cost, onclick: () => {
+          if (sel.ench === "mend" && !G.mendConfirm) { G.mendConfirm = true; G.ui.toast?.("수선 인챈트가 사라질 수 있어요. 정말 하려면 한 번 더 누르세요."); setTimeout(() => (G.mendConfirm = false), 4000); return; }
+          G.mendConfirm = false; send({ t: "enchant", uid: sel.uid });
+        } }, cur ? "다시 인챈트" : "인챈트하기"));
+    }
+    return [box, odds, h("h4", { text: "장비 선택" }), pick];
+  }, { w: 440, ...pos });
+}
+export function onEnchant(m) {
+  lastEnch = m;
+  if (isOpen("enchant")) refreshWin("enchant");
+}
 export function onEnhance(m) {
   lastEnh = m;
   if (m.result === "destroy") G.enhSel = null;
@@ -430,11 +467,11 @@ export function openNpc(o) {
     if (two) { const x0 = Math.max(8, (W - (w + 420 + 12)) / 2); open({ x: x0 }); openInv({ x: x0 + w + 12 }); }
     else open();
   };
-  ({ gate: openGate, shop: () => pair(openShop, 440), smithy: () => pair(openSmithy, 420), trainer: openTrainer, board: openBoard, class_master: openClass })[o.id]?.();
+  ({ gate: openGate, shop: () => pair(openShop, 440), smithy: () => pair(openSmithy, 420), enchanter: () => pair(openEnchant, 440), trainer: openTrainer, board: openBoard, class_master: openClass })[o.id]?.();
 }
 
 export function refreshAll() {
-  for (const id of ["char", "skills", "inv", "party", "shop", "smithy", "class", "gate", "trainer"]) if (isOpen(id)) refreshWin(id);
+  for (const id of ["char", "skills", "inv", "party", "shop", "smithy", "enchant", "class", "gate", "trainer"]) if (isOpen(id)) refreshWin(id);
 }
 
 // ───────── 조작 키 설정 (O) ─────────
@@ -510,3 +547,5 @@ export function openCodex() {
     h("div", { class: "note" }, ...Object.values(MYTHIC_EFFECTS).map((m) => h("div", { text: `◆ ${m.name}: ${m.desc}` }))),
   ], { w: 520 });
 }
+
+export { ENCHANTS };

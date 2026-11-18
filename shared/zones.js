@@ -189,8 +189,8 @@ const avg = (zi, k) => {
 };
 const NORM = ZONES.map((_, zi) => ({ hp: avg(zi, "hp") / avg(0, "hp"), dmg: avg(zi, "dmg") / avg(0, "dmg") }));
 
-/** 몬스터·보스 체력 배율: 혼자 5배, 파티 9배. 초반은 1층 1배 → 10층에서 최대치까지 서서히 (신규 유저 보호) */
-export const SOLO_HP = 5, PARTY_HP = 9;
+/** 몬스터·보스 체력 배율: 혼자 3.5배, 파티 7.5배. 초반은 1층 1배 → 10층에서 최대치까지 서서히 (신규 유저 보호) */
+export const SOLO_HP = 3.5, PARTY_HP = 7.5;
 const hpBoost = (party, floor) => { const max = party > 1 ? PARTY_HP : SOLO_HP; return 1 + (max - 1) * Math.min(1, Math.max(0, (floor - 1) / 9)); };
 /** 층에 맞춘 실제 몬스터 능력치 */
 export function monsterStats(id, floor, party = 1) {

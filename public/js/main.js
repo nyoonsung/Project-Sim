@@ -119,6 +119,7 @@ const ui = {
   },
   announce(text) { const a = $("#announce"); a.classList.toggle("hidden", !text); a.textContent = text ? "📢 " + text : ""; },
   kicked(why) { G.kickedWhy = why; },
+  onEnchant(m) { WIN.onEnchant(m); const { ENCHANTS } = WIN; HUD.toast(`인챈트: ✦ ${ENCHANTS[m.ench].name} (${ENCHANTS[m.ench].desc})`, m.ench === "mend" ? "mythic" : "rank"); },
   onEnhance(m) { WIN.onEnhance(m); HUD.toast(m.result === "success" ? `강화 성공! ${m.name} +${m.enh}` : m.result === "fail" ? `강화 실패 (${m.name} +${m.enh} 유지)` : `${m.name}이(가) 파괴됐어요…`, m.result === "success" ? "rank" : m.result === "destroy" ? "death" : "info"); },
   toast: HUD.toast,
   center: HUD.center,
@@ -259,12 +260,10 @@ function bindInput() {
     G.keys.delete(e.code);
     // 한글 입력기가 켜져 있으면 keyup의 code가 비어 오는 경우가 있음 → 이동키가 눌린 채로 남지 않게 전부 뗌
     if (!e.code || e.keyCode === 229) for (const k of [...G.keys]) if (MOVE_KEYS.has(k)) G.keys.delete(k);
-    G.keyAt?.delete(e.code);
   });
-  // 키가 '눌린 채'로 남는 문제 방지: 진짜로 누르고 있으면 브라우저가 계속 반복 신호를 보내므로, 1.2초 넘게 신호가 없는 이동키는 뗀 것으로 봄
-  G.keyAt = new Map();
-  addEventListener("keydown", (e) => { if (MOVE_KEYS.has(e.code)) G.keyAt.set(e.code, performance.now()); }, true);
-  setInterval(() => { const t = performance.now(); for (const k of [...G.keys]) if (MOVE_KEYS.has(k) && t - (G.keyAt.get(k) ?? 0) > 1200) G.keys.delete(k); }, 300);
+  // (예전의 '1.2초 동안 반복 신호 없으면 뗀 것으로 보기'는 삭제: 키 두 개를 누르면 브라우저가 마지막 키만 반복 신호를 보내서,
+  //  대각선 이동 중 먼저 누른 키가 풀려 한쪽으로 안 가던 버그였음) → 창 전환·화면 숨김 때 전부 뗌
+  document.addEventListener("visibilitychange", () => { if (document.hidden) G.keys.clear(); });
   // 입력창(파티 초대·닉네임 등)을 누르면 이동 입력을 모두 멈춤, 입력창에서 나오면 화면 위치·크기 다시 맞춤 (휴대폰 키보드 때문에 밀린 화면 복구)
   document.addEventListener("focusin", (e) => { if (/^(INPUT|TEXTAREA)$/.test(e.target.tagName)) { G.keys.clear(); G.resetStick?.(); G.stick = [0, 0]; } });
   document.addEventListener("focusout", (e) => { if (/^(INPUT|TEXTAREA)$/.test(e.target.tagName)) for (const d of [50, 300, 700]) setTimeout(() => { scrollTo(0, 0); resize(); }, d); });

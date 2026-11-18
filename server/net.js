@@ -37,6 +37,7 @@ const SCHEMA = {
   enhance: (m) => isInt(m.uid, 1, 2 ** 31),
   sellMany: (m) => Array.isArray(m.uids) && m.uids.length >= 1 && m.uids.length <= 60 && m.uids.every((u) => isInt(u, 1, 2 ** 31)),
   repair: (m) => m.uid === undefined || isInt(m.uid, 1, 2 ** 31),
+  enchant: (m) => isInt(m.uid, 1, 2 ** 31),
   lock: (m) => isInt(m.uid, 1, 2 ** 31),
   ping: (m) => isNum(m.c, 0, 1e15),
   dummy: (m) => ["reset"].includes(m.op),

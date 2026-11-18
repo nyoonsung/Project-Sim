@@ -127,7 +127,7 @@ function reachable(m, sx, sy) {
 
 /** 일반층: 큰 투기장 하나. 몬스터는 가장자리 소환 지점에서 웨이브로 몰려온다.
  *  배치 8가지: 탁 트인 곳·기둥 숲·네 웅덩이·십자 벽·고리 기둥·잔해·강과 다리·모서리 구덩이 */
-const ARENA_STYLES = ["open", "pillars", "pools", "cross", "ring", "rubble", "river", "pits"];
+const ARENA_STYLES = ["open", "open", "open", "open", "pillars", "pools", "cross", "ring", "rubble", "river", "pits"]; // 벽 줄이기: 빈 투기장 비중 ↑
 function normalFloor(floor, seed, party) {
   const R = rng(seed);
   const zone = zoneOf(floor);
@@ -147,7 +147,7 @@ function normalFloor(floor, seed, party) {
   const liq = R.chance(0.6) ? T.WATER : T.PIT;
   switch (style) {
     case "pillars":
-      for (let y = ay + 3; y < ay + ih - 3; y += 4) for (let x = ax + 3 + ((y / 4) % 2 ? 2 : 0); x < ax + iw - 3; x += 5) { put(x, y, T.WALL); if (R.chance(0.4)) put(x + 1, y, T.WALL); }
+      for (let y = ay + 4; y < ay + ih - 4; y += 7) for (let x = ax + 4 + ((y / 7) % 2 ? 4 : 0); x < ax + iw - 4; x += 8) put(x, y, T.WALL);
       break;
     case "pools":
       for (const [px, py] of [[0.25, 0.3], [0.75, 0.3], [0.25, 0.7], [0.75, 0.7]]) {
@@ -156,15 +156,15 @@ function normalFloor(floor, seed, party) {
       }
       break;
     case "cross":
-      for (let k = 4; k < Math.min(iw, ih) / 2 - 1; k++) { if (k % 5 === 0) continue; put(cx - k, cy, T.WALL); put(cx + k, cy, T.WALL); put(cx, cy - k, T.WALL); put(cx, cy + k, T.WALL); }
+      for (let k = 5; k < Math.min(iw, ih) / 2 - 1; k++) { if (k % 2 === 0) continue; put(cx - k, cy, T.WALL); put(cx + k, cy, T.WALL); put(cx, cy - k, T.WALL); put(cx, cy + k, T.WALL); }
       break;
     case "ring": {
       const rx = iw * 0.3, ry = ih * 0.3;
-      for (let k = 0; k < 16; k++) { const a = (k / 16) * Math.PI * 2; put(Math.round(cx + Math.cos(a) * rx), Math.round(cy + Math.sin(a) * ry), T.WALL); }
+      for (let k = 0; k < 16; k += 2) { const a = (k / 16) * Math.PI * 2; put(Math.round(cx + Math.cos(a) * rx), Math.round(cy + Math.sin(a) * ry), T.WALL); }
       break;
     }
     case "rubble":
-      for (let i = 0; i < Math.round((iw * ih) / 22); i++) put(R.int(ax + 2, ax + iw - 3), R.int(ay + 2, ay + ih - 3), R.chance(0.7) ? T.WALL : liq);
+      for (let i = 0; i < Math.round((iw * ih) / 90); i++) put(R.int(ax + 2, ax + iw - 3), R.int(ay + 2, ay + ih - 3), R.chance(0.7) ? T.WALL : liq);
       break;
     case "river": {
       const horiz = R.chance(0.5);
@@ -304,7 +304,7 @@ export function makeTown() {
   bld("lodge", 31, 20, 4, 7, { sign: { text: "여관", color: "#ff8ad8" }, win: "#ffd08a" });
   bld("h_green", 4, 20, 4, 3, { sign: { text: "훈련장", color: "#7af0a0" }, win: "#c8ffb0" });
   bld("h_orange", 10, 4, 4, 3, { win: "#ffcf7a" });
-  bld("h_beige", 26, 4, 4, 3, { win: "#ffe0a0" });
+  bld("h_beige", 26, 4, 4, 3, { sign: { text: "마법부여", color: "#c8a0ff" }, win: "#e0c8ff" });
   bld("h_round", 2, 4, 3, 3, { mill: true, win: "#ffcf7a" });
   bld("h_tall", 35, 4, 3, 3, { win: "#ffd8a0" });
   bld("h_orange2", 12, 24, 4, 3, { win: "#ffcf7a" });
@@ -326,6 +326,7 @@ export function makeTown() {
   objs.push({ kind: "npc", id: "trainer", name: "훈련 교관", x: P(8) + 16, y: P(23) + 16 });
   objs.push({ kind: "dummy", id: "dummy", x: P(10) + 16, y: P(22) + 8 });
   objs.push({ kind: "npc", id: "board", name: "모험가 게시판", x: P(25) + 16, y: P(14) });
+  objs.push({ kind: "npc", id: "enchanter", name: "마법부여사 엘라", x: P(28) + 16, y: P(8) + 8 });
   // 시장 노점 (광장 아래쪽)
   for (const [tx, goods, win] of [[14, ["bread", "jars", "redjar"], "#ff6ac8"], [23, ["crates", "box", "pack"], "#6ad8ff"]]) {
     set(m, tx, 19, T.WALL); set(m, tx + 1, 19, T.WALL); set(m, tx + 2, 19, T.WALL);

@@ -3,7 +3,7 @@ import { Q, secLog, itemLog } from "../db.js";
 import { TICK_RATE, ITEMS, MAX_PARTY, SKILL_SLOTS } from "../../shared/constants.js";
 import { CLASS_INFO, STATS } from "../../shared/classes.js";
 import { SKILLS, adventurerBasic } from "../../shared/skills.js";
-import { canEquip, enhanceOdds, enhanceCost, sellPrice, MAX_ENH, SLOTS, CLASS_GEAR, baseStats, itemName, ensureDur, repairCost, syncMythic } from "../../shared/items.js";
+import { canEquip, enhanceOdds, enhanceCost, sellPrice, MAX_ENH, SLOTS, CLASS_GEAR, baseStats, itemName, ensureDur, repairCost, syncMythic, enchantCost, rollEnchant } from "../../shared/items.js";
 import { floorKind } from "../../shared/zones.js";
 import { Room } from "./room.js";
 import { makeFloor, makeTown, safeZone } from "./dungeon.js";
@@ -170,6 +170,7 @@ export class World {
       case "sell": this.sell(s, m.uid); break;
       case "sellMany": this.sellMany(s, m.uids); break;
       case "repair": this.repair(s, m.uid); break;
+      case "enchant": this.enchant(s, m.uid); break;
       case "enhance": this.enhance(s, m.uid); break;
       case "lock": { const it = s.char.inv.find((i) => i.uid === m.uid) ?? Object.values(s.char.equip).find((i) => i?.uid === m.uid); if (it) { it.locked = !it.locked; this.sendChar(s); } break; }
       case "ping": s.send({ t: "pong", c: m.c, s: Date.now() }); break;
@@ -548,6 +549,26 @@ export class World {
     c.gold += gold;
     this.sendChar(s);
     s.notice(`${n}개를 ${gold.toLocaleString()}G에 팔았어요.${skipped ? ` (잠긴 ${skipped}개 제외)` : ""}`);
+  }
+  /** 인챈트 (마법부여사): 무작위 하나, 다시 하면 바뀜 */
+  enchant(s, uid) {
+    const c = s.char;
+    if (!this.nearNpc(s, "enchanter")) return s.notice("마법부여사 근처에서 인챈트할 수 있어요.");
+    let where = "inv", it = c.inv.find((x) => x.uid === uid);
+    if (!it) { it = Object.values(c.equip).find((x) => x?.uid === uid); where = "equip"; }
+    if (!it) return;
+    const cost = enchantCost(it);
+    if (c.gold < cost) return s.notice(`골드가 부족해요. (${cost.toLocaleString()}G 필요)`);
+    c.gold -= cost;
+    const before = it.ench ?? null;
+    it.ench = rollEnchant(secureRandom());
+    if (where === "equip") refreshStats(s.unit);
+    itemLog(s.userId, "enchant", { name: it.name, rarity: it.rarity, from: before, to: it.ench, cost });
+    s.send({ t: "ench", uid, ench: it.ench, before });
+    if (it.ench === "mend") this.broadcastSys(`✨ ${s.name}님이 [${it.name}]에 0.1% 확률의 '수선' 인챈트를 붙였어요!`, "legend");
+    s.unit.room?.ev({ e: "fx", fx: "arcane/mana-burst", x: s.unit.x | 0, y: (s.unit.y - 10) | 0 });
+    this.sendChar(s);
+    this.save(s);
   }
   /** 장비 수선 (대장장이): uid를 주면 그 장비만, 없으면 장착 장비 + 가방 속 장비 전부 */
   repair(s, uid) {

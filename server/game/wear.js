@@ -4,7 +4,7 @@ import { refreshStats } from "./player.js";
 
 function wear(room, u, slot, amt) {
   const s = u.session, it = s?.char.equip[slot];
-  if (!it || it.dur == null || it.dur <= 0 || !amt) return false;
+  if (!it || it.dur == null || it.dur <= 0 || !amt || it.ench === "mend") return false; // 수선 인챈트: 안 닳음
   const before = it.dur;
   it.dur = Math.max(0, +(it.dur - amt).toFixed(2));
   s.dirty = true;
