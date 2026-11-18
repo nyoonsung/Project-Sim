@@ -290,6 +290,7 @@ function bindInput() {
     if (e.code === "KeyL") G.toggleChat?.();
     if (e.code === "KeyB") toggleWin("codex", WIN.openCodex);
     if (e.code === "KeyO") toggleWin("keys", WIN.openKeys);
+    if (e.code === "KeyT" && si < 0) toggleWin("titles", WIN.openTitles);
     if (e.code === "KeyN") $("#minimap").classList.toggle("hidden-mini");
     if (e.code === "Tab") e.preventDefault();
   });
@@ -321,7 +322,7 @@ function bindInput() {
   $("#chat-btn")?.addEventListener("click", () => G.toggleChat?.());
   $("#bigmap").addEventListener("click", () => HUD.toggleBigMap());
   for (const b of document.querySelectorAll("#menu-buttons button[data-win]")) {
-    const map = { char: WIN.openChar, skills: WIN.openSkills, inv: WIN.openInv, party: WIN.openParty, help: WIN.openHelp, codex: WIN.openCodex, keys: WIN.openKeys };
+    const map = { char: WIN.openChar, skills: WIN.openSkills, inv: WIN.openInv, party: WIN.openParty, help: WIN.openHelp, codex: WIN.openCodex, keys: WIN.openKeys, titles: WIN.openTitles };
     b.addEventListener("click", () => toggleWin(b.dataset.win, map[b.dataset.win]));
   }
 }

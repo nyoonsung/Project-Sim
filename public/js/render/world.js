@@ -790,6 +790,7 @@ export class Renderer {
       if (e.k === "p") {
         const top = y - 48;
         this.label(ctx, info.n, x, top - 4, e.id === G.you ? "#ffffff" : "#8fd0ff");
+        if (info.tt) this.label(ctx, `「${info.tt}」`, x, top - 15, info.tc ?? "#ffd35a");
         if (e.id !== G.you) { ctx.fillStyle = "#000"; ctx.fillRect(x - 13, top, 26, 3); ctx.fillStyle = "#e0424e"; ctx.fillRect(x - 12, top + 1, Math.round(24 * e.hp), 1); }
         if (e.casting) {
           const k = Math.min(1, (t - e.casting.t0) / e.casting.d);

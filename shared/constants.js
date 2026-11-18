@@ -57,3 +57,7 @@ export const ITEMS = {
 
 // 직업 id
 export const CLASSES = ["adventurer", "sword", "fist", "archer", "rogue", "mage", "priest", "smith"];
+
+// 칭호: 관리자만 줄 수 있음. 글자 1~16자, 색은 이 목록 중 하나
+export const TITLE_COLORS = ["#ffd35a", "#ff5a6e", "#c8a0ff", "#7af0a0", "#7ad0ff", "#ffffff", "#ff9a30", "#ff8ad8"];
+export const TITLE_MAX = 16;

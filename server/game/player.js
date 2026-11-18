@@ -2,7 +2,7 @@
 import { deriveStats } from "../../shared/stats.js";
 import { CLASS_INFO, xpToNext, stageOf } from "../../shared/classes.js";
 import { SKILLS, unlockStage, adventurerBasic } from "../../shared/skills.js";
-import { MAX_LEVEL, STAT_POINTS_PER_LEVEL, PLAYER_RADIUS, ITEMS } from "../../shared/constants.js";
+import { MAX_LEVEL, STAT_POINTS_PER_LEVEL, PLAYER_RADIUS, ITEMS, TITLE_COLORS, TITLE_MAX } from "../../shared/constants.js";
 import { starterGear, ensureDur, upgradeMythic, syncMythic } from "../../shared/items.js";
 
 export const INV_SIZE = 40;
@@ -10,7 +10,7 @@ export const INV_SIZE = 40;
 export function newCharacter(name) {
   const g = starterGear();
   return {
-    v: 1, name, level: 1, xp: 0, cls: "adventurer", stats: {}, unspent: 0, prof: {},
+    v: 1, name, level: 1, xp: 0, cls: "adventurer", stats: {}, unspent: 0, prof: {}, titles: [], title: null,
     skills: ["c_thrust", "c_slash", null, null, null, null, "c_dash", "c_firstaid"],
     equip: { weapon: { uid: 1, ...g.weapon }, offhand: { uid: 2, ...g.offhand }, helmet: null, armor: null, trinket: null },
     inv: [], nextUid: 3, cons: { hp_potion: 5, antidote: 2, mp_potion: 2 }, gold: 100,
@@ -36,6 +36,10 @@ export function sanitizeChar(c, name) {
   if (out.cls === "adventurer" && Array.isArray(out.skills)) out.skills[0] = adventurerBasic(out.equip?.weapon?.type);
   out.equip = { ...d.equip, ...(out.equip ?? {}) };
   // 무기 내구도 (예전 무기엔 없던 값 → 가득으로)
+  // 칭호: 관리자가 준 것만 (보관함 titles, 장착 title)
+  out.titles = (Array.isArray(out.titles) ? out.titles : []).filter((t) => t && Number.isInteger(t.id) && typeof t.text === "string" && t.text.length >= 1 && t.text.length <= TITLE_MAX)
+    .map((t) => ({ id: t.id, text: t.text, color: TITLE_COLORS.includes(t.color) ? t.color : TITLE_COLORS[0], at: t.at ?? 0 })).slice(0, 50);
+  if (!out.titles.some((t) => t.id === out.title)) out.title = null;
   for (const it of out.inv) { ensureDur(it); upgradeMythic(it); }
   for (const it of Object.values(out.equip)) { ensureDur(it); upgradeMythic(it); }
   syncMythic(out);

@@ -31,3 +31,7 @@ body.gm { overflow: auto; user-select: text; }
 .toolbar input { padding: 6px 10px; background: #0e0c14; border: 1px solid var(--line2); min-width: 240px; }
 .ok-msg { color: var(--good); } .err-msg { color: var(--bad); }
 .gm-top a.btn { color: inherit; text-decoration: none; }
+/* 칭호 */
+.swatch { border: 2px solid #0008 !important; }
+.swatch.on { outline: 2px solid #fff; outline-offset: 1px; }
+.gm-title { display: inline-flex; align-items: center; gap: 4px; margin: 2px 8px 2px 0; }

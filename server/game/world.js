@@ -136,7 +136,7 @@ export class World {
 
   publicChar(s) {
     const c = s.char;
-    return { name: c.name, level: c.level, xp: c.xp, cls: c.cls, stats: c.stats, unspent: c.unspent, skills: c.skills, equip: c.equip, inv: c.inv, cons: c.cons, gold: c.gold, best: c.best, checkpoint: c.checkpoint, cleared: c.cleared, kills: c.kills, deaths: c.deaths, prof: c.prof ?? {} };
+    return { name: c.name, level: c.level, xp: c.xp, cls: c.cls, stats: c.stats, unspent: c.unspent, skills: c.skills, equip: c.equip, inv: c.inv, cons: c.cons, gold: c.gold, best: c.best, checkpoint: c.checkpoint, cleared: c.cleared, kills: c.kills, deaths: c.deaths, prof: c.prof ?? {}, titles: c.titles ?? [], title: c.title ?? null };
   }
   sendChar(s) {
     if (syncMythic(s.char) && s.unit) refreshStats(s.unit); // 새로 얻은 신화도 내 레벨로
@@ -202,6 +202,7 @@ export class World {
       case "sellMany": this.sellMany(s, m.uids); break;
       case "repair": this.repair(s, m.uid); break;
       case "enchant": this.enchant(s, m.uid); break;
+      case "title": this.equipTitle(s, m.id); break;
       case "enhance": this.enhance(s, m.uid); break;
       case "lock": { const it = s.char.inv.find((i) => i.uid === m.uid) ?? Object.values(s.char.equip).find((i) => i?.uid === m.uid); if (it) { it.locked = !it.locked; this.sendChar(s); } break; }
       case "ping": s.send({ t: "pong", c: m.c, s: Date.now() }); break;
@@ -588,6 +589,16 @@ export class World {
     this.sendChar(s);
     s.notice(`${n}개를 ${gold.toLocaleString()}G에 팔았어요.${skipped ? ` (잠긴 ${skipped}개 제외)` : ""}`);
   }
+  /** 칭호 장착/해제 (보관함에 있는 것만) */
+  equipTitle(s, id) {
+    const c = s.char;
+    if (id !== null && !c.titles?.some((t) => t.id === id)) return;
+    c.title = id;
+    this.refreshLook(s);
+    this.sendChar(s);
+  }
+  /** 이름 위 칭호 등 겉모습이 바뀌면 같은 방 사람들에게 다시 알림 */
+  refreshLook(s) { const r = s.unit?.room; if (r) r.ev({ e: "add", ...r.describe(s.unit) }); }
   /** 인챈트 (마법부여사): 무작위 하나, 다시 하면 바뀜 */
   enchant(s, uid) {
     const c = s.char;
@@ -673,6 +684,13 @@ export class World {
   gmAnnounce(text) {
     this.announcement = text ? { text, at: Date.now() } : null;
     for (const s of this.sessions.values()) s.send({ t: "announce", text });
+  }
+  /** 관리자가 칭호를 주거나 뺐을 때: 접속 중이면 알림 + 이름 위 표시 갱신 */
+  gmTitleNotice(userId, made) {
+    const s = this.sessions.get(userId);
+    if (!s) return;
+    if (made) s.notice(`새 칭호를 받았어요: 「${made.text}」 (캐릭터 창 → 칭호, 또는 T 키에서 장착)`);
+    this.refreshLook(s);
   }
   gmApplyChar(userId, fn) {
     const s = this.sessions.get(userId);

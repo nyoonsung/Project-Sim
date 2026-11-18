@@ -4,7 +4,7 @@ import { itemTip } from "./ui/windows.js";
 import { itemIcon } from "./ui/icons.js";
 import { CLASS_INFO } from "/shared/classes.js";
 import { RARITIES, SLOT_NAME } from "/shared/items.js";
-import { ITEMS } from "/shared/constants.js";
+import { ITEMS, TITLE_COLORS } from "/shared/constants.js";
 
 const main = $("#gm-main");
 const fmtT = (ms) => (ms ? new Date(ms).toLocaleString("ko-KR") : "-");
@@ -89,6 +89,8 @@ async function openPlayer(id) {
   const cls = h("select", {}, ...Object.entries(CLASS_INFO).map(([k, v]) => h("option", { value: k, selected: c?.cls === k }, v.name)));
   const cons = Object.fromEntries(Object.keys(ITEMS).map((k) => [k, h("input", { type: "number", min: 0, max: ITEMS[k].max, value: c?.cons?.[k] ?? 0 })]));
   const rar = h("select", {}, ...RARITIES.map((r) => h("option", { value: r }, r)));
+  const titleT = h("input", { type: "text", maxlength: 16, placeholder: "예: 던전의 정복자" });
+  const titleC = { v: TITLE_COLORS[0] };
   const ilvl = h("input", { type: "number", min: 1, max: 100, value: Math.max(1, c?.best || 1) });
   const slot = h("select", {}, h("option", { value: "" }, "무작위"), ...Object.entries(SLOT_NAME).map(([k, v]) => h("option", { value: k }, v)));
   const banH = h("input", { type: "number", min: 0, value: 24 });
@@ -118,6 +120,10 @@ async function openPlayer(id) {
           h("button", { class: "btn small primary", onclick: act("edit", () => ({ level: +lv.value, gold: +gold.value, unspent: +pts.value, checkpoint: +cp.value, cls: cls.value, cons: Object.fromEntries(Object.entries(cons).map(([k, el]) => [k, +el.value])) })) }, "저장")),
         h("div", { class: "box" }, h("h3", { text: "아이템 지급" }), h("div", { class: "form" }, ...field("등급", rar), ...field("아이템 레벨", ilvl), ...field("부위", slot)),
           h("button", { class: "btn small primary", onclick: act("give", () => ({ rarity: rar.value, ilvl: +ilvl.value, slot: slot.value || undefined })) }, "지급")),
+        h("div", { class: "box" }, h("h3", { text: "칭호 (관리자만 줄 수 있음)" }),
+          h("div", { class: "form" }, ...field("칭호", titleT), ...field("색", h("div", { class: "flexrow" }, ...TITLE_COLORS.map((col) => { const b = h("button", { class: "btn small swatch" + (titleC.v === col ? " on" : ""), style: { background: col, width: "22px", height: "18px", padding: 0 }, title: col, onclick: () => { titleC.v = col; for (const x of b.parentNode.children) x.classList.toggle("on", x === b); } }); return b; })))),
+          h("button", { class: "btn small primary", onclick: act("give-title", () => ({ text: titleT.value, color: titleC.v })) }, "칭호 주기"),
+          h("div", { class: "note" }, ...((c?.titles ?? []).length ? c.titles.map((t) => h("span", { class: "gm-title", style: { color: t.color } }, `「${t.text}」${c.title === t.id ? "(장착)" : ""} `, h("button", { class: "btn small danger", onclick: act("remove-title", () => ({ tid: t.id })) }, "회수"))) : ["가진 칭호 없음"]))),
         h("div", { class: "box" }, h("h3", { text: "제재 · 이동" }),
           h("div", { class: "form" },
             ...field("차단(시간)", h("div", { class: "flexrow" }, banH, banR, h("button", { class: "btn small danger", onclick: act("ban", () => ({ hours: +banH.value, reason: banR.value })) }, "차단"), h("button", { class: "btn small", onclick: act("ban", () => ({ hours: 0 })) }, "해제"))),

@@ -4,7 +4,7 @@ import { defaultLoadout } from "./game/player.js";
 import { world } from "./net.js";
 import { rollItem, RARITIES, SLOTS, canEquip } from "../shared/items.js";
 import { CLASS_INFO } from "../shared/classes.js";
-import { MAX_LEVEL, ITEMS } from "../shared/constants.js";
+import { MAX_LEVEL, ITEMS, TITLE_COLORS, TITLE_MAX } from "../shared/constants.js";
 import { secureRandom } from "./game/secure.js";
 import { hashPassword } from "./auth.js";
 
@@ -102,6 +102,33 @@ export async function handleGm(req, res, path, { readJson, send, isAdmin, ip, ur
       });
       audit("give_item", target, { rarity, ilvl, name: made?.name ?? null });
       return send(res, ok && made ? 200 : 400, ok && made ? { ok: true, item: made } : { error: "가방이 가득 찼거나 실패했어요." });
+    }
+    case "give-title": {
+      const text = typeof b.text === "string" ? b.text.trim() : "";
+      if (text.length < 1 || text.length > TITLE_MAX) return send(res, 400, { error: `칭호는 1~${TITLE_MAX}자예요.` });
+      const color = TITLE_COLORS.includes(b.color) ? b.color : TITLE_COLORS[0];
+      let made = null;
+      const ok = world.gmApplyChar(id, (c) => {
+        c.titles = Array.isArray(c.titles) ? c.titles : [];
+        if (c.titles.length >= 50) return;
+        c.titleSeq = Math.max(c.titleSeq ?? 0, ...c.titles.map((t) => t.id)) + 1;
+        made = { id: c.titleSeq, text, color, at: Date.now() };
+        c.titles.push(made);
+      });
+      world.gmTitleNotice?.(id, made);
+      audit("give_title", target, { text, color });
+      return send(res, ok && made ? 200 : 400, ok && made ? { ok: true } : { error: "칭호를 줄 수 없어요. (최대 50개)" });
+    }
+    case "remove-title": {
+      if (!int(b.tid, 1, 1e6)) return send(res, 400, { error: "tid" });
+      let removed = null;
+      world.gmApplyChar(id, (c) => {
+        const i = (c.titles ?? []).findIndex((t) => t.id === b.tid);
+        if (i >= 0) { removed = c.titles.splice(i, 1)[0]; if (c.title === b.tid) c.title = null; }
+      });
+      world.gmTitleNotice?.(id, null);
+      audit("remove_title", target, { text: removed?.text ?? null });
+      return send(res, 200, { ok: !!removed });
     }
     case "remove-item": {
       if (!int(b.uid, 1, 2 ** 31)) return send(res, 400, { error: "uid" });

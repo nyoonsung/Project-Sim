@@ -122,6 +122,7 @@ export function openChar() {
       h("div", { class: "note", text: c.cls === "adventurer" ? "10층 보스를 처치하면 안전 구역의 전직소에서 전직할 수 있어요. 전직하면 지금까지 투자한 스탯이 전부 돌아와요." : `${info.position} · ${next}` }),
       h("h4", { text: `능력치 (남은 포인트 ${c.unspent})` }),
       ...rows,
+      h("div", { class: "flexrow" }, h("span", { class: "note", text: "칭호: " }), (() => { const tt = c.titles?.find((x) => x.id === c.title); return tt ? h("span", { class: "title-tag", style: { color: tt.color, borderColor: tt.color }, text: `「${tt.text}」` }) : h("span", { class: "note", text: "없음" }); })(), h("button", { class: "btn small", onclick: () => openTitles() }, "칭호 (T)")),
       h("h4", { text: "최종 수치" }),
       h("table", {}, ...[
         ["최대 HP", st.maxHp.toLocaleString()], ["최대 MP", st.maxMp], ["공격력", Math.round(st.atk).toLocaleString()], ["방어력", st.def],
@@ -276,7 +277,7 @@ export function openHelp() {
     h("h4", { text: "조작" }),
     h("div", { class: "help-grid" }, ...[
       ["WASD / 방향키", "이동"], ["마우스", "조준"], ["좌클릭 · 우클릭", "스킬 1 · 2"], ["Q E R F ⇧ V", "스킬 3~8"], ["1 2 3", "체력 물약 · 마나 물약 · 해독제"],
-      ["G", "NPC와 대화"], ["C / K / I / P / H", "캐릭터 / 스킬 / 가방 / 파티 / 도움말"], ["Enter", "채팅"], ["Esc", "창 닫기"],
+      ["G", "NPC와 대화"], ["C / K / I / P / H / T", "캐릭터 / 스킬 / 가방 / 파티 / 도움말 / 칭호"], ["Enter", "채팅"], ["Esc", "창 닫기"],
     ].flatMap(([a, b]) => [h("kbd", { text: a }), h("span", { text: b })])),
     h("h4", { text: "던전" }),
     h("div", { class: "note", text: "1~100층. 5층마다 중간보스, 10층마다 주요 보스가 나와요. 일반층은 큰 투기장에서 몬스터가 웨이브로 몰려와요. 웨이브를 모두 물리치면(90% 처치) 출구 포탈이 열려요. 미니맵을 누르면(M) 큰 지도. 10층 보스를 쓰러뜨리면 안전 구역의 전직소에 갈 수 있고, 다음부터 그 다음 층(11, 21…)에서 바로 시작할 수 있어요." }),
@@ -471,7 +472,7 @@ export function openNpc(o) {
 }
 
 export function refreshAll() {
-  for (const id of ["char", "skills", "inv", "party", "shop", "smithy", "enchant", "class", "gate", "trainer"]) if (isOpen(id)) refreshWin(id);
+  for (const id of ["char", "skills", "inv", "party", "shop", "smithy", "enchant", "class", "gate", "trainer", "titles"]) if (isOpen(id)) refreshWin(id);
 }
 
 // ───────── 조작 키 설정 (O) ─────────
@@ -549,3 +550,24 @@ export function openCodex() {
 }
 
 export { ENCHANTS };
+
+// ── 칭호 (T): 장착칸 + 보관함. 칭호는 관리자만 줄 수 있음
+export function openTitles() {
+  openWin("titles", "칭호", () => {
+    const c = G.char;
+    const list = c?.titles ?? [];
+    const cur = list.find((t) => t.id === c?.title) ?? null;
+    const tag = (t) => h("span", { class: "title-tag", style: { color: t.color, borderColor: t.color }, text: `「${t.text}」` });
+    return [
+      h("h4", { text: "장착 중" }),
+      h("div", { class: "title-slot" }, cur ? tag(cur) : h("span", { class: "note", text: "비어 있음" }),
+        cur ? h("button", { class: "btn small", onclick: () => send({ t: "title", id: null }) }, "해제") : null),
+      h("div", { class: "note", text: "장착한 칭호는 닉네임 위에 표시돼요." }),
+      h("h4", { text: `보관함 (${list.length})` }),
+      list.length ? h("div", { class: "title-list" }, ...list.map((t) => h("div", { class: "statrow" },
+        tag(t), h("span", { class: "sd note", text: t.at ? new Date(t.at).toLocaleDateString() : "" }),
+        c.title === t.id ? h("span", { class: "note", text: "장착 중" }) : h("button", { class: "btn small primary", onclick: () => send({ t: "title", id: t.id }) }, "장착"))))
+        : h("div", { class: "note", text: "아직 칭호가 없어요. 관리자가 준 칭호만 여기에 보관돼요." }),
+    ];
+  }, { w: 340 });
+}
