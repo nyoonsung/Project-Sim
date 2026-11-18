@@ -1,3 +1,4 @@
+import { registerHeroes } from "./heroes.js";
 // 스프라이트 아틀라스: 던전(0x72 DungeonTileset II, CC0) + 마을("t:" 접두어, Ninja Adventure, CC0)
 // 프레임을 잘라 쓰고, 색 입히기(곱하기 + 밝히기)와 흰색 번쩍임 버전을 미리 만들어 캐시한다 (매 프레임 재계산 없음).
 let IMG = null, POS = null;
@@ -14,6 +15,8 @@ export function loadDT2() {
   if (!loading) loading = (async () => {
     POS = {};
     await Promise.all([loadSheet("/assets/dt2.png", "/assets/dt2.json", ""), loadSheet("/assets/town.png", "/assets/town.json", "t:")]);
+    // 직업별 주인공 도트 (직접 그린 그림, 검사·모험가 제외)
+    registerHeroes((name, cv) => { POS[name] = [0, 0, cv.width, cv.height, cv]; });
     IMG = true;
   })();
   return loading;

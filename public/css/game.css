@@ -740,3 +740,5 @@ body.touch.portrait #wallet { bottom: calc(80px + env(safe-area-inset-bottom)); 
 body.touch.portrait #potions { flex-direction: column; bottom: calc(12px + env(safe-area-inset-bottom)); }
 body.touch.portrait #potions .slot { width: 44px; height: 44px; }
 body.touch.portrait #wallet { left: calc(70px + env(safe-area-inset-left)); bottom: calc(14px + env(safe-area-inset-bottom)); }
+
+.cc canvas { width: 76px; height: 108px; }
