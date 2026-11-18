@@ -9,7 +9,7 @@ import { CLASS_INFO, STATS, stageOf, stageLevel, xpToNext } from "/shared/classe
 import { SKILLS, skillsOf, unlockStage } from "/shared/skills.js";
 import { deriveStats } from "/shared/stats.js";
 import { SKILL_SLOTS, SLOT_KEYS, ITEMS, GRADE_COLOR } from "/shared/constants.js";
-import { RARITY_COLOR, SLOT_NAME, OPTIONS, MYTHIC_EFFECTS, WEAPON_TYPES, OFFHAND_TYPES, VARIANT_TRAITS, RARITIES, RARITY_WEIGHTS, MATERIALS, ARMOR_NAMES, repairCost, enhanceOdds, enhanceCost, enhMul, sellPrice, canEquip, MAX_ENH } from "/shared/items.js";
+import { RARITY_COLOR, SLOT_NAME, OPTIONS, MYTHIC_EFFECTS, WEAPON_TYPES, OFFHAND_TYPES, VARIANT_TRAITS, RARITIES, RARITY_WEIGHTS, RARITY_MUL, MATERIALS, ARMOR_NAMES, repairCost, enhanceOdds, enhanceCost, enhMul, sellPrice, canEquip, MAX_ENH } from "/shared/items.js";
 import { sprite, playerLook } from "../render/sprites.js";
 
 const fmtPct = (v) => (v * 100).toFixed(1) + "%";
@@ -490,7 +490,7 @@ export function openCodex() {
       ...Object.keys(RARITY_WEIGHTS).map((t) => h("tr", {}, h("td", { text: tierName[t] }), ...RARITY_WEIGHTS[t].map((w) => h("td", { text: pct(w) }))))),
     h("div", { class: "note" }, ...Object.keys(dropCount).map((t) => h("div", { text: `• ${tierName[t]}: 장비 ${dropCount[t]}` })), h("div", { text: "• 층을 깨면 보상 상자에서 장비 1~2개 + 골드" })),
     h("h4", { text: "등급별 성능" }),
-    h("div", { class: "note" }, ...RARITIES.map((r, i) => h("div", { style: { color: RARITY_COLOR[r] }, text: `${r}: 기본 능력치 ×${[1, 1.12, 1.26, 1.42, 1.6][i]} · 추가 옵션 ${i}개${i === 4 ? " + 신화 고유 효과" : ""}` }))),
+    h("div", { class: "note" }, ...RARITIES.map((r, i) => h("div", { style: { color: RARITY_COLOR[r] }, text: `${r}: 기본 능력치 ×${RARITY_MUL[i]} · 추가 옵션 ${i}개${i === 4 ? " + 신화 고유 효과 · 무기는 주는 피해 +6%" : ""}` }))),
     h("h4", { text: "재료 (아이템 레벨 = 떨어진 층)" }),
     h("div", { class: "note", text: MATERIALS.map((m, i) => `${m} ${i * 10 + 1}~${i * 10 + 10}층`).join(" · ") }),
     h("h4", { text: "무기" }),

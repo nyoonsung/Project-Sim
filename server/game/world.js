@@ -283,7 +283,10 @@ export class World {
       u.status.clear();
       u.buffs.clear();
       u.shield = null;
-      if (u.cls !== "sword" && u.cls !== "fist") u.ki = 0;
+      // 새 층은 직업 자원을 기본치로 시작 (검사·권투사 내력 30, 성직자 성광 30, 대장장이 부품 1)
+      if (u.cls === "sword" || u.cls === "fist") u.ki = Math.max(u.ki, 30); else u.ki = 0;
+      if (u.cls === "priest") u.holy = Math.max(u.holy, 30);
+      if (u.cls === "smith") u.parts = Math.max(u.parts, 1);
       room.addPlayer(u);
     }
     if (kind === "dungeon") {

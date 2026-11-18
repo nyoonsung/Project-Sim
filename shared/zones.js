@@ -168,10 +168,14 @@ export function floorKind(floor) {
 /** 층 배율: 플레이어 성장 곡선(레벨≈층)에 맞춘 전역 곡선 */
 // 60층까지는 기존 곡선, 그 뒤로는 완만하게 (후반 벽 완화)
 const bend = (base, late, f) => f <= 60 ? Math.pow(base, f - 1) : Math.pow(base, 59) * Math.pow(late, f - 60);
+// 추가 난이도: 층마다 체력 +2.5%·공격력 +1.6%씩 더 강해짐 (1층 그대로, 10층 ×1.23/×1.14, 50층 ×2.2/×1.8, 100층 ×3.5/×2.6), 이동 속도 최대 +25%
+export const diffMul = (f) => ({ hp: 1 + 0.025 * (f - 1), dmg: 1 + 0.016 * (f - 1), speed: Math.min(1.25, 1 + 0.003 * (f - 1)) });
 export function floorScale(floor) {
+  const d = diffMul(floor);
   return {
-    hp: bend(1.05, 1.04, floor),
-    dmg: bend(1.04, 1.027, floor),
+    hp: bend(1.05, 1.04, floor) * d.hp,
+    dmg: bend(1.04, 1.027, floor) * d.dmg,
+    speed: d.speed,
     xp: Math.pow(1.045, floor - 1),
     gold: Math.pow(1.04, floor - 1),
     level: floor,

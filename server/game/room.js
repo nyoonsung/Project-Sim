@@ -3,6 +3,7 @@ import { TILE, TICK_DT, PLAYER_RADIUS } from "../../shared/constants.js";
 import { applyInput, moveCircle, circleHitsWall, blocksShot, lineOfSight, tileAt } from "../../shared/move.js";
 import { MONSTERS, BOSSES, monsterStats, bossStats, floorScale, zoneOf } from "../../shared/zones.js";
 import { rollItem, DUR_DEATH } from "../../shared/items.js";
+const KI_BASE = 30; // 내력 기본치
 import { tickStatuses, dealDamage, heal, moveMul, isHardCC, applyStatus, buffSum, giveShield } from "./combat.js";
 import { newUnitId, gainXp, refreshStats } from "./player.js";
 import { castSkill, onParry as skillOnParry, onPlayerHit as skillOnPlayerHit, tickPlayerSkills, cancelCast, onFrontGuard } from "./skills.js";
@@ -58,7 +59,7 @@ export class Room {
     const m = {
       id: newUnitId(), team: "m", type: "m", mid, name: (elite ? "정예 " : "") + def.name, x, y, r: 11 * (def.look.scale ?? 1) * (elite ? 1.2 : 1),
       hp: Math.round(st.hp * (elite ? 3 : 1)), maxHp: Math.round(st.hp * (elite ? 3 : 1)), atk: st.dmg * (elite ? 1.5 : 1), def: 2 + this.floor * 1.6 * (elite ? 1.5 : 1),
-      level: st.level, xp: st.xp * (elite ? 3 : 1), speed: def.speed * (elite ? 1.08 : 1), elite, ai: def.ai, def_: def,
+      level: st.level, xp: st.xp * (elite ? 3 : 1), speed: def.speed * (elite ? 1.08 : 1) * floorScale(this.floor).speed, elite, ai: def.ai, def_: def,
       status: new Map(), buffs: new Map(), threat: new Map(), facing: Math.PI / 2, aggro: !!opts.aggro, home: [x, y],
       atkReady: 0, windup: null, dead: false, fly: !!def.fly,
     };
@@ -318,8 +319,8 @@ export class Room {
       this.ev({ e: "gold", id: p.id, v: gold, x: t.x | 0, y: t.y | 0, own: p.id });
       this.rollDrops(p, t);
       if (p === killer || this.players.size === 1) ch.kills++;
-      if (p.mythic?.has("swift_kill") && p === killer) p.buffs.set("swift_kill", { until: now + 2, mods: { move: 0.15 } });
-      if (p.mythic?.has("mana_font") && p === killer) p.mp = Math.min(p.maxMp, p.mp + p.maxMp * 0.03);
+      if (p.mythic?.has("swift_kill") && p === killer) p.buffs.set("swift_kill", { until: now + 3, mods: { move: 0.2, dmg: 0.05 } });
+      if (p.mythic?.has("mana_font") && p === killer) p.mp = Math.min(p.maxMp, p.mp + p.maxMp * 0.05);
     }
     if (t.boss) this.onBossDead(t);
     else if (this.kind === "dungeon" && !this.exitOpen && this.map.kind === "normal" && (this.wave ? this.wave.spawned >= this.total : true) && this.aliveMonsters() === 0) {
@@ -469,12 +470,12 @@ export class Room {
     if (this.map.safe && !u.lastHurt) u.hp = Math.min(u.maxHp, u.hp + u.maxHp * 0.05 * TICK_DT);
     if (this.map.safe) { u.hp = Math.min(u.maxHp, u.hp + u.maxHp * 0.03 * TICK_DT); u.mp = Math.min(u.maxMp, u.mp + u.maxMp * 0.05 * TICK_DT); }
     if (u.cls === "sword" || u.cls === "fist") {
-      // 내력: 전투에서 멀어지면 천천히 감소
-      if (!u.lastHurt || now - (u.lastAction ?? 0) > 6) u.ki = Math.max(0, u.ki - 4 * TICK_DT);
+      // 내력: 전투에서 멀어지면 기본치(30)로 천천히 돌아감 (예전엔 0까지 빠져서 다음 층 시작 때 스킬이 잠김)
+      if (now - (u.lastAction ?? -99) > 6 && (!u.lastHurt || now - u.lastHurt > 6)) u.ki = u.ki > KI_BASE ? Math.max(KI_BASE, u.ki - 4 * TICK_DT) : Math.min(KI_BASE, u.ki + 8 * TICK_DT);
     }
     if (u.mythic?.has("guardian") && now >= (u.icd.get("m_guard") ?? 0)) {
-      u.icd.set("m_guard", now + 12);
-      giveShield(this, u, u.maxHp * 0.05, 12, now);
+      u.icd.set("m_guard", now + 10);
+      giveShield(this, u, u.maxHp * 0.08, 10, now);
     }
     // 입력 1틱 소비 (속도 조작 불가: 서버가 한 틱에 한 입력만 적용)
     //  - 입력이 늦게 와서 빈 틱은 '빚'으로 쌓아 두고, 밀린 입력이 오면 한 틱에 하나 더 처리해 따라잡음

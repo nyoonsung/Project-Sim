@@ -8,7 +8,7 @@ export const RARITY_WEIGHTS = {
   elite: [40, 38, 16, 5.5, 0.5],
   boss: [22, 42, 26, 9.5, 0.5],
 };
-export const RARITY_MUL = [1, 1.12, 1.26, 1.42, 1.6];      // 기본 능력치 배율
+export const RARITY_MUL = [1, 1.12, 1.26, 1.42, 1.85];      // 기본 능력치 배율
 export const RARITY_OPTS = [0, 1, 2, 3, 4];                // 추가 옵션 수
 
 export const SLOTS = ["weapon", "offhand", "helmet", "armor", "trinket"];
@@ -67,17 +67,19 @@ export const OPTIONS = {
 };
 const OPTION_KEYS = Object.keys(OPTIONS);
 
-// 신화 고유 효과: 너무 사기적이지 않게
+// 신화 고유 효과 (상향됨)
 export const MYTHIC_EFFECTS = {
-  swift_kill: { name: "질주하는 사냥꾼", desc: "적 처치 시 2초간 이동 속도 +15%" },
-  thunder_echo: { name: "천둥의 메아리", desc: "치명타 시 15% 확률로 공격력 60%의 번개 추가 피해 (내부 쿨타임 1초)" },
-  iron_will: { name: "강철 의지", desc: "HP 30% 이하일 때 받는 피해 -10%" },
-  vampiric: { name: "핏빛 갈증", desc: "준 피해의 1.5%만큼 HP 회복 (초당 최대 HP 3% 상한)" },
-  mana_font: { name: "마력의 샘", desc: "적 처치 시 최대 MP 3% 회복" },
-  guardian: { name: "수호자의 가호", desc: "12초마다 최대 HP 5%의 보호막 (중첩 불가)" },
-  berserk: { name: "광전사의 피", desc: "HP 50% 이하일 때 주는 피해 +8%" },
-  ember: { name: "잔불", desc: "적중 시 10% 확률로 화상 (3초간 초당 공격력 20%)" },
+  swift_kill: { name: "질주하는 사냥꾼", desc: "적 처치 시 3초간 이동 속도 +20%, 주는 피해 +5%" },
+  thunder_echo: { name: "천둥의 메아리", desc: "치명타 시 25% 확률로 공격력 90%의 번개 추가 피해 (내부 쿨타임 0.8초)" },
+  iron_will: { name: "강철 의지", desc: "HP 40% 이하일 때 받는 피해 -15%" },
+  vampiric: { name: "핏빛 갈증", desc: "준 피해의 2.5%만큼 HP 회복 (초당 최대 HP 4% 상한)" },
+  mana_font: { name: "마력의 샘", desc: "적 처치 시 최대 MP 5% 회복" },
+  guardian: { name: "수호자의 가호", desc: "10초마다 최대 HP 8%의 보호막 (중첩 불가)" },
+  berserk: { name: "광전사의 피", desc: "HP 50% 이하일 때 주는 피해 +12%" },
+  ember: { name: "잔불", desc: "적중 시 15% 확률로 화상 (3초간 초당 공격력 30%)" },
 };
+/** 신화 무기 기본 추가 능력치 */
+export const MYTHIC_WEAPON_BONUS = { dmg: 0.06 };
 const MYTHIC_KEYS = Object.keys(MYTHIC_EFFECTS);
 const MYTHIC_TITLES = ["태초의", "몰락한 왕의", "별을 삼킨", "영원한", "잊힌 신의", "끝없는", "심연을 본", "황혼의"];
 
@@ -163,12 +165,14 @@ export function rollItem(R, { ilvl, cls = "adventurer", tier = "normal", rarity 
   else if (slot === "offhand") type = R() < 0.75 ? pick(R, gear.o) : pick(R, Object.keys(OFFHAND_TYPES));
   else variant = Math.floor(R() * 4);
   const it = { slot, type, variant, rarity: RARITIES[ri], ilvl, enh: 0, base: baseStats(slot, type, ilvl, ri, variant), opts: [] };
+  if (ri === 4 && slot === "weapon") Object.assign(it.base, MYTHIC_WEAPON_BONUS);
   const keys = OPTION_KEYS.slice();
   for (let i = 0; i < RARITY_OPTS[ri]; i++) {
     const k = keys.splice(Math.floor(R() * keys.length), 1)[0];
     it.opts.push({ k, v: OPTIONS[k].roll(ilvl, ri, R) });
   }
   if (ri === 4) {
+    it.mythicV = 2;
     it.mythic = pick(R, MYTHIC_KEYS);
     it.title = pick(R, MYTHIC_TITLES);
   }
@@ -183,6 +187,16 @@ export const DUR_PER_CAST = 0.1;
 export const DUR_DEATH = 0.1;
 export const BROKEN_MUL = 0.3;
 export function maxDurability(it) { return 100 + RARITIES.indexOf(it.rarity) * 20; }
+/** 예전에 얻은 신화 장비도 상향된 능력치로 다시 계산 */
+export function upgradeMythic(it) {
+  if (!it || it.rarity !== "신화" || it.mythicV >= 2) return it;
+  try {
+    it.base = baseStats(it.slot, it.type, it.ilvl, 4, it.variant ?? 1);
+    if (it.slot === "weapon") Object.assign(it.base, MYTHIC_WEAPON_BONUS);
+    it.mythicV = 2;
+  } catch {}
+  return it;
+}
 /** 내구도 상태가 없던 옛 무기도 꽉 찬 상태로 맞춤 */
 export function ensureDur(it) {
   if (!it || it.slot !== "weapon") return it;

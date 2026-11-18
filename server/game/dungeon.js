@@ -204,7 +204,7 @@ function normalFloor(floor, seed, party) {
     if (edge <= 3 && Math.hypot(x - startX, y - startY) > 8 && (x + y * 3) % 3 === 0) pts.push([px(x), px(y)]);
   }
   const total = Math.min(60, Math.round((20 + floor * 0.3) * (party > 1 ? 1 + (party - 1) * 0.35 : 1)));
-  m.waves = { total, waves: Math.max(3, Math.min(6, 3 + Math.floor(floor / 20))), points: pts, pool: zone.monsters, elite: 0.06 + floor * 0.0015 };
+  m.waves = { total, waves: Math.max(3, Math.min(6, 3 + Math.floor(floor / 20))), points: pts, pool: zone.monsters, elite: Math.min(0.3, 0.07 + floor * 0.0025) };
   m.style = style;
   m.spawns = [];
   addTorches(m, R, zone, 5);
