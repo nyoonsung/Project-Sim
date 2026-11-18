@@ -196,6 +196,7 @@ function onEvent(e) {
     case "got": G.ui.gotItem(e.item); sfx("item"); break;
     case "boss": G.boss = { id: e.id, name: e.name, mid: e.mid }; G.ui.onBoss(); break;
     case "bpat": G.bossCall = { id: e.id, p: e.p, t0: now() }; break; // 보스 패턴 이름 표시
+    case "warn": (G.warns ??= []).push({ ...e, t0: now() }); if (e.k === "barrage") G.bossCall = { id: e.id, p: "barrage", t0: now(), hold: e.d }; sfx("wave"); break;
     case "bossdead": G.boss = null; G.ui.onBoss(); G.ui.center("보스 처치!"); break;
     case "exit": G.exitOpen = !!e.open; break;
     case "vote": G.ui.showVote?.(e); if (!e.end && !e.yes.includes(G.you)) sfx("wave"); break;

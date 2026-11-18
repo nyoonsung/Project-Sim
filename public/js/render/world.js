@@ -112,7 +112,7 @@ export function warmSkill(id) {
 // 보스 패턴 이름과 피하는 법
 const BOSS_CALL = {
   cleave: ["휩쓸기", "뒤로 돌아가요"], slam: ["내려찍기", "멀리 떨어져요"], ring: ["고리 폭발", "보스에게 바짝 붙어요"],
-  rain: ["낙하 공격", "빨간 원 밖으로"], barrage: ["탄막", "탄 사이로 피해요"], beam: ["회전 광선", "분홍 부채꼴 밖으로"],
+  rain: ["낙하 공격", "빨간 원 밖으로"], barrage: ["마력탄 난사", "멀리 떨어져서 선 사이 틈으로"], beam: ["회전 광선", "분홍 부채꼴 밖으로"],
   charge: ["돌진", "빨간 줄 옆으로"], aimed: ["조준 사격", "옆으로 움직여요"], pools: ["독 장판", "장판 밟지 마요"],
   pull: ["끌어당기기", "반대로 버텨요"], summon: ["소환", "졸개부터 처리"],
 };
@@ -410,16 +410,39 @@ export class Renderer {
       ctx.beginPath(); ctx.moveTo(x, y); ctx.arc(x, y, b.l, b.rot > 0 ? cur : lo, b.rot > 0 ? hi : cur); ctx.closePath(); ctx.fill();
       if (age < b.at) { ctx.strokeStyle = flash(age / b.at); ctx.lineWidth = Math.max(2, b.w * 0.5); ctx.globalAlpha = 0.5; ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + Math.cos(a0) * b.l, y + Math.sin(a0) * b.l); ctx.stroke(); ctx.globalAlpha = 1; ctx.lineWidth = 2; }
     }
+    // 탄막 사전 경고: 탄이 날아갈 길(바퀴살)을 점점 진하게 + 남은 시간 숫자
+    if (G.warns?.length) G.warns = G.warns.filter((w) => {
+      const age = t - w.t0;
+      if (age > w.d) return false;
+      const k = age / w.d, x = w.x - cx, y = w.y - cy, L = 520;
+      ctx.lineWidth = 2;
+      for (let wave = 0; wave < Math.min(2, w.w); wave++) {
+        const off = (wave * Math.PI) / w.n;
+        ctx.strokeStyle = wave ? `rgba(255,200,80,${0.25 + 0.35 * k})` : `rgba(255,70,200,${0.35 + 0.5 * k})`;
+        if (k > 0.8 && Math.floor(t * 14) % 2) ctx.strokeStyle = "rgba(255,255,255,0.9)";
+        ctx.beginPath();
+        for (let i = 0; i < w.n; i++) { const a = (i / w.n) * Math.PI * 2 + off; ctx.moveTo(x + Math.cos(a) * 18, y + Math.sin(a) * 18); ctx.lineTo(x + Math.cos(a) * L, y + Math.sin(a) * L); }
+        ctx.stroke();
+      }
+      // 커지는 경고 원 + 남은 초
+      ctx.strokeStyle = `rgba(255,80,200,${0.5 + 0.4 * Math.sin(t * 12)})`; ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.ellipse(x, y, 30 + 40 * k, (30 + 40 * k) * 0.75, 0, 0, Math.PI * 2); ctx.stroke();
+      ctx.font = "16px Galmuri14"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+      const n = Math.ceil(w.d - age);
+      ctx.fillStyle = "#000"; ctx.fillText(String(n), x + 1, y - 46 + 1); ctx.fillStyle = "#ffe08a"; ctx.fillText(String(n), x, y - 46);
+      ctx.lineWidth = 2;
+      return true;
+    });
     // 보스 패턴 이름 + 피하는 법
     const bc = G.bossCall;
-    if (bc && t - bc.t0 < 1.6) {
+    if (bc && t - bc.t0 < (bc.hold ?? 1.6)) {
       const boss = G.ents.get(bc.id), info = BOSS_CALL[bc.p];
       if (boss && info) {
         // 화면 위쪽 가운데(보스 체력바 아래)에 고정 → 보스 위치와 상관없이 항상 같은 곳에서 읽힘
         const x = VW / 2, y = 62 + Math.max(0, 8 - (t - bc.t0) * 40);
-        ctx.globalAlpha = Math.min(1, (1.6 - (t - bc.t0)) * 3);
+        ctx.globalAlpha = Math.min(1, ((bc.hold ?? 1.6) - (t - bc.t0)) * 3);
         ctx.font = "12px Galmuri11"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
-        const txt = `! ${info[0]} — ${info[1]}`, w = ctx.measureText(txt).width + 14;
+        const txt = bc.hold ? `! ${info[0]} ${Math.ceil(bc.hold - (t - bc.t0))}초 뒤 — ${info[1]}` : `! ${info[0]} — ${info[1]}`, w = ctx.measureText(txt).width + 14;
         ctx.fillStyle = "rgba(20,10,20,0.85)"; ctx.fillRect(Math.round(x - w / 2), Math.round(y - 9), Math.round(w), 18);
         ctx.strokeStyle = "#ffd35a"; ctx.lineWidth = 1; ctx.strokeRect(Math.round(x - w / 2) + 0.5, Math.round(y - 9) + 0.5, Math.round(w) - 1, 17);
         ctx.fillStyle = "#ffe08a"; ctx.fillText(txt, Math.round(x), Math.round(y) + 1);

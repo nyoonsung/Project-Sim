@@ -287,10 +287,13 @@ function startPattern(room, b, p, t, now) {
     }
     case "barrage": {
       const waves = b.phase === 2 ? 3 : 2;
-      b.pattern.end = now + 0.6 + waves * 0.5;
+      // 사전 경고: 100층 보스는 3초, 다른 보스는 1.5초 동안 탄이 날아갈 길을 크게 보여 준 뒤 발사 (근접 직업이 피할 시간)
+      const delay = room.floor >= 100 ? 3 : 1.5;
+      b.pattern.end = now + delay + 0.1 + waves * 0.5;
       room.ev({ e: "anim", id: b.id, a: "cast" });
+      room.ev({ e: "warn", id: b.id, k: "barrage", d: delay, n: p.count, w: waves, x: b.x | 0, y: (b.y - 10) | 0 });
       for (let w = 0; w < waves; w++) {
-        room.schedule(0.5 + w * 0.5, () => {
+        room.schedule(delay + w * 0.5, () => {
           if (b.dead) return;
           const off = (w * Math.PI) / p.count;
           for (let k = 0; k < p.count; k++) {
