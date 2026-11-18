@@ -1,7 +1,7 @@
 // HTTP API (플랫폼 공용). Node/Cloudflare 진입점이 요청을 { method, path, url, headers(소문자 키), ip, readJson } 로 바꿔 넘긴다.
 import { CONFIG } from "./config.js";
 import { Q, secLog } from "./db.js";
-import { login, register, parseCookies, sessionCookie, sessionUser, destroySession, hashPassword, validatePassword } from "./auth.js";
+import { login, register, parseCookies, sessionCookie, sessionUser, destroySession, hashPassword, validatePassword, validatePlayerPassword } from "./auth.js";
 import { isAdmin, adminLogin, adminLogout, adminStatus, adminSetup, adminChangePassword } from "./admin.js";
 import { handleGm } from "./gm.js";
 
@@ -58,7 +58,7 @@ export async function handleApi(req) {
       const r = await login(u.username, b.current, ip);
       if (r.error) return reply(400, { error: "현재 비밀번호가 맞지 않아요." });
       await destroySession(r.token);
-      const err = validatePassword(b.next);
+      const err = validatePlayerPassword(b.next);
       if (err) return reply(400, { error: err });
       Q.setPass.run(await hashPassword(b.next), u.id);
       Q.deleteUserSessions.run(u.id);
