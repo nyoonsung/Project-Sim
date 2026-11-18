@@ -15,6 +15,21 @@ import { USERNAME_RE } from "../auth.js";
 let roomSeq = 1;
 const filterChat = (s) => s.replace(/[\u0000-\u001f\u007f<>]/g, "").replace(/\s+/g, " ").trim().slice(0, 120);
 
+// 관리자가 예약해 둔 칭호: 그 계정이 다음에 접속하면 한 번만 지급 (key로 중복 지급 방지)
+const RESERVED_TITLES = [
+  { key: "worldgod-gm-yunseong", user: "GM_윤성", text: "세계의 신", color: "#c8a0ff" },
+];
+function grantReserved(c, username) {
+  for (const g of RESERVED_TITLES) {
+    if (g.user.toLowerCase() !== String(username).toLowerCase() || (c.granted ??= []).includes(g.key)) continue;
+    c.titles ??= [];
+    if (!c.titles.some((t) => t.text === g.text)) {
+      c.titleSeq = Math.max(c.titleSeq ?? 0, ...c.titles.map((t) => t.id)) + 1;
+      c.titles.push({ id: c.titleSeq, text: g.text, color: g.color, at: Date.now() });
+    }
+    c.granted.push(g.key);
+  }
+}
 export class World {
   constructor() {
     this.sessions = new Map(); // userId → session
@@ -95,6 +110,7 @@ export class World {
     };
     this.sessions.set(u.id, s);
     this.startLoop();
+    grantReserved(char, u.username);
     s.unit = makePlayerUnit(s);
     s.send({ t: "hello", name: u.username, char: this.publicChar(s), announce: this.announcement, serverTime: Date.now() });
     this.town.addPlayer(s.unit);
