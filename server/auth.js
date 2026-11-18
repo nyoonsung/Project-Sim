@@ -106,7 +106,7 @@ export async function register(username, password, ip) {
   const pwErr = validatePassword(password);
   if (pwErr) return { error: pwErr };
   if (locked("reg:" + ip)) return { error: "가입 시도가 너무 많아요. 잠시 뒤에 다시 시도해 주세요.", status: 429 };
-  hit("reg:" + ip, 30, 3600e3, 3600e3); // 학교처럼 한 IP에서 여러 명이 가입해도 되도록 넉넉하게
+  hit("reg:" + ip, 300, 3600e3, 3600e3); // 한 사람이 계정 여러 개 + 학교처럼 한 IP에서 여러 명이 가입해도 되도록 넉넉하게
   const old = Q.userByName.get(username);
   let id;
   if (old && !old.pass_hash) {

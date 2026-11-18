@@ -14,6 +14,19 @@ import { secureRandom } from "./secure.js";
 
 const VIEW = 600;
 
+const XP_RATE = 0.4; // 경험치 배율 (성장 속도)
+/** 몸 두께(반지름)를 고려한 직선 통로: 가운데와 양옆 선이 모두 벽에 안 막힘 */
+// 걸어서 지나갈 수 없는 칸 (흐름장과 같은 기준: 벽·물·구덩이 등. 화살은 넘어가도 몸은 못 지나감)
+const walkBlocked = (map, x, y) => { const t = tileAt(map, Math.floor(x / TILE), Math.floor(y / TILE)); return t === 0 || t === 2 || t === 4 || t === 5 || (t === 3 && !map.doorsOpen); };
+function walkLine(map, x0, y0, x1, y1) {
+  const n = Math.ceil(Math.hypot(x1 - x0, y1 - y0) / (TILE / 3));
+  for (let i = 1; i < n; i++) { const k = i / n; if (walkBlocked(map, x0 + (x1 - x0) * k, y0 + (y1 - y0) * k)) return false; }
+  return true;
+}
+function clearPath(map, m, t) {
+  const a = Math.atan2(t.y - m.y, t.x - m.x), r = (m.r ?? 10) * 0.9, px = -Math.sin(a) * r, py = Math.cos(a) * r;
+  return walkLine(map, m.x, m.y, t.x, t.y) && walkLine(map, m.x + px, m.y + py, t.x + px, t.y + py) && walkLine(map, m.x - px, m.y - py, t.x - px, t.y - py);
+}
 export class Room {
   constructor(world, { id, kind, floor = 0, map, partyId = null, partySize = 1 }) {
     Object.assign(this, { world, id, kind, floor, map, partyId, partySize });
@@ -306,8 +319,9 @@ export class Room {
     for (const p of this.players.values()) {
       if (p.dead || Math.hypot(p.x - t.x, p.y - t.y) > 700) continue;
       const ch = p.session.char;
-      let xp = t.xp * (this.players.size > 1 ? 0.8 : 1);
-      if (ch.level > this.floor + 10) xp *= Math.max(0.1, 1 - (ch.level - this.floor - 10) * 0.1);
+      // 성장 속도 하향: 경험치 40%만, 층보다 5레벨 넘게 높으면 레벨 차이만큼 크게 감소
+      let xp = t.xp * XP_RATE * (this.players.size > 1 ? 0.8 : 1);
+      if (ch.level > this.floor + 5) xp *= Math.max(0.05, 1 - (ch.level - this.floor - 5) * 0.15);
       gainXp(this, p, xp);
       const gold = Math.round((2 + Math.random() * 3) * floorScale(this.floor).gold * (t.elite ? 3 : 1) * (t.boss ? 25 : 1));
       ch.gold += gold;
@@ -708,7 +722,7 @@ export class Room {
       q[qt++] = sy * w + sx;
       while (qh < qt) {
         const i = q[qh++], x = i % w, y = (i / w) | 0, d = dist[i];
-        if (d > 40) continue;
+        if (d > 250) continue;
         for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
           const nx = x + dx, ny = y + dy;
           if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
@@ -726,11 +740,21 @@ export class Room {
   /** 대상 플레이어 쪽으로 가는 방향 (흐름장) */
   pathDir(m, target) {
     const f = this.flow.get(target.id);
-    if (target.type !== "p" || !f || lineOfSight(this.map, m.x, m.y, target.x, target.y)) {
+    // 몸통 양옆 두 줄 모두 뚫려 있을 때만 직진 (가운데만 보고 직진하다 모서리에 끼던 문제), 오래 못 움직였으면 무조건 길찾기
+    // 한 번 끼이면 3초 동안은 길찾기 유지 (예전엔 직진↔길찾기를 왔다 갔다 하며 제자리에 멈춰 있었음)
+    if (m.stuckFor > 0.6) m.pathUntil = this.now + 3;
+    const stuck = this.now < (m.pathUntil ?? 0);
+    if (target.type !== "p" || !f || (!stuck && clearPath(this.map, m, target))) {
       return Math.atan2(target.y - m.y, target.x - m.x);
     }
     const { w } = this.map;
     const tx = Math.floor(m.x / TILE), ty = Math.floor(m.y / TILE);
+    // 오래 끼어 있으면 먼저 지금 칸 한가운데로 빠져나옴 (모서리에 걸린 상태 풀기)
+    const cx = tx * TILE + TILE / 2, cy = ty * TILE + TILE / 2;
+    if (m.stuckFor > 1.5 && f[ty * w + tx] >= 0 && Math.hypot(cx - m.x, cy - m.y) > 4) {
+      if (m.stuckFor > 3) m.stuckFor = 0; // 그래도 안 되면 다시 길찾기부터
+      return Math.atan2(cy - m.y, cx - m.x);
+    }
     let best = null, bd = f[ty * w + tx] === -1 ? 9999 : f[ty * w + tx];
     for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]]) {
       const v = f[(ty + dy) * w + (tx + dx)];

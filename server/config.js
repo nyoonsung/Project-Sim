@@ -11,7 +11,7 @@ export function applyEnv(env = {}) {
     trustProxy: env.TRUST_PROXY === "1",
     sessionDays: 14,
     adminKey: env.ADMIN_KEY ?? null,
-    maxConnectionsPerIp: Number(env.MAX_CONN_PER_IP ?? 40),
+    maxConnectionsPerIp: Number(env.MAX_CONN_PER_IP ?? 300),
     registrationOpen: env.REGISTRATION_OPEN !== "0",
   });
 }

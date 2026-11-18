@@ -47,7 +47,11 @@ function separate(room, m) {
 
 function moveToward(room, m, ang, speed, dt) {
   const r = m.fly ? m.r * 0.6 : m.r * 0.8;
+  const x0 = m.x, y0 = m.y;
   [m.x, m.y] = moveCircle(room.map, m.x, m.y, Math.cos(ang) * speed * dt, Math.sin(ang) * speed * dt, r);
+  // 끼임 감지: 가려던 거리의 30%도 못 갔으면 누적 → room.pathDir가 길찾기로 전환
+  const moved = Math.hypot(m.x - x0, m.y - y0);
+  m.stuckFor = moved < speed * dt * 0.3 ? (m.stuckFor ?? 0) + dt : Math.max(0, (m.stuckFor ?? 0) - dt * 0.5);
 }
 
 /** 몬스터가 대상(플레이어 또는 골렘)을 때림 */
@@ -126,7 +130,7 @@ export function tickMonster(room, m, now) {
           };
           step();
         } };
-        m.atkReady = now + 99;
+        m.atkReady = now + 4; // 돌진이 끊겨도 4초 뒤엔 다시 공격 (예전엔 99초 동안 공격 안 함)
       } else if (dist <= def.range + t.r) {
         if (ready) m.windup = { at: now + 0.45, interruptible: true, fire: (t0) => { if (Math.hypot(t.x - m.x, t.y - m.y) <= def.range + t.r + 12) hitTarget(room, m, t, 1, t0); } };
       } else moveToward(room, m, room.pathDir(m, t), spd, dt);
