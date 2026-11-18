@@ -109,6 +109,13 @@ export function warmSkill(id) {
   preloadFx(ids).then(() => prebake(ids));
 }
 
+// 보스 패턴 이름과 피하는 법
+const BOSS_CALL = {
+  cleave: ["휩쓸기", "뒤로 돌아가요"], slam: ["내려찍기", "멀리 떨어져요"], ring: ["고리 폭발", "보스에게 바짝 붙어요"],
+  rain: ["낙하 공격", "빨간 원 밖으로"], barrage: ["탄막", "탄 사이로 피해요"], beam: ["회전 광선", "분홍 부채꼴 밖으로"],
+  charge: ["돌진", "빨간 줄 옆으로"], aimed: ["조준 사격", "옆으로 움직여요"], pools: ["독 장판", "장판 밟지 마요"],
+  pull: ["끌어당기기", "반대로 버텨요"], summon: ["소환", "졸개부터 처리"],
+};
 export class Renderer {
   /** 화면 크기 바꾸기 (휴대폰 세로·가로 전환). focusY: 캐릭터가 화면 높이의 어디쯤 오게 할지 */
   setView(w, h, focusY = 0.5) {
@@ -261,6 +268,7 @@ export class Renderer {
       for (let yy = oy; yy < VH; yy += 180) for (let xx = ox; xx < VW; xx += 320) ctx.drawImage(this.wcv, xx, yy);
       ctx.globalAlpha = 1;
     }
+    this.drawTelsOver(ctx, cx, cy, t);
     this.drawOverhead(ctx, cx, cy, t);
     if (G.hurtFlash > 0) {
       // 맞았을 때 붉은 테두리: 한 번 만든 그림을 세기만 바꿔 찍음
@@ -343,8 +351,8 @@ export class Renderer {
       const k = Math.min(1, (t - s.t0) / Math.max(0.05, s.d));
       const ally = s.tm === 1;
       const edge = ally ? "rgba(120,220,255,0.8)" : "rgba(255,60,60,0.9)";
-      const fill = ally ? "rgba(120,220,255,0.10)" : "rgba(255,40,40,0.16)";
-      const prog = ally ? "rgba(120,220,255,0.18)" : "rgba(255,70,40,0.32)";
+      const fill = ally ? "rgba(120,220,255,0.10)" : "rgba(255,40,40,0.22)";
+      const prog = ally ? "rgba(120,220,255,0.18)" : "rgba(255,70,40,0.42)";
       const x = s.x - cx, y = s.y - cy;
       ctx.lineWidth = 1;
       ctx.strokeStyle = edge;
@@ -370,6 +378,63 @@ export class Renderer {
         ctx.restore();
       }
     }
+  }
+
+  /** 보스·몬스터 공격 예고를 어둠·이펙트 위에 한 번 더: 굵은 테두리(곧 터지면 깜빡임), 화면 밖 예고는 가장자리 화살표, 보스 패턴 이름 */
+  drawTelsOver(ctx, cx, cy, t) {
+    const flash = (k) => (k > 0.7 && Math.floor(t * 14) % 2 ? "rgba(255,255,255,0.95)" : `rgba(255,${k > 0.7 ? 200 : 70},60,${0.75 + 0.25 * Math.sin(t * 10)})`);
+    ctx.save();
+    ctx.lineWidth = 2;
+    for (const s of G.tels.values()) {
+      if (s.tm === 1) continue;
+      const k = Math.min(1, (t - s.t0) / Math.max(0.05, s.d));
+      if (k >= 1) continue;
+      const x = s.x - cx, y = s.y - cy;
+      const R = Math.max(s.r ?? 0, s.r2 ?? 0, s.l ?? 0, 20);
+      // 화면 밖이면 가장자리에 화살표
+      if (x + R < 0 || y + R < 0 || x - R > VW || y - R > VH) { this.edgeArrow(ctx, x, y, t); continue; }
+      ctx.strokeStyle = flash(k);
+      if (s.sh === "c") { ctx.beginPath(); ctx.ellipse(x, y, s.r, s.r * 0.75, 0, 0, Math.PI * 2); ctx.stroke(); }
+      else if (s.sh === "ring") { ctx.beginPath(); ctx.ellipse(x, y, s.r2, s.r2 * 0.75, 0, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([4, 4]); ctx.strokeStyle = "rgba(120,255,140,0.9)"; ctx.beginPath(); ctx.ellipse(x, y, s.r, s.r * 0.75, 0, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]); }
+      else if (s.sh === "cone") { const half = (s.arc * Math.PI) / 360; ctx.save(); ctx.translate(x, y); ctx.scale(1, 0.75); ctx.beginPath(); ctx.moveTo(0, 0); ctx.arc(0, 0, s.r, s.a - half, s.a + half); ctx.closePath(); ctx.restore(); ctx.stroke(); }
+      else if (s.sh === "r") { ctx.save(); ctx.translate(x, y); ctx.rotate(s.a); ctx.strokeRect(0, -s.w / 2, s.l, s.w); ctx.restore(); }
+    }
+    // 보스 광선: 돌아갈 범위(부채꼴)를 미리 보여 줌
+    for (const b of G.beams) {
+      if (!b.boss) continue;
+      const boss = G.ents.get(b.boss); if (!boss) continue;
+      const age = t - b.t0, x = boss.rx - cx, y = boss.ry - cy - 16;
+      const a0 = b.a, a1 = b.a + b.rot * b.d, lo = Math.min(a0, a1), hi = Math.max(a0, a1);
+      const cur = age < b.at ? a0 : b.a + b.rot * (age - b.at);
+      ctx.fillStyle = `rgba(255,60,160,${age < b.at ? 0.16 : 0.08})`;
+      ctx.beginPath(); ctx.moveTo(x, y); ctx.arc(x, y, b.l, b.rot > 0 ? cur : lo, b.rot > 0 ? hi : cur); ctx.closePath(); ctx.fill();
+      if (age < b.at) { ctx.strokeStyle = flash(age / b.at); ctx.lineWidth = Math.max(2, b.w * 0.5); ctx.globalAlpha = 0.5; ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + Math.cos(a0) * b.l, y + Math.sin(a0) * b.l); ctx.stroke(); ctx.globalAlpha = 1; ctx.lineWidth = 2; }
+    }
+    // 보스 패턴 이름 + 피하는 법
+    const bc = G.bossCall;
+    if (bc && t - bc.t0 < 1.6) {
+      const boss = G.ents.get(bc.id), info = BOSS_CALL[bc.p];
+      if (boss && info) {
+        // 화면 위쪽 가운데(보스 체력바 아래)에 고정 → 보스 위치와 상관없이 항상 같은 곳에서 읽힘
+        const x = VW / 2, y = 62 + Math.max(0, 8 - (t - bc.t0) * 40);
+        ctx.globalAlpha = Math.min(1, (1.6 - (t - bc.t0)) * 3);
+        ctx.font = "12px Galmuri11"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+        const txt = `! ${info[0]} — ${info[1]}`, w = ctx.measureText(txt).width + 14;
+        ctx.fillStyle = "rgba(20,10,20,0.85)"; ctx.fillRect(Math.round(x - w / 2), Math.round(y - 9), Math.round(w), 18);
+        ctx.strokeStyle = "#ffd35a"; ctx.lineWidth = 1; ctx.strokeRect(Math.round(x - w / 2) + 0.5, Math.round(y - 9) + 0.5, Math.round(w) - 1, 17);
+        ctx.fillStyle = "#ffe08a"; ctx.fillText(txt, Math.round(x), Math.round(y) + 1);
+        ctx.globalAlpha = 1;
+      }
+    }
+    ctx.restore();
+  }
+  edgeArrow(ctx, x, y, t) {
+    const ex = Math.max(14, Math.min(VW - 14, x)), ey = Math.max(14, Math.min(VH - 14, y));
+    const a = Math.atan2(y - VH / 2, x - VW / 2);
+    ctx.save(); ctx.translate(ex, ey); ctx.rotate(a);
+    ctx.fillStyle = `rgba(255,70,50,${0.6 + 0.4 * Math.sin(t * 12)})`;
+    ctx.beginPath(); ctx.moveTo(8, 0); ctx.lineTo(-6, -6); ctx.lineTo(-6, 6); ctx.closePath(); ctx.fill();
+    ctx.restore();
   }
 
   // y 정렬해서 그릴 것들
