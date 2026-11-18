@@ -39,6 +39,7 @@ const last = mons()[0]; last.x = 99999; last.y = 99999; r.rescueAt = 0; tick(r, 
 ok(Math.hypot(last.x - a.x, last.y - a.y) < 400 || Math.hypot(last.x - b.x, last.y - b.y) < 400, "멀리 끼인 마지막 몬스터를 플레이어 근처로 옮김");
 r.kill(last, a, r.now); tick(r, 1);
 ok(r.exitOpen, "모두 처치하면 출구 열림");
+ok(a.session.char.best >= r.floor && b.session.char.best >= r.floor, "층을 깨면 바로 '깬 층'으로 기록 (마을 갔다 와도 다음 층 이어하기)");
 
 // 3) 파티 투표: 한 명이 출구에 서면 투표, 두 명 다 동의해야 이동
 const exit = r.map.objects.find((o) => o.id === "exit");

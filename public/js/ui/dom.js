@@ -51,7 +51,7 @@ function bumpZ() {
   }
   return ++z;
 }
-export function openWin(id, title, build, { x, y, w } = {}) {
+export function openWin(id, title, build, { x, y, w, onClose } = {}) {
   let win = wins.get(id);
   if (!win) {
     const body = h("div", { class: "body" });
@@ -79,6 +79,7 @@ export function openWin(id, title, build, { x, y, w } = {}) {
     win.addEventListener("pointerdown", () => (win.style.zIndex = bumpZ()));
     wins.set(id, win);
     win._build = build;
+    win._onClose = onClose;
   }
   win._build = build;
   win.style.zIndex = bumpZ();
@@ -103,7 +104,7 @@ export function refreshWin(id) {
   body.replaceChildren(...[].concat(win._build()).filter((x) => x != null && x !== false));
   body.scrollTop = st;
 }
-export function closeWin(id) { const w = wins.get(id); if (w) { w.remove(); wins.delete(id); hideTip(); } }
+export function closeWin(id) { const w = wins.get(id); if (w) { w.remove(); wins.delete(id); hideTip(); w._onClose?.(); } }
 export function isOpen(id) { return wins.has(id); }
 export function toggleWin(id, open) { if (wins.has(id)) closeWin(id); else open(); }
 export function openWins() { return [...wins.keys()]; }

@@ -11,6 +11,7 @@ import { newCharacter, sanitizeChar, makePlayerUnit, refreshStats, availableSkil
 import { secureRandom } from "./secure.js";
 import { moveMul } from "./combat.js";
 import { USERNAME_RE } from "../auth.js";
+import { tradeOp, endTrade, inOffer } from "./trade.js";
 
 let roomSeq = 1;
 const filterChat = (s) => s.replace(/[\u0000-\u001f\u007f<>]/g, "").replace(/\s+/g, " ").trim().slice(0, 120);
@@ -132,6 +133,7 @@ export class World {
     this.finishClose(s);
   }
   finishClose(s) {
+    if (s.trade) endTrade(s, `${s.name}님의 접속이 끊겨 거래가 취소됐어요.`);
     this.leaveParty(s, true);
     s.unit.room?.removePlayer(s.unit);
     s.char.playtime += Math.round((Date.now() - s.joinedAt) / 1000);
@@ -193,7 +195,10 @@ export class World {
     const s = this.sessions.get(conn.user.id);
     if (!s || s.conn !== conn) return;
     const u = s.unit, room = u.room;
+    // 거래에 올린 아이템은 팔기·강화·인챈트·장착 금지 (확정 직전 바꿔치기 방지)
+    if (s.trade && ((m.uid != null && ["sell", "enhance", "enchant", "equip", "lock"].includes(m.t) && inOffer(s, m.uid)) || (m.t === "sellMany" && m.uids.some((u) => inOffer(s, u))))) return s.notice("거래에 올린 아이템이에요. 거래창에서 먼저 내려 주세요.");
     switch (m.t) {
+      case "trade": tradeOp(this, s, m); break;
       case "in":
         if (!room) break;
         if (m.b) { for (const e of m.b) if (e[0] > (u.inputs.at(-1)?.s ?? u.lastSeq)) room.pushInput(u, { s: e[0], mx: e[1], my: e[2], ax: e[3], ay: e[4] }); }
@@ -338,6 +343,7 @@ export class World {
     const map = kind === "safe" ? safeZone(floor) : makeFloor(floor, seed, group.length);
     const room = this.addRoom(new Room(this, { id: "r" + roomSeq++, kind, floor, map, partyId: group[0].partyId, partySize: group.length }));
     for (const g of group) {
+      if (g.trade) endTrade(g, `${g.name}님이 마을을 떠나서 거래가 취소됐어요.`);
       const u = g.unit;
       u.room?.removePlayer(u);
       if (u.dead) { u.dead = false; u.hp = Math.round(u.maxHp * 0.5); }

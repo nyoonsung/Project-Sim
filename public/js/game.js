@@ -54,6 +54,8 @@ export function onMessage(m) {
     case "chat": G.ui.chat(m); break;
     case "party": G.party = m.members; G.ui.onParty(); break;
     case "invite": G.ui.invite(m.from); break;
+    case "tradeReq": G.ui.tradeReq(m.from); break;
+    case "trade": G.trade = m.st; G.ui.onTrade(m.msg); break;
     case "announce": G.ui.announce(m.text); break;
     case "kick": G.ui.kicked(m.why); break;
     case "enh": G.ui.onEnhance(m); break;

@@ -740,3 +740,19 @@ body.touch.portrait #wallet { bottom: calc(80px + env(safe-area-inset-bottom)); 
 body.touch.portrait #potions { flex-direction: column; bottom: calc(12px + env(safe-area-inset-bottom)); }
 body.touch.portrait #potions .slot { width: 44px; height: 44px; }
 body.touch.portrait #wallet { left: calc(70px + env(safe-area-inset-left)); bottom: calc(14px + env(safe-area-inset-bottom)); }
+/* 거래 창 */
+.trade-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.trade-col { padding: 8px; background: #140d0a; border: 2px solid var(--wood0); border-radius: 5px; box-shadow: inset 0 0 0 1px #5a3e2a; display: flex; flex-direction: column; gap: 6px; }
+.trade-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 4px; }
+.trade-grid .cell, .trade-bag .cell { aspect-ratio: 1; }
+.trade-gold { color: #ffe08a; font-weight: bold; min-width: 70px; }
+.trade-col input.txt { width: 90px; padding: 3px 6px; }
+.trade-badge { margin-left: auto; padding: 1px 8px; border-radius: 10px; font-size: 11px; color: #c8b08a; background: #2a1d16; box-shadow: inset 0 0 0 1px #5a3e2a; }
+.trade-badge.ready { color: #fff4c0; background: #6a4a10; box-shadow: inset 0 0 0 1px #e6c27a; }
+.trade-badge.ok { color: #e8ffe0; background: #2a6a2a; box-shadow: inset 0 0 0 1px #8ae08a; }
+.trade-actions { justify-content: center; margin: 10px 0 4px; }
+.trade-bag .cell.locked { opacity: 0.45; }
+body.touch .trade-cols { grid-template-columns: 1fr; }
+.trade-grid { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+.trade-grid .cell { width: auto; height: auto; min-width: 0; }
+.trade-cols > .trade-col { min-width: 0; }

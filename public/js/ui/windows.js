@@ -600,8 +600,61 @@ export function openWho() {
         h("span", { class: "who-dot" + (p.ld ? " away" : ""), title: p.ld ? "잠깐 끊김" : "온라인" }),
         h("span", { class: "sn" }, p.tt ? h("span", { class: "who-tt", text: `「${p.tt}」` }) : null, p.n, p.p ? h("span", { class: "who-party", text: " 파티" }) : null),
         h("span", { class: "sd", text: `Lv.${p.lv} ${CLASS_INFO[p.c]?.name ?? ""} · ${p.w}` }),
-        p.n !== G.name && !p.p ? h("button", { class: "btn small", title: "파티 초대 (마을에서)", onclick: () => send({ t: "party", op: "invite", name: p.n }) }, "초대") : null))),
+        p.n !== G.name && !p.p ? h("button", { class: "btn small", title: "파티 초대 (마을에서)", onclick: () => send({ t: "party", op: "invite", name: p.n }) }, "초대") : null,
+        p.n !== G.name ? h("button", { class: "btn small", title: "거래 신청 (둘 다 마을에서)", onclick: () => send({ t: "trade", op: "request", name: p.n }) }, "거래") : null))),
       list.length ? null : h("div", { class: "note", text: q ? "그 닉네임은 지금 접속해 있지 않아요." : "아무도 없어요." }),
     ];
   }, { w: 420 });
+}
+
+// ── 거래: 둘 다 마을에서. 물건·골드를 올리고 → 둘 다 준비 → 둘 다 확정하면 교환
+let tradeGold = "";
+export function openTrade() {
+  openWin("trade", "거래", () => {
+    const T = G.trade, c = G.char;
+    if (!T || !c) return [h("div", { class: "note", text: "거래가 끝났어요." })];
+    const mine = new Set(T.mine.items.map((i) => i.uid));
+    const cells = (items, mineSide) => h("div", { class: "trade-grid" }, ...Array.from({ length: 12 }, (_, i) => {
+      const it = items[i];
+      const el = h("div", { class: "cell" + (it ? " r-" + it.rarity : ""), onclick: () => { if (it && mineSide && !T.mine.ready) send({ t: "trade", op: "set", uids: T.mine.items.map((x) => x.uid).filter((u) => u !== it.uid) }); } },
+        it ? iconEl(it) : null, it?.enh ? h("span", { class: "enh", text: "+" + it.enh }) : null, it?.ench ? h("span", { class: "ench-dot" + (it.ench === "mend" ? " mend" : ""), text: "✦" }) : null);
+      if (it) tipOn(el, () => itemTip(it, mineSide ? null : c.equip[it.slot]));
+      return el;
+    }));
+    const badge = (sd) => h("span", { class: "trade-badge" + (sd.ok ? " ok" : sd.ready ? " ready" : ""), text: sd.ok ? "확정" : sd.ready ? "준비 완료" : "고르는 중" });
+    const goldIn = h("input", { class: "txt", type: "number", min: 0, max: c.gold, placeholder: "골드", value: tradeGold, disabled: T.mine.ready, oninput: (e) => (tradeGold = e.target.value) });
+    const setGold = () => { const g = Math.max(0, Math.min(c.gold, Math.floor(Number(tradeGold) || 0))); tradeGold = String(g); send({ t: "trade", op: "set", gold: g }); };
+    goldIn.addEventListener("keydown", (e) => { e.stopPropagation(); if (e.key === "Enter") setGold(); });
+    // 내 가방: 누르면 거래창에 올리기/내리기
+    const bag = h("div", { class: "inv-grid trade-bag" }, ...c.inv.map((it) => {
+      const on = mine.has(it.uid);
+      const el = h("div", { class: "cell r-" + it.rarity + (on ? " picked" : "") + (it.locked ? " locked" : ""), onclick: () => {
+        if (T.mine.ready) return G.ui.toast?.("준비를 풀어야 바꿀 수 있어요.");
+        if (it.locked) return G.ui.toast?.("잠긴 아이템은 거래할 수 없어요.");
+        const list = T.mine.items.map((x) => x.uid);
+        send({ t: "trade", op: "set", uids: on ? list.filter((u) => u !== it.uid) : [...list, it.uid] });
+      } }, iconEl(it), it.enh ? h("span", { class: "enh", text: "+" + it.enh }) : null, it.locked ? h("span", { class: "lock", text: "🔒" }) : null, on ? h("span", { class: "pick", text: "✓" }) : null);
+      tipOn(el, () => itemTip(it, c.equip[it.slot]));
+      return el;
+    }));
+    const bothReady = T.mine.ready && T.theirs.ready;
+    return [
+      h("div", { class: "trade-cols" },
+        h("div", { class: "trade-col" },
+          h("div", { class: "flexrow" }, h("b", { text: "내가 줄 것" }), badge(T.mine)),
+          cells(T.mine.items, true),
+          h("div", { class: "flexrow" }, h("span", { class: "trade-gold", text: `${T.mine.gold.toLocaleString()} G` }), goldIn, h("button", { class: "btn small", disabled: T.mine.ready, onclick: setGold }, "골드 올리기"))),
+        h("div", { class: "trade-col" },
+          h("div", { class: "flexrow" }, h("b", { text: `${T.with}님이 줄 것` }), badge(T.theirs)),
+          cells(T.theirs.items, false),
+          h("div", { class: "flexrow" }, h("span", { class: "trade-gold", text: `${T.theirs.gold.toLocaleString()} G` })))),
+      h("div", { class: "flexrow trade-actions" },
+        h("button", { class: "btn" + (T.mine.ready ? "" : " primary"), disabled: T.mine.ok, onclick: () => send({ t: "trade", op: "ready" }) }, T.mine.ready ? "준비 풀기" : "준비"),
+        h("button", { class: "btn primary", disabled: !bothReady || T.mine.ok, onclick: () => send({ t: "trade", op: "confirm" }) }, T.mine.ok ? "상대 확정 기다리는 중…" : "거래 확정"),
+        h("button", { class: "btn danger", onclick: () => closeWin("trade") }, "취소")),
+      h("div", { class: "note", text: "물건이나 골드가 바뀌면 양쪽 준비가 풀려요. 둘 다 '준비' → 둘 다 '거래 확정'을 눌러야 교환돼요. 받기 전에 상대가 올린 아이템을 꼭 확인하세요." }),
+      h("h4", { text: `내 가방 — 눌러서 올리기/내리기 (💰 ${c.gold.toLocaleString()} G)` }),
+      c.inv.length ? bag : h("div", { class: "note", text: "가방이 비어 있어요." }),
+    ];
+  }, { w: 640, onClose: () => { if (G.trade) { send({ t: "trade", op: "cancel" }); G.trade = null; } tradeGold = ""; } });
 }

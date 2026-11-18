@@ -127,6 +127,24 @@ const ui = {
     let n = 30;
     const tm = setInterval(() => { n--; left.textContent = String(n); if (n <= 0) done(); }, 1000);
   },
+  tradeReq(from) {
+    document.querySelector(`.invite[data-trade="${CSS.escape(from)}"]`)?.remove();
+    const left = h("span", { class: "inv-left", text: "30" });
+    const done = () => { clearInterval(tm); box.remove(); };
+    const answer = (ok) => { send({ t: "trade", op: ok ? "accept" : "decline", name: from }); done(); };
+    const box = h("div", { class: "invite" }, h("div", { text: `💰 ${from}님이 거래를 신청했어요. ` }, left, "초"),
+      h("div", { class: "flexrow" }, h("button", { class: "btn small primary", onclick: () => answer(true) }, G.touch ? "수락" : "수락 (Y)"), h("button", { class: "btn small", onclick: () => answer(false) }, G.touch ? "거절" : "거절 (N)")));
+    box.dataset.trade = from;
+    box._answer = answer;
+    $("#ui").append(box);
+    let n = 30;
+    const tm = setInterval(() => { n--; left.textContent = String(n); if (n <= 0) done(); }, 1000);
+  },
+  onTrade(msg) {
+    if (G.trade) { if (!isOpen("trade")) WIN.openTrade(); else refreshWin("trade"); }
+    else if (isOpen("trade")) closeWin("trade");
+    if (msg) HUD.toast(msg, msg.includes("완료") ? "rank" : "info");
+  },
   announce(text) { const a = $("#announce"); a.classList.toggle("hidden", !text); a.textContent = text ? "📢 " + text : ""; },
   kicked(why) { G.kickedWhy = why; },
   onWho() { if (isOpen("who")) refreshWin("who"); },
@@ -266,7 +284,12 @@ function bindInput() {
   chat.addEventListener("keydown", (e) => {
     // 한글 입력 중(조합 중)에 누른 Enter는 무시: 안 그러면 마지막 글자가 한 번 더 올라감
     if (e.key === "Enter" && (e.isComposing || e.keyCode === 229)) { e.stopPropagation(); return; }
-    if (e.key === "Enter") { const t = chat.value.trim(); if (t) send({ t: "chat", text: t }); chat.value = ""; chat.blur(); e.preventDefault(); }
+    if (e.key === "Enter") {
+      const t = chat.value.trim();
+      const tr = t.match(/^\/(?:거래|trade)\s+(\S+)/i); // /거래 닉네임
+      if (tr) send({ t: "trade", op: "request", name: tr[1] }); else if (t) send({ t: "chat", text: t });
+      chat.value = ""; chat.blur(); e.preventDefault();
+    }
     if (e.key === "Escape") chat.blur();
     e.stopPropagation();
   });

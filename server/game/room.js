@@ -339,6 +339,11 @@ export class Room {
     if (t.boss) this.onBossDead(t);
     else if (this.kind === "dungeon" && !this.exitOpen && this.map.kind === "normal" && (this.wave ? this.wave.spawned >= this.total : true) && this.aliveMonsters() === 0) {
       this.exitOpen = true;
+      // 층을 깬 순간 '깬 층'으로 기록 → 마을로 나갔다 와도 다음 층부터 이어서 도전 가능
+      for (const p of this.players.values()) {
+        const c = p.session.char;
+        if (c.best < this.floor) { c.best = this.floor; this.world.save?.(p.session); this.world.sendChar?.(p.session); }
+      }
       this.ev({ e: "exit", open: 1 });
       this.ev({ e: "msg", text: "층 클리어! 보상 상자가 나타나고 바닥 아이템을 모두 주웠어요.", kind: "info" });
       this.schedule(0.8, () => this.collectAll());
