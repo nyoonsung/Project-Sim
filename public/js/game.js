@@ -43,6 +43,12 @@ export function onMessage(m) {
       break;
     case "prof": if (G.char) { (G.char.prof ??= {})[m.s] = m.xp; G.ui.onProf?.(m.s); } break;
     case "char": G.char = m.char; G.ui.onChar(); break;
+    case "dur": {
+      // 무기 내구도 변화 (전체 캐릭터 정보를 다시 받지 않고 그 값만)
+      const it = [G.char?.equip?.weapon, ...(G.char?.inv ?? [])].find((x) => x?.uid === m.uid);
+      if (it) { it.dur = m.dur; it.maxDur = m.max; G.ui.onDur?.(); }
+      break;
+    }
     case "chat": G.ui.chat(m); break;
     case "party": G.party = m.members; G.ui.onParty(); break;
     case "invite": G.ui.invite(m.from); break;

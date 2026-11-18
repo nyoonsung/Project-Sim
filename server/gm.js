@@ -1,5 +1,6 @@
 // 관리 API: 관리자 키로 로그인한 서버 주인만 쓸 수 있고, 모든 변경은 감사 기록에 남긴다
 import { Q, secLog } from "./db.js";
+import { defaultLoadout } from "./game/player.js";
 import { world } from "./net.js";
 import { rollItem, RARITIES, SLOTS, canEquip } from "../shared/items.js";
 import { CLASS_INFO } from "../shared/classes.js";
@@ -80,7 +81,9 @@ export async function handleGm(req, res, path, { readJson, send, isAdmin, ip, ur
       const ok = world.gmApplyChar(id, (c) => {
         if (ch.cls && ch.cls !== c.cls) { c.unspent += Object.values(c.stats ?? {}).reduce((a, x) => a + x, 0); c.stats = {}; c.skills = c.skills.map((s) => (s && s.startsWith("c_") ? s : null)); for (const sl of ["weapon", "offhand"]) if (c.equip[sl] && !canEquip(c.equip[sl], ch.cls)) { c.inv.push(c.equip[sl]); c.equip[sl] = null; } }
         if (ch.level && ch.level !== c.level) c.xp = 0;
+        const clsChanged = ch.cls && ch.cls !== c.cls;
         Object.assign(c, { ...ch, cons: { ...c.cons, ...(ch.cons ?? {}) } });
+        if (clsChanged) c.skills = defaultLoadout(c); // 직업을 바꾸면 그 직업 기본 스킬 세트
       });
       audit("edit", target, ch);
       return send(res, ok ? 200 : 400, ok ? { ok: true } : { error: "수정 실패" });

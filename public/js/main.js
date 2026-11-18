@@ -113,6 +113,7 @@ const ui = {
   toast: HUD.toast,
   center: HUD.center,
   refreshKeys() { if (!G.touch) { HUD.buildHud(); HUD.updateSkillbar(); } },
+  onDur() { HUD.updateBars(); for (const id of ["inv", "smithy"]) if (isOpen(id)) refreshWin(id); },
   showVote: HUD.showVote,
   gotItem(it) { HUD.toast(`획득: ${it.name} [${it.rarity}]`, it.rarity === "신화" ? "mythic" : it.rarity === "전설" ? "legend" : "info"); },
   onBoss: HUD.updateBoss,

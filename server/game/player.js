@@ -3,7 +3,7 @@ import { deriveStats } from "../../shared/stats.js";
 import { CLASS_INFO, xpToNext, stageOf } from "../../shared/classes.js";
 import { SKILLS, unlockStage, adventurerBasic } from "../../shared/skills.js";
 import { MAX_LEVEL, STAT_POINTS_PER_LEVEL, PLAYER_RADIUS, ITEMS } from "../../shared/constants.js";
-import { starterGear } from "../../shared/items.js";
+import { starterGear, ensureDur } from "../../shared/items.js";
 
 export const INV_SIZE = 40;
 
@@ -35,6 +35,28 @@ export function sanitizeChar(c, name) {
   // 모험가 기본 공격은 든 무기에 맞춤 (활 → 활쏘기, 지팡이 → 마력탄)
   if (out.cls === "adventurer" && Array.isArray(out.skills)) out.skills[0] = adventurerBasic(out.equip?.weapon?.type);
   out.equip = { ...d.equip, ...(out.equip ?? {}) };
+  // 무기 내구도 (예전 무기엔 없던 값 → 가득으로)
+  ensureDur(out.equip.weapon);
+  for (const it of out.inv) ensureDur(it);
+  return out;
+}
+
+/** 직업 기본 스킬 세트: 1번 기본 공격, 2~6번 지금 레벨에 쓸 수 있는 직업 스킬(정의 순서), 7번 대시, 8번 응급처치 */
+export function defaultLoadout(ch) {
+  const avail = availableSkills(ch).filter((s) => s.cls === ch.cls && !s.weaponBasic);
+  const basic = avail.find((s) => s.kind === "basic" && (!s.stance || s.stance === avail.find((b) => b.kind === "basic")?.stance));
+  const out = [basic?.id ?? "c_thrust"];
+  const taken = new Set(out);
+  for (const s of avail) {
+    if (out.length >= 6) break;
+    if (s.kind === "passive" || s.kind === "basic" || s.kind === "ultimate" || taken.has(s.id)) continue;
+    if (s.exclusive && taken.has(s.exclusive)) continue;
+    out.push(s.id); taken.add(s.id);
+  }
+  // 직업 스킬이 모자라면 공용 베기로 채움
+  if (out.length < 6 && !taken.has("c_slash")) out.push("c_slash");
+  while (out.length < 6) out.push(null);
+  out.push("c_dash", "c_firstaid");
   return out;
 }
 

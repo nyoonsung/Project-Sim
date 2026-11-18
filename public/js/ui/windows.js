@@ -9,7 +9,7 @@ import { CLASS_INFO, STATS, stageOf, stageLevel, xpToNext } from "/shared/classe
 import { SKILLS, skillsOf, unlockStage } from "/shared/skills.js";
 import { deriveStats } from "/shared/stats.js";
 import { SKILL_SLOTS, SLOT_KEYS, ITEMS, GRADE_COLOR } from "/shared/constants.js";
-import { RARITY_COLOR, SLOT_NAME, OPTIONS, MYTHIC_EFFECTS, WEAPON_TYPES, OFFHAND_TYPES, VARIANT_TRAITS, RARITIES, RARITY_WEIGHTS, MATERIALS, ARMOR_NAMES, enhanceOdds, enhanceCost, enhMul, sellPrice, canEquip, MAX_ENH } from "/shared/items.js";
+import { RARITY_COLOR, SLOT_NAME, OPTIONS, MYTHIC_EFFECTS, WEAPON_TYPES, OFFHAND_TYPES, VARIANT_TRAITS, RARITIES, RARITY_WEIGHTS, MATERIALS, ARMOR_NAMES, repairCost, enhanceOdds, enhanceCost, enhMul, sellPrice, canEquip, MAX_ENH } from "/shared/items.js";
 import { sprite, playerLook } from "../render/sprites.js";
 
 const fmtPct = (v) => (v * 100).toFixed(1) + "%";
@@ -49,12 +49,21 @@ export function skillTip(sk) {
   return [el];
 }
 
+/** 내구도 막대 */
+function durBar(it) {
+  const p = Math.max(0, Math.min(1, it.dur / it.maxDur));
+  return h("span", { class: "dur-bar" + (it.dur <= 0 ? " broken" : p <= 0.2 ? " low" : "") }, h("i", { style: { width: p * 100 + "%" } }));
+}
 export function itemTip(it, compare) {
   const els = [h("div", { class: "tt-name", style: { color: RARITY_COLOR[it.rarity] } }, `${it.name}${it.enh ? ` +${it.enh}` : ""}`)];
   const type = it.slot === "weapon" ? WEAPON_TYPES[it.type]?.name : it.slot === "offhand" ? OFFHAND_TYPES[it.type]?.name : SLOT_NAME[it.slot];
   els.push(h("div", { class: "tt-sub", text: `${it.rarity} ${SLOT_NAME[it.slot]} · ${type} · 아이템 레벨 ${it.ilvl}` }));
   const m = enhMul(it.enh);
   const names = { atk: "공격력", def: "방어력", hp: "최대 HP", mp: "최대 MP", crit: "치명타 확률", aspd: "공격 속도" };
+  if (it.slot === "weapon" && it.dur != null) {
+    const broken = it.dur <= 0;
+    els.push(h("div", { class: "tt-dur" + (broken ? " broken" : it.dur <= it.maxDur * 0.2 ? " low" : "") }, durBar(it), ` 내구도 ${Math.floor(it.dur)}/${it.maxDur}${broken ? " — 부서짐! 공격력 30% (대장장이 수선)" : ""}`));
+  }
   const trait = VARIANT_TRAITS[it.slot]?.[it.variant ?? 1];
   if (trait && it.slot !== "weapon" && it.slot !== "offhand") els.push(h("div", { class: "tt-trait", text: `특징 · ${trait.desc}` }));
   for (const [k, v] of Object.entries(it.base)) {
@@ -179,6 +188,27 @@ export function openInv(pos = {}) {
     const c = G.char;
     if (!c) return [];
     const nearShop = nearNpc("shop"), nearSmith = nearNpc("smithy");
+    const multi = G.sellMode;
+    const picked = (G.sellPick ??= new Set());
+    for (const u of [...picked]) if (!c.inv.some((x) => x.uid === u && !x.locked)) picked.delete(u);
+    const pickedItems = c.inv.filter((x) => picked.has(x.uid));
+    const pickedGold = pickedItems.reduce((a, x) => a + sellPrice(x), 0);
+    const toggleAll = (pred) => { const list = c.inv.filter((x) => !x.locked && pred(x)); const all = list.every((x) => picked.has(x.uid)); for (const x of list) all ? picked.delete(x.uid) : picked.add(x.uid); refreshWin("inv"); };
+    const sellBar = multi ? h("div", { class: "sell-bar" },
+      h("div", { class: "flexrow" },
+        h("button", { class: "btn small", onclick: () => toggleAll((x) => x.rarity === "일반") }, "일반 전부"),
+        h("button", { class: "btn small", onclick: () => toggleAll((x) => x.rarity === "일반" || x.rarity === "희귀") }, "희귀 이하"),
+        h("button", { class: "btn small", onclick: () => toggleAll((x) => !canEquip(x, c.cls)) }, "못 쓰는 장비"),
+        h("button", { class: "btn small", onclick: () => { picked.clear(); refreshWin("inv"); } }, "선택 해제")),
+      h("div", { class: "flexrow" },
+        h("span", { text: `${picked.size}개 선택 · ${pickedGold.toLocaleString()}G` }),
+        h("button", { class: "btn primary small", disabled: !nearShop || !picked.size, title: nearShop ? "" : "잡화 상인 근처에서 팔 수 있어요", onclick: () => {
+          const rare = pickedItems.filter((x) => ["영웅", "전설", "신화"].includes(x.rarity) || x.enh >= 5).length;
+          if (rare && !G.sellConfirm) { G.sellConfirm = true; G.ui.toast?.(`영웅 이상·강화된 아이템 ${rare}개가 섞여 있어요. 정말 팔려면 한 번 더 누르세요.`); setTimeout(() => (G.sellConfirm = false), 4000); return; }
+          G.sellConfirm = false;
+          send({ t: "sellMany", uids: [...picked] }); picked.clear();
+        } }, nearShop ? "선택 판매" : "상인 근처에서 판매"),
+        h("button", { class: "btn small", onclick: () => { G.sellMode = false; picked.clear(); refreshWin("inv"); } }, "닫기"))) : null;
     const eq = h("div", { class: "equip-slots" }, ...["weapon", "offhand", "helmet", "armor", "trinket"].map((slot) => {
       const it = c.equip[slot];
       const el = h("div", { class: "cell" + (it ? " r-" + it.rarity : "") + (selItem === it?.uid ? " sel" : ""), onclick: () => { if (it) { selItem = it.uid; refreshWin("inv"); } } },
@@ -189,10 +219,13 @@ export function openInv(pos = {}) {
     }));
     const grid = h("div", { class: "inv-grid" }, ...Array.from({ length: 40 }, (_, i) => {
       const it = c.inv[i];
-      const el = h("div", { class: "cell" + (it ? " r-" + it.rarity : "") + (it && selItem === it.uid ? " sel" : ""), onclick: () => { if (it) { selItem = it.uid; refreshWin("inv"); } } },
-        it ? iconEl(it) : null, it?.enh ? h("span", { class: "enh", text: "+" + it.enh }) : null, it?.locked ? h("span", { class: "lock", text: "🔒" }) : null);
+      const el = h("div", { class: "cell" + (it ? " r-" + it.rarity : "") + (it && selItem === it.uid && !multi ? " sel" : "") + (it && picked.has(it.uid) ? " picked" : ""),
+        onclick: () => { if (!it) return; if (multi) { if (it.locked) return G.ui.toast?.("잠긴 아이템은 팔 수 없어요."); picked.has(it.uid) ? picked.delete(it.uid) : picked.add(it.uid); refreshWin("inv"); } else { selItem = it.uid; refreshWin("inv"); } } },
+        it ? iconEl(it) : null, it?.enh ? h("span", { class: "enh", text: "+" + it.enh }) : null, it?.locked ? h("span", { class: "lock", text: "🔒" }) : null,
+        it && multi && picked.has(it.uid) ? h("span", { class: "pick", text: "✓" }) : null,
+        it?.slot === "weapon" && it.dur != null && it.dur < it.maxDur ? h("span", { class: "dur-mini" + (it.dur <= 0 ? " broken" : it.dur <= it.maxDur * 0.2 ? " low" : "") }, h("i", { style: { width: Math.max(0, (it.dur / it.maxDur) * 100) + "%" } })) : null);
       if (it) {
-        el.addEventListener("dblclick", () => send({ t: "equip", uid: it.uid }));
+        el.addEventListener("dblclick", () => !multi && send({ t: "equip", uid: it.uid }));
         el.addEventListener("contextmenu", (e) => { e.preventDefault(); if (nearShop) send({ t: "sell", uid: it.uid }); });
         tipOn(el, () => itemTip(it, c.equip[it.slot]));
       }
@@ -205,7 +238,9 @@ export function openInv(pos = {}) {
       c.inv.includes(sel) ? h("button", { class: "btn small", disabled: !nearShop || sel.locked, onclick: () => send({ t: "sell", uid: sel.uid }) }, `판매 ${sellPrice(sel)}G`) : null,
       h("button", { class: "btn small", disabled: !nearSmith, onclick: () => { G.enhSel = sel.uid; openSmithy(); } }, "강화"),
       h("button", { class: "btn small", onclick: () => send({ t: "lock", uid: sel.uid }) }, sel.locked ? "잠금 해제" : "잠금")) : h("div", { class: "note", text: "아이템을 누르면 선택돼요. 두 번 누르면 장착/해제, 상인 근처에서 오른쪽 클릭하면 판매해요." });
-    return [h("div", { class: "flexrow" }, h("span", { text: `💰 ${c.gold.toLocaleString()} G` }), h("span", { class: "note", text: `가방 ${c.inv.length}/40` })), h("h4", { text: "장착 중" }), eq, actions, h("h4", { text: "가방" }), grid];
+    return [h("div", { class: "flexrow" }, h("span", { text: `💰 ${c.gold.toLocaleString()} G` }), h("span", { class: "note", text: `가방 ${c.inv.length}/40` }),
+        multi ? null : h("button", { class: "btn small", onclick: () => { G.sellMode = true; refreshWin("inv"); } }, "여러 개 팔기")),
+      h("h4", { text: "장착 중" }), eq, multi ? sellBar : actions, h("h4", { text: multi ? "가방 — 팔 아이템을 누르세요" : "가방" }), grid];
   }, { w: 420, ...pos });
 }
 
@@ -268,9 +303,20 @@ export function openShop(pos = {}) {
 
 let lastEnh = null;
 export function openSmithy(pos = {}) {
-  openWin("smithy", "대장장이 브론 — 강화", () => {
+  openWin("smithy", "대장장이 브론 — 강화 · 수선", () => {
     const c = G.char;
     const all = [...Object.values(c.equip).filter(Boolean), ...c.inv];
+    // 수선: 닳은 무기 목록 + 비용
+    const worn = all.filter((it) => it.slot === "weapon" && it.dur != null && it.dur < it.maxDur);
+    const total = worn.reduce((a, it) => a + repairCost(it), 0);
+    const repairBox = h("div", { class: "repair-box" },
+      h("h4", { text: "무기 수선" }),
+      worn.length ? h("div", {}, ...worn.map((it) => h("div", { class: "statrow" },
+        h("span", { class: "sn", style: { color: RARITY_COLOR[it.rarity] }, text: it.name + (c.equip.weapon === it ? " (장착)" : "") }),
+        h("span", { class: "sd" }, durBar(it), ` ${Math.floor(it.dur)}/${it.maxDur}`),
+        h("button", { class: "btn small", disabled: c.gold < repairCost(it), onclick: () => send({ t: "repair", uid: it.uid }) }, `${repairCost(it).toLocaleString()}G`))),
+        h("button", { class: "btn primary", disabled: c.gold < total, onclick: () => send({ t: "repair" }) }, `모두 수선 (${total.toLocaleString()}G)`))
+        : h("div", { class: "note", text: "모든 무기의 내구도가 가득해요. (던전에서 스킬을 쓸수록 닳고, 쓰러지면 10% 줄어요. 0이 되면 공격력이 30%로 떨어져요.)" }));
     const sel = all.find((x) => x.uid === G.enhSel) ?? null;
     const pick = h("div", { class: "inv-grid" }, ...all.map((it) => {
       const el = h("div", { class: "cell r-" + it.rarity + (sel === it ? " sel" : ""), onclick: () => { G.enhSel = it.uid; lastEnh = null; refreshWin("smithy"); } }, iconEl(it), it.enh ? h("span", { class: "enh", text: "+" + it.enh }) : null);
@@ -287,7 +333,7 @@ export function openSmithy(pos = {}) {
         h("div", { class: "enh-result " + (lastEnh?.result ?? ""), text: lastEnh ? { success: `성공! +${lastEnh.enh}`, fail: "실패… (단계 유지)", destroy: "파괴됐어요…" }[lastEnh.result] : "" }),
         h("button", { class: "btn primary", disabled: sel.enh >= MAX_ENH || c.gold < cost, onclick: () => send({ t: "enhance", uid: sel.uid }) }, `강화하기 (+${sel.enh} → +${sel.enh + 1})`));
     }
-    return [box, h("h4", { text: "장비 선택" }), pick];
+    return [repairBox, h("h4", { text: "강화" }), box, h("h4", { text: "장비 선택" }), pick];
   }, { w: 420, ...pos });
 }
 export function onEnhance(m) {

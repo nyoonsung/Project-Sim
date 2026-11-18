@@ -173,7 +173,29 @@ export function rollItem(R, { ilvl, cls = "adventurer", tier = "normal", rarity 
     it.title = pick(R, MYTHIC_TITLES);
   }
   it.name = itemName(it);
+  if (slot === "weapon") it.dur = it.maxDur = maxDurability(it);
   return it;
+}
+
+// ── 무기 내구도: 스킬을 쓸 때마다 조금씩 닳고(0.1), 쓰러지면 최대치의 10% 감소.
+//    0이 되면 '부서짐' → 무기 공격력이 30%만 적용. 대장장이에게 골드를 내고 수선.
+export const DUR_PER_CAST = 0.1;
+export const DUR_DEATH = 0.1;
+export const BROKEN_MUL = 0.3;
+export function maxDurability(it) { return 100 + RARITIES.indexOf(it.rarity) * 20; }
+/** 내구도 상태가 없던 옛 무기도 꽉 찬 상태로 맞춤 */
+export function ensureDur(it) {
+  if (!it || it.slot !== "weapon") return it;
+  if (!Number.isFinite(it.maxDur) || it.maxDur <= 0) it.maxDur = maxDurability(it);
+  if (!Number.isFinite(it.dur)) it.dur = it.maxDur;
+  it.dur = Math.max(0, Math.min(it.maxDur, it.dur));
+  return it;
+}
+/** 수선 비용(골드): 닳은 만큼 × 아이템 레벨·등급 */
+export function repairCost(it) {
+  if (!it || it.slot !== "weapon") return 0;
+  const miss = Math.max(0, (it.maxDur ?? 100) - (it.dur ?? it.maxDur ?? 100));
+  return Math.ceil(miss * (1 + it.ilvl * 0.12) * (1 + RARITIES.indexOf(it.rarity) * 0.3));
 }
 
 /** 모험가 시작 장비 */
@@ -217,7 +239,8 @@ export function gearTotals(equip) {
   const t = { atk: 0, atkPct: 0, def: 0, hp: 0, mp: 0, crit: 0, critDmg: 0, aspd: 0, move: 0, dmg: 0, dr: 0, hpRegen: 0, mpRegen: 0, heal: 0, mythic: [] };
   for (const it of Object.values(equip ?? {})) {
     if (!it) continue;
-    const m = enhMul(it.enh);
+    // 부서진 무기(내구도 0)는 공격력 30%만
+    const m = enhMul(it.enh) * (it.slot === "weapon" && it.dur != null && it.dur <= 0 ? BROKEN_MUL : 1);
     for (const [k, v] of Object.entries(it.base)) t[k] += PCT_KEYS.has(k) ? v : v * m; // 비율 능력치는 강화로 안 커짐
     for (const o of it.opts) t[o.k] += o.v;
     if (it.mythic) t.mythic.push(it.mythic);

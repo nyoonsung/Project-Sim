@@ -105,7 +105,9 @@ export function updateBars() {
   set("#orbs .xp", m.xp, need, `Lv.${m.lv}  ${((m.xp / need) * 100).toFixed(1)}%`);
   // 골드·물약 개수
   const c = m.cons ?? G.char?.cons ?? {};
-  const w = `💰 ${(m.gold ?? G.char?.gold ?? 0).toLocaleString()} G   ❤ ${c.hp_potion ?? 0}   💧 ${c.mp_potion ?? 0}   🌿 ${c.antidote ?? 0}`;
+  const wp = G.char?.equip?.weapon;
+  const durTxt = wp?.dur != null && wp.dur <= wp.maxDur * 0.2 ? (wp.dur <= 0 ? "   ⚠ 무기 부서짐!" : `   ⚠ 무기 내구도 ${Math.floor((wp.dur / wp.maxDur) * 100)}%`) : "";
+  const w = `💰 ${(m.gold ?? G.char?.gold ?? 0).toLocaleString()} G   ❤ ${c.hp_potion ?? 0}   💧 ${c.mp_potion ?? 0}   🌿 ${c.antidote ?? 0}${durTxt}`;
   const we = $("#wallet");
   if (we._t !== w) { we._t = w; we.textContent = w; }
   const res = RES[G.char?.cls];

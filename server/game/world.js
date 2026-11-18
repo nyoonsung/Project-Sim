@@ -3,11 +3,11 @@ import { Q, secLog, itemLog } from "../db.js";
 import { TICK_RATE, ITEMS, MAX_PARTY, SKILL_SLOTS } from "../../shared/constants.js";
 import { CLASS_INFO, STATS } from "../../shared/classes.js";
 import { SKILLS, adventurerBasic } from "../../shared/skills.js";
-import { canEquip, enhanceOdds, enhanceCost, sellPrice, MAX_ENH, SLOTS, CLASS_GEAR, baseStats, itemName } from "../../shared/items.js";
+import { canEquip, enhanceOdds, enhanceCost, sellPrice, MAX_ENH, SLOTS, CLASS_GEAR, baseStats, itemName, ensureDur, repairCost } from "../../shared/items.js";
 import { floorKind } from "../../shared/zones.js";
 import { Room } from "./room.js";
 import { makeFloor, makeTown, safeZone } from "./dungeon.js";
-import { newCharacter, sanitizeChar, makePlayerUnit, refreshStats, availableSkills, INV_SIZE } from "./player.js";
+import { newCharacter, sanitizeChar, makePlayerUnit, refreshStats, availableSkills, defaultLoadout, INV_SIZE } from "./player.js";
 import { secureRandom } from "./secure.js";
 import { moveMul } from "./combat.js";
 import { USERNAME_RE } from "../auth.js";
@@ -165,6 +165,8 @@ export class World {
       case "equip": this.equip(s, m.uid); break;
       case "unequip": this.unequip(s, m.slot); break;
       case "sell": this.sell(s, m.uid); break;
+      case "sellMany": this.sellMany(s, m.uids); break;
+      case "repair": this.repair(s, m.uid); break;
       case "enhance": this.enhance(s, m.uid); break;
       case "lock": { const it = s.char.inv.find((i) => i.uid === m.uid) ?? Object.values(s.char.equip).find((i) => i?.uid === m.uid); if (it) { it.locked = !it.locked; this.sendChar(s); } break; }
       case "ping": s.send({ t: "pong", c: m.c, s: Date.now() }); break;
@@ -406,10 +408,8 @@ export class World {
     c.unspent += Object.values(c.stats).reduce((a, b) => a + b, 0);
     c.stats = {};
     c.cls = cls;
-    c.skills = c.skills.map((id) => (id && SKILLS[id]?.cls === "common" ? id : null));
-    // 기본 공격을 첫 칸에
-    const basic = Object.values(SKILLS).find((k) => k.cls === cls && k.kind === "basic");
-    if (basic) { c.skills = c.skills.filter((id) => id !== "c_thrust"); c.skills.unshift(basic.id); c.skills = c.skills.slice(0, 8); while (c.skills.length < 8) c.skills.push(null); }
+    // 새 직업 기본 스킬 세트: 1번 칸 직업 기본 공격, 2~6번 칸 지금 쓸 수 있는 직업 스킬, 7번 대시, 8번 응급처치
+    c.skills = defaultLoadout(c);
     s.unit.ki = 0; s.unit.holy = 0; s.unit.parts = 0; s.unit.gap = 0;
     // 새 직업이 쓸 수 없는 장비는 가방으로, 직업 기본 무기 지급
     for (const slot of ["weapon", "offhand"]) {
@@ -420,6 +420,7 @@ export class World {
       const wt = CLASS_GEAR[cls].w[0];
       c.equip.weapon = { uid: c.nextUid++, slot: "weapon", type: wt, variant: 0, rarity: "일반", ilvl: c.level, enh: 0, base: baseStats("weapon", wt, c.level, 0), opts: [], name: "" };
       c.equip.weapon.name = "수련생의 " + itemName(c.equip.weapon).split(" ").slice(1).join(" ");
+      ensureDur(c.equip.weapon);
     }
     if (!c.equip.offhand && CLASS_GEAR[cls].o[0] !== "shield") {
       const ot = CLASS_GEAR[cls].o[0];
@@ -524,6 +525,40 @@ export class World {
     if (["전설", "신화"].includes(it.rarity) || it.enh >= 10) itemLog(s.userId, "sell", { name: it.name, rarity: it.rarity, enh: it.enh, gold: g });
     this.sendChar(s);
     s.notice(`${it.name}을(를) ${g}G에 팔았어요.`);
+  }
+  /** 일괄 판매: 잠긴 아이템은 건너뜀 */
+  sellMany(s, uids) {
+    const c = s.char;
+    if (!this.nearNpc(s, "shop")) return s.notice("상인 근처에서 팔 수 있어요.");
+    const want = new Set(uids);
+    let n = 0, gold = 0, skipped = 0;
+    c.inv = c.inv.filter((it) => {
+      if (!want.has(it.uid)) return true;
+      if (it.locked) { skipped++; return true; }
+      const g = sellPrice(it);
+      gold += g; n++;
+      if (["전설", "신화"].includes(it.rarity) || it.enh >= 10) itemLog(s.userId, "sell", { name: it.name, rarity: it.rarity, enh: it.enh, gold: g });
+      return false;
+    });
+    if (!n) return s.notice(skipped ? "잠긴 아이템은 팔 수 없어요." : "팔 아이템을 골라 주세요.");
+    c.gold += gold;
+    this.sendChar(s);
+    s.notice(`${n}개를 ${gold.toLocaleString()}G에 팔았어요.${skipped ? ` (잠긴 ${skipped}개 제외)` : ""}`);
+  }
+  /** 무기 수선 (대장장이): uid를 주면 그 무기만, 없으면 장착 무기 + 가방 속 무기 전부 */
+  repair(s, uid) {
+    const c = s.char;
+    if (!this.nearNpc(s, "smithy")) return s.notice("대장장이 브론 근처에서 수선할 수 있어요.");
+    const list = [c.equip.weapon, ...c.inv].filter((it) => it?.slot === "weapon" && (uid == null || it.uid === uid)).map(ensureDur).filter((it) => it.dur < it.maxDur);
+    if (!list.length) return s.notice("수선할 무기가 없어요. (내구도가 모두 가득)");
+    const cost = list.reduce((a, it) => a + repairCost(it), 0);
+    if (c.gold < cost) return s.notice(`골드가 부족해요. (수선비 ${cost.toLocaleString()}G)`);
+    c.gold -= cost;
+    for (const it of list) it.dur = it.maxDur;
+    refreshStats(s.unit);
+    this.sendChar(s);
+    s.unit.room?.ev({ e: "fx", fx: "impacts/hit-spark", x: s.unit.x | 0, y: (s.unit.y - 10) | 0 });
+    s.notice(`무기 ${list.length}개를 ${cost.toLocaleString()}G에 수선했어요. 내구도 가득!`);
   }
   // 강화: 성공 (99-n)%, 파괴 1%, 나머지 실패. 서버 보안 난수로 판정
   enhance(s, uid) {
