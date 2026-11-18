@@ -45,7 +45,7 @@ export function onMessage(m) {
     case "char": G.char = m.char; G.ui.onChar(); break;
     case "dur": {
       // 무기 내구도 변화 (전체 캐릭터 정보를 다시 받지 않고 그 값만)
-      const it = [G.char?.equip?.weapon, ...(G.char?.inv ?? [])].find((x) => x?.uid === m.uid);
+      const it = [...Object.values(G.char?.equip ?? {}), ...(G.char?.inv ?? [])].find((x) => x?.uid === m.uid);
       if (it) { it.dur = m.dur; it.maxDur = m.max; G.ui.onDur?.(); }
       break;
     }

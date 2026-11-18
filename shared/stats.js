@@ -4,6 +4,8 @@ import { BASE_MOVE_SPEED, CRIT } from "./constants.js";
 import { gearTotals } from "./items.js";
 import { SKILLS } from "./skills.js";
 
+// 직업 피해 배율 (궁수 2.5배 상향)
+export const CLASS_DMG = { archer: 2.5 };
 const MOVE_MUL = { adventurer: 1, sword: 1, fist: 1.02, archer: 1.02, rogue: 1.12, mage: 0.97, priest: 0.98, smith: 0.92 };
 
 /** 장착한 패시브 스킬의 상시 능력치 */
@@ -31,8 +33,8 @@ export function deriveStats(ch) {
   const sb = stageBonus(ch.cls, stage);
   const g = (k) => sum[k] ?? 0;
   const p = (k) => pm[k] ?? 0;
-  const maxHp = Math.round((((120 + 22 * L) * info.hpMul + g("hp")) * (1 + (sb - 1) * 0.5) + gear.hp) * (1 + p("hpPct")));
-  const def = Math.round((((5 + 2.2 * L) * info.defMul + g("def")) * (1 + (sb - 1) * 0.5) + gear.def) * (1 + p("defPct")));
+  const maxHp = Math.round((((120 + 22 * L) * info.hpMul + g("hp")) * (1 + (sb - 1) * 0.5) + gear.hp) * (1 + p("hpPct") + gear.hpPct));
+  const def = Math.round((((5 + 2.2 * L) * info.defMul + g("def")) * (1 + (sb - 1) * 0.5) + gear.def) * (1 + p("defPct") + gear.defPct));
   return {
     stage,
     stageBonus: sb,
@@ -64,6 +66,7 @@ export function deriveStats(ch) {
     shield: 1 + g("shield"),
     mythic: gear.mythic,
     dmgType: info.dmgType,
+    classDmg: CLASS_DMG[ch.cls] ?? 1,
   };
 }
 

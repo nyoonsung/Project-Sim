@@ -36,9 +36,8 @@ export function sanitizeChar(c, name) {
   if (out.cls === "adventurer" && Array.isArray(out.skills)) out.skills[0] = adventurerBasic(out.equip?.weapon?.type);
   out.equip = { ...d.equip, ...(out.equip ?? {}) };
   // 무기 내구도 (예전 무기엔 없던 값 → 가득으로)
-  ensureDur(out.equip.weapon);
   for (const it of out.inv) { ensureDur(it); upgradeMythic(it); }
-  for (const it of Object.values(out.equip)) upgradeMythic(it);
+  for (const it of Object.values(out.equip)) { ensureDur(it); upgradeMythic(it); }
   return out;
 }
 

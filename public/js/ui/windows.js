@@ -9,7 +9,7 @@ import { CLASS_INFO, STATS, stageOf, stageLevel, xpToNext } from "/shared/classe
 import { SKILLS, skillsOf, unlockStage } from "/shared/skills.js";
 import { deriveStats } from "/shared/stats.js";
 import { SKILL_SLOTS, SLOT_KEYS, ITEMS, GRADE_COLOR } from "/shared/constants.js";
-import { RARITY_COLOR, SLOT_NAME, OPTIONS, MYTHIC_EFFECTS, WEAPON_TYPES, OFFHAND_TYPES, VARIANT_TRAITS, RARITIES, RARITY_WEIGHTS, RARITY_MUL, MATERIALS, ARMOR_NAMES, repairCost, enhanceOdds, enhanceCost, enhMul, sellPrice, canEquip, MAX_ENH } from "/shared/items.js";
+import { RARITY_COLOR, SLOT_NAME, OPTIONS, MYTHIC_EFFECTS, WEAPON_TYPES, OFFHAND_TYPES, VARIANT_TRAITS, RARITIES, RARITY_WEIGHTS, RARITY_MUL, MATERIALS, ARMOR_NAMES, repairCost, ENH_PCT, enhanceOdds, enhanceCost, enhMul, sellPrice, canEquip, MAX_ENH } from "/shared/items.js";
 import { sprite, playerLook } from "../render/sprites.js";
 
 const fmtPct = (v) => (v * 100).toFixed(1) + "%";
@@ -58,11 +58,11 @@ export function itemTip(it, compare) {
   const els = [h("div", { class: "tt-name", style: { color: RARITY_COLOR[it.rarity] } }, `${it.name}${it.enh ? ` +${it.enh}` : ""}`)];
   const type = it.slot === "weapon" ? WEAPON_TYPES[it.type]?.name : it.slot === "offhand" ? OFFHAND_TYPES[it.type]?.name : SLOT_NAME[it.slot];
   els.push(h("div", { class: "tt-sub", text: `${it.rarity} ${SLOT_NAME[it.slot]} · ${type} · 아이템 레벨 ${it.ilvl}` }));
-  const m = enhMul(it.enh);
+  const broken = it.dur != null && it.dur <= 0;
+  const m = broken ? 0.3 : enhMul(it.enh);
   const names = { atk: "공격력", def: "방어력", hp: "최대 HP", mp: "최대 MP", crit: "치명타 확률", aspd: "공격 속도" };
-  if (it.slot === "weapon" && it.dur != null) {
-    const broken = it.dur <= 0;
-    els.push(h("div", { class: "tt-dur" + (broken ? " broken" : it.dur <= it.maxDur * 0.2 ? " low" : "") }, durBar(it), ` 내구도 ${Math.floor(it.dur)}/${it.maxDur}${broken ? " — 부서짐! 공격력 30% (대장장이 수선)" : ""}`));
+  if (it.dur != null) {
+    els.push(h("div", { class: "tt-dur" + (broken ? " broken" : it.dur <= it.maxDur * 0.2 ? " low" : "") }, durBar(it), ` 내구도 ${Math.floor(it.dur)}/${it.maxDur}${broken ? " — 부서짐! 능력치 30% (대장장이 수선)" : ""}`));
   }
   const trait = VARIANT_TRAITS[it.slot]?.[it.variant ?? 1];
   if (trait && it.slot !== "weapon" && it.slot !== "offhand") els.push(h("div", { class: "tt-trait", text: `특징 · ${trait.desc}` }));
@@ -76,6 +76,8 @@ export function itemTip(it, compare) {
     }
     els.push(h("div", {}, `${names[k] ?? OPTIONS[k]?.name ?? k} ${val}`, cmp ? h("span", { class: cmp.includes("▲") ? "tt-cmp-up" : "tt-cmp-down", text: cmp }) : ""));
   }
+  const ep = ENH_PCT[it.slot];
+  if (ep && it.enh) els.push(h("div", { class: "tt-opt" + (broken ? " off" : ""), text: `강화 보너스 · ${ep.name} +${it.enh}%${broken ? " (부서져서 꺼짐)" : ""}` }));
   for (const o of it.opts) els.push(h("div", { class: "tt-opt", text: `${OPTIONS[o.k].name} ${OPTIONS[o.k].fmt(o.v)}` }));
   if (it.mythic) els.push(h("div", { class: "tt-myth", text: `◆ ${MYTHIC_EFFECTS[it.mythic].name}: ${MYTHIC_EFFECTS[it.mythic].desc}` }));
   const allowed = it.slot === "weapon" ? WEAPON_TYPES[it.type].cls : it.slot === "offhand" ? OFFHAND_TYPES[it.type].cls : null;
@@ -125,6 +127,7 @@ export function openChar() {
         ["물리/주문 배율", `${fmtPct(st.phys)} / ${fmtPct(st.mag)}`], ["주는 피해", "+" + fmtPct(st.dmg)], ["받는 피해 감소", fmtPct(st.dr)],
         ["치명타 확률 (상한 50%)", fmtPct(st.crit)], ["치명타 피해 (상한 200%)", fmtPct(st.critDmg)], ["공격 속도", fmtPct(st.aspd)], ["이동 속도", Math.round(st.move)],
         ["성장 단계 보너스", "+" + fmtPct(st.stageBonus - 1)],
+        ...(st.classDmg && st.classDmg !== 1 ? [["직업 피해 배율", "×" + st.classDmg]] : []),
       ].map(([a, b]) => h("tr", {}, h("td", { text: a }), h("td", { text: b })))),
       h("div", { class: "note", text: `최고 층 ${c.best} · 체크포인트 ${c.checkpoint}층 · 처치 ${c.kills} · 쓰러짐 ${c.deaths}${c.cleared ? " · 🏆 던전 정복" : ""}` }),
     ];
@@ -223,7 +226,7 @@ export function openInv(pos = {}) {
         onclick: () => { if (!it) return; if (multi) { if (it.locked) return G.ui.toast?.("잠긴 아이템은 팔 수 없어요."); picked.has(it.uid) ? picked.delete(it.uid) : picked.add(it.uid); refreshWin("inv"); } else { selItem = it.uid; refreshWin("inv"); } } },
         it ? iconEl(it) : null, it?.enh ? h("span", { class: "enh", text: "+" + it.enh }) : null, it?.locked ? h("span", { class: "lock", text: "🔒" }) : null,
         it && multi && picked.has(it.uid) ? h("span", { class: "pick", text: "✓" }) : null,
-        it?.slot === "weapon" && it.dur != null && it.dur < it.maxDur ? h("span", { class: "dur-mini" + (it.dur <= 0 ? " broken" : it.dur <= it.maxDur * 0.2 ? " low" : "") }, h("i", { style: { width: Math.max(0, (it.dur / it.maxDur) * 100) + "%" } })) : null);
+        it?.dur != null && it.dur < it.maxDur ? h("span", { class: "dur-mini" + (it.dur <= 0 ? " broken" : it.dur <= it.maxDur * 0.2 ? " low" : "") }, h("i", { style: { width: Math.max(0, (it.dur / it.maxDur) * 100) + "%" } })) : null);
       if (it) {
         el.addEventListener("dblclick", () => !multi && send({ t: "equip", uid: it.uid }));
         el.addEventListener("contextmenu", (e) => { e.preventDefault(); if (multi || it.locked) return;
@@ -310,16 +313,16 @@ export function openSmithy(pos = {}) {
     const c = G.char;
     const all = [...Object.values(c.equip).filter(Boolean), ...c.inv];
     // 수선: 닳은 무기 목록 + 비용
-    const worn = all.filter((it) => it.slot === "weapon" && it.dur != null && it.dur < it.maxDur);
+    const worn = all.filter((it) => it.dur != null && it.dur < it.maxDur);
     const total = worn.reduce((a, it) => a + repairCost(it), 0);
     const repairBox = h("div", { class: "repair-box" },
-      h("h4", { text: "무기 수선" }),
+      h("h4", { text: "장비 수선" }),
       worn.length ? h("div", {}, ...worn.map((it) => h("div", { class: "statrow" },
         h("span", { class: "sn", style: { color: RARITY_COLOR[it.rarity] }, text: it.name + (c.equip.weapon === it ? " (장착)" : "") }),
         h("span", { class: "sd" }, durBar(it), ` ${Math.floor(it.dur)}/${it.maxDur}`),
         h("button", { class: "btn small", disabled: c.gold < repairCost(it), onclick: () => send({ t: "repair", uid: it.uid }) }, `${repairCost(it).toLocaleString()}G`))),
         h("button", { class: "btn primary", disabled: c.gold < total, onclick: () => send({ t: "repair" }) }, `모두 수선 (${total.toLocaleString()}G)`))
-        : h("div", { class: "note", text: "모든 무기의 내구도가 가득해요. (던전에서 스킬을 쓸수록 닳고, 쓰러지면 10% 줄어요. 0이 되면 공격력이 30%로 떨어져요.)" }));
+        : h("div", { class: "note", text: "모든 장비의 내구도가 가득해요. (무기·장신구는 스킬을 쓸 때, 갑옷·투구·방패는 맞을 때 닳고, 쓰러지면 10% 줄어요. 0이 되면 그 장비 능력치가 30%로 떨어져요.)" }));
     const sel = all.find((x) => x.uid === G.enhSel) ?? null;
     const pick = h("div", { class: "inv-grid" }, ...all.map((it) => {
       const el = h("div", { class: "cell r-" + it.rarity + (sel === it ? " sel" : ""), onclick: () => { G.enhSel = it.uid; lastEnh = null; refreshWin("smithy"); } }, iconEl(it), it.enh ? h("span", { class: "enh", text: "+" + it.enh }) : null);
@@ -332,7 +335,7 @@ export function openSmithy(pos = {}) {
       box = h("div", { class: "enh-box" },
         h("div", { style: { color: RARITY_COLOR[sel.rarity] }, text: `${sel.name} +${sel.enh}` }),
         sel.enh >= MAX_ENH ? h("div", { text: "최대 강화 +99" }) : h("div", { class: "enh-odds" }, h("span", { class: "s", text: `성공 ${fmtPct(o.success)}` }), h("span", { class: "f", text: `실패 ${fmtPct(o.fail)}` }), h("span", { class: "d", text: `파괴 ${fmtPct(o.destroy)}` })),
-        h("div", { class: "note", text: `강화 단계마다 기본 능력치 +2% · 비용 ${cost.toLocaleString()}G (보유 ${c.gold.toLocaleString()}G)` }),
+        h("div", { class: "note", text: `강화 단계마다 기본 능력치 +2%, ${ENH_PCT[sel.slot]?.name ?? "능력치"} +1% · 비용 ${cost.toLocaleString()}G (보유 ${c.gold.toLocaleString()}G)` }),
         h("div", { class: "enh-result " + (lastEnh?.result ?? ""), text: lastEnh ? { success: `성공! +${lastEnh.enh}`, fail: "실패… (단계 유지)", destroy: "파괴됐어요…" }[lastEnh.result] : "" }),
         h("button", { class: "btn primary", disabled: sel.enh >= MAX_ENH || c.gold < cost, onclick: () => send({ t: "enhance", uid: sel.uid }) }, `강화하기 (+${sel.enh} → +${sel.enh + 1})`));
     }

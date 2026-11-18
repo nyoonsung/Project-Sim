@@ -423,8 +423,8 @@ export class World {
       const wt = CLASS_GEAR[cls].w[0];
       c.equip.weapon = { uid: c.nextUid++, slot: "weapon", type: wt, variant: 0, rarity: "일반", ilvl: c.level, enh: 0, base: baseStats("weapon", wt, c.level, 0), opts: [], name: "" };
       c.equip.weapon.name = "수련생의 " + itemName(c.equip.weapon).split(" ").slice(1).join(" ");
-      ensureDur(c.equip.weapon);
     }
+    for (const it of Object.values(c.equip)) ensureDur(it);
     if (!c.equip.offhand && CLASS_GEAR[cls].o[0] !== "shield") {
       const ot = CLASS_GEAR[cls].o[0];
       c.equip.offhand = { uid: c.nextUid++, slot: "offhand", type: ot, variant: 0, rarity: "일반", ilvl: c.level, enh: 0, base: baseStats("offhand", ot, c.level, 0), opts: [], name: "" };
@@ -546,12 +546,12 @@ export class World {
     this.sendChar(s);
     s.notice(`${n}개를 ${gold.toLocaleString()}G에 팔았어요.${skipped ? ` (잠긴 ${skipped}개 제외)` : ""}`);
   }
-  /** 무기 수선 (대장장이): uid를 주면 그 무기만, 없으면 장착 무기 + 가방 속 무기 전부 */
+  /** 장비 수선 (대장장이): uid를 주면 그 장비만, 없으면 장착 장비 + 가방 속 장비 전부 */
   repair(s, uid) {
     const c = s.char;
     if (!this.nearNpc(s, "smithy")) return s.notice("대장장이 브론 근처에서 수선할 수 있어요.");
-    const list = [c.equip.weapon, ...c.inv].filter((it) => it?.slot === "weapon" && (uid == null || it.uid === uid)).map(ensureDur).filter((it) => it.dur < it.maxDur);
-    if (!list.length) return s.notice("수선할 무기가 없어요. (내구도가 모두 가득)");
+    const list = [...Object.values(c.equip), ...c.inv].filter((it) => it && (uid == null || it.uid === uid)).map(ensureDur).filter((it) => it.dur < it.maxDur);
+    if (!list.length) return s.notice("수선할 장비가 없어요. (내구도가 모두 가득)");
     const cost = list.reduce((a, it) => a + repairCost(it), 0);
     if (c.gold < cost) return s.notice(`골드가 부족해요. (수선비 ${cost.toLocaleString()}G)`);
     c.gold -= cost;
@@ -559,7 +559,7 @@ export class World {
     refreshStats(s.unit);
     this.sendChar(s);
     s.unit.room?.ev({ e: "fx", fx: "impacts/hit-spark", x: s.unit.x | 0, y: (s.unit.y - 10) | 0 });
-    s.notice(`무기 ${list.length}개를 ${cost.toLocaleString()}G에 수선했어요. 내구도 가득!`);
+    s.notice(`장비 ${list.length}개를 ${cost.toLocaleString()}G에 수선했어요. 내구도 가득!`);
   }
   // 강화: 성공 (99-n)%, 파괴 1%, 나머지 실패. 서버 보안 난수로 판정
   enhance(s, uid) {

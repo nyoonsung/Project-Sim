@@ -425,3 +425,5 @@ body.touch.portrait #wallet { right: auto; left: calc(8px + env(safe-area-inset-
 .dur-bar.broken { border-color: #ff4a4a; }
 .tt-dur { font-size: 11px; color: #b8e0b8; } .tt-dur.low { color: #ffd35a; } .tt-dur.broken { color: #ff6a6a; }
 .repair-box .statrow .sd { display: flex; align-items: center; gap: 4px; }
+
+.tt-opt.off { color: #777; text-decoration: line-through; }

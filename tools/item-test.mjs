@@ -1,5 +1,5 @@
 // 내구도·수선 비용·전직 기본 스킬 세트 검사
-import { rollItem, sellPrice, gearTotals, ensureDur, repairCost, maxDurability, DUR_PER_CAST } from "../shared/items.js";
+import { ENH_PCT, rollItem, sellPrice, gearTotals, ensureDur, repairCost, maxDurability, DUR_PER_CAST } from "../shared/items.js";
 import { newCharacter, defaultLoadout, sanitizeChar } from "../server/game/player.js";
 import { SKILLS } from "../shared/skills.js";
 import { CLASS_INFO } from "../shared/classes.js";
@@ -54,3 +54,18 @@ s2.char.gold = cost + 5;
 World.prototype.repair.call(fake("smithy"), s2);
 ok(wpn.dur === wpn.maxDur && s2.char.gold === 5, `수선 완료 — "${notes.at(-1)}"`);
 ok((s2.unit.atk ?? s2.unit.stats?.atk) >= atkB2, "수선 후 공격력 회복");
+
+// 7) 모든 장비 내구도, 강화 1단계당 부위별 +1%, 궁수 2.5배
+for (const slot of ["weapon", "offhand", "helmet", "armor", "trinket"]) {
+  let it; for (let i = 0; i < 80 && it?.slot !== slot; i++) it = rollItem(Math.random, { ilvl: 10, rarity: "영웅" });
+  ok(it.dur === it.maxDur && it.maxDur === 140, `${slot} 새 장비 내구도 ${it.dur}/${it.maxDur}`);
+  const k = ENH_PCT[slot].k;
+  const a = gearTotals({ [slot]: { ...it, opts: [], enh: 0 } })[k], b = gearTotals({ [slot]: { ...it, opts: [], enh: 10 } })[k], c = gearTotals({ [slot]: { ...it, opts: [], enh: 10, dur: 0 } })[k];
+  ok(Math.abs(b - a - 0.1) < 1e-9 && c <= a, `${slot} +10강 → ${ENH_PCT[slot].name} +10%, 부서지면 꺼짐`);
+}
+const { deriveStats } = await import("../shared/stats.js");
+const arch = deriveStats({ ...newCharacter("궁"), cls: "archer", level: 10 }), swd = deriveStats({ ...newCharacter("검"), cls: "sword", level: 10 });
+ok(arch.classDmg === 2.5 && swd.classDmg === 1, "궁수 피해 배율 ×2.5");
+const hpA = deriveStats({ ...newCharacter("h"), equip: { helmet: { slot: "helmet", variant: 1, rarity: "일반", ilvl: 1, enh: 0, base: { def: 2, hp: 10 }, opts: [] } } }).maxHp;
+const hpB = deriveStats({ ...newCharacter("h"), equip: { helmet: { slot: "helmet", variant: 1, rarity: "일반", ilvl: 1, enh: 20, base: { def: 2, hp: 10 }, opts: [] } } }).maxHp;
+ok(hpB / hpA > 1.19, `투구 +20강 최대 HP ${hpA} → ${hpB}`);

@@ -177,13 +177,16 @@ export function rollItem(R, { ilvl, cls = "adventurer", tier = "normal", rarity 
     it.title = pick(R, MYTHIC_TITLES);
   }
   it.name = itemName(it);
-  if (slot === "weapon") it.dur = it.maxDur = maxDurability(it);
+  it.dur = it.maxDur = maxDurability(it);
   return it;
 }
 
-// ── 무기 내구도: 스킬을 쓸 때마다 조금씩 닳고(0.1), 쓰러지면 최대치의 10% 감소.
-//    0이 되면 '부서짐' → 무기 공격력이 30%만 적용. 대장장이에게 골드를 내고 수선.
+// ── 장비 내구도 (모든 장비): 무기·보조장비(방패 제외)·장신구는 스킬을 쓸 때, 갑옷·투구·방패는 맞을 때 닳고,
+//    쓰러지면 장착한 장비 모두 최대치의 10% 감소. 0이 되면 '부서짐' → 그 장비 능력치 30%만, 강화 보너스 없음. 대장장이에게 수선.
 export const DUR_PER_CAST = 0.1;
+export const DUR_CAST = { weapon: 0.1, offhand: 0.05, trinket: 0.05 }; // 스킬 1번
+export const DUR_HIT = { armor: 0.1, helmet: 0.08, offhand: 0.1 };     // 맞을 때 1번 (offhand는 방패만)
+export const isBroken = (it) => it?.dur != null && it.dur <= 0;
 export const DUR_DEATH = 0.1;
 export const BROKEN_MUL = 0.3;
 export function maxDurability(it) { return 100 + RARITIES.indexOf(it.rarity) * 20; }
@@ -197,9 +200,9 @@ export function upgradeMythic(it) {
   } catch {}
   return it;
 }
-/** 내구도 상태가 없던 옛 무기도 꽉 찬 상태로 맞춤 */
+/** 내구도 상태가 없던 옛 장비도 꽉 찬 상태로 맞춤 */
 export function ensureDur(it) {
-  if (!it || it.slot !== "weapon") return it;
+  if (!it || !SLOTS.includes(it.slot)) return it;
   if (!Number.isFinite(it.maxDur) || it.maxDur <= 0) it.maxDur = maxDurability(it);
   if (!Number.isFinite(it.dur)) it.dur = it.maxDur;
   it.dur = Math.max(0, Math.min(it.maxDur, it.dur));
@@ -207,15 +210,15 @@ export function ensureDur(it) {
 }
 /** 수선 비용(골드): 닳은 만큼 × 아이템 레벨·등급 */
 export function repairCost(it) {
-  if (!it || it.slot !== "weapon") return 0;
+  if (!it || it.dur == null) return 0;
   const miss = Math.max(0, (it.maxDur ?? 100) - (it.dur ?? it.maxDur ?? 100));
   return Math.ceil(miss * (1 + it.ilvl * 0.12) * (1 + RARITIES.indexOf(it.rarity) * 0.3));
 }
 
 /** 모험가 시작 장비 */
 export function starterGear() {
-  const club = { slot: "weapon", type: "club", rarity: "일반", ilvl: 1, enh: 0, base: { atk: 5 }, opts: [], name: "나무 몽둥이" };
-  const shield = { slot: "offhand", type: "shield", rarity: "일반", ilvl: 1, enh: 0, base: { def: 3, hp: 12 }, opts: [], name: "나무 방패" };
+  const club = { slot: "weapon", type: "club", rarity: "일반", ilvl: 1, enh: 0, base: { atk: 5 }, opts: [], name: "나무 몽둥이", dur: 100, maxDur: 100 };
+  const shield = { slot: "offhand", type: "shield", rarity: "일반", ilvl: 1, enh: 0, base: { def: 3, hp: 12 }, opts: [], name: "나무 방패", dur: 100, maxDur: 100 };
   return { weapon: club, offhand: shield };
 }
 
@@ -241,21 +244,33 @@ export function enhanceCost(it) {
 export function enhMul(enh) {
   return 1 + 0.02 * enh;
 }
+/** 강화 단계마다 부위별로 능력치 하나가 +1%씩 (부서지면 없음) */
+export const ENH_PCT = {
+  weapon: { k: "dmg", name: "주는 피해" },
+  offhand: { k: "critDmg", name: "치명타 피해" },
+  helmet: { k: "hpPct", name: "최대 HP" },
+  armor: { k: "defPct", name: "방어력" },
+  trinket: { k: "atkPct", name: "공격력" },
+};
+export const ENH_PCT_PER = 0.01;
 /** 판매 가격 */
 export function sellPrice(it) {
   const ri = RARITIES.indexOf(it.rarity);
   return Math.round((4 + it.ilvl * 2) * Math.pow(2.2, ri) * (1 + it.enh * 0.1));
 }
 
-const PCT_KEYS = new Set(["crit", "aspd", "move", "dr", "atkPct", "critDmg", "mpRegen", "dmg", "heal"]);
+const PCT_KEYS = new Set(["crit", "aspd", "move", "dr", "atkPct", "critDmg", "mpRegen", "dmg", "heal", "hpPct", "defPct"]);
 /** 장착 장비 전체 합산 (서버 판정·클라이언트 표시 공용) */
 export function gearTotals(equip) {
-  const t = { atk: 0, atkPct: 0, def: 0, hp: 0, mp: 0, crit: 0, critDmg: 0, aspd: 0, move: 0, dmg: 0, dr: 0, hpRegen: 0, mpRegen: 0, heal: 0, mythic: [] };
+  const t = { atk: 0, atkPct: 0, def: 0, hp: 0, mp: 0, crit: 0, critDmg: 0, aspd: 0, move: 0, dmg: 0, dr: 0, hpRegen: 0, mpRegen: 0, heal: 0, hpPct: 0, defPct: 0, mythic: [] };
   for (const it of Object.values(equip ?? {})) {
     if (!it) continue;
-    // 부서진 무기(내구도 0)는 공격력 30%만
-    const m = enhMul(it.enh) * (it.slot === "weapon" && it.dur != null && it.dur <= 0 ? BROKEN_MUL : 1);
-    for (const [k, v] of Object.entries(it.base)) t[k] += PCT_KEYS.has(k) ? v : v * m; // 비율 능력치는 강화로 안 커짐
+    // 부서진 장비(내구도 0)는 기본 능력치 30%만, 강화 보너스 없음
+    const broken = isBroken(it);
+    const m = broken ? BROKEN_MUL : enhMul(it.enh);
+    for (const [k, v] of Object.entries(it.base)) t[k] += PCT_KEYS.has(k) ? v * (broken ? BROKEN_MUL : 1) : v * m; // 비율 능력치는 강화로 안 커짐
+    const ep = ENH_PCT[it.slot];
+    if (ep && it.enh && !broken) t[ep.k] += it.enh * ENH_PCT_PER;
     for (const o of it.opts) t[o.k] += o.v;
     if (it.mythic) t.mythic.push(it.mythic);
   }

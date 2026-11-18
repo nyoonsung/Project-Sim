@@ -1,6 +1,7 @@
 // 피해·치유·상태이상·위협 계산 (치명타 규칙은 기획서 4장 표 그대로)
 import { CRIT } from "../../shared/constants.js";
 import { defReduction } from "../../shared/stats.js";
+import { wearOnHit } from "./wear.js";
 
 const DOT_TYPES = new Set(["burn", "poison", "bleed"]);
 const HARD_CC = new Set(["stun", "down", "freeze"]);
@@ -105,7 +106,7 @@ export function dealDamage(room, src, t, o, now) {
     }
     if (t.status.has("shock")) mul += 0.08;
     if (t.status.has("groggy")) mul += 0.25;
-    dmg = atk * (o.pow ?? 1) * typeMul * mul;
+    dmg = atk * (o.pow ?? 1) * typeMul * mul * (src.team === "p" ? src.stats.classDmg ?? 1 : 1);
     // 치명타: 직접 공격만 (지속 피해·독·화상 제외)
     if (!o.dot && src.team === "p" && o.crit !== "none") {
       if (o.crit === "force") { crit = true; dmg *= CRIT.BASE_DAMAGE; }
@@ -145,6 +146,7 @@ export function dealDamage(room, src, t, o, now) {
   const real = dmg - absorbed;
   t.hp = Math.max(0, t.hp - real);
   t.lastHurt = now;
+  if (t.type === "p" && real > 0 && !o.dot) wearOnHit(room, t);
   const ev = { e: "dmg", id: t.id, v: dmg, c: crit ? 1 : 0, a: absorbed > 0 ? 1 : 0, d: o.dot ? 1 : 0, p: t.team === "p" ? 1 : 0 };
   if (o.skill && !o.dot && src?.type === "p") ev.sk = o.skill; // 스킬별 적중 연출용
   room.ev(ev);

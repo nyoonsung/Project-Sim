@@ -2,7 +2,8 @@
 import { TILE, TICK_DT, PLAYER_RADIUS } from "../../shared/constants.js";
 import { applyInput, moveCircle, circleHitsWall, blocksShot, lineOfSight, tileAt } from "../../shared/move.js";
 import { MONSTERS, BOSSES, monsterStats, bossStats, floorScale, zoneOf } from "../../shared/zones.js";
-import { rollItem, DUR_DEATH } from "../../shared/items.js";
+import { rollItem } from "../../shared/items.js";
+import { wearOnDeath } from "./wear.js";
 const KI_BASE = 30; // 내력 기본치
 import { tickStatuses, dealDamage, heal, moveMul, isHardCC, applyStatus, buffSum, giveShield } from "./combat.js";
 import { newUnitId, gainXp, refreshStats } from "./player.js";
@@ -290,12 +291,7 @@ export class Room {
     if (t.type === "p") {
       t.status.clear(); t.buffs.clear(); t.casting = null; t.channel = null; t.dash = null;
       t.session.char.deaths++;
-      const w = t.session.char.equip.weapon;
-      if (w?.dur > 0 && this.kind === "dungeon") {
-        w.dur = Math.max(0, w.dur - w.maxDur * DUR_DEATH);
-        t.session.send({ t: "dur", uid: w.uid, dur: Math.floor(w.dur), max: w.maxDur });
-        if (w.dur <= 0) refreshStats(t);
-      }
+      wearOnDeath(this, t);
       this.ev({ e: "die", id: t.id });
       this.ev({ e: "msg", text: `${t.name}님이 쓰러졌어요.`, kind: "death" });
       this.removeDevicesOf(t);

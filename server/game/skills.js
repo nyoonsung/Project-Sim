@@ -1,7 +1,6 @@
 // 스킬 실행 엔진: shared/skills.js 의 steps 를 서버에서 판정
 import { SKILLS, unlockStage } from "../../shared/skills.js";
-import { DUR_PER_CAST, DUR_DEATH } from "../../shared/items.js";
-import { refreshStats } from "./player.js";
+import { wearOnCast } from "./wear.js";
 import { profOf, profLevel, profGain, profPow, profCost, PROF_MAX, isUncapped } from "../../shared/prof.js";
 import { CLASS_INFO, stageOf } from "../../shared/classes.js";
 import { moveCircle, circleHitsWall, lineOfSight } from "../../shared/move.js";
@@ -92,7 +91,7 @@ export function castSkill(room, u, slot, ax, ay, tx, now, exp) {
   const aim = Math.atan2(ay - u.y, ax - u.x);
   const ctx = { sk, aim, ax, ay, tx, mul: 0, prof: plv, pf: 1 + profPow(plv), now };
   gainProf(room, u, sk, now);
-  wearWeapon(room, u);
+  wearOnCast(room, u);
   // 검사 자세 전환: 다른 자세 스킬을 쓰면 그 스킬 피해 +15%, 내력 +10
   if (sk.stance && ch.cls === "sword") {
     if (sk.stance !== u.stance || u.stanceShift) {
@@ -146,18 +145,6 @@ export function castSkill(room, u, slot, ax, ay, tx, now, exp) {
   u.session.meDirty = true;
 }
 const s0 = (sk) => sk.steps[0];
-/** 무기 내구도: 던전에서 스킬을 쓸 때마다 조금씩 닳음 (마을·안전 구역 X) */
-function wearWeapon(room, u) {
-  if (room.kind !== "dungeon" || room.map.safe) return;
-  const s = u.session, w = s.char.equip.weapon;
-  if (!w || w.dur == null || w.dur <= 0) return;
-  const before = w.dur;
-  w.dur = Math.max(0, +(w.dur - DUR_PER_CAST).toFixed(2));
-  if (Math.floor(before) !== Math.floor(w.dur)) s.send({ t: "dur", uid: w.uid, dur: Math.floor(w.dur), max: w.maxDur });
-  if (before > w.maxDur * 0.2 && w.dur <= w.maxDur * 0.2) s.notice("무기 내구도가 20% 남았어요. 마을 대장장이에게 수선하세요.");
-  if (w.dur <= 0) { refreshStats(u); s.notice("무기가 부서졌어요! 공격력이 크게 줄어요. 대장장이에게 수선하세요."); room.world.sendChar?.(s); }
-  s.dirty = true;
-}
 /** 숙련 경험치: 던전에서 근처(450px)에 적이 있을 때만 오름 */
 function gainProf(room, u, sk, now) {
   if (room.kind !== "dungeon" || room.map.safe || sk.kind === "passive") return;
