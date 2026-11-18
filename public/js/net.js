@@ -15,9 +15,11 @@ export class Net {
       if (m.t === "pong") { this.rtt = performance.now() - m.c; return; }
       this.onMsg(m);
     };
-    this.ws.onclose = (e) => this.onClose(e);
-    this.ws.onopen = () => { this.pinger = setInterval(() => this.send({ t: "ping", c: performance.now() }), 5000); };
-    return new Promise((res) => this.ws.addEventListener("open", res, { once: true }));
+    const ws = this.ws;
+    ws.onclose = (e) => { clearInterval(this.pinger); if (ws === this.ws) this.onClose(e); };
+    ws.onopen = () => { clearInterval(this.pinger); this.pinger = setInterval(() => this.send({ t: "ping", c: performance.now() }), 5000); };
+    // 열리면 성공, 열리기 전에 닫히면 실패 (자동 재접속이 다시 시도)
+    return new Promise((res, rej) => { ws.addEventListener("open", res, { once: true }); ws.addEventListener("close", () => rej(new Error("closed")), { once: true }); });
   }
   send(o) { if (this.ws?.readyState === 1) this.ws.send(JSON.stringify(o)); }
   close() { clearInterval(this.pinger); this.ws?.close(); }

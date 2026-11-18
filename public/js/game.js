@@ -280,8 +280,8 @@ export function inputTick() {
     if (dashing) D.seqEnd = s;
     G.lastAx = ax; G.lastAy = ay; if (aimMoved) G.lastAimSend = tn;
     (G.outBatch ??= []).push([s, +mx.toFixed(3), +my.toFixed(3), ax, ay]);
-    // 두 틱씩 묶어서 전송 (멈출 때·대시 중엔 바로)
-    if (G.outBatch.length >= 2 || still || dashing) flushInputs();
+    // 세 틱씩 묶어서 전송 (멈출 때·대시 중엔 바로) → 서버로 가는 메시지 수 줄이기 (무료 요금제 한도·끊김 방지)
+    if (G.outBatch.length >= 3 || still || dashing) flushInputs();
     const frozen = isFrozen() || dashing;
     G.pending.push({ s, mx, my, frozen });
     if (G.pending.length > 40) G.pending.shift();
@@ -357,7 +357,6 @@ export function tryCast(slot, at) {
   // 모바일: 따로 조준점을 안 줬으면 자동 조준 대상(가장 가까운 적)으로 쏘고, 잠깐 그쪽을 봄
   if (!at && G.touch && G.touchTarget) { at = sk.moveSkill && G.touchMoving ? G.touchAhead : G.touchTarget; G.faceTargetUntil = now() + 0.5; G.mouse.wx = at.x; G.mouse.wy = at.y; }
   const ax = at ? at.x : G.mouse.wx, ay = at ? at.y : G.mouse.wy;
-  flushInputs();
   const msg = { t: "cast", slot, ax: Math.round(ax), ay: Math.round(ay), s: G.seq };
   if (at?.tx) msg.tx = at.tx;
   else if (sk.aim === "ally") {
@@ -365,7 +364,9 @@ export function tryCast(slot, at) {
     for (const e of G.ents.values()) if (e.k === "p" && !e.dead) { const d = Math.hypot(e.rx - ax, e.ry - 16 - ay); if (d < bd) { bd = d; best = e; } }
     if (best) msg.tx = best.id;
   }
-  send(msg);
+  // 이동 입력이 쌓여 있으면 스킬과 한 메시지로 같이 보냄 (서버는 이동을 먼저 적용하고 같은 위치에서 시전)
+  if (G.outBatch?.length) { const { t: _t, ...c } = msg; send({ t: "in", b: G.outBatch, c }); G.outBatch = []; }
+  else send(msg);
   G.lastCastAt = t;
   // 예측: 쿨타임 바로 표시, 시전 시간이 있으면 그동안 제자리에 (서버도 똑같이 멈춤)
   if (sk.cd && sk.kind !== "basic") (G.localCd ??= {})[id] = { until: t + sk.cd, at: t };

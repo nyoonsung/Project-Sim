@@ -61,7 +61,7 @@ export function addGroggy(room, t, amount, now) {
  * 반환: { dmg, crit, blocked }
  */
 export function dealDamage(room, src, t, o, now) {
-  if (!t || t.dead || t.invuln) return { dmg: 0 };
+  if (!t || t.dead || t.invuln || t.ghost) return { dmg: 0 };
   // 막기/반격 (플레이어가 정면 공격을 받을 때)
   if (t.team === "p" && t.parry && now <= t.parry.until && !o.dot && src && !o.unblockable) {
     const ang = Math.atan2(src.y - t.y, src.x - t.x);

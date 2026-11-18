@@ -175,7 +175,7 @@ export class Room {
 
   // ── 입력·명령
   pushInput(u, m) {
-    if (u.inputs.length >= 6) { u.inputs.shift(); u.session.inputOverflow = (u.session.inputOverflow ?? 0) + 1; }
+    if (u.inputs.length >= 8) { u.inputs.shift(); u.session.inputOverflow = (u.session.inputOverflow ?? 0) + 1; }
     u.inputs.push(m);
   }
   cast(u, m) {

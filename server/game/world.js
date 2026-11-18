@@ -56,6 +56,8 @@ export class World {
     for (const r of this.rooms.values()) {
       try { r.tick(); r.flush(); } catch (e) { console.error("room tick", r.id, e); }
     }
+    // 30초 넘게 다시 안 들어온 끊긴 플레이어는 정리
+    if (this.tickN = (this.tickN ?? 0) + 1, this.tickN % 20 === 0) for (const s of [...this.sessions.values()]) if (s.linkdead && Date.now() - s.linkdead > 30_000) this.finishClose(s);
     for (const r of [...this.rooms.values()]) if (r !== this.town && r.players.size === 0 && Date.now() - r.createdAt > 5000) this.rooms.delete(r.id);
     const dt = performance.now() - t0;
     this.tickTimes.push(dt);
@@ -66,15 +68,29 @@ export class World {
   onOpen(conn) {
     const u = conn.user;
     const old = this.sessions.get(u.id);
-    if (old) { old.conn.send({ t: "kick", why: "다른 곳에서 접속해서 연결이 끊겼어요." }); old.conn.close(4001, "dup"); this.onClose(old.conn); }
+    // 잠깐 끊겼다가 다시 들어오면(30초 안) 던전·파티 그대로 이어서 (튕겨도 진행이 날아가지 않게)
+    if (old?.linkdead && old.unit?.room) {
+      old.conn = conn; old.linkdead = 0; old.ip = conn.ip;
+      const un = old.unit, room = un.room;
+      un.ghost = false; un.inputs.length = 0;
+      old.sent = null; old.sentRoom = null; old.sentAck = null; old.meKey = null;
+      old.send({ t: "hello", name: u.username, char: this.publicChar(old), announce: this.announcement, serverTime: Date.now() });
+      const at = [un.x, un.y];
+      room.removePlayer(un); room.addPlayer(un, at); un.x = at[0]; un.y = at[1];
+      room.ev({ e: "add", ...room.describe(un) });
+      const p = this.partyOf(old); if (p) this.sendParty(p);
+      old.notice("다시 연결됐어요. 하던 곳에서 이어서 해요.");
+      return;
+    }
+    if (old) { old.conn.send({ t: "kick", why: "다른 곳에서 접속해서 연결이 끊겼어요." }); old.conn.close(4001, "dup"); this.finishClose(old); }
     const row = Q.charByUser.get(u.id);
     let char;
     try { char = row ? sanitizeChar(JSON.parse(row.data), u.username) : newCharacter(u.username); } catch { char = newCharacter(u.username); }
     const s = {
       userId: u.id, name: u.username, conn, char, ip: conn.ip, joinedAt: Date.now(), partyId: null, invites: new Set(),
       mutedUntil: u.muted_until, dirty: true, meDirty: true, potionCd: {},
-      send: (o) => conn.send(o),
-      notice: (text) => conn.send({ t: "ev", list: [{ e: "notice", text }] }),
+      send: (o) => s.conn.send(o),
+      notice: (text) => s.conn.send({ t: "ev", list: [{ e: "notice", text }] }),
       sendMe: () => this.sendMe(s),
     };
     this.sessions.set(u.id, s);
@@ -88,6 +104,17 @@ export class World {
   onClose(conn) {
     const s = this.sessions.get(conn.user.id);
     if (!s || s.conn !== conn) return;
+    // 던전에서 끊기면 30초 동안 자리 유지(몬스터가 무시, 피해 없음) → 다시 접속하면 그대로 이어감
+    if (s.unit.room && s.unit.room !== this.town && !s.unit.dead) {
+      s.linkdead = Date.now();
+      s.conn = { send() {}, close() {}, user: conn.user, ip: conn.ip, dead: true };
+      s.unit.ghost = true; s.unit.inputs.length = 0; s.unit.castQ = [];
+      this.save(s);
+      return;
+    }
+    this.finishClose(s);
+  }
+  finishClose(s) {
     this.leaveParty(s, true);
     s.unit.room?.removePlayer(s.unit);
     s.char.playtime += Math.round((Date.now() - s.joinedAt) / 1000);
@@ -151,6 +178,7 @@ export class World {
         if (!room) break;
         if (m.b) { for (const e of m.b) if (e[0] > (u.inputs.at(-1)?.s ?? u.lastSeq)) room.pushInput(u, { s: e[0], mx: e[1], my: e[2], ax: e[3], ay: e[4] }); }
         else room.pushInput(u, m);
+        if (m.c) room.cast(u, m.c); // 이동 묶음에 같이 실려 온 스킬
         break;
       case "cast": if (room) room.cast(u, m); break;
       case "vote": if (room) room.voteCast(u, m.ok); break;

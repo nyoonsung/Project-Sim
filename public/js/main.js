@@ -7,7 +7,8 @@ import { loadDT2, frame } from "./render/dt2.js";
 import { dtLookFor, drawDT } from "./render/looks.js";
 if (isTouchDevice()) document.body.classList.add("touch");
 import { Net } from "./net.js";
-import { watchUpdates, onTown, autoReconnect } from "./update.js";
+import { watchUpdates, onTown, autoReconnect, latestVersion, reloadNow } from "./update.js";
+import { VERSION } from "./version.js";
 import { Renderer } from "./render/world.js";
 import { $, h, closeAll, openWins, toggleWin, refreshWin, isOpen, closeWin } from "./ui/dom.js";
 import * as HUD from "./ui/hud.js";
@@ -180,7 +181,29 @@ async function startGame() {
   await document.fonts.load("10px Galmuri9").catch(() => {});
   document.fonts.load("14px Galmuri14").catch(() => {}); // 제목·데미지 숫자용 (기다리지 않음)
   const NetClass = globalThis.__LOCAL_NET ?? Net;
-  G.net = new NetClass(onMessage, (e) => {
+  // 끊기면 화면을 그대로 둔 채 조용히 다시 연결 (예전엔 로그인 화면으로 튕겼다가 새로고침)
+  //  서버가 30초 동안 던전 자리를 지켜 주므로 이어서 플레이. 새 버전이 배포된 경우만 새로고침
+  let reconnecting = false;
+  const reconnect = async () => {
+    if (reconnecting) return;
+    reconnecting = true;
+    const bar = $("#reconnect") ?? $("#ui").appendChild(h("div", { id: "reconnect" }));
+    bar.textContent = "연결이 잠깐 끊겼어요. 다시 연결하는 중...";
+    bar.classList.remove("hidden");
+    G.keys.clear(); G.stick = [0, 0];
+    let wait = 400;
+    for (let i = 0; i < 25; i++) {
+      await new Promise((r) => setTimeout(r, wait));
+      const v = await latestVersion().catch(() => null);
+      if (v && v !== VERSION && VERSION !== "dev") return reloadNow((t) => (bar.textContent = t)); // 새 버전 → 새로고침
+      try { await G.net.connect(); bar.classList.add("hidden"); reconnecting = false; return; } catch {}
+      wait = Math.min(5000, wait * 1.6);
+      bar.textContent = `다시 연결하는 중... (${i + 1})`;
+    }
+    reconnecting = false;
+    showLost({ code: 1006 });
+  };
+  const showLost = (e) => {
     $("#game").classList.add("hidden");
     $("#login").classList.remove("hidden");
     $("#login-form").classList.add("hidden");
@@ -189,6 +212,11 @@ async function startGame() {
     $(".login-card").append(b);
     // 쫓겨난 게 아니면(업데이트 배포·잠깐 끊김) 서버가 살아나는 대로 자동 재접속 = 새 버전 적용
     if (!G.kickedWhy) autoReconnect((t) => ($("#lf-msg").textContent = t));
+  };
+  G.net = new NetClass(onMessage, (e) => {
+    // 쫓겨남(중복 접속·차단) 또는 로그인 만료(4401 등)는 로그인 화면으로, 그 밖의 끊김은 조용히 재연결
+    if (G.kickedWhy || [4001, 4002, 4003, 4008].includes(e.code)) return showLost(e);
+    reconnect();
   });
   try { await G.net.connect(); } catch { $("#lf-msg").textContent = "접속하지 못했어요."; return; }
   bindInput();

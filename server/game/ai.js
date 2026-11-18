@@ -12,13 +12,13 @@ function pickTarget(room, m, now) {
   let best = null, bv = -1;
   for (const [id, v] of m.threat) {
     const p = room.units.get(id);
-    if (!p || p.dead) { m.threat.delete(id); continue; }
+    if (!p || p.dead || p.ghost) { m.threat.delete(id); continue; }
     if (v > bv) { bv = v; best = p; }
   }
   if (best) return best;
   if (!m.aggro || !best) {
     for (const p of room.players.values()) {
-      if (p.dead) continue;
+      if (p.dead || p.ghost) continue;
       const d = Math.hypot(p.x - m.x, p.y - m.y);
       if (d < (m.aggro ? 900 : 250) && (m.aggro || lineOfSight(room.map, m.x, m.y, p.x, p.y))) {
         if (!best || d < Math.hypot(best.x - m.x, best.y - m.y)) best = p;
