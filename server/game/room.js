@@ -13,6 +13,7 @@ import { mapPayload } from "./dungeon.js";
 import { secureRandom } from "./secure.js";
 
 const VIEW = 600;
+const FLOW_DIRS = [[1, 0], [-1, 0], [0, 1], [0, -1]];
 // 근처 사람에게만 보내는 화면 효과 이벤트와 그 범위
 const NEAR_ONLY = new Set(["fx", "anim", "cast", "casting", "cx", "st", "stx", "heal", "miss", "shake", "buff", "shield", "dmg", "pj", "tel", "zone", "beam", "dash", "parryup", "spk", "trap", "gap", "stance"]);
 const EV_RANGE_X = 1000, EV_RANGE_Y = 760, CROWD_EV_CAP = 24;
@@ -45,6 +46,7 @@ export class Room {
     this.now = world.clock ?? 0;
     this.tickN = 0;
     this.flow = new Map();
+    this.flowBuffers = new Map();
     this.flowAt = 0;
     this.mobGrid = null;
     this.total = 0;
@@ -76,7 +78,7 @@ export class Room {
     const st = monsterStats(mid, Math.max(1, this.floor), this.partySize, this.dungeon);
     const m = {
       id: newUnitId(), team: "m", type: "m", mid, name: (elite ? "정예 " : "") + def.name, x, y, r: 11 * (def.look.scale ?? 1) * (elite ? 1.2 : 1),
-      hp: Math.round(st.hp * (elite ? 3 : 1)), maxHp: Math.round(st.hp * (elite ? 3 : 1)), atk: st.dmg * (elite ? 1.5 : 1), def: 2 + this.floor * 1.6 * (elite ? 1.5 : 1),
+      hp: Math.round(st.hp * (elite ? 3 : 1)), maxHp: Math.round(st.hp * (elite ? 3 : 1)), atk: st.dmg * (elite ? 1.5 : 1), def: (def.ai === "guard" ? 12 + this.floor * 1.2 : 2 + this.floor * 1.6) * (elite ? 1.5 : 1),
       level: st.level, xp: st.xp * (elite ? 3 : 1), speed: def.speed * (elite ? 1.08 : 1) * floorScale(this.floor, this.dungeon).speed, elite, ai: def.ai, def_: def,
       status: new Map(), buffs: new Map(), threat: new Map(), facing: Math.PI / 2, aggro: !!opts.aggro, home: [x, y],
       atkReady: 0, windup: null, dead: false, fly: !!def.fly,
@@ -158,6 +160,7 @@ export class Room {
   }
   removePlayer(u) {
     this.removeDevicesOf(u);
+    this.flow.delete(u.id); this.flowBuffers.delete(u.id);
     this.units.delete(u.id);
     this.players.delete(u.id);
     this.flow.delete(u.id);
@@ -786,12 +789,14 @@ export class Room {
   }
   // ── 흐름장(길찾기): 플레이어까지 타일 거리
   updateFlow() {
-    const { w, h } = this.map;
+    const { w, h } = this.map, size = w * h;
     for (const p of this.players.values()) {
       if (p.dead) { this.flow.delete(p.id); continue; }
-      const dist = new Int16Array(w * h).fill(-1);
+      let buf = this.flowBuffers.get(p.id);
+      if (!buf || buf.dist.length !== size) { buf = { dist: new Int16Array(size), q: new Int32Array(size) }; this.flowBuffers.set(p.id, buf); }
+      const dist = buf.dist, q = buf.q;
+      dist.fill(-1);
       const sx = Math.floor(p.x / TILE), sy = Math.floor(p.y / TILE);
-      const q = new Int32Array(w * h);
       let qh = 0, qt = 0;
       if (sx < 0 || sy < 0 || sx >= w || sy >= h) continue;
       dist[sy * w + sx] = 0;
@@ -799,7 +804,7 @@ export class Room {
       while (qh < qt) {
         const i = q[qh++], x = i % w, y = (i / w) | 0, d = dist[i];
         if (d > 250) continue;
-        for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        for (const [dx, dy] of FLOW_DIRS) {
           const nx = x + dx, ny = y + dy;
           if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
           const j = ny * w + nx;
