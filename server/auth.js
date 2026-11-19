@@ -110,9 +110,10 @@ export async function register(username, password, ip) {
   const old = Q.userByName.get(username);
   let id;
   if (old && !old.pass_hash) {
-    // 예전(구글 로그인) 계정은 비밀번호가 없음 → 처음 이 아이디로 가입하는 사람이 비밀번호를 정함
-    Q.setPass.run(await hashPassword(password), old.id);
-    id = old.id;
+    // 예전(구글 로그인) 계정은 비밀번호가 없음. 예전엔 '먼저 가입하는 사람'이 비밀번호를 정할 수 있어서
+    // 아이디만 알면 남의 계정을 가져갈 수 있었음(보안 구멍) → 이제는 관리자에게 임시 비밀번호를 받아야 함
+    secLog("legacy_claim_blocked", { username: username.slice(0, 24), ip, userId: old.id });
+    return { error: "예전 방식(구글 로그인)으로 만든 아이디예요. 관리자에게 임시 비밀번호를 받아 로그인해 주세요." };
   } else {
     if (old) return { error: "이미 있는 아이디예요." };
     id = Q.createUser.run(username, await hashPassword(password), "player", Date.now()).lastInsertRowid;

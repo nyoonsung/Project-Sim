@@ -19,7 +19,7 @@ function unready(T) { for (const v of T.sides.values()) { v.ready = false; v.ok 
 function view(T, s) {
   const me = side(T, s), o = other(T, s), them = side(T, o);
   const items = (sess, sd) => sd.uids.map((u) => sess.char.inv.find((i) => i.uid === u)).filter(Boolean);
-  return { with: o.name, mine: { items: items(s, me), gold: me.gold, ready: me.ready, ok: me.ok }, theirs: { items: items(o, them), gold: them.gold, ready: them.ready, ok: them.ok } };
+  return { ver: T.ver, with: o.name, mine: { items: items(s, me), gold: me.gold, ready: me.ready, ok: me.ok }, theirs: { items: items(o, them), gold: them.gold, ready: them.ready, ok: them.ok } };
 }
 function push(T) { for (const s of [T.a, T.b]) s.send({ t: "trade", st: view(T, s) }); }
 
@@ -53,7 +53,7 @@ export function tradeOp(world, s, m) {
       if (m.op === "decline") return from.notice(`${s.name}님이 거래를 거절했어요.`);
       if (!inTown(world, s) || !inTown(world, from)) return s.notice("거래는 둘 다 마을에 있을 때만 할 수 있어요.");
       if (s.trade || from.trade) return s.notice("둘 중 한 명이 이미 거래 중이에요.");
-      const NT = { a: from, b: s, sides: new Map([[from.userId, { uids: [], snaps: [], gold: 0, ready: false, ok: false }], [s.userId, { uids: [], snaps: [], gold: 0, ready: false, ok: false }]]) };
+      const NT = { ver: 1, a: from, b: s, sides: new Map([[from.userId, { uids: [], snaps: [], gold: 0, ready: false, ok: false }], [s.userId, { uids: [], snaps: [], gold: 0, ready: false, ok: false }]]) };
       from.trade = s.trade = NT;
       return push(NT);
     }
@@ -71,6 +71,7 @@ export function tradeOp(world, s, m) {
       const gold = m.gold ?? me.gold;
       if (gold > s.char.gold) return s.notice("가진 골드보다 많이 올릴 수 없어요.");
       me.uids = uids; me.snaps = items.map(snap); me.gold = gold;
+      T.ver++;
       unready(T);
       return push(T);
     }
@@ -79,6 +80,8 @@ export function tradeOp(world, s, m) {
       return push(T);
     }
     case "confirm": {
+      // 내가 본 조건(버전)과 지금 조건이 다르면 거절: 상대가 바꾼 직후 옛 화면에서 수락 누르는 것 방지
+      if (m.ver !== T.ver) { push(T); return s.notice("거래 조건이 방금 바뀌었어요. 다시 확인하고 눌러 주세요."); }
       // 한 명이 '거래하기'를 누르면 상대에게 수락/거절 창이 뜸 → 상대가 수락(=confirm)하면 바로 교환
       if (!me.uids.length && !me.gold && !side(T, o).uids.length && !side(T, o).gold) return s.notice("올린 물건이나 골드가 없어요.");
       me.ok = true;

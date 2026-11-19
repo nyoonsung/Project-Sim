@@ -35,7 +35,7 @@ const SCHEMA = {
   unequip: (m) => ["weapon", "offhand", "helmet", "armor", "trinket"].includes(m.slot),
   sell: (m) => isInt(m.uid, 1, 2 ** 31),
   enhance: (m) => isInt(m.uid, 1, 2 ** 31),
-  trade: (m) => ["request", "accept", "decline", "set", "ready", "confirm", "reject", "cancel"].includes(m.op) && (m.name === undefined || isStr(m.name, 12)) && (m.gold === undefined || isInt(m.gold, 0, 1e9)) && (m.uids === undefined || (Array.isArray(m.uids) && m.uids.length <= 12 && m.uids.every((u) => isInt(u, 1, 2 ** 31)))),
+  trade: (m) => ["request", "accept", "decline", "set", "ready", "confirm", "reject", "cancel"].includes(m.op) && (m.name === undefined || isStr(m.name, 12)) && (m.gold === undefined || isInt(m.gold, 0, 1e9)) && (m.uids === undefined || (Array.isArray(m.uids) && m.uids.length <= 12 && m.uids.every((u) => isInt(u, 1, 2 ** 31)))) && (m.ver === undefined || isInt(m.ver, 0, 1e9)),
   sellMany: (m) => Array.isArray(m.uids) && m.uids.length >= 1 && m.uids.length <= 60 && m.uids.every((u) => isInt(u, 1, 2 ** 31)),
   repair: (m) => m.uid === undefined || isInt(m.uid, 1, 2 ** 31),
   enchant: (m) => isInt(m.uid, 1, 2 ** 31),

@@ -73,18 +73,25 @@ try {
   A.send({ t: "sell", uid: aw.uid }); await sleep(150);
   ok(A.char.inv.some((i) => i.uid === aw.uid), "거래에 올린 아이템 판매 막힘");
   // 한 명이 '거래하기' → 상대에게 요청(수락 창). 그 사이 조건이 바뀌면 요청이 풀림
-  A.send({ t: "trade", op: "confirm" }); await sleep(150);
+  A.send({ t: "trade", op: "confirm", ver: A.trade.ver }); await sleep(150);
   ok(A.trade.mine.ok && B.trade.theirs.ok, "한 명이 거래하기 → 상대 쪽에 요청 표시");
   ok(A.char.inv.some((i) => i.uid === aw.uid), "상대가 수락하기 전엔 안 바뀜");
   B.send({ t: "trade", op: "set", gold: 400 }); await sleep(150);
   ok(!A.trade.mine.ok && !B.trade.theirs.ok, "조건이 바뀌면 요청이 풀림");
   // 거절
-  A.send({ t: "trade", op: "confirm" }); await sleep(150);
+  A.send({ t: "trade", op: "confirm", ver: A.trade.ver }); await sleep(150);
   B.send({ t: "trade", op: "reject" }); await sleep(150);
   ok(!A.trade.mine.ok && A.trade !== null, "거절하면 요청만 풀리고 거래창은 유지");
+  // 상대가 조건을 바꾼 직후 옛 화면(옛 버전)으로 수락하면 거절돼야 함 (바꿔치기 사기 방지)
+  A.send({ t: "trade", op: "confirm", ver: A.trade.ver }); await sleep(150);
+  const staleVer = B.trade.ver;
+  A.send({ t: "trade", op: "set", gold: 0 }); await sleep(150);
+  B.send({ t: "trade", op: "confirm", ver: staleVer }); await sleep(150);
+  ok(!B.trade.mine.ok, "조건이 바뀐 뒤 옛 화면으로 누른 수락은 거절");
+  A.send({ t: "trade", op: "set", gold: 1000 }); await sleep(150);
   // 수락 → 교환
-  A.send({ t: "trade", op: "confirm" }); await sleep(150);
-  B.send({ t: "trade", op: "confirm" }); await sleep(300);
+  A.send({ t: "trade", op: "confirm", ver: A.trade.ver }); await sleep(150);
+  B.send({ t: "trade", op: "confirm", ver: B.trade.ver }); await sleep(300);
   ok(A.trade === null && B.trade === null, "거래 종료");
   ok(A.char.gold === 50000 - 1000 + 400 && B.char.gold === 50000 - 400 + 1000, `골드 교환 (${A.char.gold}, ${B.char.gold})`);
   ok(A.char.inv.length === 2 && B.char.inv.length === 2, "아이템 수 유지 (복사 없음)");

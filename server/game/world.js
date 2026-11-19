@@ -21,9 +21,15 @@ const RESERVED_TITLES = [
   { key: "worldgod-gm-yunseong", user: "GM_윤성", text: "세계의 신", color: "#c8a0ff" },
   { key: "firstrival-yuminthomas", user: "yuminthomas", text: "최초의 대적자", color: "#ff5a6e" },
 ];
-function grantReserved(c, username) {
+function grantReserved(c, username, userId) {
   for (const g of RESERVED_TITLES) {
-    if (g.user.toLowerCase() !== String(username).toLowerCase() || (c.granted ??= []).includes(g.key)) continue;
+    if (g.user.toLowerCase() !== String(username).toLowerCase()) continue;
+    // 처음 받은 계정 번호에 영구히 묶음: 나중에 누가 같은 닉네임을 차지해도(이름 변경·계정 삭제 후 등) 칭호를 못 받음
+    let owner = null;
+    try { owner = Q.metaGet.get("reserved:" + g.key)?.v ?? null; } catch {}
+    if (owner && String(owner) !== String(userId)) continue;
+    if (!owner && userId != null) { try { Q.metaSet.run("reserved:" + g.key, String(userId)); } catch {} }
+    if ((c.granted ??= []).includes(g.key)) continue;
     c.titles ??= [];
     if (!c.titles.some((t) => t.text === g.text)) {
       c.titleSeq = Math.max(c.titleSeq ?? 0, ...c.titles.map((t) => t.id)) + 1;
@@ -115,7 +121,7 @@ export class World {
     };
     this.sessions.set(u.id, s);
     this.startLoop();
-    grantReserved(char, u.username);
+    grantReserved(char, u.username, u.id);
     s.unit = makePlayerUnit(s);
     s.send({ t: "hello", name: u.username, char: this.publicChar(s), announce: this.announcement, serverTime: Date.now() });
     if (!this.tryResume(s)) this.town.addPlayer(s.unit);
@@ -186,8 +192,18 @@ export class World {
     this.save(s);
     this.sessions.delete(s.userId);
   }
+  /** 바로 저장. 단 메시지를 마구 보내 DB 쓰기를 폭주시키지 못하게: 연속 5번까지는 즉시, 그 뒤로는 초당 2번꼴(남은 건 잠시 뒤 한 번에) */
+  saveSoon(s) {
+    const now = Date.now();
+    s.saveTok = Math.min(5, (s.saveTok ?? 5) + ((now - (s.saveTokAt ?? now)) / 1000) * 2);
+    s.saveTokAt = now;
+    if (s.saveTok >= 1) { s.saveTok -= 1; return this.save(s); }
+    if (s.saveTimer) return;
+    s.saveTimer = setTimeout(() => { s.saveTimer = null; if (this.sessions.get(s.userId) === s && s.dirty) this.save(s); }, 600);
+  }
   save(s) {
-    if (s.deleted) return; // 관리자가 지운 계정: 다시 저장하지 않음
+    if (s.deleted) return;
+    s.lastSaveAt = Date.now(); // 관리자가 지운 계정: 다시 저장하지 않음
     try { Q.saveChar.run(s.userId, JSON.stringify(s.char), s.char.level, s.char.cls, s.char.best, Date.now()); s.dirty = false; } catch (e) { console.error("save", e); }
   }
   saveAll() {
@@ -278,7 +294,7 @@ export class World {
       case "dummy": break;
     }
     // 아이템·장비가 바뀌는 행동은 바로 저장 (업데이트 배포 등으로 서버가 재시작돼도 신화 장착 같은 게 되돌아가지 않게)
-    if (ITEM_OPS.has(m.t) && s.dirty) this.save(s);
+    if (ITEM_OPS.has(m.t) && s.dirty) this.saveSoon(s);
   }
 
   nearNpc(s, id, dist = 90) {
@@ -602,7 +618,7 @@ export class World {
     }
     const it = { ...item, uid: c.nextUid++ };
     c.inv.push(it);
-    this.save(s); // 주운 장비는 바로 저장
+    this.saveSoon(s); // 주운 장비는 바로 저장 (1초에 한 번까지)
     if (["전설", "신화"].includes(it.rarity)) itemLog(s.userId, "drop", { name: it.name, rarity: it.rarity, ilvl: it.ilvl });
     s.send({ t: "ev", list: [{ e: "got", item: it }] });
     this.sendChar(s);

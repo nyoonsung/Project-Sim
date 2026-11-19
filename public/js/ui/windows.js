@@ -652,8 +652,8 @@ export function openTrade() {
           h("div", { class: "flexrow" }, h("span", { class: "trade-gold", text: `${T.theirs.gold.toLocaleString()} G` })))),
       h("div", { class: "flexrow trade-actions" },
         T.theirs.ok && !T.mine.ok
-          ? h("button", { class: "btn primary", onclick: () => send({ t: "trade", op: "confirm" }) }, "수락하고 교환")
-          : h("button", { class: "btn primary", disabled: T.mine.ok, onclick: () => send({ t: "trade", op: "confirm" }) }, T.mine.ok ? "상대 수락 기다리는 중…" : "거래하기"),
+          ? h("button", { class: "btn primary", onclick: () => send({ t: "trade", op: "confirm", ver: G.trade?.ver }) }, "수락하고 교환")
+          : h("button", { class: "btn primary", disabled: T.mine.ok, onclick: () => send({ t: "trade", op: "confirm", ver: G.trade?.ver }) }, T.mine.ok ? "상대 수락 기다리는 중…" : "거래하기"),
         T.theirs.ok && !T.mine.ok ? h("button", { class: "btn", onclick: () => send({ t: "trade", op: "reject" }) }, "거절") : null,
         h("button", { class: "btn danger", onclick: () => closeWin("trade") }, "취소")),
       h("div", { class: "note", text: "한 명이 '거래하기'를 누르면 상대에게 수락/거절 창이 떠요. 수락하면 바로 교환돼요. 그 전에 물건이나 골드가 바뀌면 요청이 풀려요. 상대가 올린 아이템을 꼭 확인하세요." }),
@@ -666,12 +666,13 @@ export function openTrade() {
 // 비밀번호 바꾸기 (설정 창): 현재 비밀번호 확인 → 새 비밀번호(8자 이상) 두 번 → 바뀌면 모든 기기에서 로그아웃, 다시 로그인
 function passwordForm() {
   const inp = (ph) => { const e = h("input", { class: "txt", type: "password", placeholder: ph, autocomplete: ph.startsWith("현재") ? "current-password" : "new-password", maxlength: 100 }); e.addEventListener("keydown", (ev) => ev.stopPropagation()); return e; };
-  const cur = inp("현재 비밀번호"), nx = inp("새 비밀번호 (8자 이상)"), nx2 = inp("새 비밀번호 한 번 더");
+  const cur = inp("현재 비밀번호"), nx = inp("새 비밀번호 (8자 이상, 영문+숫자)"), nx2 = inp("새 비밀번호 한 번 더");
   const msg = h("div", { class: "note" });
   const go = async (btn) => {
     if (!cur.value || !nx.value) return (msg.textContent = "현재 비밀번호와 새 비밀번호를 넣어 주세요.");
     if (nx.value !== nx2.value) return (msg.textContent = "새 비밀번호 두 칸이 서로 달라요.");
     if (nx.value.length < 8) return (msg.textContent = "새 비밀번호는 8자 이상이어야 해요.");
+    if (!/[A-Za-z]/.test(nx.value) || !/[0-9]/.test(nx.value)) return (msg.textContent = "새 비밀번호에 영문과 숫자를 모두 넣어 주세요.");
     if (nx.value === cur.value) return (msg.textContent = "지금 비밀번호와 같아요.");
     btn.disabled = true; msg.textContent = "바꾸는 중…";
     try {

@@ -151,7 +151,8 @@ const ui = {
       if (!ask) {
         const sum = `${T.theirs.items.length ? T.theirs.items.length + "개 아이템" : ""}${T.theirs.items.length && T.theirs.gold ? " + " : ""}${T.theirs.gold ? T.theirs.gold.toLocaleString() + "G" : ""}` || "아무것도 없음";
         const give = `${T.mine.items.length ? T.mine.items.length + "개 아이템" : ""}${T.mine.items.length && T.mine.gold ? " + " : ""}${T.mine.gold ? T.mine.gold.toLocaleString() + "G" : ""}` || "아무것도 없음";
-        const answer = (ok) => { send({ t: "trade", op: ok ? "confirm" : "reject" }); box.remove(); };
+        const ver = T.ver;
+        const answer = (ok) => { send({ t: "trade", op: ok ? "confirm" : "reject", ver }); box.remove(); };
         const box = h("div", { class: "invite trade-ask" }, h("div", { text: `💰 ${T.with}님이 거래하자고 해요. 받음: ${sum} / 줌: ${give}` }),
           h("div", { class: "flexrow" }, h("button", { class: "btn small primary", onclick: () => answer(true) }, G.touch ? "수락" : "수락 (Y)"), h("button", { class: "btn small", onclick: () => answer(false) }, G.touch ? "거절" : "거절 (N)")));
         box._answer = answer;
