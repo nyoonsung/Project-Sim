@@ -133,10 +133,27 @@ add("fist", [
     desc: "정면 공격을 막고 반격하며 높은 위협을 쌓는 탱킹 핵심기.", limit: "타이밍·방향 조건. 연속 방어 시 자원 소모 증가, 반격 내부 쿨타임 적용.",
     fx: { self: "impacts/shield-block", hit: "impacts/blunt-hit" },
     steps: [{ do: "parry", dur: 0.8, arc: 140, counter: { pow: 1.3, threat: 6, gain: { ki: 15 } } }] },
-  { id: "fi_imun", name: "이문정주", grade: "일반", kind: "active", cd: 6, cost: { ki: 10 }, aim: "dir", anim: "guard",
-    desc: "자세를 낮춰 정면 공격을 흘리고 받아친다. 성공 시 짧게 피해 저항.", limit: "타이밍·방향 조건, 반격 내부 쿨타임.",
-    fx: { self: "impacts/parry", hit: "impacts/blunt-hit" },
-    steps: [{ do: "parry", dur: 1.0, arc: 160, counter: { pow: 1.0, threat: 5, buff: { id: "imun", dur: 3, mods: { dr: 0.15 } } } }] },
+  // (예전 반격기 '이문정주' 자리 → 공격기로 교체. 이미 장착한 사람은 그대로 철산고가 됨)
+  { id: "fi_imun", name: "철산고", grade: "일반", kind: "active", cd: 6, cost: { ki: 10 }, aim: "dir", anim: "dash", moveSkill: true,
+    desc: "어깨로 몸통 박치기를 하며 돌진해, 부딪힌 적에게 큰 피해를 주고 멀리 밀쳐 낸다.", limit: "처음 부딪힌 적에서 멈춘다.",
+    fx: { self: "spawn/poof", hit: "explosions/cartoon-pow" }, steps: [{ do: "dash", dist: 100, speed: 600, stopOnHit: true, hit: { pow: 1.6, knock: 70, groggy: 12, threat: 3 } }] },
+  { id: "fi_combo", name: "연환권", grade: "일반", kind: "active", cd: 3, cost: { ki: 8 }, aim: "dir", anim: "punch",
+    desc: "눈에 보이지 않을 만큼 빠르게 주먹을 세 번 꽂는다.", limit: "한 명만 노린다.",
+    fx: { swing: "melee/dagger-flurry", hit: "impacts/blunt-hit" }, steps: [{ do: "melee", range: 44, arc: 60, pow: 0.6, hits: 3, gap: 0.09, max: 1, threat: 1.5 }] },
+  { id: "fi_palm", name: "장풍", grade: "희귀", kind: "active", cd: 6, cost: { ki: 15 }, aim: "dir", anim: "punch",
+    desc: "내력을 손바닥에 모아 앞으로 쏘아 보낸다. 줄지어 선 적 4명까지 꿰뚫는다.", limit: "권투사의 유일한 원거리기. 사거리 중간.",
+    fx: { proj: "projectiles/energy-disc", palette: ["#200800", "#802008", "#e05020", "#ffa040", "#ffe8a0", "#ffffff"], hit: "explosions/cartoon-pow" },
+    steps: [{ do: "proj", speed: 560, range: 280, pow: 2.0, radius: 12, pierce: 3, knock: 30, threat: 2 }] },
+  { id: "fi_twinclaw", name: "호조쌍격", grade: "희귀", kind: "active", cd: 7, cost: { ki: 15 }, aim: "dir", anim: "punch",
+    desc: "호랑이 발톱처럼 두 손을 연달아 휘둘러 앞쪽 적 4명까지 찢는다.", limit: "두 번째 타격은 첫 타격 뒤 0.15초.",
+    fx: { swing: "melee/claw-swipe", hit: "impacts/hit-spark" }, steps: [{ do: "melee", range: 56, arc: 120, pow: 1.4, hits: 2, gap: 0.15, max: 4, threat: 2, knock: 20 }] },
+  { id: "fi_meteorkick", name: "유성각", grade: "영웅", kind: "active", cd: 12, cost: { ki: 25 }, aim: "dir", anim: "dash", moveSkill: true,
+    desc: "높이 뛰어올라 유성처럼 내리꽂는 발차기. 떨어진 자리 주변 적을 기절시킨다.", limit: "보스는 기절 면역(그로기만 누적).",
+    fx: { self: "spawn/poof", area: "impacts/ground-slam" }, steps: [{ do: "dash", dist: 150, speed: 680 }, { do: "circle", radius: 74, pow: 2.6, max: 6, threat: 4, cc: { type: "stun", dur: 0.7 }, groggy: 22 }] },
+  { id: "fi_thousand", name: "천수권", grade: "영웅", kind: "active", cd: 14, cost: { ki: 30 }, aim: "dir", anim: "punch",
+    desc: "천 개의 손처럼 보이는 주먹 세례. 앞쪽 적 2명에게 10연타를 퍼붓는다.", limit: "타격마다 피해는 낮지만 합치면 매우 높다.",
+    fx: { swing: "melee/dagger-flurry", hit: "impacts/blunt-hit", palette: ["#200800", "#802008", "#e05020", "#ffa040", "#ffe8a0", "#ffffff"] },
+    steps: [{ do: "melee", range: 52, arc: 70, pow: 0.5, hits: 10, gap: 0.07, max: 2, threat: 1 }] },
   { id: "fi_sidestep", name: "횡이동", grade: "일반", kind: "active", cd: 8, aim: "dir", anim: "dash", moveSkill: true,
     desc: "공격을 저항하며 측면으로 이동해 위험 범위를 벗어난다.", limit: "이동 거리 제한. 탱커 생존 보조이지 무적기 아님.",
     fx: { self: "spawn/poof" }, steps: [{ do: "dash", dist: 80, speed: 480, side: true }, { do: "buff", target: "self", id: "sidestep", dur: 1.0, mods: { dr: 0.25 } }] },
@@ -211,17 +228,17 @@ add("archer", [
   { id: "ar_entangle", name: "인탱글", grade: "희귀", kind: "active", cd: 12, cost: { mp: 14 }, aim: "point", range: 260, anim: "shoot",
     desc: "적을 묶어 이동 속도와 회피율을 낮춘다.", limit: "일반 적 중심, 보스는 면역 또는 짧은 감쇠.",
     fx: { area: "nature/root-snare" }, steps: [{ do: "area", radius: 48, pow: 0.5, telegraph: 0.2, cc: { type: "root", dur: 2.5 }, status: { type: "slow", dur: 4, v: 0.4 } }] },
-  { id: "ar_lethal", name: "리썰 샷", grade: "영웅", kind: "active", cd: 9, cost: { mp: 16 }, aim: "dir", anim: "shoot",
-    desc: "높은 단일 피해와 함께 적의 방어력을 약화한다.", limit: "디버프 비중첩, 보스 약화량 제한.",
+  { id: "ar_lethal", name: "리썰 샷", grade: "영웅", kind: "active", cd: 6, cost: { mp: 14 }, aim: "dir", anim: "shoot",
+    desc: "적을 꿰뚫는 강력한 한 발. 줄지어 선 적 3명까지 관통하고 방어력을 크게 약화한다(25%).", limit: "약화 비중첩.",
     fx: { proj: "ice/ice-lance", palette: ["#200810", "#801830", "#d04060", "#ff90a0", "#ffe0e8", "#ffffff"], hit: "impacts/crit-hit" },
-    steps: [{ do: "proj", speed: 700, range: 360, pow: 2.6, radius: 6, status: { type: "weaken", dur: 6, v: 0.15 } }] },
-  { id: "ar_evasion", name: "이베이젼", grade: "영웅", kind: "active", cd: 18, cost: { mp: 10 }, aim: "self", anim: "cast",
-    desc: "원거리 회피율을 잠시 높여 생존력을 보강한다.", limit: "지속시간(4초)과 회피 보너스(35%) 제한. 피격 위험이 남는다.",
-    fx: { self: "status/haste" }, steps: [{ do: "buff", target: "self", id: "evasion", dur: 4, mods: { evade: 0.35, move: 0.15 } }] },
-  { id: "ar_absolute", name: "앱솔루트 애로우", grade: "영웅", kind: "active", cd: 20, cost: { mp: 18 }, aim: "self", anim: "cast",
-    desc: "짧은 시간 사거리를 늘리고 적 방어를 일부 관통한다.", limit: "중첩 불가, 지속시간 단축(6초).",
+    steps: [{ do: "proj", speed: 760, range: 400, pow: 4.8, radius: 8, pierce: 2, critBonus: 0.2, status: { type: "weaken", dur: 8, v: 0.25 } }] },
+  { id: "ar_evasion", name: "이베이젼", grade: "영웅", kind: "active", cd: 14, cost: { mp: 10 }, aim: "self", anim: "cast",
+    desc: "7초간 회피율 60%, 이동 속도 30%, 공격 속도 30%, 주는 피해 20%가 오른다. 피하면서 쏘는 궁수의 핵심 버프.", limit: "중첩 불가.",
+    fx: { self: "status/haste" }, steps: [{ do: "buff", target: "self", id: "evasion", dur: 7, mods: { evade: 0.6, move: 0.3, aspd: 0.3, dmg: 0.2 } }] },
+  { id: "ar_absolute", name: "앱솔루트 애로우", grade: "영웅", kind: "active", cd: 18, cost: { mp: 18 }, aim: "self", anim: "cast",
+    desc: "12초간 사거리 +50%, 적 방어 50% 관통, 주는 피해 +30%, 치명타 +15%p, 공격 속도 +25%.", limit: "중첩 불가.",
     fx: { self: "arcane/spell-charge", palette: ["#201808", "#806018", "#d0a830", "#ffe080", "#fff8d0", "#ffffff"] },
-    steps: [{ do: "buff", target: "self", id: "absolute", dur: 6, mods: { range: 0.35, pen: 0.3 } }] },
+    steps: [{ do: "buff", target: "self", id: "absolute", dur: 12, mods: { range: 0.5, pen: 0.5, dmg: 0.3, crit: 0.15, aspd: 0.25 } }] },
   { id: "ar_rain", name: "애로우 레인", grade: "전설", kind: "ultimate", cd: 35, cost: { mp: 30 }, aim: "point", range: 300, anim: "shoot",
     desc: "넓은 범위에 화살비를 내려 다수 적에게 누적 피해를 준다.", limit: "낙하지점을 예고하고 대상 수(10)·총 피해를 제한한다.",
     fx: { area: "weather/rain", tick: "projectiles/arrow" }, steps: [{ do: "area", radius: 90, pow: 0.55, ticks: 8, interval: 0.3, telegraph: 0.6, max: 10 }] },
@@ -407,11 +424,41 @@ add("smith", [
     fx: { area: "spawn/summon-rise" }, steps: [{ do: "device", kind: "golem", dur: 8, hp: 10, pow: 0.7 }] },
 ]);
 
+// ─────────────────────────── 최종 단계 신화 스킬 (각 직업의 마지막 성장 단계에서 해금) ───────────────────────────
+add("sword", [{ id: "sw_final", name: "검성 일섬", grade: "신화", kind: "ultimate", cd: 45, cost: { ki: 60 }, aim: "dir", anim: "dash",
+  desc: "검의 정점에 오른 자의 일격. 눈앞 일직선 전체를 한 번에 베어 가른다(길이 340, 대상 무제한). 시전 후 6초간 주는 피해 +25%.", limit: "자세와 상관없이 쓸 수 있다. 짧은 예고(0.3초).",
+  fx: { line: "melee/sword-slash", self: "status/rage" },
+  steps: [{ do: "line", length: 340, width: 64, pow: 9.0, telegraph: 0.3, groggy: 50 }, { do: "buff", target: "self", id: "sword_saint", dur: 6, mods: { dmg: 0.25 } }] }]);
+add("fist", [{ id: "fi_final", name: "권왕멸천", grade: "신화", kind: "ultimate", cd: 40, cost: { ki: 50 }, aim: "dir", anim: "dash", moveSkill: true,
+  desc: "하늘마저 부수는 권왕의 주먹. 돌진해 주변을 내려찍어 거대한 충격파를 일으키고 모두 기절시킨다. 8초간 주는 피해 +30%, 받는 피해 -20%.", limit: "보스는 기절 대신 큰 그로기.",
+  fx: { self: "status/rage", area: "explosions/plasma-explosion", palette: ["#200800", "#802008", "#e05020", "#ffa040", "#ffe8a0", "#ffffff"] },
+  steps: [{ do: "buff", target: "self", id: "fist_king", dur: 8, mods: { dmg: 0.3, dr: 0.2 } }, { do: "dash", dist: 130, speed: 700 }, { do: "circle", radius: 120, pow: 5.5, max: 12, threat: 10, cc: { type: "stun", dur: 1.2 }, groggy: 50 }] }]);
+add("archer", [{ id: "ar_final", name: "천궁 강림", grade: "신화", kind: "ultimate", cd: 45, cost: { mp: 40 }, aim: "point", range: 340, anim: "shoot",
+  desc: "하늘의 활이 내려와 지정한 곳에 3초 동안 별빛 화살을 쏟아붓는다(12번). 동시에 10초간 공격 속도 +50%, 주는 피해 +30%.", limit: "대상 수 12명까지.",
+  fx: { area: "arcane/star-fall", tick: "projectiles/arrow", self: "arcane/spell-charge" },
+  steps: [{ do: "buff", target: "self", id: "heaven_bow", dur: 10, mods: { aspd: 0.5, dmg: 0.3 } }, { do: "area", radius: 120, pow: 1.3, ticks: 12, interval: 0.25, telegraph: 0.4, max: 12 }] }]);
+add("rogue", [{ id: "ro_final", name: "섀도우 처형", grade: "신화", kind: "ultimate", cd: 40, cost: { mp: 30 }, aim: "dir", anim: "stab", moveSkill: true,
+  desc: "그림자가 되어 적의 뒤로 순간 이동한 뒤, 치명타 확률이 크게 오른 6연속 처형 베기를 가한다.", limit: "한 명만 노린다.",
+  fx: { self: "arcane/blink-out", swing: "melee/dagger-flurry", hit: "impacts/crit-hit", palette: ["#100818", "#301848", "#6030a0", "#a070e0", "#e0d0ff", "#ffffff"] },
+  steps: [{ do: "custom", fn: "shadowstep", range: 230, pow: 3.0 }, { do: "melee", range: 48, arc: 90, pow: 1.4, hits: 6, gap: 0.08, max: 1, critBonus: 0.45 }] }]);
+add("mage", [{ id: "ma_final", name: "아포칼립스", grade: "신화", kind: "ultimate", cd: 50, cost: { mp: 60 }, aim: "point", range: 340, anim: "cast", cast: 0.8,
+  desc: "9서클의 금주. 하늘을 갈라 지정한 곳에 거대한 불기둥을 네 번 떨어뜨리고 모두 불태운다.", limit: "시전 0.8초, 대상 수 14명까지.",
+  fx: { area: "fire/meteor", pre: "arcane/magic-circle-cast" },
+  steps: [{ do: "area", radius: 135, pow: 3.4, ticks: 4, interval: 0.4, telegraph: 0.9, max: 14, status: { type: "burn", dur: 4, pow: 0.4 } }] }]);
+add("priest", [{ id: "pr_final", name: "신의 심판", grade: "신화", kind: "ultimate", cd: 50, cost: { holy: 50 }, aim: "point", range: 280, anim: "cast",
+  desc: "교황만이 부를 수 있는 심판의 빛. 주변 파티원의 HP를 40% 회복시키고, 지정한 곳에 성스러운 빛기둥을 세 번 내려 적을 벌한다(빛에 닿은 아군도 회복).", limit: "회복은 주변 240 안의 파티원.",
+  fx: { area: "holy/holy-pillar", self: "holy/heal-aoe" },
+  steps: [{ do: "heal", target: "party", radius: 240, pctMax: 0.4 }, { do: "area", radius: 120, pow: 3.0, ticks: 3, interval: 0.35, telegraph: 0.5, max: 12, healAllies: 0.8 }] }]);
+add("smith", [{ id: "sm_final", name: "천공의 망치", grade: "신화", kind: "ultimate", cd: 45, cost: { parts: 3 }, aim: "point", range: 230, anim: "smash",
+  desc: "9성 장인의 걸작. 하늘에서 거대한 망치를 떨어뜨려 일대를 짓뭉개고 기절시킨다. 주변 파티원에게 큰 보호막.", limit: "부품 3개 소모.",
+  fx: { area: "melee/hammer-smash", self: "holy/divine-shield" },
+  steps: [{ do: "shield", target: "party", radius: 200, pow: 2.4, dur: 6 }, { do: "area", radius: 115, pow: 6.5, telegraph: 0.7, max: 12, cc: { type: "stun", dur: 1.5 }, groggy: 50 }] }]);
+
 export const SKILLS = Object.fromEntries(S.map((s) => [s.id, s]));
 export const SKILL_LIST = S;
 
 // 직업별 스킬 해금 단계 (등급 기준, 단계 수에 비례)
-const GRADE_AT = { 일반: 0, 희귀: 0.1, 영웅: 0.25, 전설: 0.45 };
+const GRADE_AT = { 일반: 0, 희귀: 0.1, 영웅: 0.25, 전설: 0.45, 신화: 1 }; // 신화 = 마지막 성장 단계
 export function unlockStage(skill, stagesInClass) {
   if (skill.cls === "common") return 0;
   return Math.round((GRADE_AT[skill.grade] ?? 0) * (stagesInClass - 1));

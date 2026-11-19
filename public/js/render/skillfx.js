@@ -11,7 +11,7 @@ import { addGlow } from "./glow.js";
 import { addTrauma } from "../feel.js";
 
 const now = () => performance.now() / 1000;
-const GT = { 일반: 0, 희귀: 1, 영웅: 2, 전설: 3 };
+const GT = { 일반: 0, 희귀: 1, 영웅: 2, 전설: 3, 신화: 3 };
 const FX = { rings: [], runes: [], pillars: [], streaks: [], motes: [], stars: [], sweeps: [] };
 export const SFX_LIMITS = { motes: 420 };
 

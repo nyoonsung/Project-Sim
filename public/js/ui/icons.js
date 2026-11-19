@@ -41,7 +41,7 @@ export function itemIcon(it) {
 
 // ── 스킬 아이콘: 스킬 종류(근접·투사체·범위·버프·회복·이동…)로 모양, 이펙트 속성(불·얼음·신성…)으로 색
 const ELEM = [["fire", "#ff8a3a"], ["ice", "#8ae6ff"], ["holy", "#ffe27a"], ["shadow", "#b47aff"], ["nature", "#7ae06a"], ["arcane", "#d08cff"], ["lightning", "#fff05a"], ["explosions", "#ff6a3a"], ["scifi", "#6affe0"], ["weather", "#9ad0ff"]];
-const GRADE_TINT = { 일반: "#d8dde6", 희귀: "#6ab4ff", 영웅: "#d8b0ff", 전설: "#ffbe5a" };
+const GRADE_TINT = { 일반: "#d8dde6", 희귀: "#6ab4ff", 영웅: "#d8b0ff", 전설: "#ffbe5a", 신화: "#ff6a7a" };
 export function skillColor(sk) {
   const fx = JSON.stringify(sk.fx ?? {});
   for (const [k, c] of ELEM) if (fx.includes(`"${k}/`)) return c;

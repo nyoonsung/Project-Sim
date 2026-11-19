@@ -164,12 +164,12 @@ export function openSkills() {
       if (sk) tipOn(el, () => skillTip(sk));
       return el;
     }));
-    const groups = ["기본", "일반", "희귀", "영웅", "전설"];
+    const groups = ["기본", "일반", "희귀", "영웅", "전설", "신화"];
     const cards = [];
     for (const gname of groups) {
       const items = list.filter((s) => (gname === "기본" ? s.cls === "common" : s.cls !== "common" && s.grade === gname));
       if (!items.length) continue;
-      cards.push(h("h4", { text: gname === "기본" ? "공용 스킬 (모험가 기본기)" : `${gname} 스킬` }));
+      cards.push(h("h4", { text: gname === "기본" ? "공용 스킬 (모험가 기본기)" : gname === "신화" ? "신화 스킬 (최종 단계)" : `${gname} 스킬` }));
       cards.push(h("div", { class: "skill-list" }, ...items.map((s) => {
         const need = unlockStage(s, n);
         const locked = s.cls !== "common" && stage < need;
