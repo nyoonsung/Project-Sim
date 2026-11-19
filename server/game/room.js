@@ -438,7 +438,7 @@ export class Room {
   }
   lootDesc(l) {
     const it = l.item;
-    return { id: l.id, x: l.x | 0, y: l.y | 0, r: it.rarity ?? "일반", n: it.name ?? (it.cons ? "체력 물약" : "?"), s: it.slot ?? "cons", ty: it.type ?? undefined, v: it.variant ?? 0, il: it.ilvl ?? 1 };
+    return { id: l.id, x: l.x | 0, y: l.y | 0, r: it.rarity ?? "일반", n: it.name ?? (it.cons ? "체력 물약" : "?"), s: it.slot ?? "cons", ty: it.type ?? undefined, v: it.variant ?? 0, il: it.ilvl ?? 1, ...(it.relic ? { rl: it.relic, rc: it.relicColor } : {}) };
   }
 
   onBossDead(b) {

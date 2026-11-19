@@ -184,7 +184,15 @@ export class Renderer {
     const ids = ["arcane/portal", "fire/torch", "fire/campfire", "water/fountain", "fire/candle", "impacts/hit-spark", "impacts/hit-flash", "spawn/poof", "ui/level-up", "spawn/soul-rise", "status/stunned", "status/burning", "status/poisoned", "status/frozen", "status/slowed", "pickups/loot-beam"];
     if (G.kind !== "town") {
       ids.push(z.torch);
-      for (const id of z.monsters) { const m = MONSTERS[id]; if (m.look.critter) ids.push(m.look.critter); if (m.proj) ids.push(m.proj); if (m.aoe) ids.push(m.aoe); if (m.ai === "bomber") ids.push("explosions/small-explosion"); }
+      for (const id of z.monsters) {
+        const m = MONSTERS[id];
+        if (m.look.critter) ids.push(m.look.critter); if (m.proj) ids.push(m.proj); if (m.aoe) ids.push(m.aoe); if (m.ai === "bomber") ids.push("explosions/small-explosion");
+        // 소환하는 몬스터는 소환될 몬스터의 모습·공격도 미리 (처음 나올 때 멈칫 방지)
+        const sm = m.summon && MONSTERS[m.summon];
+        if (sm) { if (sm.look.critter) ids.push(sm.look.critter); if (sm.proj) ids.push(sm.proj); if (sm.aoe) ids.push(sm.aoe); }
+      }
+      // 제2 던전 전용 행동·보스 페이즈 이펙트 (순간이동·소환문·분노 등)
+      if (G.dungeon === 2) ids.push("spawn/spawn-portal", "status/rage", "shadow/void-orb", "shadow/shadow-flames", "shadow/dark-explosion", "impacts/ground-slam", "arcane/blink-in", "arcane/blink-out", "nature/spore-burst", "explosions/small-explosion");
       for (const b of [z.mid, z.boss]) { const d = BOSSES[b]; if (d.look.critter) ids.push(d.look.critter); for (const p of d.patterns) if (p.fx) ids.push(p.fx); }
       if (G.mapKind === "boss" || G.floor % 5 === 0) ids.push("impacts/ground-slam", "melee/spear-sweep", "lightning/zap-hit", "arcane/arcane-orb", "shadow/dark-explosion"); // 공용 고급 보스 패턴
       if (z.weather) ids.push(z.weather);
@@ -362,7 +370,7 @@ export class Renderer {
       ctx.fillStyle = "#0008"; ctx.beginPath(); ctx.ellipse(x, y + 3, 8, 3, 0, 0, Math.PI * 2); ctx.fill();
       let icon = null;
       if (l.s === "cons") icon = dtFrame("flask_red");
-      else icon = itemIcon({ slot: l.s, type: l.ty, variant: l.v, rarity: l.r, ilvl: l.il ?? 1 });
+      else icon = itemIcon({ slot: l.s, type: l.ty, variant: l.v, rarity: l.r, ilvl: l.il ?? 1, relic: l.rl, relicColor: l.rc });
       if (icon) {
         const w = l.s === "cons" ? 16 : 18;
         // 등급 색 테두리(아이콘 뒤에 살짝 큰 사각 빛)
@@ -382,7 +390,7 @@ export class Renderer {
         const to = G.ents.get(f.to);
         const tx = to ? to.rx : f.x, ty = to ? to.ry - 14 : f.y;
         const x = f.x + (tx - f.x) * e - cx, y = f.y + (ty - f.y) * e - Math.sin(k * Math.PI) * 30 - cy;
-        const icon = f.s === "cons" ? dtFrame("flask_red") : itemIcon({ slot: f.s, type: f.ty, variant: f.v, rarity: f.r, ilvl: f.il ?? 1 });
+        const icon = f.s === "cons" ? dtFrame("flask_red") : itemIcon({ slot: f.s, type: f.ty, variant: f.v, rarity: f.r, ilvl: f.il ?? 1, relic: f.rl, relicColor: f.rc });
         ctx.globalAlpha = 1 - k * 0.5;
         if (icon) ctx.drawImage(icon, Math.round(x - 8), Math.round(y - 8), 16, 16);
         ctx.globalAlpha = 1;

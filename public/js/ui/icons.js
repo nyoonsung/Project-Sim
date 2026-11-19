@@ -1,53 +1,182 @@
 // 아이템 아이콘 (작은 픽셀 그림)
-import { RARITY_COLOR } from "/shared/items.js";
 
 const cache = new Map();
 const P = (g, c, x, y, w = 1, h = 1) => { g.fillStyle = c; g.fillRect(x, y, w, h); };
-const MAT = ["#9a6a3a", "#c08a50", "#c0c8d8", "#e8edf6", "#9ae0ff", "#5a5a6a", "#c8a0ff", "#f0e0c0", "#ffffff", "#ff6080"];
 
-export function itemIcon(it) {
-  const key = `${it.slot}|${it.type}|${it.variant}|${it.rarity}|${Math.floor((it.ilvl - 1) / 10)}|${it.relic ?? ""}`;
-  if (cache.has(key)) return cache.get(key);
-  const cv = document.createElement("canvas");
-  cv.width = 18; cv.height = 18;
-  const g = cv.getContext("2d");
-  const m = MAT[Math.min(9, Math.floor((it.ilvl - 1) / 10))], r = RARITY_COLOR[it.rarity] ?? "#ccc", ink = "#14101c", wood = "#8a5a32";
-  const edge = it.relicColor ?? r;
-  // 정돈된 메탈 프레임 + 딥 네이비 인레이. 그림 자체는 픽셀 실루엣을 유지한다.
-  P(g, "#080b13", 0, 0, 18, 18);
-  P(g, "#1a2030", 1, 1, 16, 16);
-  P(g, "#303b50", 1, 1, 16, 1);
-  P(g, "#0c101a", 1, 16, 16, 1);
-  P(g, edge, 0, 0, 18, 1); P(g, edge, 0, 17, 18, 1);
-  P(g, edge, 0, 1, 1, 16); P(g, edge, 17, 1, 1, 16);
-  P(g, "#ffffff", 2, 2, 3, 1); P(g, "#ffffff", 2, 3, 1, 1);
+// ── 장비 아이콘 (18×18 픽셀 아트)
+//  모양을 '재질 채널'로 칠한 뒤 자동으로: 왼쪽 위에서 빛 → 4단계 명암, 재질별 진한 외곽선, 등급별 보석·오라·반짝임
+//  재질 색은 재료(아이템 레벨 10단위, 제2 던전 재료 포함) 15가지
+const N = 18;
+const MAT_RAMP = [
+  ["#f4d8a8", "#d4a066", "#9a6a3a", "#5e3e1e"], // 나무
+  ["#ffe2b0", "#e8a868", "#ae6e36", "#6a3e1a"], // 청동
+  ["#ffffff", "#ccd2dc", "#8e96a4", "#525866"], // 철
+  ["#ffffff", "#c4dcf2", "#7c9cc0", "#44587c"], // 강철
+  ["#f0ffff", "#a0ecff", "#48b4dc", "#226890"], // 미스릴
+  ["#b8bcc8", "#6c7080", "#40424e", "#1e1f28"], // 흑철
+  ["#f6e6ff", "#cca6ff", "#8a60d4", "#4a2c84"], // 아다만
+  ["#fffcf2", "#f2e4c4", "#c8b088", "#86704c"], // 용골
+  ["#ffffff", "#fff2c0", "#e8c464", "#a47e30"], // 성은
+  ["#ffd0dc", "#ff6a8a", "#c42a4c", "#661028"], // 혼돈
+  ["#f0fffc", "#a4f4e4", "#3cbab2", "#126468"], // 심해진주
+  ["#fff4ff", "#ffb4f4", "#d26ee4", "#782c96"], // 공명수정
+  ["#ffb0a0", "#e04444", "#8c1c26", "#480a12"], // 혈철
+  ["#fffcea", "#f2e2aa", "#c2a85e", "#6a5a28"], // 영겁은
+  ["#f0f2ff", "#acb4ff", "#6a62e2", "#2e2678"], // 성운
+];
+const WOOD = ["#e8b47a", "#b07a44", "#7a4e26", "#4a2c12"];
+const GOLD = ["#fff6c0", "#ffd24a", "#d09a1c", "#7e560a"];
+const LEATHER = ["#e0b086", "#ae7a4e", "#7a4e2c", "#462a14"];
+const STRING = ["#ffffff", "#e8e2d4", "#b8b0a0", "#7a7468"];
+const PAPER = ["#fffdf2", "#f2e8cc", "#d2c49c", "#9a8a62"];
+const CORE = ["#3a3446", "#26222e", "#18151e", "#0c0a10"];
+const GEM = { 일반: null, 희귀: ["#e6f4ff", "#7cc4ff", "#2e7ee0", "#163e8a"], 영웅: ["#fbeaff", "#dc9cff", "#9a50e0", "#4e2290"], 전설: ["#fff4d0", "#ffc04a", "#e07a14", "#82400a"], 신화: ["#fff0f0", "#ff7a8a", "#e02040", "#7a0a20"] };
+const AURA = { 전설: "#ffb347", 신화: "#ff4a64" };
+// 옷감 색: 등급을 살짝 닮게
+const CLOTH = { 일반: ["#d8dce4", "#9aa2b2", "#626a7c", "#363c4a"], 희귀: ["#cfe6ff", "#6a9ee0", "#3a62a8", "#1c3466"], 영웅: ["#eedcff", "#a678d8", "#6a44a0", "#3a2260"], 전설: ["#fff0d0", "#e0a050", "#a0601e", "#5a320c"], 신화: ["#ffe0e4", "#e05a6a", "#a02436", "#5a0c1a"] };
+
+function makeBuf() { return { c: new Array(N * N).fill(null), hi: new Set() }; }
+function put(B, x, y, ch) { x = Math.round(x); y = Math.round(y); if (x >= 0 && y >= 0 && x < N && y < N) B.c[y * N + x] = ch; }
+function line(B, x0, y0, x1, y1, ch, w = 1) {
+  const n = Math.max(Math.abs(x1 - x0), Math.abs(y1 - y0)) * 2 + 1;
+  for (let i = 0; i <= n; i++) {
+    const x = x0 + ((x1 - x0) * i) / n, y = y0 + ((y1 - y0) * i) / n;
+    for (let a = 0; a < w; a++) for (let b = 0; b < w; b++) put(B, x - (w - 1) / 2 + a, y - (w - 1) / 2 + b, ch);
+  }
+}
+function rect(B, x, y, w, h, ch) { for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) put(B, x + i, y + j, ch); }
+function disc(B, cx, cy, r, ch, sy = 1) { for (let y = -Math.ceil(r); y <= Math.ceil(r); y++) for (let x = -Math.ceil(r); x <= Math.ceil(r); x++) if ((x * x) + (y * y) / (sy * sy) <= r * r + 0.3) put(B, cx + x, cy + y, ch); }
+function poly(B, pts, ch) {
+  const ys = pts.map((p) => p[1]), y0 = Math.floor(Math.min(...ys)), y1 = Math.ceil(Math.max(...ys));
+  for (let y = y0; y <= y1; y++) for (let x = 0; x < N; x++) {
+    let inside = false;
+    for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+      const [xi, yi] = pts[i], [xj, yj] = pts[j];
+      if ((yi > y + 0.5) !== (yj > y + 0.5) && x + 0.5 < ((xj - xi) * (y + 0.5 - yi)) / (yj - yi) + xi) inside = !inside;
+    }
+    if (inside) put(B, x, y, ch);
+  }
+}
+const hl = (B, x, y) => { if (x >= 0 && y >= 0 && x < N && y < N) B.hi.add(y * N + x); };
+const bez = (p0, c, p1, t) => [(1 - t) * (1 - t) * p0[0] + 2 * (1 - t) * t * c[0] + t * t * p1[0], (1 - t) * (1 - t) * p0[1] + 2 * (1 - t) * t * c[1] + t * t * p1[1]];
+
+/** 모양 그리기 (채널: M 재질 · W 나무 · G 금 · R 보석 · L 가죽 · C 옷감 · S 줄 · P 종이 · K 어두운 속) */
+function shape(B, it) {
+  const v = it.variant ?? 0;
   switch (it.slot) {
     case "weapon":
       switch (it.type) {
-        case "club": P(g, ink, 4, 4, 9, 9); for (let k = 0; k < 9; k++) P(g, k < 5 ? wood : "#b07a42", 4 + k, 13 - k, 2 + (k > 4 ? 1 : 0), 2); break;
-        case "sword": case "greatsword": for (let k = 0; k < 10; k++) P(g, m, 5 + k, 12 - k, 2, 2); P(g, "#ffd84a", 3, 11, 6, 2); P(g, wood, 2, 14, 3, 2); break;
-        case "dagger": for (let k = 0; k < 6; k++) P(g, m, 7 + k, 10 - k, 2, 2); P(g, "#ffd84a", 5, 10, 4, 2); P(g, wood, 4, 12, 2, 3); break;
-        case "bow": for (let k = 0; k < 12; k++) P(g, wood, 6 + Math.round(Math.sin((k / 11) * Math.PI) * 5), 3 + k, 2, 1); P(g, "#eee", 6, 3, 1, 12); break;
-        case "staff": for (let k = 0; k < 12; k++) P(g, wood, 4 + k, 15 - k, 1, 1); P(g, "#7ff0ff", 13, 1, 4, 4); P(g, "#fff", 14, 2, 1, 1); break;
-        case "mace": for (let k = 0; k < 7; k++) P(g, wood, 4 + k, 14 - k, 1, 1); P(g, m, 10, 3, 6, 6); P(g, "#fff", 11, 4, 2, 1); break;
-        case "hammer": for (let k = 0; k < 8; k++) P(g, wood, 4 + k, 15 - k, 1, 1); P(g, m, 9, 2, 8, 5); P(g, ink, 9, 7, 8, 1); break;
-        case "knuckle": P(g, m, 4, 6, 10, 6); P(g, ink, 4, 9, 10, 1); for (let k = 0; k < 4; k++) P(g, "#fff", 5 + k * 2, 6, 1, 1); break;
+        case "sword": line(B, 7, 10, 15, 2, "M", 2); for (let k = 0; k < 7; k++) hl(B, 9 + k, 7 - k); line(B, 3, 8, 8, 13, "G", 2); line(B, 5, 12, 2, 15, "W", 2); disc(B, 2, 15, 1, "G"); put(B, 6, 11, "R"); break;
+        case "greatsword": line(B, 7, 10, 16, 1, "M", 3); for (let k = 0; k < 8; k++) hl(B, 9 + k, 6 - k); put(B, 16, 0, "M"); line(B, 2, 7, 9, 14, "G", 2); line(B, 5, 12, 2, 15, "W", 2); disc(B, 1.5, 15.5, 1, "G"); put(B, 6, 11, "R"); put(B, 5, 10, "R"); break;
+        case "dagger": poly(B, [[7, 10], [13, 3], [14, 4], [8, 11]], "M"); line(B, 7, 10, 14, 3, "M", 2); hl(B, 11, 6); hl(B, 12, 5); line(B, 4, 8, 9, 13, "G", 1); line(B, 6, 11, 3, 14, "L", 2); disc(B, 3, 14, 1, "G"); put(B, 6, 11, "R"); break;
+        case "club": line(B, 3, 15, 10, 8, "W", 2); disc(B, 12, 6, 3.6, "W"); for (const [x, y] of [[10, 4], [14, 5], [12, 8], [13, 3], [9, 7]]) put(B, x, y, "M"); line(B, 6, 12, 7, 11, "L", 2); break;
+        case "mace": line(B, 3, 15, 10, 8, "W", 1); line(B, 4, 14, 6, 12, "L", 2); disc(B, 12, 6, 3, "M"); for (const [x, y] of [[12, 1], [16, 6], [12, 10], [8, 6], [15, 3], [9, 3]]) put(B, x, y, "M"); put(B, 12, 6, "R"); put(B, 11, 5, "R"); break;
+        case "hammer": line(B, 3, 15, 11, 7, "W", 2); line(B, 8, 3, 15, 10, "M", 4); line(B, 9, 5, 13, 9, "K", 1); put(B, 11, 7, "R"); hl(B, 8, 2); hl(B, 9, 2); line(B, 5, 13, 6, 12, "L", 2); break;
+        case "staff": line(B, 2, 16, 11, 7, "W", 2); line(B, 4, 14, 5, 13, "L", 2); for (let k = 0; k < 6; k++) { const a = -0.3 + k * 1.15; put(B, 13.5 + Math.cos(a) * 3.2, 4.5 + Math.sin(a) * 3.2, "G"); } disc(B, 13.5, 4.5, 2, "R"); hl(B, 13, 3); break;
+        case "bow": {
+          const p0 = [4, 16], c = [-1, -1], p1 = [16, 4];
+          for (let t = 0; t <= 1; t += 0.02) { const [x, y] = bez(p0, c, p1, t); put(B, x, y, "W"); put(B, x + 0.6, y + 0.6, "W"); }
+          line(B, 4, 16, 16, 4, "S", 1);
+          for (const t of [0.46, 0.5, 0.54]) { const [x, y] = bez(p0, c, p1, t); put(B, x, y, "L"); put(B, x + 1, y + 1, "L"); }
+          put(B, 4, 16, "G"); put(B, 16, 4, "G"); put(B, 3, 16, "G"); put(B, 16, 3, "G");
+          line(B, 6, 12, 12, 6, "W", 1); put(B, 13, 5, "M"); put(B, 14, 4, "M"); put(B, 5, 12, "R"); put(B, 6, 13, "R");
+          break;
+        }
+        case "knuckle":
+          // 건틀릿 주먹: 접힌 손가락 4개(마디 징) + 엄지 + 손목 보호대
+          poly(B, [[4, 5], [14, 5], [15, 7], [15, 11], [4, 12], [3, 8]], "M");
+          for (const x of [6.5, 9, 11.5]) line(B, x, 6, x, 10, "K", 1);
+          line(B, 4, 11, 11, 11, "M", 2);
+          for (const x of [5, 7.6, 10.2, 12.8]) { put(B, x, 4, "M"); hl(B, Math.round(x), 5); }
+          rect(B, 5, 13, 9, 4, "L"); line(B, 5, 13, 13, 13, "G", 1); put(B, 9, 15, "R"); put(B, 9, 8, "R");
+          break;
       }
       break;
     case "offhand":
-      if (it.type === "shield") { P(g, ink, 3, 2, 12, 14); P(g, it.ilvl <= 10 ? wood : m, 4, 3, 10, 12); P(g, "#666a78", 8, 3, 2, 12); P(g, "#fff8", 5, 4, 2, 4); }
-      else if (it.type === "quiver") { P(g, wood, 6, 5, 6, 11); for (let k = 0; k < 3; k++) P(g, "#e8e8e8", 6 + k * 2, 1, 1, 5); }
-      else if (it.type === "tome") { P(g, "#4a2a6a", 4, 3, 10, 12); P(g, "#ffd84a", 8, 7, 2, 3); P(g, "#e8dcc8", 13, 4, 1, 10); }
-      else { for (let k = 0; k < 6; k++) P(g, m, 7 + k, 10 - k, 2, 2); P(g, wood, 4, 12, 3, 3); }
+      if (it.type === "shield") { poly(B, [[3, 2], [15, 2], [15, 9], [9, 16.5], [3, 9]], "M"); poly(B, [[5, 4], [13, 4], [13, 9], [9, 14], [5, 9]], "C"); line(B, 9, 4, 9, 13, "G", 1); line(B, 5, 7, 13, 7, "G", 1); disc(B, 9, 7, 1.2, "R"); }
+      else if (it.type === "quiver") { line(B, 5, 15, 11, 6, "L", 4); line(B, 4, 13, 9, 6, "G", 1); for (const [x, y] of [[9, 2], [12, 3], [14, 5]]) { line(B, x, y, x - 2, y + 4, "W", 1); put(B, x, y, "C"); put(B, x + 1, y - 1, "C"); put(B, x - 1, y - 1, "S"); } put(B, 8, 11, "R"); }
+      else if (it.type === "tome") { rect(B, 3, 3, 11, 13, "C"); rect(B, 13, 4, 2, 11, "P"); for (const [x, y] of [[3, 3], [12, 3], [3, 15], [12, 15]]) { put(B, x, y, "G"); } line(B, 5, 3, 5, 15, "G", 1); disc(B, 9, 9, 2, "G"); disc(B, 9, 9, 1, "R"); }
+      else { poly(B, [[6, 9], [13, 2], [12, 6], [8, 11]], "M"); line(B, 7, 10, 13, 3, "M", 2); hl(B, 10, 5); hl(B, 11, 4); line(B, 4, 8, 9, 13, "G", 1); line(B, 6, 11, 3, 14, "L", 2); disc(B, 3, 14, 1, "G"); put(B, 6, 11, "R"); }
       break;
-    case "helmet": P(g, ink, 3, 4, 12, 10); P(g, m, 4, 5, 10, 8); P(g, ink, 6, 9, 6, 1); P(g, "#fff8", 5, 6, 3, 1); break;
-    case "armor": P(g, ink, 3, 3, 12, 13); P(g, m, 4, 4, 10, 11); P(g, ink, 8, 4, 2, 11); P(g, "#fff6", 5, 5, 2, 4); P(g, ink, 3, 3, 3, 2); P(g, ink, 12, 3, 3, 2); break;
-    case "trinket": P(g, "#ffd84a", 5, 4, 8, 1); P(g, "#ffd84a", 4, 5, 1, 6); P(g, "#ffd84a", 13, 5, 1, 6); P(g, "#ffd84a", 5, 11, 8, 1); P(g, r, 7, 7, 4, 3); break;
+    case "helmet":
+      if (v === 0) { poly(B, [[9, 0.5], [14, 4], [15.5, 10], [15, 16], [3, 16], [2.5, 10], [4, 4]], "C"); disc(B, 9, 10.5, 3.3, "K", 1.15); line(B, 5, 15, 13, 15, "M", 1); put(B, 9, 15, "R"); put(B, 9, 3, "M"); put(B, 10, 2, "C"); }
+      else if (v === 1) { disc(B, 9, 9, 6, "M"); rect(B, 3, 9, 13, 5, "M"); rect(B, 5, 10, 9, 2, "K"); rect(B, 8, 10, 2, 5, "M"); line(B, 9, 2, 9, 9, "G", 1); poly(B, [[9, 1], [14, 0], [12, 3]], "C"); put(B, 9, 5, "R"); }
+      else if (v === 2) { disc(B, 9, 8, 4.6, "M"); rect(B, 1, 10, 16, 2, "M"); rect(B, 4, 12, 10, 3, "K"); line(B, 2, 10, 15, 10, "G", 1); put(B, 9, 6, "R"); }
+      else { rect(B, 4, 5, 10, 11, "M"); disc(B, 9, 5.5, 5, "M", 0.7); rect(B, 5, 8, 8, 1, "K"); rect(B, 8, 8, 2, 5, "K"); for (const [x, y] of [[5, 12], [6, 14], [12, 14], [13, 12]]) put(B, x, y, "K"); line(B, 9, 2, 9, 6, "G", 1); put(B, 9, 2, "R"); }
+      break;
+    case "armor":
+      if (v === 0) { poly(B, [[4, 3], [14, 3], [16, 6], [14, 8], [14, 16], [4, 16], [4, 8], [2, 6]], "L"); line(B, 9, 4, 9, 15, "K", 1); for (let y = 6; y < 15; y += 2) { put(B, 8, y, "S"); put(B, 10, y, "S"); } rect(B, 4, 12, 11, 1, "M"); put(B, 9, 12, "R"); }
+      else if (v === 1) { poly(B, [[4, 3], [14, 3], [16, 7], [14, 9], [14, 16], [4, 16], [4, 9], [2, 7]], "M"); for (let y = 4; y < 16; y++) for (let x = 3; x < 16; x++) if ((x + y) % 2 === 0 && B.c[y * N + x] === "M") B.c[y * N + x] = "K"; rect(B, 4, 12, 11, 1, "L"); put(B, 9, 12, "G"); rect(B, 7, 3, 5, 2, "C"); put(B, 9, 4, "R"); }
+      else if (v === 2) { poly(B, [[5, 4], [13, 4], [14, 16], [4, 16]], "M"); disc(B, 3.5, 5.5, 2.6, "M"); disc(B, 14.5, 5.5, 2.6, "M"); line(B, 5, 9, 13, 9, "K", 1); line(B, 5, 12, 13, 12, "K", 1); line(B, 9, 4, 9, 15, "G", 1); put(B, 3, 5, "G"); put(B, 15, 5, "G"); disc(B, 9, 7, 1, "R"); }
+      else { poly(B, [[5, 2], [13, 2], [16, 6], [14, 8], [15, 16], [3, 16], [4, 8], [2, 6]], "C"); poly(B, [[7, 2], [11, 2], [9, 6]], "K"); rect(B, 4, 11, 11, 2, "L"); put(B, 9, 11, "G"); put(B, 9, 12, "G"); line(B, 6, 7, 6, 10, "M", 1); line(B, 12, 7, 12, 10, "M", 1); put(B, 9, 8, "R"); }
+      break;
+    case "trinket":
+      if (v === 0) { for (let k = 0; k < 40; k++) { const a = (k / 40) * Math.PI * 2; put(B, 9 + Math.cos(a) * 5, 11 + Math.sin(a) * 3.4, "G"); put(B, 9 + Math.cos(a) * 4.4, 11.4 + Math.sin(a) * 3, "G"); } poly(B, [[6, 6], [12, 6], [13, 4], [9, 1], [5, 4]], "M"); disc(B, 9, 4, 2.2, "R"); hl(B, 8, 3); }
+      else if (v === 1) { for (let k = 0; k <= 20; k++) { const t = k / 20; const [x, y] = bez([2, 2], [9, 14], [16, 2], t); put(B, x, y, k % 2 ? "G" : "M"); } poly(B, [[9, 9], [12, 12], [9, 17], [6, 12]], "M"); disc(B, 9, 12.5, 1.7, "R"); put(B, 9, 9, "G"); }
+      else if (v === 2) { poly(B, [[5, 4], [13, 4], [14, 15], [4, 15]], "P"); line(B, 9, 0, 9, 4, "S", 1); for (const [x, y] of [[7, 7], [9, 6], [11, 7], [9, 9], [7, 11], [11, 11], [9, 13]]) put(B, x, y, "C"); rect(B, 4, 4, 10, 1, "M"); disc(B, 9, 10, 1, "R"); }
+      else { for (const cx of [5, 13]) { disc(B, cx, 2.6, 1.6, "G"); put(B, cx, 2.6, "K"); line(B, cx, 4.5, cx, 6.5, "G", 1); poly(B, [[cx, 6.6], [cx + 2.6, 10.4], [cx, 15.2], [cx - 2.6, 10.4]], "R"); put(B, cx, 6.8, "M"); hl(B, cx - 1, 9); } }
+      break;
   }
-  // 등급 보석과 상단 하이라이트. 작은 아이콘에서도 희귀도와 유물 여부가 구분된다.
-  P(g, edge, 14, 2, 2, 2);
-  P(g, "#ffffff", 14, 2, 1, 1);
-  if (it.relic) { P(g, "#ffffff", 13, 5, 1, 1); P(g, edge, 14, 5, 2, 1); }
+}
+
+function hexToRgb(c) { const n = parseInt(c.slice(1), 16); return [n >> 16, (n >> 8) & 255, n & 255]; }
+const mix = (a, b, k) => { const A = hexToRgb(a), Bc = hexToRgb(b); return `rgb(${Math.round(A[0] + (Bc[0] - A[0]) * k)},${Math.round(A[1] + (Bc[1] - A[1]) * k)},${Math.round(A[2] + (Bc[2] - A[2]) * k)})`; };
+
+export function matIndex(it) {
+  if (Number.isInteger(it.mat) && it.mat >= 0 && it.mat < MAT_RAMP.length) return it.mat;
+  return Math.max(0, Math.min(MAT_RAMP.length - 1, Math.floor(((it.ilvl ?? 1) - 1) / 10)));
+}
+
+export function itemIcon(it) {
+  const mi = matIndex(it);
+  const key = `${it.slot}|${it.type}|${it.variant}|${it.rarity}|${mi}|${it.relic ?? ""}|${it.relicColor ?? ""}`;
+  if (cache.has(key)) return cache.get(key);
+  const cv = document.createElement("canvas");
+  cv.width = N; cv.height = N;
+  const g = cv.getContext("2d");
+  const B = makeBuf();
+  shape(B, it);
+  const gem = GEM[it.rarity] ?? null;
+  const RAMP = { M: MAT_RAMP[mi], W: WOOD, G: GOLD, L: LEATHER, S: STRING, P: PAPER, K: CORE, C: CLOTH[it.rarity] ?? CLOTH.일반, R: gem ?? MAT_RAMP[mi] };
+  const at = (x, y) => (x < 0 || y < 0 || x >= N || y >= N ? null : B.c[y * N + x]);
+  // 오라 (전설·신화·제2 던전 유물): 외곽선 바깥으로 은은한 빛. 유물은 유물 고유 색
+  const aura = it.relic ? it.relicColor ?? "#ff75d8" : AURA[it.rarity];
+  if (aura) {
+    // 부드러운 빛: 외곽선 바깥으로 갈수록 옅게 (대각선 방향은 더 옅게)
+    for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+      if (at(x, y)) continue;
+      let d = 9;
+      for (let dy = -3; dy <= 3; dy++) for (let dx = -3; dx <= 3; dx++) if (at(x + dx, y + dy)) d = Math.min(d, Math.hypot(dx, dy));
+      if (d > 1.05 && d < 3.2) { g.globalAlpha = d < 2.1 ? 0.24 : 0.09; P(g, aura, x, y); }
+    }
+    g.globalAlpha = 1;
+  }
+  // 외곽선: 바로 옆 재질의 가장 어두운 색을 더 어둡게 (선택적 외곽선). 전설·신화·각인은 외곽선에 빛 색을 섞음
+  for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+    if (at(x, y)) continue;
+    const nb = at(x, y - 1) ?? at(x - 1, y) ?? at(x + 1, y) ?? at(x, y + 1);
+    if (nb) { const o = mix(RAMP[nb][3], "#07050c", nb === "K" ? 0.3 : 0.62); P(g, o, x, y); if (aura) { g.globalAlpha = 0.3; P(g, aura, x, y); g.globalAlpha = 1; } }
+  }
+  // 칠하기: 빛은 왼쪽 위에서. 위·왼쪽이 비면 밝게, 아래·오른쪽이 비면 어둡게
+  for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+    const ch = at(x, y);
+    if (!ch) continue;
+    const same = (dx, dy) => at(x + dx, y + dy) === ch;
+    let tone = 2;
+    const lit = !same(0, -1) || !same(-1, 0), dark = !same(0, 1) || !same(1, 0);
+    if (lit && !dark) tone = !same(-1, -1) && !same(0, -1) && !same(-1, 0) ? 0 : 1;
+    else if (dark && !lit) tone = 3;
+    else if (lit && dark) tone = 1;
+    else tone = (x + y) % 7 === 0 ? 1 : 2;
+    if (ch === "R" && gem) tone = Math.min(tone, 2) === 0 ? 0 : tone === 3 ? 2 : 1; // 보석은 밝게
+    if (B.hi.has(y * N + x)) tone = 0;
+    P(g, RAMP[ch][tone], x, y);
+  }
+  // 보석 반짝임 (영웅 이상) · 신화 별빛
+  if (gem && it.rarity !== "희귀") for (let i = 0; i < N * N; i++) if (B.c[i] === "R" && B.c[i - N] !== "R" && B.c[i - 1] !== "R") { P(g, "#ffffff", i % N, (i / N) | 0); break; }
+  if (it.rarity === "신화") for (const [x, y] of [[1, 1], [16, 13], [2, 9]]) if (!at(x, y)) { P(g, "#ffd0d8", x, y); g.globalAlpha = 0.5; P(g, "#ff8a9a", x - 1, y); P(g, "#ff8a9a", x + 1, y); P(g, "#ff8a9a", x, y - 1); P(g, "#ff8a9a", x, y + 1); g.globalAlpha = 1; }
+  // 제2 던전 유물 표시: 오른쪽 아래 작은 마름모 (유물 색)
+  if (it.relic) { const rc = it.relicColor ?? "#ff75d8"; P(g, "#0a0612", 14, 15, 3, 1); P(g, "#0a0612", 15, 14, 1, 3); P(g, "#ffffff", 15, 15); g.globalAlpha = 0.85; P(g, rc, 14, 15); P(g, rc, 16, 15); P(g, rc, 15, 14); P(g, rc, 15, 16); g.globalAlpha = 1; }
   cache.set(key, cv);
   return cv;
 }
