@@ -153,9 +153,12 @@ export class World {
   tryResume(s) {
     const r = s.char.resume;
     delete s.char.resume;
+    // 저장 기록이 없거나 손상된 경우 속성을 읽기 전에 종료한다.
+    if (!r || typeof r !== "object" || !Number.isInteger(r.floor) || !Number.isFinite(r.at)) return false;
     const dungeon = r.dungeon === 2 ? 2 : 1;
     const maxFloor = dungeon === 2 ? DUNGEON2_MAX_FLOOR : 100;
-    if (!r || !Number.isInteger(r.floor) || r.floor < 1 || r.floor > maxFloor || !(Date.now() - r.at < 6 * 3600_000)) return false; // 이상하거나 오래된 기록은 무시
+    const age = Date.now() - r.at;
+    if (r.floor < 1 || r.floor > maxFloor || age < 0 || age >= 6 * 3600_000) return false; // 이상하거나 오래된 기록은 무시
     if (dungeon === 2 && !s.char.cleared) return false;
     const ids = [...new Set(r.party ?? [s.userId])].sort((a, b) => a - b);
     const key = `${dungeon}|${r.kind}|${r.floor}|${ids.join(",")}`;
@@ -479,6 +482,7 @@ export class World {
           if (!g.char.cleared2) this.broadcastSys(`🏆 ${g.name}님이 심연의 균열 30층을 정복했어요!`, "legend");
           g.char.cleared2 = true;
           this.toTown(g, "심연의 감시자를 쓰러뜨렸어요! 심연의 균열을 정복했어요!");
+          this.sendChar(g);
         } else {
           if (!g.char.cleared) this.broadcastSys(`🏆 ${g.name}님이 던전 100층을 정복했어요!`, "legend");
           g.char.cleared = true;
