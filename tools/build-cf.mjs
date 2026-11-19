@@ -27,7 +27,8 @@ for (const name of ["main", "gm"]) {
     write: false, legalComments: "none", sourcemap: false, charset: "utf8", logLevel: "error",
     plugins: [{ name: "paths", setup(b) {
       b.onResolve({ filter: /^\/shared\// }, (a) => ({ path: join(root, a.path) }));
-      b.onResolve({ filter: /^\/vendor\// }, (a) => ({ path: a.path, external: true }));
+      // 이펙트 엔진(pixelfx)은 묶지 않고 원래 주소로: 나중에 불러오는 이펙트 파일들과 같은 엔진 하나를 같이 써야 함
+      b.onResolve({ filter: /vendor\/pixelfx\// }, (a) => ({ path: "/vendor/pixelfx/" + a.path.split("vendor/pixelfx/")[1], external: true }));
     } }],
   });
   const code = r.outputFiles[0].text;

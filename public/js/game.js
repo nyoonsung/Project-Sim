@@ -10,6 +10,7 @@ import { TICK_DT, PLAYER_RADIUS, SLOT_KEYS, VIEW_W, VIEW_H, ITEMS } from "/share
 import { SKILLS } from "/shared/skills.js";
 import { zoneOf, ZONES } from "/shared/zones.js";
 import { TileMap } from "./render/tiles.js";
+import { makeClock } from "./netclock.js";
 
 export const G = {
   net: null, ui: null, renderer: null,
@@ -84,6 +85,7 @@ function onMap(m) {
   G.localDash = null; G.chestOpened = new Set(); G.lootFly = [];
   G.pred.x = G.pred.px = G.local.x = m.start[0]; G.pred.y = G.pred.py = G.local.y = m.start[1];
   G.pending.length = 0;
+  netClock.reset(); // 방이 바뀌면 틱 번호도 새로 시작
   G.renderer?.onMap();
   G.ui.onMap(m);
 }
@@ -99,17 +101,22 @@ function addEnt(d) {
   if (d.id === G.you) e.self = true;
 }
 
+// 다른 유닛은 서버 시각 기준으로 이어 그림 (자세한 설명은 netclock.js)
+export const netClock = makeClock(TICK_DT, now);
+
 function onSnapshot(m) {
   const t = now();
+  const st = Number.isFinite(m.k) ? netClock.onPacket(m.k, t) : t;
   for (const a of m.e) {
     const [id, x, y, f, hp, fl] = a;
     const e = G.ents.get(id);
     if (!e) continue;
     const moved = Math.hypot(x - e.x, y - e.y) > 0.5;
     // 한동안 안 바뀌어 안 왔던 유닛: 직전 위치를 한 틱 전에 찍어 두어 출발이 부드럽게
-    if (e.buf.length && t - e.buf[e.buf.length - 1][0] > 0.12) e.buf.push([t - 0.05, e.x, e.y]);
+    if (e.buf.length && st - e.buf[e.buf.length - 1][0] > 0.12) e.buf.push([st - TICK_DT, e.x, e.y]);
     e.x = x; e.y = y; e.facing = f / 100; e.hp = hp / 1000; e.fl = fl;
-    e.buf.push([t, x, y]);
+    if (e.buf.length && st <= e.buf[e.buf.length - 1][0]) e.buf.pop(); // 같은 틱이 두 번 오면 새 값으로
+    e.buf.push([st, x, y]);
     if (e.buf.length > 12) e.buf.shift();
     if (moved) e.movedAt = t;
     e.seenAt = t;

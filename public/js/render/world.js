@@ -1,5 +1,5 @@
 // 월드 렌더러: 타일 → 바닥 표시(예고·구역) → y정렬 유닛/오브젝트 → 투사체 → 이펙트 → 조명 → 날씨 → 머리 위 UI
-import { G, localStep, moveDir } from "../game.js";
+import { G, localStep, moveDir, netClock } from "../game.js";
 import { titleDesign } from "/shared/titles.js";
 import { tickQuality, preset } from "../quality.js";
 import { frame as dtFrame, drawFoot as drawDTFoot } from "./dt2.js";
@@ -233,7 +233,7 @@ export class Renderer {
     localStep(dt);
     tickFeel(dt);
     tickSkillFx(dt);
-    const rt = t - 0.1;
+    const rt = netClock.renderTime(dt, t);
     for (const e of G.ents.values()) {
       if (e.id === G.you) { e.rx = G.local.x; e.ry = G.local.y; continue; }
       const b = e.buf;

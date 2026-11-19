@@ -66,7 +66,9 @@ export class World {
       acc += n - last; last = n;
       if (acc > STEP * 5) acc = STEP * 2; // 너무 밀리면(일시 정지 등) 버림
       while (acc >= STEP) { this.tick(); acc -= STEP; }
-      if (Date.now() >= saveAt) { saveAt = Date.now() + 10_000; this.saveAll(); } // 10초마다 (서버가 갑자기 재시작돼도 잃는 게 거의 없게)
+      // 정기 저장: 10초마다 모두를 한꺼번에 저장하면 그 순간 서버가 잠깐 멈칫(렉)함
+      //  → 사람마다 저장 차례를 10초 안에 고르게 흩어서 틱마다 조금씩 (잃는 양은 그대로 최대 10초)
+      if (Date.now() >= saveAt) { saveAt = Date.now() + 250; this.saveSome(); }
       if (this.sessions.size) this.emptySince = 0;
       else if (!this.emptySince) this.emptySince = Date.now();
       else if (Date.now() - this.emptySince > 60_000) { clearInterval(id); this.loop = null; }
@@ -202,18 +204,24 @@ export class World {
     s.saveTimer = setTimeout(() => { s.saveTimer = null; if (this.sessions.get(s.userId) === s && s.dirty) this.save(s); }, 600);
   }
   save(s) {
-    if (s.deleted) return;
-    s.lastSaveAt = Date.now(); // 관리자가 지운 계정: 다시 저장하지 않음
+    if (s.deleted) return; // 관리자가 지운 계정: 다시 저장하지 않음
     try { Q.saveChar.run(s.userId, JSON.stringify(s.char), s.char.level, s.char.cls, s.char.best, Date.now()); s.dirty = false; } catch (e) { console.error("save", e); }
+  }
+  /** 이번 0.25초 차례인 사람만 저장 (한 사람당 10초에 한 번) */
+  saveSome() {
+    const slot = (this.saveSlot = ((this.saveSlot ?? 0) + 1) % 40);
+    for (const s of this.sessions.values()) if (s.userId % 40 === slot) this.saveOne(s);
+  }
+  saveOne(s, t = Date.now()) {
+    s.char.playtime += Math.round((t - s.joinedAt) / 1000); s.joinedAt = t;
+    const key = `${s.char.level}|${s.char.xp}|${s.char.gold}|${s.char.best}|${s.char.kills}|${s.char.deaths}|${JSON.stringify(s.char.cons)}|${s.char.inv?.length}`;
+    if (s.dirty || key !== s.saveKey || t - (s.savedAt ?? 0) > 300_000) { this.save(s); s.saveKey = key; s.savedAt = t; }
   }
   saveAll() {
     const t = Date.now();
-    for (const s of this.sessions.values()) {
-      s.char.playtime += Math.round((t - s.joinedAt) / 1000); s.joinedAt = t;
-      const key = `${s.char.level}|${s.char.xp}|${s.char.gold}|${s.char.best}|${s.char.kills}|${s.char.deaths}|${JSON.stringify(s.char.cons)}|${s.char.inv?.length}`;
-      if (s.dirty || key !== s.saveKey || t - (s.savedAt ?? 0) > 300_000) { this.save(s); s.saveKey = key; s.savedAt = t; }
-    }
+    for (const s of this.sessions.values()) this.saveOne(s, t);
   }
+
 
   publicChar(s) {
     const c = s.char;
