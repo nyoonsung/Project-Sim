@@ -208,7 +208,7 @@ export function updateZoneLabel() {
   const z = $("#zone-label");
   if (G.kind === "town" || G.mapKind === "town") z.textContent = "모험가 마을";
   else if (G.mapKind === "safe") z.textContent = `${G.floor}층 안전 구역 · 전직소`;
-  else z.textContent = `${G.floor}층 · ${G.zone?.name ?? ""}`;
+  else z.textContent = `제${G.dungeon === 2 ? "2" : "1"} 던전 · ${G.floor}층 · ${G.zone?.name ?? ""}`;
 }
 
 let partyKey = "";
