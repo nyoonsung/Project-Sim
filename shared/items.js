@@ -232,8 +232,8 @@ const ABYSS_RELICS = [
   { id: "rift-edge", name: "균열 절단자", color: "#ff647d", slot: "weapon", base: { dmg: 0.14, crit: 0.025 } },
   { id: "null-aegis", name: "무효의 방벽", color: "#65d9e5", slot: "offhand", base: { def: 34, hp: 190, dr: 0.045 } },
   { id: "eclipse-visor", name: "일식의 면갑", color: "#c18aff", slot: "helmet", base: { def: 24, hp: 165, critDmg: 0.09 } },
-  { id: "chrono-mantle", name: "역행의 외투", color: "#65d9e5", slot: "armor", base: { def: 48, hp: 260, move: 0.035, dr: 0.035 } },
-  { id: "star-heart", name: "별먹는 심장", color: "#d0a0ff", slot: "trinket", base: { hp: 180, mp: 110, atkPct: 0.07, crit: 0.025 } },
+  { id: "chrono-mantle", name: "무음의 망토", color: "#65d9e5", slot: "armor", base: { def: 48, hp: 260, move: 0.035, dr: 0.035 } },
+  { id: "star-heart", name: "심연의 인장", color: "#d0a0ff", slot: "trinket", base: { hp: 180, mp: 110, atkPct: 0.07, crit: 0.025 } },
 ];
 export function rollAbyssRelic(R, { ilvl, cls = "adventurer" } = {}) {
   const gear = CLASS_GEAR[cls] ?? CLASS_GEAR.adventurer;
