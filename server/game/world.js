@@ -458,6 +458,11 @@ export class World {
   usePortal(room, id) {
     const group = [...room.players.values()].map((p) => p.session);
     if (!group.length) return;
+    if (room.kind === "town" && (id === "dungeon" || id === "dungeon2")) {
+      const leader = group.find((g) => this.partyOf(g)?.leader === g.userId) ?? group[0];
+      this.enterDungeon(leader, 1, id === "dungeon2" ? 2 : 1);
+      return;
+    }
     const dungeon = room.dungeon === 2 ? 2 : 1;
     if (id === "exit" || id === "next") {
       const f = room.floor + 1;
