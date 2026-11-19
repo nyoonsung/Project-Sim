@@ -32,6 +32,8 @@ function grantReserved(c, username) {
     c.granted.push(g.key);
   }
 }
+const ITEM_OPS = new Set(["equip", "unequip", "sell", "sellMany", "repair", "enchant", "enhance", "buy", "lock", "class", "stat", "resetStats", "skills", "title", "rename"]);
+
 export class World {
   constructor() {
     this.sessions = new Map(); // userId → session
@@ -51,14 +53,14 @@ export class World {
   startLoop() {
     if (this.loop) return;
     const STEP = 1000 / TICK_RATE;
-    let last = performance.now(), acc = 0, saveAt = Date.now() + 30_000;
+    let last = performance.now(), acc = 0, saveAt = Date.now() + 10_000;
     this.emptySince = 0;
     const id = setInterval(() => {
       const n = performance.now();
       acc += n - last; last = n;
       if (acc > STEP * 5) acc = STEP * 2; // 너무 밀리면(일시 정지 등) 버림
       while (acc >= STEP) { this.tick(); acc -= STEP; }
-      if (Date.now() >= saveAt) { saveAt = Date.now() + 30_000; this.saveAll(); }
+      if (Date.now() >= saveAt) { saveAt = Date.now() + 10_000; this.saveAll(); } // 10초마다 (서버가 갑자기 재시작돼도 잃는 게 거의 없게)
       if (this.sessions.size) this.emptySince = 0;
       else if (!this.emptySince) this.emptySince = Date.now();
       else if (Date.now() - this.emptySince > 60_000) { clearInterval(id); this.loop = null; }
@@ -274,6 +276,8 @@ export class World {
       case "ping": s.send({ t: "pong", c: m.c, s: Date.now() }); break;
       case "dummy": break;
     }
+    // 아이템·장비가 바뀌는 행동은 바로 저장 (업데이트 배포 등으로 서버가 재시작돼도 신화 장착 같은 게 되돌아가지 않게)
+    if (ITEM_OPS.has(m.t) && s.dirty) this.save(s);
   }
 
   nearNpc(s, id, dist = 90) {
@@ -597,6 +601,7 @@ export class World {
     }
     const it = { ...item, uid: c.nextUid++ };
     c.inv.push(it);
+    this.save(s); // 주운 장비는 바로 저장
     if (["전설", "신화"].includes(it.rarity)) itemLog(s.userId, "drop", { name: it.name, rarity: it.rarity, ilvl: it.ilvl });
     s.send({ t: "ev", list: [{ e: "got", item: it }] });
     this.sendChar(s);

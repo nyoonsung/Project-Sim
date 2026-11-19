@@ -28,6 +28,7 @@ class Bot {
       this.ws.on("message", (d) => {
         const m = JSON.parse(d);
         if (m.t === "map") this.map = m;
+        if (m.t === "hello" || m.t === "char") this.char = m.char;
         if (m.t === "party") this.party = m.members;
         if (m.t === "invite") this.inv = m.from;
         if (m.t === "ev") for (const e of m.list) if (e.text) this.notes.push(e.text);
@@ -64,6 +65,19 @@ try {
   ok(B.party?.length === 2 && A.party?.length === 2, `파티 다시 묶임 (${B.party?.length})`);
   C = await new Bot(cc).connect(); await sleep(500);
   ok(where(C) === "dungeon:1" && C.party == null, `혼자였던 C는 혼자 복귀 (${where(C)})`);
+  // 던전에서 신화 장착 직후 서버가 갑자기 꺼져도 장착이 유지되는지 (예전엔 최대 30초치 변화가 날아감)
+  const gm = (await api("/api/admin/login", { key: "test-admin-key-123" })).cookie;
+  const aid = (await api("/api/gm/players?q=복귀가", null, gm)).j.list[0].id;
+  await api(`/api/gm/player/${aid}/give`, { rarity: "신화", ilvl: 1, slot: "weapon" }, gm); await sleep(300);
+  const my = A.char.inv.find((i) => i.rarity === "신화");
+  A.send({ t: "equip", uid: my.uid }); await sleep(150);
+  ok(A.char.equip.weapon?.rarity === "신화", "던전에서 신화 장착");
+  srv.kill("SIGKILL"); await sleep(400); await start();
+  A = await new Bot(ca).connect(); await sleep(500);
+  ok(A.char.equip.weapon?.rarity === "신화" && A.char.equip.weapon?.name === my.name, `재시작 직후에도 신화 장착 유지 (${A.char.equip.weapon?.name})`);
+  A.send({ t: "town" }); await sleep(400);
+  ok(A.char.equip.weapon?.rarity === "신화", "마을로 돌아가도 신화 그대로");
+  B = await new Bot(cb).connect(); C = await new Bot(cc).connect(); await sleep(400);
   // 마을로 돌아간 뒤 재시작하면 마을에서 시작
   C.send({ t: "town" }); await sleep(400);
   srv.kill("SIGKILL"); await sleep(500); await start();
