@@ -39,8 +39,11 @@ for (const floor of [1, 5, 10, 15, 20, 25, 30]) {
   assert.ok(map.objects?.length);
   assert.ok(map.start?.length === 2);
   if (floorKind(floor) === "normal") {
-    assert.ok(map.spawns.length > 0, `floor ${floor} has no spawns`);
-    for (const s of map.spawns) assert.ok(MONSTERS[s.id], `unknown spawn ${s.id}`);
+    // 일반층은 초기 고정 스폰이 아니라 웨이브 지점에서 순차 소환된다.
+    assert.ok(map.waves && map.waves.total > 0, `floor ${floor} has no waves`);
+    assert.ok(map.waves.points.length > 0, `floor ${floor} has no wave spawn points`);
+    assert.ok(map.waves.pool.length > 0, `floor ${floor} has no monster pool`);
+    for (const id of map.waves.pool) assert.ok(MONSTERS[id], `unknown wave monster ${id}`);
   } else {
     assert.ok(BOSSES[map.boss], `unknown boss ${map.boss}`);
   }
