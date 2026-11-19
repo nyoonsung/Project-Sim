@@ -4,6 +4,7 @@ import {
   bossStats, floorKind, floorScale, monsterStats, zoneOf,
 } from "../shared/zones.js";
 import { makeFloor, mapPayload, makeTown, safeZone } from "../server/game/dungeon.js";
+import { levelGapXpMultiplier } from "../server/game/room.js";
 
 const ok = (condition, label) => {
   assert.ok(condition, label);
@@ -19,6 +20,16 @@ for (const floor of [1, 5, 10, 20, 30]) {
   assert.equal(two.speed, one.speed);
 }
 ok(true, "제2 던전 HP·공격력 5배 / 이동 속도 동일");
+
+// 제2 던전에서는 캐릭터 레벨이 층보다 아무리 높아도 레벨 차이 경험치 페널티가 없다.
+// 제1 던전은 기존 감소 규칙을 그대로 유지한다.
+for (const floor of [1, 10, 30]) {
+  assert.equal(levelGapXpMultiplier(250, floor, 2), 1);
+  assert.equal(levelGapXpMultiplier(floor + 5, floor, 1), 1);
+  assert.ok(levelGapXpMultiplier(floor + 6, floor, 1) < 1);
+}
+assert.equal(levelGapXpMultiplier(250, 30, 2), 1);
+ok(true, "제2 던전 레벨 차이 경험치 감소 없음 / 제1 던전 기존 규칙 유지");
 
 // 세 구역, 층별 몬스터 정의, 보스 정의 확인.
 assert.equal(DUNGEON2_MAX_FLOOR, 30);
