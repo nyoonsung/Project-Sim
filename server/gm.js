@@ -215,9 +215,10 @@ export async function handleGm(req, res, path, { readJson, send, isAdmin, ip, ur
       return send(res, 200, { ok });
     }
     case "warp": {
-      if (!int(b.floor, 1, 100)) return send(res, 400, { error: "층은 1~100이에요." });
-      const ok = world.gmWarp(id, b.floor);
-      audit("warp", target, { floor: b.floor });
+      const dg = b.dungeon === 2 ? 2 : 1;
+      if (!int(b.floor, 1, dg === 2 ? 30 : 100)) return send(res, 400, { error: dg === 2 ? "제2 던전은 1~30층이에요." : "층은 1~100이에요." });
+      const ok = world.gmWarp(id, b.floor, dg);
+      audit("warp", target, { floor: b.floor, dungeon: dg });
       return send(res, ok ? 200 : 400, ok ? { ok: true } : { error: "접속 중인 플레이어만 이동시킬 수 있어요." });
     }
   }

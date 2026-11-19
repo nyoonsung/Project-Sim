@@ -47,6 +47,19 @@ function signCanvas(text, color) {
 const BULBS = ["#ff5a7a", "#ffd35a", "#5ad8ff", "#a0ff6a", "#ff8af0", "#ffb04a"];
 
 /** y 정렬 목록에서 호출: 마을 오브젝트 하나 그리기. 그렸으면 true */
+let archTint = null;
+function tintedArch(c) {
+  if (archTint) return archTint;
+  const cv = document.createElement("canvas"); cv.width = c.width; cv.height = c.height;
+  const g = cv.getContext("2d");
+  g.drawImage(c, 0, 0);
+  // 돌 무늬는 살리고 색만 어두운 자줏빛 붉은 돌로 (곱하기)
+  g.globalCompositeOperation = "multiply";
+  g.fillStyle = "#b46a9a"; g.fillRect(0, 0, cv.width, cv.height);
+  g.globalCompositeOperation = "destination-in";
+  g.drawImage(c, 0, 0);
+  return (archTint = cv);
+}
 export function drawTownObject(ctx, o, x, y, t) {
   switch (o.kind) {
     case "prop": {
@@ -54,7 +67,18 @@ export function drawTownObject(ctx, o, x, y, t) {
       if (!c) return true;
       if (!o.flat && !o.small) shadow(ctx, x, y - 2, c.width * 0.9, 8, 0.3);
       else if (o.small && !o.flat) shadow(ctx, x, y - 1, 11, 4, 0.25);
-      draw(ctx, o.s, x, y);
+      if (o.tint === "d2") {
+        // 제2 던전 아치: 같은 돌 아치를 붉은 보랏빛으로 물들이고 별빛 룬을 박음
+        const tc = tintedArch(c);
+        const w = c.width * S, hh = c.height * S;
+        ctx.drawImage(tc, Math.round(x - w / 2), Math.round(y - hh), w, hh);
+        for (let k = 0; k < 5; k++) {
+          const a = t * 1.6 + k * 1.256, px = x - 16 + Math.cos(a) * 26, py = y - hh * 0.62 + Math.sin(a) * 14;
+          ctx.fillStyle = k % 2 ? "#ffd0e8" : "#ff5a9a"; ctx.globalAlpha = 0.6 + Math.sin(t * 5 + k) * 0.3;
+          ctx.fillRect(Math.round(px), Math.round(py), 2, 2);
+        }
+        ctx.globalAlpha = 1;
+      } else draw(ctx, o.s, x, y);
       if (o.mill) {
         const f = Math.floor(t * 6) % 4;
         draw(ctx, "mill_f" + f, x, y - c.height * S + 34, 1.6);

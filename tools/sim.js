@@ -37,15 +37,15 @@ function makeChar(cls, L, gearRarity = "희귀") {
 
 const stubWorld = { pickup: () => true, onBossCleared() {}, usePortal() {}, partyFailed() {}, toTown() {} };
 
-export function simulate(cls, L, F, { maxT = 300, rarity = "희귀", log = false } = {}) {
+export function simulate(cls, L, F, { maxT = 300, rarity = "희귀", log = false, dungeon = 1, immortal = false } = {}) {
   const ch = makeChar(cls, L, rarity);
   const session = { userId: 1, role: "player", char: ch, send() {}, notice() {}, sendMe() {}, meDirty: false };
   const u = makePlayerUnit(session);
   session.unit = u;
   refreshStats(u);
   u.hp = u.maxHp;
-  const map = makeFloor(F, 12345 + F, 1);
-  const room = new Room(stubWorld, { id: "sim", kind: "dungeon", floor: F, map, partySize: 1 });
+  const map = makeFloor(F, 12345 + F, 1, dungeon);
+  const room = new Room(stubWorld, { id: "sim", kind: "dungeon", floor: F, dungeon, map, partySize: 1 });
   room.addPlayer(u);
   let dmgTaken = 0, potions = 5, t = 0, xp0 = ch.xp + 0;
   const range = RANGE[cls] ?? 34;
@@ -86,6 +86,7 @@ export function simulate(cls, L, F, { maxT = 300, rarity = "희귀", log = false
     if (u.hp < u.maxHp * 0.35 && potions > 0 && t - (u.potAt ?? -99) > 15) { potions--; u.potAt = t; u.hp = Math.min(u.maxHp, u.hp + u.maxHp * 0.35); }
     room.tick();
     room.events.length = 0;
+    if (immortal) { u.hp = u.maxHp; u.dead = false; }
     if (u.hp < lastHp) dmgTaken += lastHp - u.hp;
     lastHp = u.hp;
     t += 0.05;

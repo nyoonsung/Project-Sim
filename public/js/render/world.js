@@ -144,6 +144,10 @@ const BOSS_CALL = {
   pull: ["끌어당기기", "반대로 버텨요"], summon: ["소환", "졸개부터 처리"],
   chase: ["추적 폭격", "멈추지 말고 계속 움직여요"], cross: ["십자 베기", "선 사이 대각선으로, 곧 X자"], donut: ["안팎 폭발", "밖으로 피했다가 다시 안으로"],
   spiral: ["나선 탄막", "탄 사이 틈을 따라 돌아요"], lanes: ["줄 공격", "비어 있는 줄로"],
+  // 제2 던전 전용
+  safespot: ["심연 붕괴", "빛나는 원 안으로 뛰어요!"], grid: ["격자 낙뢰", "빈 칸으로 — 곧 반대 줄, 그다음 세로줄"],
+  multicharge: ["연속 돌진", "매번 다시 조준해요, 옆으로 계속"], walk: ["행진 폭발", "줄 옆으로 비켜요 (두 번 와요)"],
+  nova: ["파도 고리", "첫 고리가 터지면 안쪽으로 파고들어요"],
 };
 export class Renderer {
   /** 화면 크기 바꾸기 (휴대폰 세로·가로 전환). focusY: 캐릭터가 화면 높이의 어디쯤 오게 할지 */
@@ -563,10 +567,10 @@ export class Renderer {
       }
       case "portal": {
         const locked = o.id === "exit" && !G.exitOpen;
-        const pal = o.color === "town" ? ["#062010", "#0e4a1e", "#1f8a34", "#4fd060", "#b0ff9a", "#f0fff0"] : o.id === "safe" || o.id === "victory" ? ["#201808", "#806018", "#d0a830", "#ffe080", "#fff8d0", "#ffffff"] : null;
+        const pal = o.color === "town" ? ["#062010", "#0e4a1e", "#1f8a34", "#4fd060", "#b0ff9a", "#f0fff0"] : o.id === "safe" || o.id === "victory" ? ["#201808", "#806018", "#d0a830", "#ffe080", "#fff8d0", "#ffffff"] : o.color === "dungeon2" ? ["#140410", "#50102e", "#b02060", "#ff5a9a", "#ffd0e8", "#ffffff"] : null;
         const b = baked_("arcane/portal", pal);
         const f = bakedFrame(b, t);
-        if (!locked) addGlow(o.x, o.y - 20, 120, pal ? (o.color === "town" ? "#6aff7a" : "#ffd35a") : "#b07aff", 0.5, o);
+        if (!locked) addGlow(o.x, o.y - 20, 120, pal ? (o.color === "town" ? "#6aff7a" : o.color === "dungeon2" ? "#ff4a8a" : "#ffd35a") : "#b07aff", 0.5, o);
         if (f) { ctx.globalAlpha = locked ? 0.25 : 1; const s = 0.55; ctx.drawImage(f, Math.round(x - b.ox * s), Math.round(y - b.oy * s), Math.round(b.w * s), Math.round(b.h * s)); ctx.globalAlpha = 1; }
         if (o.label || locked) this.label(ctx, locked ? "출구 (몬스터를 모두 처치하면 열림)" : o.label, x, y - 44, locked ? "#888" : "#ffe08a");
         break;

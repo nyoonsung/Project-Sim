@@ -206,11 +206,11 @@ export const ZONES = [
 // 제2 던전: 30층 독립 진행. 10층마다 환경·몬스터·보스가 모두 교체된다.
 export const DUNGEON2_ZONES = [
   { name: "붉은 균열", floor: ["#38212a", "#301a24", "#24131e", "#482633"], wall: ["#7a394a", "#5a2638", "#3a1a2a", "#180b16"], accent: "#ff647d", light: 118, ambient: 0.92, torch: "shadow/shadow-flames",
-    monsters: ["resonance_tracker", "shard_golem", "abyss_sorcerer", "rift_wraith", "poison_spore"], mid: "rift_harbinger", boss: "scarlet_regent", weather: "weather/fog", deco: ["crack", "bones", "rune"] },
+    monsters: ["rift_guard", "blood_wisp", "crimson_hunter", "shard_mimic", "resonance_tracker", "shard_golem"], mid: "rift_harbinger", boss: "scarlet_regent", weather: "weather/fog", deco: ["crack", "bones", "rune"] },
   { name: "정지한 시계도시", floor: ["#1c3038", "#172832", "#11212c", "#29434a"], wall: ["#3a7380", "#2a5668", "#1a3a4c", "#0b1722"], accent: "#65d9e5", light: 130, ambient: 0.88, torch: "scifi/energy-core",
-    monsters: ["null_automaton", "paradox_marksman", "chrono_sentinel", "hex_oracle"], mid: "null_archivist", boss: "paradox_engine", weather: "weather/storm", deco: ["gear", "rune", "crack"] },
+    monsters: ["null_automaton", "paradox_marksman", "chrono_sentinel", "hex_oracle", "rift_wraith", "abyss_sorcerer"], mid: "null_archivist", boss: "paradox_engine", weather: "weather/storm", deco: ["gear", "rune", "crack"] },
   { name: "별 없는 심연", floor: ["#20182e", "#1a1428", "#120d20", "#2b2040"], wall: ["#59417e", "#3c2b60", "#251a42", "#0e081a"], accent: "#c18aff", light: 105, ambient: 0.95, torch: "shadow/shadow-flames",
-    monsters: ["resonance_tracker", "shard_golem", "abyss_sorcerer", "rift_wraith", "poison_spore"], mid: "eclipse_warden", boss: "abyss_watcher", weather: "weather/fog", deco: ["rune", "bones", "crack"] },
+    monsters: ["void_stalker", "eclipse_cultist", "star_eater", "abyss_mirror", "poison_spore", "resonance_tracker", "shard_golem"], mid: "eclipse_warden", boss: "abyss_watcher", weather: "weather/fog", deco: ["rune", "bones", "crack"] },
 ];
 export const DUNGEON2_MAX_FLOOR = 30;
 export function zoneOf(floor, dungeon = 1) {
@@ -230,15 +230,34 @@ const bend = (base, late, f) => f <= 60 ? Math.pow(base, f - 1) : Math.pow(base,
 export const diffMul = (f) => ({ hp: 1 + 0.025 * (f - 1), dmg: 1 + 0.016 * (f - 1), speed: Math.min(1.25, 1 + 0.003 * (f - 1)) });
 // 95층부터는 너무 어렵다는 의견 → 체력·공격력 75%
 export const LATE_EASE = (f) => (f >= 95 ? 0.75 : 1);
+// ── 제2 던전 난이도 (대폭 상향)
+//  예전: 층 번호 1~30을 그대로 써서 '제1 던전 1~30층 ×5' → 레벨 100 이상에게는 1층이 제1 던전 100층보다 10배 쉬웠고,
+//        몬스터 레벨이 1~30이라 방어력이 피해를 거의 다 막았으며, 드롭 아이템도 1~30레벨짜리였음.
+//  지금: 제2 던전 n층 = 실제 레벨 100 + n×5/3 (1층 102 → 30층 150).
+//        체력·공격력은 '제1 던전 100층' 기준 1층부터 체력 ×2.5 · 공격력 ×1.8, 층마다 체력 +3% · 공격력 +1.8% (30층: ×4.7 · ×2.7)
+export const D2_HARD = { hp: 2.5, dmg: 1.8, hpStep: 0.03, dmgStep: 0.018, speed: 1.1 };
+export const d2Level = (floor) => 100 + Math.round((floor * 5) / 3);
+/** 그 층의 실제 레벨 (제1 던전은 층 = 레벨) */
+export const effLevel = (floor, dungeon = 1) => (dungeon === 2 ? d2Level(floor) : floor);
 export function floorScale(floor, dungeon = 1) {
+  if (dungeon === 2) {
+    const b = floorScale(100, 1), n = Math.max(0, floor - 1), L = d2Level(floor);
+    return {
+      hp: b.hp * D2_HARD.hp * (1 + D2_HARD.hpStep * n),
+      dmg: b.dmg * D2_HARD.dmg * (1 + D2_HARD.dmgStep * n),
+      speed: b.speed * D2_HARD.speed,
+      xp: Math.pow(1.045, L - 1) * 1.5,
+      gold: Math.pow(1.04, L - 1) * 1.3,
+      level: L,
+    };
+  }
   const d = diffMul(floor), e = LATE_EASE(floor);
-  const harder = dungeon === 2;
   return {
-    hp: bend(1.05, 1.04, floor) * d.hp * e * (harder ? 5 : 1),
-    dmg: bend(1.04, 1.027, floor) * d.dmg * e * (harder ? 5 : 1),
-    speed: d.speed, // 제2 던전은 이동 속도를 올리지 않고 체력·공격력만 5배
-    xp: Math.pow(1.045, floor - 1) * (harder ? 1.55 : 1),
-    gold: Math.pow(1.04, floor - 1) * (harder ? 1.35 : 1),
+    hp: bend(1.05, 1.04, floor) * d.hp * e,
+    dmg: bend(1.04, 1.027, floor) * d.dmg * e,
+    speed: d.speed,
+    xp: Math.pow(1.045, floor - 1),
+    gold: Math.pow(1.04, floor - 1),
     level: floor,
   };
 }
@@ -251,6 +270,8 @@ const avg = (zi, k, list = ZONES) => {
 const normFor = (list) => list.map((_, zi) => ({ hp: avg(zi, "hp", list) / avg(0, "hp", list), dmg: avg(zi, "dmg", list) / avg(0, "dmg", list) }));
 const NORM = normFor(ZONES);
 const DUNGEON2_NORM = normFor(DUNGEON2_ZONES);
+// 제2 던전 데이터는 원래 숫자가 커서(평균 체력 약 5배) 그대로 쓰면 난이도가 데이터 크기에 따라 들쭉날쭉 → 제1 던전 기준으로 맞춤
+const D2_FIX = { hp: avg(0, "hp", ZONES) / avg(0, "hp", DUNGEON2_ZONES), dmg: avg(0, "dmg", ZONES) / avg(0, "dmg", DUNGEON2_ZONES) };
 
 /** 몬스터·보스 체력 배율: 혼자 3.5배, 파티 7.5배. 초반은 1층 1배 → 10층에서 최대치까지 서서히 (신규 유저 보호) */
 export const SOLO_HP = 3.5, PARTY_HP = 7.5;
@@ -263,11 +284,12 @@ export function monsterStats(id, floor, party = 1, dungeon = 1) {
   const zi = Math.min(list.length - 1, Math.floor((floor - 1) / 10));
   const s = floorScale(floor, dungeon);
   const pScale = 1 + 0.55 * (party - 1);
+  const L = effLevel(floor, dungeon), fx = dungeon === 2 ? D2_FIX : { hp: 1, dmg: 1 };
   return {
-    hp: Math.round((def.hp / norm[zi].hp) * s.hp * pScale * hpBoost(party, floor)),
-    dmg: (def.dmg / norm[zi].dmg) * s.dmg,
+    hp: Math.round((def.hp / norm[zi].hp) * fx.hp * s.hp * pScale * hpBoost(party, L)),
+    dmg: (def.dmg / norm[zi].dmg) * fx.dmg * s.dmg,
     xp: def.xp * 6 * s.xp,
-    level: floor,
+    level: L,
   };
 }
 /** 보스 능력치: 중간보스는 평균 몬스터의 36배, 주요 보스는 64배 체력 */
@@ -275,14 +297,14 @@ export function bossStats(id, floor, party = 1, dungeon = 1) {
   const def = BOSSES[id];
   const list = dungeon === 2 ? DUNGEON2_ZONES : ZONES;
   const s = floorScale(floor, dungeon);
-  const baseHp = avg(0, "hp", list) * s.hp, baseDmg = avg(0, "dmg", list) * s.dmg;
+  const baseHp = avg(0, "hp", ZONES) * s.hp, baseDmg = avg(0, "dmg", ZONES) * s.dmg; // 두 던전 모두 같은 기준값
   const pScale = 1 + 0.7 * (party - 1);
   const hpMul = def.mid ? 36 : 64;
   const capBonus = dungeon === 1 && floor >= 100 ? 1.5 : 1;
   return {
-    hp: Math.round(baseHp * hpMul * pScale * capBonus * hpBoost(party, floor)),
+    hp: Math.round(baseHp * hpMul * pScale * capBonus * (dungeon === 2 && floor >= DUNGEON2_MAX_FLOOR ? 1.5 : 1) * hpBoost(party, effLevel(floor, dungeon))),
     dmg: baseDmg * (def.mid ? 1.5 : 1.7),
     xp: (def.xp ?? 25) * 6 * s.xp,
-    level: floor,
+    level: effLevel(floor, dungeon),
   };
 }

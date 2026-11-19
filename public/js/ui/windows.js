@@ -465,7 +465,7 @@ export function openGate2() {
       bosses.length ? h("h4", { text: "보스 재도전" }) : null,
       bosses.length ? h("div", { class: "floors" }, ...bosses.map((f) => h("button", { class: "btn small" + (f % 10 === 0 ? " boss" : ""), disabled: !isLeader || !unlocked, onclick: () => { send({ t: "enter", dungeon: 2, floor: f }); closeWin("gate2"); } }, `${f}층 ${f % 10 === 0 ? "보스" : "중보"}`))) : null,
       h("div", { class: "note", text: `최고 기록 ${best}/30층 · 심연의 열쇠 ${G.char.abyssKeys ?? 0}개 · 균열 결정 ${G.char.riftCrystals ?? 0}개` }),
-      h("button", { class: "btn", disabled: !isLeader, onclick: () => openAbyssVault() }, "심연 보관고 열기"),
+      h("button", { class: "btn", onclick: () => openAbyssVault() }, "심연 보관고 열기"),
       !isLeader ? h("div", { class: "note", text: "파티장만 입장할 수 있어요." }) : null,
     ];
   }, { w: 390 });

@@ -99,6 +99,7 @@ async function openPlayer(id) {
   const banR = h("input", { maxlength: 200, placeholder: "사유" });
   const muteM = h("input", { type: "number", min: 0, value: 30 });
   const warpF = h("input", { type: "number", min: 1, max: 100, value: c?.checkpoint ?? 1 });
+  const warpD = h("select", {}, h("option", { value: 1 }, "제1 던전"), h("option", { value: 2 }, "제2 던전 (1~30)"));
   const itemCell = (it, where) => {
     const cv = document.createElement("canvas"); cv.width = 18; cv.height = 18; cv.getContext("2d").drawImage(itemIcon(it), 0, 0);
     const el = h("div", { class: "cell r-" + it.rarity }, cv, it.enh ? h("span", { class: "enh", text: "+" + it.enh }) : null);
@@ -135,7 +136,7 @@ async function openPlayer(id) {
             ...field("연결 끊기", h("button", { class: "btn small danger", onclick: act("kick", () => ({ reason: "관리자에 의해 연결이 끊겼어요." })) }, "킥")),
             ...field("비밀번호", h("button", { class: "btn small", onclick: act("reset-password", () => ({})) }, "임시 비밀번호 발급")),
             ...field("마을로", h("button", { class: "btn small", onclick: act("town", () => ({})) }, "마을로 이동")),
-            ...field("층 이동", h("div", { class: "flexrow" }, warpF, h("button", { class: "btn small", onclick: act("warp", () => ({ floor: +warpF.value })) }, "이동"))),
+            ...field("층 이동", h("div", { class: "flexrow" }, warpD, warpF, h("button", { class: "btn small", onclick: act("warp", () => ({ floor: +warpF.value, dungeon: +warpD.value })) }, "이동"))),
           )),
       ),
       h("div", {},

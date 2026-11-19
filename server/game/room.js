@@ -1,7 +1,7 @@
 // 방(마을·던전 한 층·안전 구역) 시뮬레이션: 서버가 모든 판정을 한다
 import { TILE, TICK_DT, PLAYER_RADIUS } from "../../shared/constants.js";
 import { applyInput, moveCircle, circleHitsWall, blocksShot, lineOfSight, tileAt } from "../../shared/move.js";
-import { MONSTERS, BOSSES, monsterStats, bossStats, floorScale, zoneOf } from "../../shared/zones.js";
+import { MONSTERS, BOSSES, monsterStats, bossStats, floorScale, zoneOf, effLevel } from "../../shared/zones.js";
 import { rollItem, rollAbyssRelic } from "../../shared/items.js";
 import { wearOnDeath } from "./wear.js";
 const KI_BASE = 30; // 내력 기본치
@@ -39,6 +39,8 @@ function clearPath(map, m, t) {
 export class Room {
   constructor(world, { id, kind, floor = 0, dungeon = 1, map, partyId = null, partySize = 1 }) {
     Object.assign(this, { world, id, kind, floor, dungeon: dungeon === 2 ? 2 : 1, map, partyId, partySize });
+    // 실제 레벨: 제1 던전은 층 그대로, 제2 던전은 102~150 (방어력·드롭 아이템 레벨·골드 계산에 사용)
+    this.lvl = effLevel(Math.max(1, floor), this.dungeon);
     this.units = new Map();
     this.players = new Map();
     this.projectiles = [];
@@ -83,10 +85,10 @@ export class Room {
     const st = monsterStats(mid, Math.max(1, this.floor), this.partySize, this.dungeon);
     const m = {
       id: newUnitId(), team: "m", type: "m", mid, name: (elite ? "정예 " : "") + def.name, x, y, r: 11 * (def.look.scale ?? 1) * (elite ? 1.2 : 1),
-      hp: Math.round(st.hp * (elite ? 3 : 1)), maxHp: Math.round(st.hp * (elite ? 3 : 1)), atk: st.dmg * (elite ? 1.5 : 1), def: (def.ai === "guard" ? 12 + this.floor * 1.2 : 2 + this.floor * 1.6) * (elite ? 1.5 : 1),
+      hp: Math.round(st.hp * (elite ? 3 : 1)), maxHp: Math.round(st.hp * (elite ? 3 : 1)), atk: st.dmg * (elite ? 1.5 : 1), def: (def.ai === "guard" ? 12 + this.lvl * 1.2 : 2 + this.lvl * 1.6) * (elite ? 1.5 : 1),
       level: st.level, xp: st.xp * (elite ? 3 : 1), speed: def.speed * (elite ? 1.08 : 1) * floorScale(this.floor, this.dungeon).speed, elite, ai: def.ai, def_: def,
       status: new Map(), buffs: new Map(), threat: new Map(), facing: Math.PI / 2, aggro: !!opts.aggro, home: [x, y],
-      atkReady: 0, windup: null, dead: false, fly: !!def.fly,
+      atkReady: 0, windup: null, dead: false, fly: !!def.fly, summoned: !!opts.summoned,
     };
     this.units.set(m.id, m);
     this.ev({ e: "add", ...this.describe(m) });
@@ -97,7 +99,7 @@ export class Room {
     const st = bossStats(bid, this.floor, this.partySize, this.dungeon);
     const b = {
       id: newUnitId(), team: "m", type: "b", bid, name: def.name, x, y, r: 14 * Math.min(2.2, def.look.scale ?? 1),
-      hp: st.hp, maxHp: st.hp, atk: st.dmg, def: 6 + this.floor * 2.2, level: st.level, xp: st.xp, speed: def.speed,
+      hp: st.hp, maxHp: st.hp, atk: st.dmg, def: 6 + this.lvl * 2.2, level: st.level, xp: st.xp, speed: def.speed,
       boss: true, mid: def.mid, def_: def, dungeon: this.dungeon, status: new Map(), buffs: new Map(), threat: new Map(), facing: Math.PI / 2,
       aggro: true, patternAt: 2, pattern: null, phase: 1, groggyGauge: 0, dead: false, fly: !!def.fly, patIdx: 0,
     };
@@ -333,14 +335,14 @@ export class Room {
       if (p.dead || Math.hypot(p.x - t.x, p.y - t.y) > 700) continue;
       const ch = p.session.char;
       // 기본 경험치 배율은 유지하고, 층-레벨 차이 감소는 제1 던전에만 적용한다.
-      let xp = t.xp * XP_RATE * (this.players.size > 1 ? 0.8 : 1);
+      let xp = t.xp * XP_RATE * (this.players.size > 1 ? 0.8 : 1) * (t.summoned ? 0.15 : 1); // 소환된 몬스터는 경험치 적게
       xp *= levelGapXpMultiplier(ch.level, this.floor, this.dungeon);
       gainXp(this, p, xp);
-      const gold = Math.round((2 + Math.random() * 3) * floorScale(this.floor, this.dungeon).gold * (t.elite ? 3 : 1) * (t.boss ? 25 : 1));
+      const gold = Math.round((2 + Math.random() * 3) * floorScale(this.floor, this.dungeon).gold * (t.elite ? 3 : 1) * (t.boss ? 25 : 1) * (t.summoned ? 0.15 : 1));
       ch.gold += gold;
       p.session.meDirty = true;
       this.ev({ e: "gold", id: p.id, v: gold, x: t.x | 0, y: t.y | 0, own: p.id });
-      this.rollDrops(p, t);
+      if (!t.summoned) this.rollDrops(p, t); // 소환된 몬스터는 아이템·균열 결정 없음 (무한 소환 파밍 방지)
       if (p === killer || this.players.size === 1) ch.kills++;
       if (p.mythic?.has("swift_kill") && p === killer) p.buffs.set("swift_kill", { until: now + 3, mods: { move: 0.4, dmg: 0.1 } });
       if (p.mythic?.has("mana_font") && p === killer) p.mp = Math.min(p.maxMp, p.mp + p.maxMp * 0.1);
@@ -392,12 +394,12 @@ export class Room {
       if (p.dead || c.opened.has(p.userId) || Math.hypot(p.x - c.x, p.y - c.y) > 34) continue;
       c.opened.add(p.userId);
       const s = p.session, ch = s.char;
-      const gold = Math.round((12 + this.floor * 6 + Math.random() * this.floor * 3) * floorScale(this.floor, this.dungeon).gold);
+      const gold = Math.round((12 + this.lvl * 6 + Math.random() * this.lvl * 3) * (this.dungeon === 2 ? 1.3 : 1));
       ch.gold += gold; s.meDirty = true; s.dirty = true;
       const n = 1 + (Math.random() < 0.35 ? 1 : 0);
       const names = [];
       for (let i = 0; i < n; i++) {
-        const it = rollItem(secureRandom, { ilvl: Math.max(1, this.floor), cls: ch.cls, tier: "elite" });
+        const it = this.rollGear(ch.cls, "elite");
         if (this.world.pickup(p, it)) names.push(it.name); else this.dropLoot(p.userId, it, c.x + (Math.random() * 40 - 20), c.y + 20);
       }
       if (this.dungeon === 2 && Math.random() < 0.2) {
@@ -411,6 +413,12 @@ export class Room {
     }
   }
 
+  /** 이 층의 장비 드롭. 제2 던전은 아이템 레벨 100(최고) + 한 단계 좋은 등급표 (예전엔 1~30레벨짜리가 나왔음) */
+  rollGear(cls, tier) {
+    if (this.dungeon !== 2) return rollItem(secureRandom, { ilvl: Math.max(1, this.floor), cls, tier });
+    const up = { normal: "elite", elite: "boss", boss: "boss" }[tier] ?? tier;
+    return rollItem(secureRandom, { ilvl: Math.min(100, this.lvl), cls, tier: up });
+  }
   rollDrops(p, t) {
     const tier = t.boss ? "boss" : t.elite ? "elite" : "normal";
     if (this.dungeon === 2 && Math.random() < (t.boss ? 0.75 : t.elite ? 0.28 : 0.12)) {
@@ -422,7 +430,7 @@ export class Room {
     }
     const n = t.boss ? (t.mid ? 1 + (Math.random() < 0.5) : 2 + (Math.random() < 0.5)) : Math.random() < (t.elite ? 0.35 : 0.07) ? 1 : 0;
     for (let i = 0; i < n; i++) {
-      const it = rollItem(secureRandom, { ilvl: Math.max(1, this.floor), cls: p.session.char.cls, tier });
+      const it = this.rollGear(p.session.char.cls, tier);
       this.dropLoot(p.userId, it, t.x + (Math.random() * 40 - 20), t.y + (Math.random() * 40 - 20));
     }
     // 소모품 소량

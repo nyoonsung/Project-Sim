@@ -508,11 +508,13 @@ export class World {
     }
   }
   openAbyssVault(s) {
-    if (!this.nearNpc(s, "vault", 110)) return s.notice("마을의 심연 보관고 앞에서만 사용할 수 있어요.");
+    // 보관고는 제2 던전 관문지기 창에서도 열 수 있음 (둘이 붙어 있음)
+    if (!this.nearNpc(s, "vault", 160) && !this.nearNpc(s, "gate2", 160)) return s.notice("마을 오른쪽 심연 보관고(또는 관문지기) 앞에서만 사용할 수 있어요.");
     const c = s.char;
     if ((c.abyssKeys ?? 0) < 1) return s.notice("심연의 열쇠가 필요해요. 심연의 감시자를 처치해 얻을 수 있어요.");
     if ((c.riftCrystals ?? 0) < 5) return s.notice(`균열 결정이 부족해요. 5개가 필요해요. (보유: ${c.riftCrystals ?? 0}개)`);
-    const it = rollAbyssRelic(secureRandom, { ilvl: 30, cls: c.cls });
+    // 예전엔 아이템 레벨 30으로 나와서 레벨 100 이상에게 쓸모가 없었음 → 최고 레벨(100)
+    const it = rollAbyssRelic(secureRandom, { ilvl: 100, cls: c.cls });
     if (!this.pickup(s.unit, it)) return;
     c.abyssKeys--; c.riftCrystals -= 5;
     this.save(s); this.sendChar(s);
@@ -923,12 +925,12 @@ export class World {
     Q.saveChar.run(userId, JSON.stringify(c), c.level, c.cls, c.best, Date.now());
     return true;
   }
-  gmWarp(userId, floor) {
+  gmWarp(userId, floor, dungeon = 1) {
     const s = this.sessions.get(userId);
     if (!s) return false;
     const group = this.groupOf(s).filter((g) => g === s || g.unit.room === s.unit.room);
-    this.moveGroup(group, floor, "dungeon");
-    s.notice(`관리자가 ${floor}층으로 이동시켰어요.`);
+    this.moveGroup(group, floor, "dungeon", { dungeon });
+    s.notice(`관리자가 ${dungeon === 2 ? "제2 던전 " : ""}${floor}층으로 이동시켰어요.`);
     return true;
   }
   gmTeleportTown(userId) {

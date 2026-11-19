@@ -207,7 +207,7 @@ export function updateBoss() {
 export function updateZoneLabel() {
   const z = $("#zone-label");
   if (G.kind === "town" || G.mapKind === "town") z.textContent = "모험가 마을";
-  else if (G.mapKind === "safe") z.textContent = `${G.floor}층 안전 구역 · 전직소`;
+  else if (G.mapKind === "safe") z.textContent = `${G.dungeon === 2 ? "제2 던전 " : ""}${G.floor}층 안전 구역 · 전직소`;
   else z.textContent = `제${G.dungeon === 2 ? "2" : "1"} 던전 · ${G.floor}층 · ${G.zone?.name ?? ""}`;
 }
 
@@ -285,7 +285,7 @@ function drawMapOn(cv, maxS, big) {
     g.fillStyle = "#000"; g.fillText(text, cv.width / 2 + 1, cv.height - 2);
     g.fillStyle = G.exitOpen ? "#7ff0ff" : "#ffd35a"; g.fillText(text, cv.width / 2, cv.height - 3);
   }
-  if (big) { g.font = "16px Galmuri11"; g.textAlign = "center"; g.textBaseline = "top"; g.fillStyle = "#ffd35a"; g.fillText(G.mapKind === "town" ? "모험가 마을" : `${G.floor}층 · ${G.zone?.name ?? ""}`, cv.width / 2, 8); }
+  if (big) { g.font = "16px Galmuri11"; g.textAlign = "center"; g.textBaseline = "top"; g.fillStyle = "#ffd35a"; g.fillText(G.mapKind === "town" ? "모험가 마을" : `${G.dungeon === 2 ? "제2 던전 " : ""}${G.floor}층 · ${G.zone?.name ?? ""}`, cv.width / 2, 8); }
 }
 
 // 상호작용 안내

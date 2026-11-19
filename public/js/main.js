@@ -110,7 +110,7 @@ const ui = {
   onChar() { HUD.updateSkillbar(); WIN.refreshAll(); },
   onMe() { HUD.updateBars(); },
   onProf() { if (isOpen("skills") && !(G._profRefresh > performance.now())) { G._profRefresh = performance.now() + 500; refreshWin("skills"); } },
-  onMap() { HUD.updateZoneLabel(); WIN.refreshAll(); HUD.toast(G.mapKind === "town" ? "모험가 마을" : G.mapKind === "safe" ? "안전 구역 — 전직소" : `${G.floor}층 · ${G.zone.name}`, "floor"); },
+  onMap() { HUD.updateZoneLabel(); WIN.refreshAll(); HUD.toast(G.mapKind === "town" ? "모험가 마을" : G.mapKind === "safe" ? "안전 구역 — 전직소" : `${G.dungeon === 2 ? "제2 던전 " : ""}${G.floor}층 · ${G.zone.name}`, "floor"); },
   chat: HUD.chatLine,
   onParty() { HUD.updateParty(); WIN.refreshAll(); },
   invite(from) {

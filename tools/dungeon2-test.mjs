@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
 import {
   BOSSES, DUNGEON2_MAX_FLOOR, DUNGEON2_ZONES, MONSTERS,
-  bossStats, floorKind, floorScale, monsterStats, zoneOf,
+  bossStats, floorKind, floorScale, monsterStats, zoneOf, effLevel,
 } from "../shared/zones.js";
+import { Room } from "../server/game/room.js";
+import { rollAbyssRelic } from "../shared/items.js";
 import { makeFloor, mapPayload, makeTown, safeZone } from "../server/game/dungeon.js";
 import { levelGapXpMultiplier } from "../server/game/room.js";
 
@@ -11,15 +13,23 @@ const ok = (condition, label) => {
   console.log("✓", label);
 };
 
-// 제2 던전의 기본 난이도 배율: 같은 층의 기존 성장 곡선 대비 HP·공격력 정확히 5배.
-for (const floor of [1, 5, 10, 20, 30]) {
-  const one = floorScale(floor, 1);
-  const two = floorScale(floor, 2);
-  assert.ok(Math.abs(two.hp / one.hp - 5) < 1e-10);
-  assert.ok(Math.abs(two.dmg / one.dmg - 5) < 1e-10);
-  assert.equal(two.speed, one.speed);
+// 제2 던전 난이도: 제1 던전 100층 기준 1층부터 체력 ×2.5 · 공격력 ×1.8, 층이 오를수록 더 강해짐. 실제 레벨 102~150
+{
+  const top = floorScale(100, 1);
+  const d1 = floorScale(1, 2), d30 = floorScale(30, 2);
+  assert.ok(Math.abs(d1.hp / top.hp - 2.5) < 1e-9 && Math.abs(d1.dmg / top.dmg - 1.8) < 1e-9);
+  assert.ok(d30.hp > d1.hp * 1.8 && d30.dmg > d1.dmg * 1.4);
+  assert.ok(d1.speed > top.speed);
+  assert.equal(effLevel(1, 2), 102); assert.equal(effLevel(30, 2), 150); assert.equal(effLevel(45, 1), 45);
+  for (const f of [1, 15, 30]) for (const id of zoneOf(f, 2).monsters) assert.equal(monsterStats(id, f, 1, 2).level, effLevel(f, 2));
+  const top1 = monsterStats(zoneOf(100).monsters[0], 100, 1, 1);
+  assert.ok(monsterStats(zoneOf(1, 2).monsters[0], 1, 1, 2).hp > top1.hp, "제2 던전 1층 몬스터가 제1 던전 100층보다 단단함");
 }
-ok(true, "제2 던전 HP·공격력 5배 / 이동 속도 동일");
+ok(true, "제2 던전 난이도: 1층부터 제1 던전 100층보다 훨씬 강함, 실제 레벨 102~150");
+
+// 구역마다 몬스터 구성이 서로 다름 (예전엔 1구역과 3구역이 똑같았음)
+assert.notDeepEqual([...DUNGEON2_ZONES[0].monsters].sort(), [...DUNGEON2_ZONES[2].monsters].sort());
+ok(true, "제2 던전 1·3구역 몬스터 구성이 다름");
 
 // 제2 던전에서는 캐릭터 레벨이 층보다 아무리 높아도 레벨 차이 경험치 페널티가 없다.
 // 제1 던전은 기존 감소 규칙을 그대로 유지한다.
@@ -74,6 +84,23 @@ for (const id of [DUNGEON2_ZONES[0].mid, DUNGEON2_ZONES[0].boss, DUNGEON2_ZONES[
   assert.ok(Number.isFinite(s.dmg) && s.dmg > 0);
 }
 ok(true, "제2 던전 몬스터·보스 능력치 산출");
+
+// 드롭: 제2 던전 장비는 아이템 레벨 100, 소환된 몬스터는 아이템·결정 없음, 보관고 유물도 레벨 100
+{
+  const stub = { pickup: () => true, onBossCleared() {}, usePortal() {}, partyFailed() {}, toTown() {}, sendChar() {}, save() {} };
+  const room = new Room(stub, { id: "t", kind: "dungeon", floor: 3, dungeon: 2, map: makeFloor(3, 7, 1, 2), partySize: 1 });
+  assert.equal(room.lvl, effLevel(3, 2));
+  for (let k = 0; k < 20; k++) assert.equal(room.rollGear("sword", "normal").ilvl, 100);
+  const m = room.spawnMonster("rift_wraith", 300, 300, false, { summoned: true });
+  assert.ok(m.summoned);
+  let drops = 0; const orig = room.rollDrops; room.rollDrops = () => drops++;
+  room.kill(m, null, 1);
+  assert.equal(drops, 0);
+  room.rollDrops = orig;
+  const relic = rollAbyssRelic(Math.random, { ilvl: 100, cls: "sword" });
+  assert.equal(relic.ilvl, 100);
+}
+ok(true, "제2 던전 드롭 레벨 100 · 소환물 드롭 없음 · 유물 레벨 100");
 
 // 기존 마을·안전 구역 생성 경로 회귀 확인.
 const town = makeTown();
