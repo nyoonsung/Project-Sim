@@ -8,7 +8,9 @@ export const RARITY_WEIGHTS = {
   elite: [40, 38, 16, 5.5, 0.5],
   boss: [22, 42, 26, 9.5, 0.5],
 };
-export const RARITY_MUL = [1, 1.12, 1.26, 1.42, 1.85];      // 기본 능력치 배율
+export const RARITY_MUL = [1, 1.12, 1.26, 1.42, 3.7];       // 기본 능력치 배율 (신화 2배 상향: 1.85 → 3.7)
+export const MYTHIC_OPT_MUL = 2;                              // 신화 추가 옵션 값 2배
+const MYTHIC_V = 3;                                           // 신화 성능 버전 (옛 신화를 한 번만 올려 주기용)
 export const RARITY_OPTS = [0, 1, 2, 3, 4];                // 추가 옵션 수
 
 export const SLOTS = ["weapon", "offhand", "helmet", "armor", "trinket"];
@@ -69,17 +71,17 @@ const OPTION_KEYS = Object.keys(OPTIONS);
 
 // 신화 고유 효과 (상향됨)
 export const MYTHIC_EFFECTS = {
-  swift_kill: { name: "질주하는 사냥꾼", desc: "적 처치 시 3초간 이동 속도 +20%, 주는 피해 +5%" },
-  thunder_echo: { name: "천둥의 메아리", desc: "치명타 시 25% 확률로 공격력 90%의 번개 추가 피해 (내부 쿨타임 0.8초)" },
-  iron_will: { name: "강철 의지", desc: "HP 40% 이하일 때 받는 피해 -15%" },
-  vampiric: { name: "핏빛 갈증", desc: "준 피해의 2.5%만큼 HP 회복 (초당 최대 HP 4% 상한)" },
-  mana_font: { name: "마력의 샘", desc: "적 처치 시 최대 MP 5% 회복" },
-  guardian: { name: "수호자의 가호", desc: "10초마다 최대 HP 8%의 보호막 (중첩 불가)" },
-  berserk: { name: "광전사의 피", desc: "HP 50% 이하일 때 주는 피해 +12%" },
-  ember: { name: "잔불", desc: "적중 시 15% 확률로 화상 (3초간 초당 공격력 30%)" },
+  swift_kill: { name: "질주하는 사냥꾼", desc: "적 처치 시 3초간 이동 속도 +40%, 주는 피해 +10%" },
+  thunder_echo: { name: "천둥의 메아리", desc: "치명타 시 25% 확률로 공격력 180%의 번개 추가 피해 (내부 쿨타임 0.8초)" },
+  iron_will: { name: "강철 의지", desc: "HP 40% 이하일 때 받는 피해 -30%" },
+  vampiric: { name: "핏빛 갈증", desc: "준 피해의 5%만큼 HP 회복 (초당 최대 HP 8% 상한)" },
+  mana_font: { name: "마력의 샘", desc: "적 처치 시 최대 MP 10% 회복" },
+  guardian: { name: "수호자의 가호", desc: "10초마다 최대 HP 16%의 보호막 (중첩 불가)" },
+  berserk: { name: "광전사의 피", desc: "HP 50% 이하일 때 주는 피해 +24%" },
+  ember: { name: "잔불", desc: "적중 시 15% 확률로 화상 (3초간 초당 공격력 60%)" },
 };
 /** 신화 무기 기본 추가 능력치 */
-export const MYTHIC_WEAPON_BONUS = { dmg: 0.06 };
+export const MYTHIC_WEAPON_BONUS = { dmg: 0.12 }; // 2배 상향 (6% → 12%)
 const MYTHIC_KEYS = Object.keys(MYTHIC_EFFECTS);
 const MYTHIC_TITLES = ["태초의", "몰락한 왕의", "별을 삼킨", "영원한", "잊힌 신의", "끝없는", "심연을 본", "황혼의"];
 
@@ -170,10 +172,11 @@ export function rollItem(R, { ilvl, cls = "adventurer", tier = "normal", rarity 
   const keys = OPTION_KEYS.slice();
   for (let i = 0; i < RARITY_OPTS[ri]; i++) {
     const k = keys.splice(Math.floor(R() * keys.length), 1)[0];
-    it.opts.push({ k, v: OPTIONS[k].roll(ilvl, ri, R) });
+    const v = OPTIONS[k].roll(ilvl, ri, R);
+    it.opts.push({ k, v: ri === 4 ? +(v * MYTHIC_OPT_MUL).toFixed(3) : v });
   }
   if (ri === 4) {
-    it.mythicV = 2;
+    it.mythicV = MYTHIC_V;
     it.mythic = pick(R, MYTHIC_KEYS);
     it.title = pick(R, MYTHIC_TITLES);
   }
@@ -183,7 +186,7 @@ export function rollItem(R, { ilvl, cls = "adventurer", tier = "normal", rarity 
 }
 
 /** 옵션 값의 일반적인 최대치(관리자 지정 아이템 기본값·검증용): 난수를 최대로 굴린 값 */
-export function optionMax(k, ilvl, ri) { return OPTIONS[k].roll(ilvl, ri, () => 0.999); }
+export function optionMax(k, ilvl, ri) { const v = OPTIONS[k].roll(ilvl, ri, () => 0.999); return ri === 4 ? +(v * MYTHIC_OPT_MUL).toFixed(3) : v; }
 export const MYTHIC_TITLE_LIST = MYTHIC_TITLES;
 /**
  * 관리자가 고른 그대로 장비 만들기 (무작위 아님). 잘못된 값은 고치거나 null.
@@ -204,14 +207,14 @@ export function makeItem(spec) {
   const seen = new Set();
   for (const o of Array.isArray(spec.opts) ? spec.opts : []) {
     if (!o || !OPTIONS[o.k] || seen.has(o.k) || it.opts.length >= RARITY_OPTS[ri]) continue;
-    const max = Math.abs(optionMax(o.k, ilvl, ri)) * 3;
+    const max = Math.abs(optionMax(o.k, ilvl, ri)) * 3 * (ri === 4 ? MYTHIC_OPT_MUL : 1);
     const v = Number(o.v);
     if (!Number.isFinite(v)) continue;
     seen.add(o.k);
     it.opts.push({ k: o.k, v: +Math.max(0, Math.min(max, v)).toFixed(3) });
   }
   if (ri === 4) {
-    it.mythicV = 2;
+    it.mythicV = MYTHIC_V;
     it.mythic = MYTHIC_EFFECTS[spec.mythic] ? spec.mythic : MYTHIC_KEYS[0];
     it.title = MYTHIC_TITLES.includes(spec.title) ? spec.title : MYTHIC_TITLES[0];
   }
@@ -236,23 +239,25 @@ export function maxDurability(it) { return 100 + RARITIES.indexOf(it.rarity) * 2
 export function syncMythic(ch) {
   let changed = false;
   for (const it of [...Object.values(ch.equip ?? {}), ...(ch.inv ?? [])]) {
-    if (!it || it.rarity !== "신화" || it.ilvl === ch.level) continue;
+    if (!it || it.rarity !== "신화") continue;
+    if ((it.mythicV ?? 0) < MYTHIC_V) { upgradeMythic(it); changed = true; }
+    if (it.ilvl === ch.level) continue;
     it.ilvl = Math.max(1, ch.level);
     it.base = baseStats(it.slot, it.type, it.ilvl, 4, it.variant ?? 1);
     if (it.slot === "weapon") Object.assign(it.base, MYTHIC_WEAPON_BONUS);
     it.name = itemName(it);
-    it.mythicV = 2;
     changed = true;
   }
   return changed;
 }
-/** 예전에 얻은 신화 장비도 상향된 능력치로 다시 계산 */
+/** 예전에 얻은 신화 장비도 상향된 능력치로 다시 계산 (버전이 낮을 때 한 번만: 기본 능력치 재계산 + 추가 옵션 2배) */
 export function upgradeMythic(it) {
-  if (!it || it.rarity !== "신화" || it.mythicV >= 2) return it;
+  if (!it || it.rarity !== "신화" || (it.mythicV ?? 0) >= MYTHIC_V) return it;
   try {
     it.base = baseStats(it.slot, it.type, it.ilvl, 4, it.variant ?? 1);
     if (it.slot === "weapon") Object.assign(it.base, MYTHIC_WEAPON_BONUS);
-    it.mythicV = 2;
+    if (Array.isArray(it.opts)) for (const o of it.opts) if (Number.isFinite(o.v)) o.v = +(o.v * MYTHIC_OPT_MUL).toFixed(3);
+    it.mythicV = MYTHIC_V;
   } catch {}
   return it;
 }

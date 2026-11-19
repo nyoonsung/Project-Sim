@@ -99,7 +99,7 @@ export function dealDamage(room, src, t, o, now) {
     let mul = 1 + (o.bonus ?? 0);
     if (src.team === "p") {
       mul += (src.stats.dmg ?? 0) + buffSum(src, "dmg");
-      if (src.mythicBerserk && src.hp / src.maxHp <= 0.5) mul += 0.12;
+      if (src.mythicBerserk && src.hp / src.maxHp <= 0.5) mul += 0.24;
       if (o.flank) mul += src.stats.vital ?? 0;
       if (t.status.has("vitalmark") || t.status.has("huntmark")) mul += (src.stats.vital ?? 0) * 0.5 + (src.stats.weak ?? 0);
       if (t.status.has("huntmark") && t.status.get("huntmark").src === src.id) mul += 0.15;
@@ -129,7 +129,7 @@ export function dealDamage(room, src, t, o, now) {
   // 받는 피해 감소
   if (t.team === "p") {
     let dr = (t.stats?.dr ?? 0) + buffSum(t, "dr");
-    if (t.mythicIron && t.hp / t.maxHp <= 0.4) dr += 0.15;
+    if (t.mythicIron && t.hp / t.maxHp <= 0.4) dr += 0.3;
     dmg *= 1 - Math.min(0.6, dr);
     dmg *= 1 - frontDr;
   }

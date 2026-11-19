@@ -75,7 +75,7 @@ const { syncMythic } = await import("../shared/items.js");
 let my; for (let i = 0; i < 60 && my?.slot !== "weapon"; i++) my = rollItem(Math.random, { ilvl: 5, rarity: "신화" });
 const chM = { ...newCharacter("신"), level: 40, equip: { weapon: my }, inv: [] };
 const atk5 = my.base.atk;
-ok(syncMythic(chM) && my.ilvl === 40 && my.base.atk > atk5 * 3 && my.base.dmg === 0.06, `신화 무기 Lv5 → 캐릭터 Lv40 따라 성장 (공격력 ${atk5} → ${my.base.atk})`);
+ok(syncMythic(chM) && my.ilvl === 40 && my.base.atk > atk5 * 3 && my.base.dmg === 0.12, `신화 무기 Lv5 → 캐릭터 Lv40 따라 성장 (공격력 ${atk5} → ${my.base.atk})`);
 ok(!syncMythic(chM), "레벨이 같으면 다시 계산 안 함");
 
 // 9) 근접 판정: 조준이 살짝(50°) 빗나가도 가까운 적을 맞힘

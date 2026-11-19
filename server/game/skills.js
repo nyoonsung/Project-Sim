@@ -690,14 +690,14 @@ export function onPlayerHit(room, u, t, dmg, crit, now, o) {
   if (u.mythic?.has("thunder_echo") && crit && Math.random() < 0.25 && now >= (u.icd.get("m_thunder") ?? 0)) {
     u.icd.set("m_thunder", now + 0.8);
     room.ev({ e: "fx", fx: "lightning/zap-hit", x: t.x | 0, y: t.y | 0 });
-    room.schedule(0.05, (t2) => dealDamage(room, u, t, { pow: 0.9, crit: "none" }, t2));
+    room.schedule(0.05, (t2) => dealDamage(room, u, t, { pow: 1.8, crit: "none" }, t2));
   }
   if (u.mythic?.has("vampiric")) {
     if (now - (u.vampWin?.t ?? -9) >= 1) u.vampWin = { t: now, n: 0 };
-    const v = Math.min(dmg * 0.025, u.maxHp * 0.04 - u.vampWin.n);
+    const v = Math.min(dmg * 0.05, u.maxHp * 0.08 - u.vampWin.n);
     if (v > 0) { u.vampWin.n += v; heal(room, u, u, v, now, { noEvent: true }); }
   }
-  if (u.mythic?.has("ember") && Math.random() < 0.15) applyStatus(room, u, t, { type: "burn", dur: 3, pow: 0.3 }, now);
+  if (u.mythic?.has("ember") && Math.random() < 0.15) applyStatus(room, u, t, { type: "burn", dur: 3, pow: 0.6 }, now);
 }
 
 /** 매 틱 플레이어 스킬 상태 (채널링, 정지 감지, 점혈 감소, 순교자의 각인) */

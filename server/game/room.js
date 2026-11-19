@@ -333,8 +333,8 @@ export class Room {
       this.ev({ e: "gold", id: p.id, v: gold, x: t.x | 0, y: t.y | 0, own: p.id });
       this.rollDrops(p, t);
       if (p === killer || this.players.size === 1) ch.kills++;
-      if (p.mythic?.has("swift_kill") && p === killer) p.buffs.set("swift_kill", { until: now + 3, mods: { move: 0.2, dmg: 0.05 } });
-      if (p.mythic?.has("mana_font") && p === killer) p.mp = Math.min(p.maxMp, p.mp + p.maxMp * 0.05);
+      if (p.mythic?.has("swift_kill") && p === killer) p.buffs.set("swift_kill", { until: now + 3, mods: { move: 0.4, dmg: 0.1 } });
+      if (p.mythic?.has("mana_font") && p === killer) p.mp = Math.min(p.maxMp, p.mp + p.maxMp * 0.1);
     }
     if (t.boss) this.onBossDead(t);
     else if (this.kind === "dungeon" && !this.exitOpen && this.map.kind === "normal" && (this.wave ? this.wave.spawned >= this.total : true) && this.aliveMonsters() === 0) {
@@ -494,7 +494,7 @@ export class Room {
     }
     if (u.mythic?.has("guardian") && now >= (u.icd.get("m_guard") ?? 0)) {
       u.icd.set("m_guard", now + 10);
-      giveShield(this, u, u.maxHp * 0.08, 10, now);
+      giveShield(this, u, u.maxHp * 0.16, 10, now);
     }
     // 입력 1틱 소비 (속도 조작 불가: 서버가 한 틱에 한 입력만 적용)
     //  - 입력이 늦게 와서 빈 틱은 '빚'으로 쌓아 두고, 밀린 입력이 오면 한 틱에 하나 더 처리해 따라잡음
