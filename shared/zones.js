@@ -90,6 +90,12 @@ export const MONSTERS = {
   eclipse_cultist: { name: "일식 숭배자", ai: "caster", hp: 238, dmg: 62, speed: 68, range: 255, atkCd: 2.5, xp: 7.2, aoe: "shadow/grasping-hands", look: rig(ECLIPSE, "staff", "mitre", "#10091f") },
   star_eater: { name: "별 포식자", ai: "bomber", hp: 230, dmg: 74, speed: 88, range: 34, atkCd: 1.0, xp: 7.0, look: critter("critters/eyeball", ["#080412", "#29104d", "#6035a0", "#a878df", "#e5caff", "#ffffff"], 1.15) },
   abyss_mirror: { name: "심연의 거울상", ai: "ranged", hp: 252, dmg: 66, speed: 76, range: 260, atkCd: 1.4, xp: 7.4, proj: "shadow/void-orb", projSmall: true, look: critter("scifi/hologram", ["#080412", "#25133d", "#5b2e83", "#a65ac7", "#f0b8ff", "#ffffff"], 0.8) },
+  // 제2 던전 전용: 외형뿐 아니라 전투 역할과 AI가 서로 다르다.
+  resonance_tracker: { name: "잔향 추적자", ai: "stalker", hp: 240, dmg: 52, speed: 148, range: 28, atkCd: 1.0, xp: 7.0, look: rig(ECLIPSE, "dagger", "hood", "#160d2a", 0.95) },
+  shard_golem: { name: "파편 골렘", ai: "guard", hp: 420, dmg: 72, speed: 42, range: 54, atkCd: 2.8, xp: 8.0, look: rig(RIFT, "hammer", "helm", "#491a2b", 1.35) },
+  abyss_sorcerer: { name: "심연술사", ai: "summoner", hp: 260, dmg: 58, speed: 58, range: 245, atkCd: 2.5, xp: 7.8, aoe: "shadow/void-orb", summon: "rift_wraith", look: rig(ECLIPSE, "staff", "hat", "#10091f", 1.0) },
+  rift_wraith: { name: "균열 망령", ai: "blink", hp: 220, dmg: 64, speed: 98, range: 32, atkCd: 1.1, xp: 7.6, fly: true, look: critter("critters/ghost", ["#080412", "#25133d", "#5b2e83", "#a65ac7", "#f0b8ff", "#ffffff"], 1.1) },
+  poison_spore: { name: "독안개 포자체", ai: "spore", hp: 300, dmg: 50, speed: 48, range: 220, atkCd: 2.8, xp: 7.8, aoe: "nature/spore-burst", look: critter("critters/slime", ["#061a12", "#123b2c", "#277b57", "#62c894", "#b8ffd8", "#ffffff"], 1.25) },
 };
 
 // 보스 패턴: cleave(전방 부채꼴) slam(원형) ring(도넛, 안쪽 안전) charge(직선 돌진) barrage(전방위 탄막)
@@ -161,6 +167,16 @@ export const BOSSES = {
     patterns: [{ type: "pull", radius: 275, tel: 0.75, pow: 1.65 }, { type: "donut", inner: 95, outer: 245, tel: 0.9, pow: 1.7, fx: "shadow/dark-explosion" }, { type: "barrage", count: 28, speed: 210, pow: 1.0, fx: "shadow/void-orb" }, { type: "summon", monster: "void_stalker", n: 4, phase2: true }] }),
   void_emperor: B({ name: "별을 삼킨 황제 에레보스", hp: 98000, dmg: 112, speed: 76, look: rig(ECLIPSE, "scythe", "mitre", "#10091f", 2.85), xp: 80,
     patterns: [{ type: "cross", len: 440, width: 42, tel: 0.75, pow: 1.7, fx: "shadow/dark-explosion" }, { type: "lanes", n: 9, width: 38, len: 440, tel: 0.75, pow: 1.55, fx: "shadow/shadow-flames" }, { type: "spiral", arms: 4, dur: 2.8, speed: 220, pow: 1.05, fx: "arcane/arcane-orb" }, { type: "donut", inner: 110, outer: 270, tel: 0.9, pow: 1.85, fx: "shadow/dark-explosion", phase2: true }, { type: "beam", dur: 5.2, width: 38, pow: 1.05, fx: "arcane/arcane-beam", phase2: true }, { type: "summon", monster: "star_eater", n: 4, phase2: true }, { type: "pools", n: 9, radius: 45, dur: 8, pow: 0.65, fx: "shadow/shadow-flames", phase2: true }] }),
+  abyss_watcher: B({ name: "심연의 감시자", hp: 145000, dmg: 128, speed: 78, look: rig(ECLIPSE, "scythe", "helm", "#10091f", 3.0), xp: 110,
+    patterns: [
+      { type: "cross", len: 460, width: 42, tel: 1.25, pow: 1.8, fx: "shadow/dark-explosion" },
+      { type: "rain", n: 12, radius: 52, tel: 1.2, pow: 1.65, fx: "arcane/star-fall" },
+      { type: "donut", inner: 112, outer: 280, tel: 1.3, pow: 1.9, fx: "shadow/shadow-flames" },
+      { type: "lanes", n: 8, width: 44, len: 460, tel: 1.15, pow: 1.7, fx: "lightning/lightning-strike", phase2: true },
+      { type: "beam", dur: 4.8, width: 34, pow: 1.0, fx: "arcane/arcane-beam", phase2: true },
+      { type: "summon", monster: "rift_wraith", n: 3, phase2: true },
+      { type: "pools", n: 8, radius: 46, dur: 7, pow: 0.6, fx: "nature/spore-burst", phase2: true }
+    ] }),
 };
 
 // 구역 정의: 팔레트(바닥·벽), 조명, 분위기 이펙트
@@ -190,11 +206,11 @@ export const ZONES = [
 // 제2 던전: 30층 독립 진행. 10층마다 환경·몬스터·보스가 모두 교체된다.
 export const DUNGEON2_ZONES = [
   { name: "붉은 균열", floor: ["#38212a", "#301a24", "#24131e", "#482633"], wall: ["#7a394a", "#5a2638", "#3a1a2a", "#180b16"], accent: "#ff647d", light: 118, ambient: 0.92, torch: "shadow/shadow-flames",
-    monsters: ["rift_guard", "blood_wisp", "crimson_hunter", "shard_mimic"], mid: "rift_harbinger", boss: "scarlet_regent", weather: "weather/fog", deco: ["crack", "bones", "rune"] },
+    monsters: ["resonance_tracker", "shard_golem", "abyss_sorcerer", "rift_wraith", "poison_spore"], mid: "rift_harbinger", boss: "scarlet_regent", weather: "weather/fog", deco: ["crack", "bones", "rune"] },
   { name: "정지한 시계도시", floor: ["#1c3038", "#172832", "#11212c", "#29434a"], wall: ["#3a7380", "#2a5668", "#1a3a4c", "#0b1722"], accent: "#65d9e5", light: 130, ambient: 0.88, torch: "scifi/energy-core",
     monsters: ["null_automaton", "paradox_marksman", "chrono_sentinel", "hex_oracle"], mid: "null_archivist", boss: "paradox_engine", weather: "weather/storm", deco: ["gear", "rune", "crack"] },
   { name: "별 없는 심연", floor: ["#20182e", "#1a1428", "#120d20", "#2b2040"], wall: ["#59417e", "#3c2b60", "#251a42", "#0e081a"], accent: "#c18aff", light: 105, ambient: 0.95, torch: "shadow/shadow-flames",
-    monsters: ["void_stalker", "eclipse_cultist", "star_eater", "abyss_mirror"], mid: "eclipse_warden", boss: "void_emperor", weather: "weather/fog", deco: ["rune", "bones", "crack"] },
+    monsters: ["resonance_tracker", "shard_golem", "abyss_sorcerer", "rift_wraith", "poison_spore"], mid: "eclipse_warden", boss: "abyss_watcher", weather: "weather/fog", deco: ["rune", "bones", "crack"] },
 ];
 export const DUNGEON2_MAX_FLOOR = 30;
 export function zoneOf(floor, dungeon = 1) {
@@ -218,9 +234,9 @@ export function floorScale(floor, dungeon = 1) {
   const d = diffMul(floor), e = LATE_EASE(floor);
   const harder = dungeon === 2;
   return {
-    hp: bend(1.05, 1.04, floor) * d.hp * e * (harder ? 1.9 : 1),
-    dmg: bend(1.04, 1.027, floor) * d.dmg * e * (harder ? 1.9 : 1),
-    speed: d.speed * (harder ? 1.12 : 1),
+    hp: bend(1.05, 1.04, floor) * d.hp * e * (harder ? 5 : 1),
+    dmg: bend(1.04, 1.027, floor) * d.dmg * e * (harder ? 5 : 1),
+    speed: d.speed * (harder ? 1.25 : 1),
     xp: Math.pow(1.045, floor - 1) * (harder ? 1.55 : 1),
     gold: Math.pow(1.04, floor - 1) * (harder ? 1.35 : 1),
     level: floor,
