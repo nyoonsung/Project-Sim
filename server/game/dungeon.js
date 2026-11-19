@@ -128,9 +128,9 @@ function reachable(m, sx, sy) {
 /** 일반층: 큰 투기장 하나. 몬스터는 가장자리 소환 지점에서 웨이브로 몰려온다.
  *  배치 8가지: 탁 트인 곳·기둥 숲·네 웅덩이·십자 벽·고리 기둥·잔해·강과 다리·모서리 구덩이 */
 const ARENA_STYLES = ["open", "open", "open", "open", "pillars", "pools", "cross", "ring", "rubble", "river", "pits"]; // 벽 줄이기: 빈 투기장 비중 ↑
-function normalFloor(floor, seed, party) {
+function normalFloor(floor, seed, party, dungeon = 1) {
   const R = rng(seed);
-  const zone = zoneOf(floor);
+  const zone = zoneOf(floor, dungeon);
   const iw = Math.min(40, 30 + Math.floor(floor / 10)), ih = Math.min(28, 20 + Math.floor(floor / 14));
   const W = iw + 6, H = ih + 7;
   const m = grid(W, H);
@@ -217,9 +217,9 @@ function normalFloor(floor, seed, party) {
 }
 
 /** 보스층: 입구 방 → 통로 → 투기장 (투기장 진입 시 문이 닫힘) */
-function bossFloor(floor, seed) {
+function bossFloor(floor, seed, dungeon = 1) {
   const R = rng(seed);
-  const zone = zoneOf(floor);
+  const zone = zoneOf(floor, dungeon);
   const kind = floorKind(floor);
   const AW = kind === "boss" ? 30 : 26, AH = kind === "boss" ? 22 : 19;
   const W = AW + 8, H = AH + 26;
@@ -250,9 +250,9 @@ function bossFloor(floor, seed) {
 }
 
 /** 안전 구역: 10층 보스 처치 후. 전직소 + 다음 층/마을 포탈 */
-export function safeZone(floor) {
-  const R = rng(floor * 977);
-  const zone = zoneOf(floor);
+export function safeZone(floor, dungeon = 1) {
+  const R = rng(floor * 977 + dungeon * 7919);
+  const zone = zoneOf(floor, dungeon);
   const m = grid(26, 20);
   carveRect(m, 3, 4, 20, 13);
   wallUp(m);
@@ -268,9 +268,9 @@ export function safeZone(floor) {
   return m;
 }
 
-export function makeFloor(floor, seed, party = 1) {
+export function makeFloor(floor, seed, party = 1, dungeon = 1) {
   const kind = floorKind(floor);
-  return kind === "normal" ? normalFloor(floor, seed, party) : bossFloor(floor, seed);
+  return kind === "normal" ? normalFloor(floor, seed, party, dungeon) : bossFloor(floor, seed, dungeon);
 }
 
 /** 마을: 아담한 저녁 마을. 가운데 분수 광장, 위쪽 던전 관문, 둘레에 상점·대장간·여관·훈련장·집·풍차·연못.
@@ -316,6 +316,10 @@ export function makeTown() {
   for (const tx of [15, 23]) { bld("statue", tx, 2, 2, 2); objs[objs.length - 1].glow = "#9a7aff"; }
   for (const tx of [17, 22]) objs.push({ kind: "flag", c: tx === 17 ? "flag_red" : "flag_blue", x: P(tx) + 16, y: P(7) });
   objs.push({ kind: "npc", id: "gate", name: "던전 관문지기", x: P(17) + 16, y: P(6) + 8 });
+  // 마을 오른쪽 길 끝: 제1 던전과 색·실루엣이 다른 심연의 균열 관문
+  objs.push({ kind: "prop", s: "arch", x: P(35) + 16, y: P(15) + 18, glow: "#a45cff" });
+  objs.push({ kind: "portal", id: "dungeon2", x: P(35) + 16, y: P(15) + 12, label: "심연의 균열", color: "dungeon" });
+  objs.push({ kind: "npc", id: "gate2", name: "심연의 관문지기", x: P(33) + 16, y: P(17) + 8 });
   // 분수 (광장 가운데, 둘레 돌)
   set(m, 19, 16, T.WALL); set(m, 20, 16, T.WALL);
   objs.push({ kind: "fountain", fx: "water/fountain", x: P(20), y: P(17) - 4 });
