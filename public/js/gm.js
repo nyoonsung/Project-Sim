@@ -4,7 +4,7 @@ import { TITLE_DESIGNS } from "/shared/titles.js";
 import { itemTip } from "./ui/windows.js";
 import { itemIcon } from "./ui/icons.js";
 import { CLASS_INFO } from "/shared/classes.js";
-import { RARITIES, SLOT_NAME } from "/shared/items.js";
+import { RARITIES, SLOT_NAME, SLOTS, WEAPON_TYPES, OFFHAND_TYPES, ARMOR_NAMES, VARIANT_TRAITS, RARITY_OPTS, OPTIONS, MYTHIC_EFFECTS, MYTHIC_TITLE_LIST, ENCHANTS, MAX_ENH, makeItem, optionMax } from "/shared/items.js";
 import { ITEMS, TITLE_COLORS } from "/shared/constants.js";
 
 const main = $("#gm-main");
@@ -120,8 +120,9 @@ async function openPlayer(id) {
             ...Object.entries(cons).flatMap(([k, el]) => field(ITEMS[k].name, el))),
           h("div", { class: "note", text: "직업을 바꾸면 투자한 스탯이 미사용 포인트로 돌아가요." }),
           h("button", { class: "btn small primary", onclick: act("edit", () => ({ level: +lv.value, gold: +gold.value, unspent: +pts.value, checkpoint: +cp.value, cls: cls.value, cons: Object.fromEntries(Object.entries(cons).map(([k, el]) => [k, +el.value])) })) }, "저장")),
-        h("div", { class: "box" }, h("h3", { text: "아이템 지급" }), h("div", { class: "form" }, ...field("등급", rar), ...field("아이템 레벨", ilvl), ...field("부위", slot)),
-          h("button", { class: "btn small primary", onclick: act("give", () => ({ rarity: rar.value, ilvl: +ilvl.value, slot: slot.value || undefined })) }, "지급")),
+        exactGiveBox(c, act),
+        h("details", { class: "box" }, h("summary", { text: "무작위 아이템 지급" }), h("div", { class: "form" }, ...field("등급", rar), ...field("아이템 레벨", ilvl), ...field("부위", slot)),
+          h("button", { class: "btn small primary", onclick: act("give", () => ({ rarity: rar.value, ilvl: +ilvl.value, slot: slot.value || undefined })) }, "무작위로 지급")),
         h("div", { class: "box" }, h("h3", { text: "칭호 (관리자만 줄 수 있음)" }),
           h("div", { class: "form" }, ...field("디자인", titleD), ...field("칭호", titleT), ...field("색", h("div", { class: "flexrow" }, ...TITLE_COLORS.map((col) => { const b = h("button", { class: "btn small swatch" + (titleC.v === col ? " on" : ""), style: { background: col, width: "22px", height: "18px", padding: 0 }, title: col, onclick: () => { titleC.v = col; for (const x of b.parentNode.children) x.classList.toggle("on", x === b); } }); return b; })))),
           h("button", { class: "btn small primary", onclick: act("give-title", () => ({ text: titleT.value, color: titleC.v })) }, "칭호 주기"),
@@ -198,3 +199,51 @@ async function boot() {
 }
 window.addEventListener("hashchange", () => { if (/key=/.test(location.hash)) location.reload(); });
 boot();
+
+// ── 아이템 직접 만들어 지급: 부위 → 종류 → 등급·레벨·강화 → 옵션(종류·값) → 신화 효과·이름 → 인챈트, 오른쪽에 미리보기
+const isPct = (k) => OPTIONS[k].fmt(0.1).includes("%");
+function exactGiveBox(c, act) {
+  const field = (lbl, el) => [h("span", { text: lbl }), el];
+  const st = { slot: "weapon", type: "sword", variant: 0, rarity: "전설", ilvl: Math.max(1, c?.level || 1), enh: 0, opts: [], mythic: Object.keys(MYTHIC_EFFECTS)[0], title: MYTHIC_TITLE_LIST[0], ench: "" };
+  const form = h("div", { class: "form" }), preview = h("div", { class: "gm-preview" });
+  const sel = (val, list, on) => { const e = h("select", { onchange: () => on(e.value) }, ...list.map(([v, t]) => h("option", { value: v, ...(String(v) === String(val) ? { selected: true } : {}) }, t))); return e; };
+  const num = (val, min, max, on, step = 1) => h("input", { type: "number", min, max, step, value: val, oninput: (e) => on(e.target.value) });
+  const ri = () => RARITIES.indexOf(st.rarity);
+  const defVal = (k) => { const m = optionMax(k, st.ilvl, ri()); return isPct(k) ? +(m * 100).toFixed(1) : m; };
+  const fitOpts = () => {
+    const n = RARITY_OPTS[ri()], keys = Object.keys(OPTIONS);
+    st.opts = st.opts.slice(0, n);
+    while (st.opts.length < n) { const k = keys.find((x) => !st.opts.some((o) => o.k === x)); st.opts.push({ k, v: defVal(k) }); }
+  };
+  const spec = () => ({ ...st, opts: st.opts.map((o) => ({ k: o.k, v: isPct(o.k) ? Number(o.v) / 100 : Number(o.v) })), ench: st.ench || null });
+  const draw = () => {
+    fitOpts();
+    const types = st.slot === "weapon" ? Object.entries(WEAPON_TYPES).map(([k, v]) => [k, `${v.name} (${v.cls.filter((x) => x !== "adventurer").map((x) => CLASS_INFO[x]?.name ?? x).join("·") || "모험가"})`])
+      : st.slot === "offhand" ? Object.entries(OFFHAND_TYPES).map(([k, v]) => [k, v.name])
+      : ARMOR_NAMES[st.slot].map((nm, i) => [i, `${nm} — ${VARIANT_TRAITS[st.slot][i].desc}`]);
+    if (st.slot === "weapon" && !WEAPON_TYPES[st.type]) st.type = "sword";
+    if (st.slot === "offhand" && !OFFHAND_TYPES[st.type]) st.type = "shield";
+    const rows = [
+      ["부위", sel(st.slot, SLOTS.map((k) => [k, SLOT_NAME[k]]), (v) => { st.slot = v; draw(); })],
+      ["종류", st.slot === "weapon" || st.slot === "offhand" ? sel(st.type, types, (v) => { st.type = v; draw(); }) : sel(st.variant, types, (v) => { st.variant = +v; draw(); })],
+      ["등급", sel(st.rarity, RARITIES.map((r) => [r, r]), (v) => { st.rarity = v; for (const o of st.opts) o.v = defVal(o.k); draw(); })],
+      ["아이템 레벨", h("input", { type: "number", min: 1, max: 100, value: st.ilvl, onchange: (e) => { st.ilvl = Math.max(1, Math.min(100, +e.target.value || 1)); for (const o of st.opts) o.v = defVal(o.k); draw(); } })],
+      ["강화", num(st.enh, 0, MAX_ENH, (v) => { st.enh = +v || 0; upd(); })],
+      ...st.opts.map((o, i) => [`옵션 ${i + 1}`, h("div", { class: "flexrow" },
+        sel(o.k, Object.entries(OPTIONS).filter(([k]) => k === o.k || !st.opts.some((x) => x.k === k)).map(([k, v]) => [k, v.name + (isPct(k) ? " (%)" : "")]), (v) => { o.k = v; o.v = defVal(v); draw(); }),
+        num(o.v, 0, 9999, (v) => { o.v = v; upd(); }, isPct(o.k) ? 0.1 : 0.1))]),
+      ...(st.rarity === "신화" ? [
+        ["신화 효과", sel(st.mythic, Object.entries(MYTHIC_EFFECTS).map(([k, v]) => [k, `${v.name} — ${v.desc}`]), (v) => { st.mythic = v; upd(); })],
+        ["이름 앞말", sel(st.title, MYTHIC_TITLE_LIST.map((t) => [t, t]), (v) => { st.title = v; upd(); })]] : []),
+      ["인챈트", sel(st.ench, [["", "없음"], ...Object.entries(ENCHANTS).map(([k, v]) => [k, `${v.name} — ${v.desc}`])], (v) => { st.ench = v; upd(); })],
+    ];
+    form.replaceChildren(...rows.flatMap(([k, el]) => field(k, el)));
+    upd();
+  };
+  const upd = () => { const it = makeItem(spec()); preview.replaceChildren(...(it ? itemTip(it) : [h("div", { text: "-" })])); };
+  draw();
+  return h("div", { class: "box" }, h("h3", { text: "아이템 직접 만들어 지급" }),
+    h("div", { class: "gm-give" }, form, preview),
+    h("div", { class: "note", text: "옵션 값은 기본으로 그 레벨·등급의 일반 최대치가 들어가요. (최대 3배까지 입력 가능, % 옵션은 % 숫자로) 신화는 받는 사람 레벨에 맞춰 아이템 레벨이 자동으로 바뀌어요." }),
+    h("button", { class: "btn small primary", onclick: act("give-exact", () => ({ spec: spec() })) }, "이 아이템 지급"));
+}

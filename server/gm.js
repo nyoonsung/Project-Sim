@@ -2,7 +2,7 @@
 import { Q, secLog } from "./db.js";
 import { defaultLoadout } from "./game/player.js";
 import { world } from "./net.js";
-import { rollItem, RARITIES, SLOTS, canEquip } from "../shared/items.js";
+import { rollItem, makeItem, RARITIES, SLOTS, canEquip } from "../shared/items.js";
 import { CLASS_INFO } from "../shared/classes.js";
 import { MAX_LEVEL, ITEMS, TITLE_COLORS, TITLE_MAX } from "../shared/constants.js";
 import { secureRandom } from "./game/secure.js";
@@ -101,6 +101,26 @@ export async function handleGm(req, res, path, { readJson, send, isAdmin, ip, ur
         made = it;
       });
       audit("give_item", target, { rarity, ilvl, name: made?.name ?? null });
+      return send(res, ok && made ? 200 : 400, ok && made ? { ok: true, item: made } : { error: "가방이 가득 찼거나 실패했어요." });
+    }
+    case "give-exact": {
+      // 관리자가 고른 그대로 (부위·종류·등급·레벨·강화·옵션·신화 효과·인챈트)
+      const spec = b.spec && typeof b.spec === "object" ? b.spec : {};
+      const opts = Array.isArray(spec.opts) ? spec.opts.slice(0, 4).map((o) => ({ k: String(o?.k ?? ""), v: Number(o?.v) })) : [];
+      const clean = { slot: String(spec.slot ?? ""), type: String(spec.type ?? ""), variant: Number(spec.variant) || 0, rarity: String(spec.rarity ?? ""), ilvl: Number(spec.ilvl) || 1, enh: Number(spec.enh) || 0, opts,
+        mythic: String(spec.mythic ?? ""), title: String(spec.title ?? ""), ench: spec.ench ? String(spec.ench) : null };
+      if (!SLOTS.includes(clean.slot) || !RARITIES.includes(clean.rarity)) return send(res, 400, { error: "부위·등급을 골라 주세요." });
+      let made = null;
+      const ok = world.gmApplyChar(id, (c) => {
+        if (c.inv.length >= 40) return;
+        const it = makeItem(clean);
+        if (!it) return;
+        it.uid = c.nextUid++;
+        c.inv.push(it);
+        made = it;
+      });
+      audit("give_item_exact", target, { name: made?.name ?? null, rarity: clean.rarity, ilvl: clean.ilvl, enh: clean.enh, opts: made?.opts, mythic: made?.mythic ?? null, ench: made?.ench ?? null });
+      if (made) world.sessions.get(id)?.notice(`관리자가 [${made.name}${made.enh ? " +" + made.enh : ""}]을(를) 가방에 넣어 줬어요.`);
       return send(res, ok && made ? 200 : 400, ok && made ? { ok: true, item: made } : { error: "가방이 가득 찼거나 실패했어요." });
     }
     case "give-title": {

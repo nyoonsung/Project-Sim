@@ -181,6 +181,45 @@ export function rollItem(R, { ilvl, cls = "adventurer", tier = "normal", rarity 
   return it;
 }
 
+/** 옵션 값의 일반적인 최대치(관리자 지정 아이템 기본값·검증용): 난수를 최대로 굴린 값 */
+export function optionMax(k, ilvl, ri) { return OPTIONS[k].roll(ilvl, ri, () => 0.999); }
+export const MYTHIC_TITLE_LIST = MYTHIC_TITLES;
+/**
+ * 관리자가 고른 그대로 장비 만들기 (무작위 아님). 잘못된 값은 고치거나 null.
+ * spec: { slot, type?, variant?, rarity, ilvl, enh?, opts?: [{k, v}], mythic?, title?, ench? }
+ */
+export function makeItem(spec) {
+  const slot = SLOTS.includes(spec.slot) ? spec.slot : null;
+  if (!slot) return null;
+  const ri = Math.max(0, RARITIES.indexOf(spec.rarity));
+  const ilvl = Math.max(1, Math.min(100, Math.floor(Number(spec.ilvl) || 1)));
+  let type = null, variant = 0;
+  if (slot === "weapon") { type = WEAPON_TYPES[spec.type] ? spec.type : "sword"; }
+  else if (slot === "offhand") { type = OFFHAND_TYPES[spec.type] ? spec.type : "shield"; }
+  else variant = Math.max(0, Math.min(3, Math.floor(Number(spec.variant) || 0)));
+  const it = { slot, type, variant, rarity: RARITIES[ri], ilvl, enh: Math.max(0, Math.min(MAX_ENH, Math.floor(Number(spec.enh) || 0))), base: baseStats(slot, type, ilvl, ri, variant), opts: [] };
+  if (ri === 4 && slot === "weapon") Object.assign(it.base, MYTHIC_WEAPON_BONUS);
+  // 추가 옵션: 같은 옵션 중복 없이, 등급별 개수까지, 값은 0 ~ 일반 최대치의 3배
+  const seen = new Set();
+  for (const o of Array.isArray(spec.opts) ? spec.opts : []) {
+    if (!o || !OPTIONS[o.k] || seen.has(o.k) || it.opts.length >= RARITY_OPTS[ri]) continue;
+    const max = Math.abs(optionMax(o.k, ilvl, ri)) * 3;
+    const v = Number(o.v);
+    if (!Number.isFinite(v)) continue;
+    seen.add(o.k);
+    it.opts.push({ k: o.k, v: +Math.max(0, Math.min(max, v)).toFixed(3) });
+  }
+  if (ri === 4) {
+    it.mythicV = 2;
+    it.mythic = MYTHIC_EFFECTS[spec.mythic] ? spec.mythic : MYTHIC_KEYS[0];
+    it.title = MYTHIC_TITLES.includes(spec.title) ? spec.title : MYTHIC_TITLES[0];
+  }
+  if (spec.ench && ENCHANTS[spec.ench]) it.ench = spec.ench;
+  it.name = itemName(it);
+  it.dur = it.maxDur = maxDurability(it);
+  return it;
+}
+
 // ── 장비 내구도 (모든 장비): 무기·보조장비(방패 제외)·장신구는 스킬을 쓸 때, 갑옷·투구·방패는 맞을 때 닳고,
 //    쓰러지면 장착한 장비 모두 최대치의 10% 감소. 0이 되면 '부서짐' → 그 장비 능력치 30%만, 강화 보너스 없음. 대장장이에게 수선.
 export const DUR_PER_CAST = 0.1;
