@@ -394,6 +394,7 @@ export class Room {
       }
       if (this.dungeon === 2 && Math.random() < 0.2) {
         ch.riftCrystals = Math.min(999999, (ch.riftCrystals ?? 0) + 1); s.dirty = true;
+        this.world.sendChar?.(s);
         s.send({ t: "ev", list: [{ e: "msg", text: "균열 결정 1개를 획득했어요.", kind: "legend" }] });
       }
       if (Math.random() < 0.5) this.world.pickup(p, { cons: Math.random() < 0.6 ? "hp_potion" : "mp_potion", n: 1 });
@@ -408,6 +409,7 @@ export class Room {
       const ch = p.session.char;
       ch.riftCrystals = Math.min(999999, (ch.riftCrystals ?? 0) + 1);
       p.session.dirty = true; p.session.meDirty = true;
+      this.world.sendChar?.(p.session);
       p.session.send({ t: "ev", list: [{ e: "msg", text: "균열 결정 1개를 획득했어요.", kind: "legend" }] });
     }
     const n = t.boss ? (t.mid ? 1 + (Math.random() < 0.5) : 2 + (Math.random() < 0.5)) : Math.random() < (t.elite ? 0.35 : 0.07) ? 1 : 0;
