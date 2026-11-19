@@ -10,10 +10,10 @@ GitHub Actions의 검증 워크플로는 테스트와 빌드만 수행하며, �
 3. **Settings → Builds → Connect**에서 GitHub를 선택하고 `nyoonsung/Project-Sim` 저장소 접근을 승인합니다.
 4. Production branch를 `main`으로 설정합니다.
 5. Root directory는 저장소 루트(`/` 또는 빈 값)로 둡니다.
-6. Build command는 `npm ci`로 설정합니다.
+6. Build command는 `npm run build:cf`로 설정합니다.
 7. Deploy command는 `npx wrangler deploy`로 설정합니다.
 
-저장소의 `wrangler.toml`에 Worker 이름(`abyss-run`)과 빌드 명령(`node tools/build-cf.mjs`)이 이미 정의되어 있습니다. 따라서 Wrangler 배포 단계가 설정된 빌드 명령을 실행한 뒤 Worker와 정적 자산을 게시합니다.
+Workers Builds가 의존성을 설치하고, Build command가 `cf-dist`를 생성한 뒤 Deploy command가 Worker와 정적 자산을 게시합니다. Worker 이름은 `abyss-run`이어야 합니다. Cloudflare Workers Builds는 기본적으로 자체 배포 토큰을 관리하므로 GitHub Secrets에 Cloudflare 토큰이나 계정 ID를 넣을 필요가 없습니다.
 
 ## 이후 배포
 
