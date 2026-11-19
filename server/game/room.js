@@ -457,7 +457,8 @@ export class Room {
       for (const p of this.players.values()) {
         const ch = p.session.char;
         ch.abyssKeys = Math.min(9999, (ch.abyssKeys ?? 0) + 1);
-        p.session.dirty = true; p.session.send({ t: "ev", list: [{ e: "msg", text: "심연의 열쇠를 획득했어요! 마을의 심연 보관고에서 사용할 수 있어요.", kind: "legend" }] });
+        p.session.dirty = true;
+        p.session.send({ t: "ev", list: [{ e: "msg", text: "심연의 열쇠를 획득했어요! 마을의 심연 보관고에서 사용할 수 있어요.", kind: "legend" }] });
       }
     }
     this.map.objects.push(portal);
@@ -481,7 +482,8 @@ export class Room {
     if (this.map.traps?.length) this.tickTraps(now);
     for (const u of this.players.values()) this.tickPlayer(u, now);
     this.rebuildMobGrid();
-    for (const u of this.units.values()) {
+    // 틱 도중 소환·삭제되는 유닛이 있어도 현재 틱의 순회 목록을 고정한다.
+    for (const u of [...this.units.values()]) {
       if (u.type === "p" || u.dead) continue;
       tickStatuses(this, u, now);
       if (u.dead) continue;
@@ -766,24 +768,25 @@ export class Room {
 
   // 몬스터 충돌 계산 공간 분할: 주변 셀만 검사해 군집 상황의 O(n²) 비용을 줄인다.
   rebuildMobGrid() {
-    const cell = 96, buckets = new Map();
+    const cell = 96, cols = Math.ceil((this.map.w * TILE) / cell), buckets = new Map();
     for (const u of this.units.values()) {
       if (u.team !== "m" || u.dead || u.type === "d") continue;
-      const key = `${Math.floor(u.x / cell)},${Math.floor(u.y / cell)}`;
+      const cx = Math.floor(u.x / cell), cy = Math.floor(u.y / cell);
+      const key = cy * cols + cx;
       let a = buckets.get(key); if (!a) buckets.set(key, (a = []));
       a.push(u);
     }
-    this.mobGrid = { cell, buckets, tick: this.tickN };
+    this.mobGrid = { cell, cols, buckets, tick: this.tickN };
   }
   nearbyMobs(x, y, radius = 96) {
     const g = this.mobGrid;
     if (!g) return this.units.values();
-    const { cell, buckets } = g;
+    const { cell, cols, buckets } = g;
     const x0 = Math.floor((x - radius) / cell), x1 = Math.floor((x + radius) / cell);
     const y0 = Math.floor((y - radius) / cell), y1 = Math.floor((y + radius) / cell);
     const out = [];
     for (let cy = y0; cy <= y1; cy++) for (let cx = x0; cx <= x1; cx++) {
-      const a = buckets.get(`${cx},${cy}`); if (a) for (const u of a) out.push(u);
+      const a = buckets.get(cy * cols + cx); if (a) for (const u of a) out.push(u);
     }
     return out;
   }
@@ -893,6 +896,15 @@ export class Room {
           onTown.add(p);
           if (p.townAt == null) { p.townAt = now; p.session.send({ t: "ev", list: [{ e: "msg", text: "잠시 서 있으면 마을로 돌아가요.", kind: "info" }] }); }
           else if (now - p.townAt >= 1.5) { p.townAt = null; this.world.toTown(p.session, "포탈을 타고 마을로 돌아왔어요."); }
+        }
+        continue;
+      }
+      // 마을은 전체 이용자가 같은 방을 공유하므로, 관문을 밟은 사람의 파티만 입장시킨다.
+      if (this.kind === "town" && (o.id === "dungeon" || o.id === "dungeon2")) {
+        const trigger = on[0];
+        if (now >= (trigger.gateAt ?? 0)) {
+          trigger.gateAt = now + 1.5;
+          this.world.enterDungeon(trigger.session, 1, o.id === "dungeon2" ? 2 : 1);
         }
         continue;
       }
