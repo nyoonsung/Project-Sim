@@ -289,10 +289,16 @@ function bindInput() {
   addEventListener("mouseup", (e) => (G.mouse.down[e.button] = false));
   cv.addEventListener("contextmenu", (e) => e.preventDefault());
   $("#game").addEventListener("contextmenu", (e) => { if (!e.target.closest?.("input, textarea")) e.preventDefault(); });
-  // 채팅 숨기기/보이기 (L 또는 메뉴 버튼), 기억해 둠
-  const chatHidden = () => { try { return localStorage.getItem("abyss.chatHidden") === "1"; } catch { return false; } };
-  $("#chat").classList.toggle("collapsed", chatHidden());
-  G.toggleChat = () => { const on = !$("#chat").classList.contains("collapsed"); $("#chat").classList.toggle("collapsed", on); try { localStorage.setItem("abyss.chatHidden", on ? "1" : "0"); } catch {} };
+  // 채팅 열기 (L 또는 메뉴의 '채팅' 버튼, Enter와 같음): 채팅 기록을 보이고 바로 입력할 수 있게
+  //  예전엔 L이 채팅 기록 숨기기/보이기만 해서 '안 열린다'고 느껴졌고, 숨긴 상태가 저장돼 계속 안 보였음 → 저장된 숨김도 풀어 줌
+  try { localStorage.removeItem("abyss.chatHidden"); } catch {}
+  $("#chat").classList.remove("collapsed");
+  G.toggleChat = () => {
+    $("#chat").classList.remove("collapsed", "collapsed-tmp");
+    document.body.classList.add("chat-open");
+    if (G.touch) { if (document.activeElement === chat) chat.blur(); else chat.focus(); return; }
+    chat.focus();
+  };
   addEventListener("blur", () => { G.keys.clear(); G.mouse.down = [false, false, false]; });
   chat.addEventListener("focus", () => { G.typing = true; G.keys.clear(); document.body.classList.add("chat-open"); });
   chat.addEventListener("blur", () => { G.typing = false; setTimeout(() => { if (document.activeElement !== chat) document.body.classList.remove("chat-open"); }, 150); });
@@ -335,7 +341,7 @@ function bindInput() {
     if (e.code === "KeyH") toggleWin("help", WIN.openHelp);
     if (e.code === "KeyG") { const o = HUD.interactTarget(); if (o) WIN.openNpc(o); }
     if (e.code === "KeyM") HUD.toggleBigMap();
-    if (e.code === "KeyL") G.toggleChat?.();
+    if (e.code === "KeyL") { e.preventDefault(); G.toggleChat?.(); return; } // preventDefault: 'l'이 입력칸에 찍히지 않게
     if (e.code === "KeyB") toggleWin("codex", WIN.openCodex);
     if (e.code === "KeyO") toggleWin("keys", WIN.openKeys);
     if (e.code === "KeyT" && si < 0) toggleWin("titles", WIN.openTitles);

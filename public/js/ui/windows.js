@@ -508,7 +508,7 @@ export function openKeys() {
       h("div", { class: "note", text: "바꿀 칸을 누르고 원하는 키(또는 마우스 버튼)를 누르세요. 이미 쓰는 키면 서로 바뀌어요. Esc: 취소" }),
       ...names.map((n, i) => row(n, "slots", i)),
       h("h4", { text: "물약" }), ...pots.map((n, i) => row(n, "potions", i)),
-      h("div", { class: "note", text: "이동 WASD/방향키 · 캐릭터 C · 스킬 K · 가방 I · 파티 P · 도움말 H · 도감 B · 대화 G · 지도 M · 미니맵 N · 채팅 숨기기 L 은 고정이에요." }),
+      h("div", { class: "note", text: "이동 WASD/방향키 · 캐릭터 C · 스킬 K · 가방 I · 파티 P · 도움말 H · 도감 B · 대화 G · 지도 M · 미니맵 N · 채팅 열기 L(또는 Enter) 은 고정이에요." }),
       h("div", { class: "flexrow" }, h("button", { class: "btn small", onclick: () => { resetKeys(); G.ui.refreshKeys?.(); refreshWin("keys"); } }, "키 기본값으로")),
     ]),
   ], { w: 400 });
