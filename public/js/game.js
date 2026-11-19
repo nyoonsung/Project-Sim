@@ -15,7 +15,7 @@ import { makeClock } from "./netclock.js";
 export const G = {
   net: null, ui: null, renderer: null,
   name: "", char: null, me: null, meAt: 0,
-  you: 0, map: null, room: null, kind: "town", floor: 0, zone: null, zoneName: "", objects: [], exitOpen: false, arena: null,
+  you: 0, map: null, room: null, kind: "town", floor: 0, dungeon: 1, zone: null, zoneName: "", objects: [], exitOpen: false, arena: null,
   ents: new Map(), projectiles: new Map(), tels: new Map(), zones: new Map(), loot: new Map(), beams: [],
   floaters: [], party: [], boss: null, shake: 0, hurtFlash: 0,
   pred: { x: 0, y: 0, px: 0, py: 0, at: 0 }, local: { x: 0, y: 0 }, stick: [0, 0], touchHeld: new Set(), touch: false, aimLine: null, pending: [], seq: 0, ackSeq: 0, forced: 0,
@@ -69,10 +69,10 @@ export function onMessage(m) {
 }
 
 function onMap(m) {
-  G.room = m.room; G.kind = m.map?.kind ?? m.kind; G.floor = m.floor; G.you = m.you;
+  G.room = m.room; G.kind = m.map?.kind ?? m.kind; G.floor = m.floor; G.dungeon = m.dungeon ?? 1; G.you = m.you;
   if (G.kind === "town") onTown((t) => G.ui?.center(t));
   G.mapKind = m.kind === "town" ? "town" : m.kind === "safe" ? "safe" : m.kind;
-  G.zone = m.floor ? zoneOf(m.floor) : ZONES[0];
+  G.zone = m.floor ? zoneOf(m.floor, G.dungeon) : ZONES[0];
   G.map = new TileMap({ ...m, kind: m.kind === "town" ? "town" : m.kind }, G.zone);
   G.map.doorsOpen = m.doorsOpen;
   G.map.explored.fill(1); // 투기장 한 방이라 지도 전체를 바로 보여 줌

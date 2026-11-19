@@ -446,6 +446,42 @@ export function openGate() {
   }, { w: 360 });
 }
 
+export function openGate2() {
+  openWin("gate2", "제2 던전 — 심연의 균열", () => {
+    const leaderName = G.party.find((m) => m.leader)?.name;
+    const isLeader = !G.party.length || leaderName === G.name;
+    const unlocked = !!G.char.cleared && G.party.every((m) => m.cleared);
+    const cp = Math.min(G.char.checkpoint2 ?? 1, ...G.party.map((m) => m.cp2 ?? 1));
+    const best = Math.min(G.char.best2 ?? 0, ...G.party.map((m) => m.best2 ?? 0));
+    const next = Math.min(30, best + 1);
+    const floors = [1]; for (let f = 11; f <= cp; f += 10) floors.push(f);
+    const bosses = []; for (let f = 5; f <= Math.min(30, best); f += 5) bosses.push(f);
+    return [
+      h("div", { class: "note", text: G.party.length ? `파티 ${G.party.length}명 · 파티장 ${leaderName}` : "혼자 입장해요." }),
+      h("div", { class: "note", text: unlocked ? "해금 완료 — 제1 던전 100층 정복자 전용 지역" : "잠김 — 파티원 전원이 제1 던전 100층을 정복해야 해요." }),
+      best >= 1 ? h("button", { class: "btn primary continue-btn", disabled: !isLeader || !unlocked, onclick: () => { send({ t: "enter", dungeon: 2, floor: next }); closeWin("gate2"); } }, `▶ 이어하기: ${next}층부터`) : null,
+      h("h4", { text: "시작 층" }),
+      h("div", { class: "floors" }, ...floors.map((f) => h("button", { class: "btn small primary", disabled: !isLeader || !unlocked, onclick: () => { send({ t: "enter", dungeon: 2, floor: f }); closeWin("gate2"); } }, `${f}층`))),
+      bosses.length ? h("h4", { text: "보스 재도전" }) : null,
+      bosses.length ? h("div", { class: "floors" }, ...bosses.map((f) => h("button", { class: "btn small" + (f % 10 === 0 ? " boss" : ""), disabled: !isLeader || !unlocked, onclick: () => { send({ t: "enter", dungeon: 2, floor: f }); closeWin("gate2"); } }, `${f}층 ${f % 10 === 0 ? "보스" : "중보"}`))) : null,
+      h("div", { class: "note", text: `최고 기록 ${best}/30층 · 심연의 열쇠 ${G.char.abyssKeys ?? 0}개 · 균열 결정 ${G.char.riftCrystals ?? 0}개` }),
+      h("button", { class: "btn", disabled: !isLeader, onclick: () => openAbyssVault() }, "심연 보관고 열기"),
+      !isLeader ? h("div", { class: "note", text: "파티장만 입장할 수 있어요." }) : null,
+    ];
+  }, { w: 390 });
+}
+
+export function openAbyssVault() {
+  openWin("abyss-vault", "심연 보관고", () => {
+    const keys = G.char.abyssKeys ?? 0, crystals = G.char.riftCrystals ?? 0;
+    return [
+      h("div", { class: "note", text: "심연의 열쇠 1개와 균열 결정 5개를 바치면 제2 던전 전용 전설 유물을 하나 얻어요." }),
+      h("div", { class: "note", text: `보유량 — 심연의 열쇠: ${keys}개 / 균열 결정: ${crystals}개` }),
+      h("button", { class: "btn primary", disabled: keys < 1 || crystals < 5, onclick: () => send({ t: "vault" }) }, "열쇠와 결정으로 보관고 열기"),
+    ];
+  }, { w: 360 });
+}
+
 export async function openBoard() {
   let list = [];
   try { list = (await (await fetch("/api/ranking")).json()).list ?? []; } catch {}
@@ -475,11 +511,11 @@ export function openNpc(o) {
     if (two) { const x0 = Math.max(8, (W - (w + 420 + 12)) / 2); open({ x: x0 }); openInv({ x: x0 + w + 12 }); }
     else open();
   };
-  ({ gate: openGate, shop: () => pair(openShop, 440), smithy: () => pair(openSmithy, 420), enchanter: () => pair(openEnchant, 440), trainer: openTrainer, board: openBoard, class_master: openClass })[o.id]?.();
+  ({ gate: openGate, gate2: openGate2, vault: openAbyssVault, shop: () => pair(openShop, 440), smithy: () => pair(openSmithy, 420), enchanter: () => pair(openEnchant, 440), trainer: openTrainer, board: openBoard, class_master: openClass })[o.id]?.();
 }
 
 export function refreshAll() {
-  for (const id of ["char", "skills", "inv", "party", "shop", "smithy", "enchant", "class", "gate", "trainer", "titles", "trade"]) if (isOpen(id)) refreshWin(id);
+  for (const id of ["char", "skills", "inv", "party", "shop", "smithy", "enchant", "class", "gate", "gate2", "abyss-vault", "trainer", "titles", "trade"]) if (isOpen(id)) refreshWin(id);
 }
 
 // ───────── 조작 키 설정 (O) ─────────

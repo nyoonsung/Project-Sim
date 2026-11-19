@@ -27,6 +27,9 @@ const MON = {
   zealot: ["wizzard_f", TINT.crimson], fallen_blade: ["chort"], automaton: ["wogol", TINT.steel], shade: ["chort", TINT.shadow], void_caller: ["necromancer", TINT.void],
   royal_guard: ["knight_f", TINT.royal], royal_archer: ["elf_m", TINT.royal], chaos_mage: ["wizzard_m", TINT.chaos],
   imp: ["imp"], chaos_hound: ["chort", TINT.crimson],
+  resonance_tracker: ["chort", TINT.void], shard_golem: ["ogre", TINT.steel],
+  abyss_sorcerer: ["necromancer", TINT.void], rift_wraith: ["big_zombie", TINT.shadow],
+  poison_spore: ["ogre", TINT.swamp],
 };
 // 보스 (몸, 색, 크기 배율)
 const BOSS = {
@@ -34,6 +37,10 @@ const BOSS = {
   magma_golem: ["big_demon", TINT.fire, 2.4], furnace_giant: ["ogre", TINT.fire, 2.7], frost_witch: ["necromancer", TINT.ice, 3.2], frost_lord: ["big_zombie", TINT.ice, 2.6],
   thunder_apostle: ["big_demon", TINT.storm, 2.4], fallen_inquisitor: ["necromancer", TINT.gold, 3.2], fallen_archangel: ["big_demon", TINT.holy, 2.6],
   clock_warden: ["ogre", TINT.steel, 2.4], machine_colossus: ["big_zombie", TINT.steel, 2.8], chaos_knight: ["big_demon", TINT.dark, 2.5], dungeon_king: ["big_demon", TINT.crimson, 2.9],
+  rift_harbinger: ["big_demon", TINT.crimson, 2.5], scarlet_regent: ["big_demon", TINT.crimson, 2.7],
+  null_archivist: ["necromancer", TINT.blue, 2.5], paradox_engine: ["ogre", TINT.steel, 2.8],
+  eclipse_warden: ["big_zombie", TINT.void, 2.5], void_emperor: ["big_demon", TINT.void, 2.9],
+  abyss_watcher: ["big_demon", TINT.void, 3.0],
 };
 
 export function dtLookFor(e) {

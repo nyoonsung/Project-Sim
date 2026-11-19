@@ -37,7 +37,7 @@ function pickTarget(room, m, now) {
 }
 
 function separate(room, m) {
-  for (const o of room.units.values()) {
+  for (const o of room.nearbyMobs ? room.nearbyMobs(m.x, m.y, m.r + 72) : room.units.values()) {
     if (o === m || o.team !== "m" || o.dead || o.type === "d") continue;
     const dx = m.x - o.x, dy = m.y - o.y, d = Math.hypot(dx, dy), min = m.r + o.r - 2;
     if (d > 0 && d < min) {
@@ -96,6 +96,53 @@ export function tickMonster(room, m, now) {
   }
   const ready = now >= (m.atkReady ?? 0);
   switch (m.ai) {
+    case "stalker": {
+      // 짧은 예고 후 빠르게 거리를 좁히는 추적 돌진
+      if (ready && dist > 70 && dist < 230 && now >= (m.dashAt ?? 0) && lineOfSight(room.map, m.x, m.y, t.x, t.y)) {
+        const a = ang, len = Math.min(190, dist - 28);
+        room.addArea({ team: "m", shape: "r", x: m.x, y: m.y, ang: a, l: len, w: 38, tel: 0.72, fire: () => {} });
+        m.windup = { at: now + 0.72, interruptible: true, fire: (t0) => {
+          const hit = new Set(); let left = len;
+          const step = () => {
+            if (m.dead) return;
+            const ox = m.x, oy = m.y; moveToward(room, m, a, Math.min(left, 34) / dt, dt); left -= Math.min(left, 34);
+            for (const p of room.players.values()) if (!p.dead && !hit.has(p.id) && Math.hypot(p.x - m.x, p.y - m.y) < p.r + m.r + 14) { hit.add(p.id); hitTarget(room, m, p, 1.35, room.now); }
+            if (left > 0 && Math.hypot(m.x - ox, m.y - oy) > 2) room.schedule(dt, step);
+          };
+          step(); m.dashAt = t0 + 4.2;
+        } };
+        m.atkReady = now + 4.2;
+      } else if (dist <= def.range + t.r) {
+        if (ready) m.windup = { at: now + 0.32, interruptible: true, fire: (t0) => { const tt = room.units.get(t.id); if (tt && !tt.dead && Math.hypot(tt.x - m.x, tt.y - m.y) <= def.range + tt.r + 12) hitTarget(room, m, tt, 1.1, t0); } };
+      } else moveToward(room, m, room.pathDir(m, t), spd * 1.12, dt);
+      break;
+    }
+    case "guard": {
+      // 파편 골렘은 느리지만 단단하고 범위 강타로 공간을 압박한다.
+      if (dist < 105 && ready) {
+        const x = m.x, y = m.y;
+        room.addArea({ team: "m", shape: "c", x, y, r: 92, tel: 1.05, fire: (t0) => {
+          room.ev({ e: "fx", fx: "impacts/ground-slam", x: x | 0, y: y | 0, s: 0.85 });
+          for (const p of room.players.values()) if (!p.dead && Math.hypot(p.x - x, p.y - y) <= 92 + p.r) hitTarget(room, m, p, 1.55, t0);
+        } });
+        m.atkReady = now + def.atkCd;
+      } else if (dist > def.range + t.r) moveToward(room, m, room.pathDir(m, t), spd, dt);
+      break;
+    }
+    case "blink": {
+      // 주기적으로 목표의 측후방으로 이동. 벽 안쪽 좌표는 피하고 즉시 공격하지 않는다.
+      if (dist > 90 && dist < 240 && ready && now >= (m.blinkAt ?? 0)) {
+        const a = ang + Math.PI + (m.id % 2 ? 0.5 : -0.5);
+        const x = t.x + Math.cos(a) * 54, y = t.y + Math.sin(a) * 54;
+        if (!circleHitsWall(room.map, x, y, m.r * 0.7)) {
+          m.x = x; m.y = y; m.blinkAt = now + 4.8; m.atkReady = now + 0.8;
+          room.ev({ e: "fx", fx: "shadow/void-orb", x: x | 0, y: y | 0, s: 0.7 });
+        } else moveToward(room, m, room.pathDir(m, t), spd, dt);
+      } else if (dist <= def.range + t.r && ready) {
+        m.windup = { at: now + 0.28, interruptible: true, fire: (t0) => { const tt = room.units.get(t.id); if (tt && !tt.dead && Math.hypot(tt.x - m.x, tt.y - m.y) <= def.range + tt.r + 10) hitTarget(room, m, tt, 1.25, t0); } };
+      } else moveToward(room, m, room.pathDir(m, t), spd, dt);
+      break;
+    }
     case "chaser":
     case "swarm": {
       if (dist <= def.range + t.r) {
@@ -139,7 +186,19 @@ export function tickMonster(room, m, now) {
       break;
     }
     case "ranged":
-    case "caster": {
+    case "caster":
+    case "summoner":
+    case "spore": {
+      if (m.ai === "summoner" && now >= (m.summonAt ?? 0) && room.aliveMonsters() < 22) {
+        const count = room.dungeon === 2 ? 2 : 1;
+        for (let i = 0; i < count; i++) {
+          const a = Math.random() * TAU, d = 50 + Math.random() * 35;
+          const x = m.x + Math.cos(a) * d, y = m.y + Math.sin(a) * d;
+          if (!circleHitsWall(room.map, x, y, 12)) room.spawnMonster(def.summon ?? "rift_wraith", x, y, false, { aggro: true });
+        }
+        m.summonAt = now + 9;
+        room.ev({ e: "fx", fx: "spawn/spawn-portal", x: m.x | 0, y: m.y | 0, s: 0.55 });
+      }
       const los = lineOfSight(room.map, m.x, m.y, t.x, t.y);
       const want = def.range * 0.7;
       if (!los || dist > def.range * 0.95) moveToward(room, m, room.pathDir(m, t), spd, dt);
@@ -156,7 +215,7 @@ export function tickMonster(room, m, now) {
           } };
         } else {
           const tx = t.x, ty = t.y, R = 46;
-          const status = def.aoe?.includes("ice") ? { type: "slow", dur: 2, v: 0.35 } : def.aoe?.includes("poison") || def.aoe?.includes("spore") ? { type: "poison", dur: 4, pow: 0.3 } : def.aoe?.includes("lightning") ? { type: "shock", dur: 3 } : null;
+          const status = m.ai === "spore" ? { type: "slow", dur: 2.8, v: 0.42 } : def.aoe?.includes("ice") ? { type: "slow", dur: 2, v: 0.35 } : def.aoe?.includes("poison") || def.aoe?.includes("spore") ? { type: "poison", dur: 4, pow: 0.3 } : def.aoe?.includes("lightning") ? { type: "shock", dur: 3 } : null;
           m.windup = { at: now + 0.3, interruptible: true, fire: () => {
             room.addArea({ team: "m", shape: "c", x: tx, y: ty, r: R, tel: 1.0, fire: (t1) => {
               room.ev({ e: "fx", fx: def.aoe, x: tx | 0, y: ty | 0, s: 0.55 });
@@ -193,12 +252,21 @@ export function tickBoss(room, b, now) {
   const dt = 0.05;
   if (isHardCC(b)) return;
   const def = b.def_;
-  if (b.phase === 1 && b.hp < b.maxHp * 0.5) {
+  const phase2Threshold = room.dungeon === 2 ? 0.66 : 0.5;
+  if (b.phase === 1 && b.hp < b.maxHp * phase2Threshold) {
     b.phase = 2;
     b.speed *= 1.15;
-    room.ev({ e: "msg", text: `${b.name}이(가) 격노했어요! (2페이즈)`, kind: "boss" });
+    room.ev({ e: "msg", text: `${b.name}이(가) 힘을 끌어올렸어요! (2페이즈)`, kind: "boss" });
     room.ev({ e: "fx", fx: "status/rage", x: b.x | 0, y: b.y | 0, s: 1.5, at: b.id });
     b.patternAt = now + 1;
+  }
+  // 심연 보스의 3페이즈: 20% 이하에서 분노. 기존 텔레그래프는 유지해 회피 여지를 남긴다.
+  if (room.dungeon === 2 && b.phase === 2 && b.hp < b.maxHp * 0.3) {
+    b.phase = 3;
+    b.speed *= 1.18;
+    room.ev({ e: "msg", text: `${b.name}이(가) 완전히 폭주합니다! (분노 상태)`, kind: "boss" });
+    room.ev({ e: "fx", fx: "status/rage", x: b.x | 0, y: b.y | 0, s: 2.0, at: b.id });
+    b.patternAt = now + 0.85;
   }
   const t = pickTarget(room, b, now) ?? bossTargets(room)[0];
   if (!t) return;
@@ -213,15 +281,37 @@ export function tickBoss(room, b, now) {
   if (now >= b.patternAt) {
     // 보스 고유 패턴 + 층에 따라 추가되는 공용 고급 패턴(추적 폭격·십자·안팎 폭발·나선 탄막·줄 공격)
     const extra = EXTRA_PATTERNS.filter((x) => room.floor >= x.from).map((x) => x.p);
-    const pats = [...def.patterns.filter((p) => !p.phase2 || b.phase === 2), ...extra];
-    const p = pats[(b.patIdx++ * 7 + Math.floor(Math.random() * pats.length)) % pats.length];
-    startPattern(room, b, p, t, now);
-    // 2페이즈: 가끔 고급 패턴을 겹쳐서 연계 (예: 십자 + 추적 폭격)
-    if (b.phase === 2 && extra.length && Math.random() < 0.35) {
-      const p2 = extra[Math.floor(Math.random() * extra.length)];
-      room.schedule(0.8, () => { if (!b.dead) { const keep = b.pattern; startPattern(room, b, p2, pickTarget(room, b, room.now) ?? t, room.now); if (keep && keep.end > (b.pattern?.end ?? 0)) b.pattern = keep; } });
+    const native = def.patterns.filter((p) => !p.phase2 || b.phase >= 2);
+    // 제2 던전은 어느 보스든 추적 폭격·십자 베기·잔류 장판을 추가로 사용한다.
+    const abyssExtra = room.dungeon === 2 ? [
+      { type: "chase", n: b.phase === 3 ? 4 : 3, gap: 0.42, radius: 46, tel: 0.82, pow: 1.0, fx: "impacts/ground-slam" },
+      { type: "cross", len: 420, width: 40, tel: 0.86, pow: 1.2, fx: "shadow/dark-explosion" },
+      { type: "pools", n: b.phase === 3 ? 7 : 5, radius: 40, dur: 6, pow: 0.52, fx: "shadow/shadow-flames" },
+    ] : [];
+    const allPats = [...native, ...extra, ...abyssExtra];
+    if (!allPats.length) return;
+    const pickIndex = (b.patIdx++ * 7 + Math.floor(Math.random() * allPats.length)) % allPats.length;
+    const chosen = allPats[pickIndex];
+    const tune = (pat) => room.dungeon === 2
+      ? { ...pat, ...(pat.tel == null ? {} : { tel: Math.max(0.68, pat.tel * 0.8) }), pow: (pat.pow ?? 1) * 1.13 }
+      : pat;
+    startPattern(room, b, tune(chosen), t, now);
+    // 심연 보스는 2·3페이즈에서 서로 다른 공격을 겹쳐 압박한다.
+    const comboPool = room.dungeon === 2 ? allPats.filter((x) => x !== chosen) : extra;
+    const comboChance = room.dungeon === 2 ? (b.phase === 3 ? 0.78 : 0.62) : 0.35;
+    if (b.phase >= 2 && comboPool.length && Math.random() < comboChance) {
+      const p2 = tune(comboPool[Math.floor(Math.random() * comboPool.length)]);
+      room.schedule(room.dungeon === 2 ? 0.62 : 0.8, () => {
+        if (!b.dead) {
+          const keep = b.pattern;
+          startPattern(room, b, p2, pickTarget(room, b, room.now) ?? t, room.now);
+          if (keep && keep.end > (b.pattern?.end ?? 0)) b.pattern = keep;
+        }
+      });
     }
-    b.patternAt = now + (b.phase === 2 ? 2.1 : 2.9) + Math.random() * 0.7;
+    b.patternAt = now + (room.dungeon === 2
+      ? (b.phase === 3 ? 1.05 : b.phase === 2 ? 1.45 : 2.15)
+      : (b.phase === 2 ? 2.1 : 2.9)) + Math.random() * (room.dungeon === 2 ? 0.35 : 0.45);
     return;
   }
   // 평타 (가까우면)
@@ -305,7 +395,7 @@ function startPattern(room, b, p, t, now) {
     case "barrage": {
       const waves = b.phase === 2 ? 3 : 2;
       // 사전 경고: 100층 보스는 3초, 다른 보스는 1.5초 동안 탄이 날아갈 길을 크게 보여 준 뒤 발사 (근접 직업이 피할 시간)
-      const delay = room.floor >= 100 ? 3 : 1.5;
+      const delay = room.dungeon === 2 ? 0.95 : room.floor >= 100 ? 3 : 1.5;
       b.pattern.end = now + delay + 0.1 + waves * 0.5;
       room.ev({ e: "anim", id: b.id, a: "cast" });
       room.ev({ e: "warn", id: b.id, k: "barrage", d: delay, n: p.count, w: waves, x: b.x | 0, y: (b.y - 10) | 0 });
@@ -375,7 +465,7 @@ function startPattern(room, b, p, t, now) {
         const q = ply[k % Math.max(1, ply.length)];
         const x = (q?.x ?? b.x) + (Math.random() - 0.5) * 160, y = (q?.y ?? b.y) + (Math.random() - 0.5) * 160;
         if (circleHitsWall(room.map, x, y, 6)) continue;
-        room.addArea({ team: "m", shape: "c", x, y, r: p.radius, tel: 0.9, fire: () => {
+        room.addArea({ team: "m", shape: "c", x, y, r: p.radius, tel: room.dungeon === 2 ? 0.72 : 0.9, fire: () => {
           room.addZone({ team: "m", owner: b.id, x, y, r: p.radius, dur: p.dur, interval: 0.5, fx: p.fx, tick: (t0, z) => {
             for (const q2 of bossTargets(room)) if (Math.hypot(q2.x - z.x, q2.y - z.y) <= z.r - SH) hitTarget(room, b, q2, p.pow, t0, { unblockable: true });
           } });

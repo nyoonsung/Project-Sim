@@ -20,6 +20,9 @@ const P = {
 const rig = (pal, weapon, head = null, headColor = null, scale = 1) => ({ rig: { ...pal, weapon, head, headColor }, scale });
 const critter = (fx, palette, scale = 1) => ({ critter: fx, palette, scale });
 const GREENS = ["#062010", "#0e4a1e", "#1f8a34", "#4fd060", "#b0ff9a", "#f0fff0"];
+const RIFT = { armor: ["#ffb0aa", "#d85b67", "#933344", "#491a2b"], core: ["#421522", "#2a0c18", "#160710"], mark: "#fff0d0" };
+const CHRONO = { armor: ["#a8f0f0", "#62b8c4", "#347a8e", "#1b3a58"], core: ["#122c42", "#0c1c32", "#060e1b"], mark: "#ffe070" };
+const ECLIPSE = { armor: ["#c9adff", "#8d69c8", "#573d90", "#2b1c52"], core: ["#1b102f", "#10091f", "#080412"], mark: "#ff75d8" };
 
 export const MONSTERS = {
   // 1구역: 이끼 낀 지하묘지
@@ -72,6 +75,27 @@ export const MONSTERS = {
   royal_archer: { name: "왕실 저격수", ai: "ranged", hp: 170, dmg: 30, speed: 66, range: 270, atkCd: 1.7, xp: 3.4, proj: "projectiles/arrow", look: rig(P.royal, "bow", "hood", "#5a0a1a") },
   chaos_mage: { name: "혼돈 마도사", ai: "caster", hp: 180, dmg: 34, speed: 62, range: 250, atkCd: 2.8, xp: 3.6, aoe: "arcane/star-fall", look: rig(P.cult, "staff", "hat", "#ffd860") },
   chaos_hound: { name: "혼돈 사냥개", ai: "swarm", hp: 150, dmg: 28, speed: 130, range: 26, atkCd: 0.9, xp: 3, look: critter("fire/spirit-flame", ["#100818", "#301848", "#6030a0", "#a070e0", "#e0d0ff", "#ffffff"], 0.6) },
+  // 제2 던전 1구역: 붉은 균열
+  rift_guard: { name: "균열 수호병", ai: "chaser", hp: 210, dmg: 40, speed: 72, range: 42, atkCd: 1.35, xp: 5.2, look: rig(RIFT, "greatsword", "helm", "#491a2b", 1.05) },
+  blood_wisp: { name: "혈흔 정령", ai: "swarm", hp: 128, dmg: 34, speed: 142, range: 24, atkCd: 0.9, xp: 4.6, fly: true, look: critter("critters/wisp", ["#240510", "#6a1028", "#c52b48", "#f06a80", "#ffc0c8", "#ffffff"], 1.05) },
+  crimson_hunter: { name: "진홍 추격자", ai: "charger", hp: 188, dmg: 46, speed: 96, range: 40, atkCd: 2.0, xp: 5.4, poison: true, look: rig(RIFT, "dagger", "hood", "#761c36", 0.95) },
+  shard_mimic: { name: "파편 모방체", ai: "bomber", hp: 174, dmg: 58, speed: 82, range: 30, atkCd: 1.1, xp: 5.0, look: critter("critters/slime", ["#160d20", "#4a1738", "#9f2858", "#e65b86", "#ffd0e0", "#ffffff"], 1.1) },
+  // 제2 던전 2구역: 정지한 시계도시
+  null_automaton: { name: "무효화 자동인형", ai: "chaser", hp: 260, dmg: 48, speed: 74, range: 42, atkCd: 1.25, xp: 6.0, look: rig(CHRONO, "hammer", "helm", "#1b3a58", 1.05) },
+  paradox_marksman: { name: "역행 저격수", ai: "ranged", hp: 172, dmg: 52, speed: 66, range: 270, atkCd: 1.55, xp: 5.8, proj: "projectiles/laser-bolt", look: rig(CHRONO, "bow", "hood", "#1b3a58") },
+  chrono_sentinel: { name: "시간 감시자", ai: "charger", hp: 238, dmg: 55, speed: 86, range: 44, atkCd: 2.1, xp: 6.2, look: rig(CHRONO, "spear", "helm", "#347a8e", 1.0) },
+  hex_oracle: { name: "저주 예언자", ai: "caster", hp: 190, dmg: 54, speed: 62, range: 250, atkCd: 2.6, xp: 6.4, aoe: "arcane/star-fall", look: rig(ECLIPSE, "staff", "hat", "#2b1c52", 0.95) },
+  // 제2 던전 3구역: 별 없는 심연
+  void_stalker: { name: "무광 추적자", ai: "swarm", hp: 212, dmg: 58, speed: 154, range: 26, atkCd: 0.85, xp: 6.8, look: rig(ECLIPSE, "dagger", "hood", "#10091f", 0.95) },
+  eclipse_cultist: { name: "일식 숭배자", ai: "caster", hp: 238, dmg: 62, speed: 68, range: 255, atkCd: 2.5, xp: 7.2, aoe: "shadow/grasping-hands", look: rig(ECLIPSE, "staff", "mitre", "#10091f") },
+  star_eater: { name: "별 포식자", ai: "bomber", hp: 230, dmg: 74, speed: 88, range: 34, atkCd: 1.0, xp: 7.0, look: critter("critters/eyeball", ["#080412", "#29104d", "#6035a0", "#a878df", "#e5caff", "#ffffff"], 1.15) },
+  abyss_mirror: { name: "심연의 거울상", ai: "ranged", hp: 252, dmg: 66, speed: 76, range: 260, atkCd: 1.4, xp: 7.4, proj: "shadow/void-orb", projSmall: true, look: critter("scifi/hologram", ["#080412", "#25133d", "#5b2e83", "#a65ac7", "#f0b8ff", "#ffffff"], 0.8) },
+  // 제2 던전 전용: 외형뿐 아니라 전투 역할과 AI가 서로 다르다.
+  resonance_tracker: { name: "잔향 추적자", ai: "stalker", hp: 240, dmg: 52, speed: 148, range: 28, atkCd: 1.0, xp: 7.0, look: rig(ECLIPSE, "dagger", "hood", "#160d2a", 0.95) },
+  shard_golem: { name: "파편 골렘", ai: "guard", hp: 420, dmg: 72, speed: 42, range: 54, atkCd: 2.8, xp: 8.0, look: rig(RIFT, "hammer", "helm", "#491a2b", 1.35) },
+  abyss_sorcerer: { name: "심연술사", ai: "summoner", hp: 260, dmg: 58, speed: 58, range: 245, atkCd: 2.5, xp: 7.8, aoe: "shadow/void-orb", summon: "rift_wraith", look: rig(ECLIPSE, "staff", "hat", "#10091f", 1.0) },
+  rift_wraith: { name: "균열 망령", ai: "blink", hp: 220, dmg: 64, speed: 98, range: 32, atkCd: 1.1, xp: 7.6, fly: true, look: critter("critters/ghost", ["#080412", "#25133d", "#5b2e83", "#a65ac7", "#f0b8ff", "#ffffff"], 1.1) },
+  poison_spore: { name: "독안개 포자체", ai: "spore", hp: 300, dmg: 50, speed: 48, range: 220, atkCd: 2.8, xp: 7.8, aoe: "nature/spore-burst", look: critter("critters/slime", ["#061a12", "#123b2c", "#277b57", "#62c894", "#b8ffd8", "#ffffff"], 1.25) },
 };
 
 // 보스 패턴: cleave(전방 부채꼴) slam(원형) ring(도넛, 안쪽 안전) charge(직선 돌진) barrage(전방위 탄막)
@@ -130,6 +154,29 @@ export const BOSSES = {
     patterns: [{ type: "cleave", range: 120, arc: 160, tel: 0.7, pow: 2.0 }, { type: "charge", dist: 360, width: 52, tel: 0.7, pow: 1.9 }, { type: "rain", n: 10, radius: 50, tel: 1.0, pow: 1.5, fx: "arcane/star-fall" }, { type: "summon", monster: "royal_guard", n: 2 }] }),
   dungeon_king: B({ name: "던전의 왕 바엘제논", hp: 60000, dmg: 76, speed: 66, look: rig(P.royal, "scythe", "mitre", "#ffd860", 2.6), xp: 60,
     patterns: [{ type: "cleave", range: 130, arc: 170, tel: 0.8, pow: 2.0, fx: "melee/scythe-reap" }, { type: "ring", inner: 80, outer: 230, tel: 1.2, pow: 2.0, fx: "shadow/dark-explosion" }, { type: "rain", n: 14, radius: 52, tel: 1.0, pow: 1.6, fx: "fire/meteor" }, { type: "barrage", count: 32, speed: 190, pow: 1.0, fx: "arcane/arcane-orb" }, { type: "beam", dur: 5, width: 30, pow: 0.9, fx: "arcane/arcane-beam", phase2: true }, { type: "summon", monster: "chaos_hound", n: 4, phase2: true }] }),
+  // 제2 던전 보스: 패턴을 겹치고 안전지대를 빠르게 바꾸는 고난도 설계
+  rift_harbinger: B({ name: "균열의 선도자 베르칸", hp: 18000, dmg: 62, speed: 82, look: rig(RIFT, "greatsword", "helm", "#491a2b", 2.2), mid: true,
+    patterns: [{ type: "cross", len: 380, width: 42, tel: 0.85, pow: 1.55, fx: "melee/spear-sweep" }, { type: "rain", n: 9, radius: 48, tel: 0.9, pow: 1.45, fx: "fire/meteor" }, { type: "pull", radius: 245, tel: 0.85, pow: 1.5 }, { type: "summon", monster: "crimson_hunter", n: 3, phase2: true }] }),
+  scarlet_regent: B({ name: "진홍의 섭정 아르카디아", hp: 52000, dmg: 88, speed: 78, look: rig(RIFT, "scythe", "mitre", "#491a2b", 2.65),
+    patterns: [{ type: "donut", inner: 105, outer: 255, tel: 0.95, pow: 1.65, fx: "shadow/dark-explosion" }, { type: "lanes", n: 7, width: 42, len: 390, tel: 0.8, pow: 1.45, fx: "fire/fire-ring" }, { type: "spiral", arms: 4, dur: 2.4, speed: 205, pow: 1.0, fx: "shadow/void-orb" }, { type: "beam", dur: 4.2, width: 34, pow: 0.95, fx: "fire/flamethrower", phase2: true }, { type: "summon", monster: "shard_mimic", n: 4, phase2: true }, { type: "pools", n: 7, radius: 42, dur: 7, pow: 0.55, fx: "shadow/shadow-flames", phase2: true }] }),
+  null_archivist: B({ name: "무효의 기록관", hp: 26000, dmg: 74, speed: 70, look: rig(CHRONO, "staff", "hat", "#1b3a58", 2.15), mid: true,
+    patterns: [{ type: "lanes", n: 8, width: 38, len: 430, tel: 0.75, pow: 1.5, fx: "lightning/lightning-strike" }, { type: "barrage", count: 26, speed: 215, pow: 1.0, fx: "projectiles/laser-bolt" }, { type: "spiral", arms: 3, dur: 2.6, speed: 195, pow: 0.95, fx: "arcane/arcane-orb" }, { type: "summon", monster: "null_automaton", n: 2, phase2: true }] }),
+  paradox_engine: B({ name: "역행의 심장 크로노스", hp: 72000, dmg: 98, speed: 72, look: critter("scifi/energy-core", ["#061522", "#12445c", "#2b8caa", "#65d9e5", "#d0ffff", "#ffffff"], 3.0),
+    patterns: [{ type: "cross", len: 420, width: 38, tel: 0.8, pow: 1.55, fx: "scifi/emp-blast" }, { type: "ring", inner: 90, outer: 250, tel: 1.0, pow: 1.75, fx: "lightning/thunderclap" }, { type: "rain", n: 13, radius: 48, tel: 0.85, pow: 1.55, fx: "projectiles/homing-missile" }, { type: "beam", dur: 4.8, width: 32, pow: 0.95, fx: "scifi/tractor-beam", phase2: true }, { type: "chase", n: 5, gap: 0.38, radius: 52, tel: 0.7, pow: 1.15, fx: "impacts/ground-slam", phase2: true }, { type: "summon", monster: "paradox_marksman", n: 3, phase2: true }] }),
+  eclipse_warden: B({ name: "일식의 감시자", hp: 34000, dmg: 82, speed: 80, look: rig(ECLIPSE, "spear", "helm", "#10091f", 2.3), mid: true,
+    patterns: [{ type: "pull", radius: 275, tel: 0.75, pow: 1.65 }, { type: "donut", inner: 95, outer: 245, tel: 0.9, pow: 1.7, fx: "shadow/dark-explosion" }, { type: "barrage", count: 28, speed: 210, pow: 1.0, fx: "shadow/void-orb" }, { type: "summon", monster: "void_stalker", n: 4, phase2: true }] }),
+  void_emperor: B({ name: "별을 삼킨 황제 에레보스", hp: 98000, dmg: 112, speed: 76, look: rig(ECLIPSE, "scythe", "mitre", "#10091f", 2.85), xp: 80,
+    patterns: [{ type: "cross", len: 440, width: 42, tel: 0.75, pow: 1.7, fx: "shadow/dark-explosion" }, { type: "lanes", n: 9, width: 38, len: 440, tel: 0.75, pow: 1.55, fx: "shadow/shadow-flames" }, { type: "spiral", arms: 4, dur: 2.8, speed: 220, pow: 1.05, fx: "arcane/arcane-orb" }, { type: "donut", inner: 110, outer: 270, tel: 0.9, pow: 1.85, fx: "shadow/dark-explosion", phase2: true }, { type: "beam", dur: 5.2, width: 38, pow: 1.05, fx: "arcane/arcane-beam", phase2: true }, { type: "summon", monster: "star_eater", n: 4, phase2: true }, { type: "pools", n: 9, radius: 45, dur: 8, pow: 0.65, fx: "shadow/shadow-flames", phase2: true }] }),
+  abyss_watcher: B({ name: "심연의 감시자", hp: 145000, dmg: 128, speed: 78, look: rig(ECLIPSE, "scythe", "helm", "#10091f", 3.0), xp: 110,
+    patterns: [
+      { type: "cross", len: 460, width: 42, tel: 1.25, pow: 1.8, fx: "shadow/dark-explosion" },
+      { type: "rain", n: 12, radius: 52, tel: 1.2, pow: 1.65, fx: "arcane/star-fall" },
+      { type: "donut", inner: 112, outer: 280, tel: 1.3, pow: 1.9, fx: "shadow/shadow-flames" },
+      { type: "lanes", n: 8, width: 44, len: 460, tel: 1.15, pow: 1.7, fx: "lightning/lightning-strike", phase2: true },
+      { type: "beam", dur: 4.8, width: 34, pow: 1.0, fx: "arcane/arcane-beam", phase2: true },
+      { type: "summon", monster: "rift_wraith", n: 3, phase2: true },
+      { type: "pools", n: 8, radius: 46, dur: 7, pow: 0.6, fx: "nature/spore-burst", phase2: true }
+    ] }),
 };
 
 // 구역 정의: 팔레트(바닥·벽), 조명, 분위기 이펙트
@@ -156,8 +203,19 @@ export const ZONES = [
     monsters: ["royal_guard", "royal_archer", "chaos_mage", "chaos_hound"], mid: "chaos_knight", boss: "dungeon_king", weather: "weather/shooting-stars", deco: ["banner", "candle", "crack"] },
 ];
 
-export function zoneOf(floor) {
-  return ZONES[Math.min(ZONES.length - 1, Math.floor((floor - 1) / 10))];
+// 제2 던전: 30층 독립 진행. 10층마다 환경·몬스터·보스가 모두 교체된다.
+export const DUNGEON2_ZONES = [
+  { name: "붉은 균열", floor: ["#38212a", "#301a24", "#24131e", "#482633"], wall: ["#7a394a", "#5a2638", "#3a1a2a", "#180b16"], accent: "#ff647d", light: 118, ambient: 0.92, torch: "shadow/shadow-flames",
+    monsters: ["resonance_tracker", "shard_golem", "abyss_sorcerer", "rift_wraith", "poison_spore"], mid: "rift_harbinger", boss: "scarlet_regent", weather: "weather/fog", deco: ["crack", "bones", "rune"] },
+  { name: "정지한 시계도시", floor: ["#1c3038", "#172832", "#11212c", "#29434a"], wall: ["#3a7380", "#2a5668", "#1a3a4c", "#0b1722"], accent: "#65d9e5", light: 130, ambient: 0.88, torch: "scifi/energy-core",
+    monsters: ["null_automaton", "paradox_marksman", "chrono_sentinel", "hex_oracle"], mid: "null_archivist", boss: "paradox_engine", weather: "weather/storm", deco: ["gear", "rune", "crack"] },
+  { name: "별 없는 심연", floor: ["#20182e", "#1a1428", "#120d20", "#2b2040"], wall: ["#59417e", "#3c2b60", "#251a42", "#0e081a"], accent: "#c18aff", light: 105, ambient: 0.95, torch: "shadow/shadow-flames",
+    monsters: ["resonance_tracker", "shard_golem", "abyss_sorcerer", "rift_wraith", "poison_spore"], mid: "eclipse_warden", boss: "abyss_watcher", weather: "weather/fog", deco: ["rune", "bones", "crack"] },
+];
+export const DUNGEON2_MAX_FLOOR = 30;
+export function zoneOf(floor, dungeon = 1) {
+  const list = dungeon === 2 ? DUNGEON2_ZONES : ZONES;
+  return list[Math.min(list.length - 1, Math.floor((floor - 1) / 10))];
 }
 /** 층 종류: normal | mid(5의 배수, 10의 배수 제외) | boss(10의 배수) */
 export function floorKind(floor) {
@@ -172,50 +230,57 @@ const bend = (base, late, f) => f <= 60 ? Math.pow(base, f - 1) : Math.pow(base,
 export const diffMul = (f) => ({ hp: 1 + 0.025 * (f - 1), dmg: 1 + 0.016 * (f - 1), speed: Math.min(1.25, 1 + 0.003 * (f - 1)) });
 // 95층부터는 너무 어렵다는 의견 → 체력·공격력 75%
 export const LATE_EASE = (f) => (f >= 95 ? 0.75 : 1);
-export function floorScale(floor) {
+export function floorScale(floor, dungeon = 1) {
   const d = diffMul(floor), e = LATE_EASE(floor);
+  const harder = dungeon === 2;
   return {
-    hp: bend(1.05, 1.04, floor) * d.hp * e,
-    dmg: bend(1.04, 1.027, floor) * d.dmg * e,
-    speed: d.speed,
-    xp: Math.pow(1.045, floor - 1),
-    gold: Math.pow(1.04, floor - 1),
+    hp: bend(1.05, 1.04, floor) * d.hp * e * (harder ? 5 : 1),
+    dmg: bend(1.04, 1.027, floor) * d.dmg * e * (harder ? 5 : 1),
+    speed: d.speed, // 제2 던전은 이동 속도를 올리지 않고 체력·공격력만 5배
+    xp: Math.pow(1.045, floor - 1) * (harder ? 1.55 : 1),
+    gold: Math.pow(1.04, floor - 1) * (harder ? 1.35 : 1),
     level: floor,
   };
 }
 
 // 구역마다 데이터 숫자의 평균을 1구역 기준으로 정규화 → 구역 안 상대 차이(궁수는 약하고 기사는 단단함)만 남김
-const avg = (zi, k) => {
-  const ids = ZONES[zi].monsters;
+const avg = (zi, k, list = ZONES) => {
+  const ids = list[zi].monsters;
   return ids.reduce((s, id) => s + MONSTERS[id][k], 0) / ids.length;
 };
-const NORM = ZONES.map((_, zi) => ({ hp: avg(zi, "hp") / avg(0, "hp"), dmg: avg(zi, "dmg") / avg(0, "dmg") }));
+const normFor = (list) => list.map((_, zi) => ({ hp: avg(zi, "hp", list) / avg(0, "hp", list), dmg: avg(zi, "dmg", list) / avg(0, "dmg", list) }));
+const NORM = normFor(ZONES);
+const DUNGEON2_NORM = normFor(DUNGEON2_ZONES);
 
 /** 몬스터·보스 체력 배율: 혼자 3.5배, 파티 7.5배. 초반은 1층 1배 → 10층에서 최대치까지 서서히 (신규 유저 보호) */
 export const SOLO_HP = 3.5, PARTY_HP = 7.5;
 const hpBoost = (party, floor) => { const max = party > 1 ? PARTY_HP : SOLO_HP; return 1 + (max - 1) * Math.min(1, Math.max(0, (floor - 1) / 9)); };
 /** 층에 맞춘 실제 몬스터 능력치 */
-export function monsterStats(id, floor, party = 1) {
+export function monsterStats(id, floor, party = 1, dungeon = 1) {
   const def = MONSTERS[id];
-  const zi = Math.min(ZONES.length - 1, Math.floor((floor - 1) / 10));
-  const s = floorScale(floor);
+  const list = dungeon === 2 ? DUNGEON2_ZONES : ZONES;
+  const norm = dungeon === 2 ? DUNGEON2_NORM : NORM;
+  const zi = Math.min(list.length - 1, Math.floor((floor - 1) / 10));
+  const s = floorScale(floor, dungeon);
   const pScale = 1 + 0.55 * (party - 1);
   return {
-    hp: Math.round((def.hp / NORM[zi].hp) * s.hp * pScale * hpBoost(party, floor)),
-    dmg: (def.dmg / NORM[zi].dmg) * s.dmg,
+    hp: Math.round((def.hp / norm[zi].hp) * s.hp * pScale * hpBoost(party, floor)),
+    dmg: (def.dmg / norm[zi].dmg) * s.dmg,
     xp: def.xp * 6 * s.xp,
     level: floor,
   };
 }
 /** 보스 능력치: 중간보스는 평균 몬스터의 36배, 주요 보스는 64배 체력 */
-export function bossStats(id, floor, party = 1) {
+export function bossStats(id, floor, party = 1, dungeon = 1) {
   const def = BOSSES[id];
-  const s = floorScale(floor);
-  const baseHp = avg(0, "hp") * s.hp, baseDmg = avg(0, "dmg") * s.dmg;
+  const list = dungeon === 2 ? DUNGEON2_ZONES : ZONES;
+  const s = floorScale(floor, dungeon);
+  const baseHp = avg(0, "hp", list) * s.hp, baseDmg = avg(0, "dmg", list) * s.dmg;
   const pScale = 1 + 0.7 * (party - 1);
   const hpMul = def.mid ? 36 : 64;
+  const capBonus = dungeon === 1 && floor >= 100 ? 1.5 : 1;
   return {
-    hp: Math.round(baseHp * hpMul * pScale * (floor >= 100 ? 1.5 : 1) * hpBoost(party, floor)),
+    hp: Math.round(baseHp * hpMul * pScale * capBonus * hpBoost(party, floor)),
     dmg: baseDmg * (def.mid ? 1.5 : 1.7),
     xp: (def.xp ?? 25) * 6 * s.xp,
     level: floor,

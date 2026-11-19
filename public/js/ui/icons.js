@@ -6,12 +6,21 @@ const P = (g, c, x, y, w = 1, h = 1) => { g.fillStyle = c; g.fillRect(x, y, w, h
 const MAT = ["#9a6a3a", "#c08a50", "#c0c8d8", "#e8edf6", "#9ae0ff", "#5a5a6a", "#c8a0ff", "#f0e0c0", "#ffffff", "#ff6080"];
 
 export function itemIcon(it) {
-  const key = `${it.slot}|${it.type}|${it.variant}|${it.rarity}|${Math.floor((it.ilvl - 1) / 10)}`;
+  const key = `${it.slot}|${it.type}|${it.variant}|${it.rarity}|${Math.floor((it.ilvl - 1) / 10)}|${it.relic ?? ""}`;
   if (cache.has(key)) return cache.get(key);
   const cv = document.createElement("canvas");
   cv.width = 18; cv.height = 18;
   const g = cv.getContext("2d");
   const m = MAT[Math.min(9, Math.floor((it.ilvl - 1) / 10))], r = RARITY_COLOR[it.rarity] ?? "#ccc", ink = "#14101c", wood = "#8a5a32";
+  const edge = it.relicColor ?? r;
+  // 정돈된 메탈 프레임 + 딥 네이비 인레이. 그림 자체는 픽셀 실루엣을 유지한다.
+  P(g, "#080b13", 0, 0, 18, 18);
+  P(g, "#1a2030", 1, 1, 16, 16);
+  P(g, "#303b50", 1, 1, 16, 1);
+  P(g, "#0c101a", 1, 16, 16, 1);
+  P(g, edge, 0, 0, 18, 1); P(g, edge, 0, 17, 18, 1);
+  P(g, edge, 0, 1, 1, 16); P(g, edge, 17, 1, 1, 16);
+  P(g, "#ffffff", 2, 2, 3, 1); P(g, "#ffffff", 2, 3, 1, 1);
   switch (it.slot) {
     case "weapon":
       switch (it.type) {
@@ -35,6 +44,10 @@ export function itemIcon(it) {
     case "armor": P(g, ink, 3, 3, 12, 13); P(g, m, 4, 4, 10, 11); P(g, ink, 8, 4, 2, 11); P(g, "#fff6", 5, 5, 2, 4); P(g, ink, 3, 3, 3, 2); P(g, ink, 12, 3, 3, 2); break;
     case "trinket": P(g, "#ffd84a", 5, 4, 8, 1); P(g, "#ffd84a", 4, 5, 1, 6); P(g, "#ffd84a", 13, 5, 1, 6); P(g, "#ffd84a", 5, 11, 8, 1); P(g, r, 7, 7, 4, 3); break;
   }
+  // 등급 보석과 상단 하이라이트. 작은 아이콘에서도 희귀도와 유물 여부가 구분된다.
+  P(g, edge, 14, 2, 2, 2);
+  P(g, "#ffffff", 14, 2, 1, 1);
+  if (it.relic) { P(g, "#ffffff", 13, 5, 1, 1); P(g, edge, 14, 5, 2, 1); }
   cache.set(key, cv);
   return cv;
 }

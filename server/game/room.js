@@ -2,7 +2,7 @@
 import { TILE, TICK_DT, PLAYER_RADIUS } from "../../shared/constants.js";
 import { applyInput, moveCircle, circleHitsWall, blocksShot, lineOfSight, tileAt } from "../../shared/move.js";
 import { MONSTERS, BOSSES, monsterStats, bossStats, floorScale, zoneOf } from "../../shared/zones.js";
-import { rollItem } from "../../shared/items.js";
+import { rollItem, rollAbyssRelic } from "../../shared/items.js";
 import { wearOnDeath } from "./wear.js";
 const KI_BASE = 30; // 내력 기본치
 import { tickStatuses, dealDamage, heal, moveMul, isHardCC, applyStatus, buffSum, giveShield } from "./combat.js";
@@ -13,6 +13,7 @@ import { mapPayload } from "./dungeon.js";
 import { secureRandom } from "./secure.js";
 
 const VIEW = 600;
+const FLOW_DIRS = [[1, 0], [-1, 0], [0, 1], [0, -1]];
 // 근처 사람에게만 보내는 화면 효과 이벤트와 그 범위
 const NEAR_ONLY = new Set(["fx", "anim", "cast", "casting", "cx", "st", "stx", "heal", "miss", "shake", "buff", "shield", "dmg", "pj", "tel", "zone", "beam", "dash", "parryup", "spk", "trap", "gap", "stance"]);
 const EV_RANGE_X = 1000, EV_RANGE_Y = 760, CROWD_EV_CAP = 24;
@@ -31,8 +32,8 @@ function clearPath(map, m, t) {
   return walkLine(map, m.x, m.y, t.x, t.y) && walkLine(map, m.x + px, m.y + py, t.x + px, t.y + py) && walkLine(map, m.x - px, m.y - py, t.x - px, t.y - py);
 }
 export class Room {
-  constructor(world, { id, kind, floor = 0, map, partyId = null, partySize = 1 }) {
-    Object.assign(this, { world, id, kind, floor, map, partyId, partySize });
+  constructor(world, { id, kind, floor = 0, dungeon = 1, map, partyId = null, partySize = 1 }) {
+    Object.assign(this, { world, id, kind, floor, dungeon: dungeon === 2 ? 2 : 1, map, partyId, partySize });
     this.units = new Map();
     this.players = new Map();
     this.projectiles = [];
@@ -45,7 +46,9 @@ export class Room {
     this.now = world.clock ?? 0;
     this.tickN = 0;
     this.flow = new Map();
+    this.flowBuffers = new Map();
     this.flowAt = 0;
+    this.mobGrid = null;
     this.total = 0;
     this.killed = 0;
     this.exitOpen = kind !== "dungeon";
@@ -72,11 +75,11 @@ export class Room {
   spawnMonster(mid, x, y, elite = false, opts = {}) {
     const def = MONSTERS[mid];
     if (!def) return null;
-    const st = monsterStats(mid, Math.max(1, this.floor), this.partySize);
+    const st = monsterStats(mid, Math.max(1, this.floor), this.partySize, this.dungeon);
     const m = {
       id: newUnitId(), team: "m", type: "m", mid, name: (elite ? "정예 " : "") + def.name, x, y, r: 11 * (def.look.scale ?? 1) * (elite ? 1.2 : 1),
-      hp: Math.round(st.hp * (elite ? 3 : 1)), maxHp: Math.round(st.hp * (elite ? 3 : 1)), atk: st.dmg * (elite ? 1.5 : 1), def: 2 + this.floor * 1.6 * (elite ? 1.5 : 1),
-      level: st.level, xp: st.xp * (elite ? 3 : 1), speed: def.speed * (elite ? 1.08 : 1) * floorScale(this.floor).speed, elite, ai: def.ai, def_: def,
+      hp: Math.round(st.hp * (elite ? 3 : 1)), maxHp: Math.round(st.hp * (elite ? 3 : 1)), atk: st.dmg * (elite ? 1.5 : 1), def: (def.ai === "guard" ? 12 + this.floor * 1.2 : 2 + this.floor * 1.6) * (elite ? 1.5 : 1),
+      level: st.level, xp: st.xp * (elite ? 3 : 1), speed: def.speed * (elite ? 1.08 : 1) * floorScale(this.floor, this.dungeon).speed, elite, ai: def.ai, def_: def,
       status: new Map(), buffs: new Map(), threat: new Map(), facing: Math.PI / 2, aggro: !!opts.aggro, home: [x, y],
       atkReady: 0, windup: null, dead: false, fly: !!def.fly,
     };
@@ -86,11 +89,11 @@ export class Room {
   }
   spawnBoss(bid, x, y) {
     const def = BOSSES[bid];
-    const st = bossStats(bid, this.floor, this.partySize);
+    const st = bossStats(bid, this.floor, this.partySize, this.dungeon);
     const b = {
       id: newUnitId(), team: "m", type: "b", bid, name: def.name, x, y, r: 14 * Math.min(2.2, def.look.scale ?? 1),
       hp: st.hp, maxHp: st.hp, atk: st.dmg, def: 6 + this.floor * 2.2, level: st.level, xp: st.xp, speed: def.speed,
-      boss: true, mid: def.mid, def_: def, status: new Map(), buffs: new Map(), threat: new Map(), facing: Math.PI / 2,
+      boss: true, mid: def.mid, def_: def, dungeon: this.dungeon, status: new Map(), buffs: new Map(), threat: new Map(), facing: Math.PI / 2,
       aggro: true, patternAt: 2, pattern: null, phase: 1, groggyGauge: 0, dead: false, fly: !!def.fly, patIdx: 0,
     };
     this.units.set(b.id, b);
@@ -146,7 +149,7 @@ export class Room {
     this.units.set(u.id, u);
     this.players.set(u.id, u);
     const s = u.session;
-    s.send({ t: "map", room: this.id, kind: this.kind, floor: this.floor, zone: this.floor ? zoneOf(this.floor).name : null, ...mapPayload(this.map), exitOpen: this.exitOpen, you: u.id });
+    s.send({ t: "map", room: this.id, kind: this.kind, floor: this.floor, dungeon: this.dungeon, zone: this.floor ? zoneOf(this.floor, this.dungeon).name : null, ...mapPayload(this.map), exitOpen: this.exitOpen, you: u.id });
     // 이미 있는 유닛 정보
     const list = [];
     for (const o of this.units.values()) if (o !== u) list.push(this.describe(o));
@@ -157,6 +160,7 @@ export class Room {
   }
   removePlayer(u) {
     this.removeDevicesOf(u);
+    this.flow.delete(u.id); this.flowBuffers.delete(u.id);
     this.units.delete(u.id);
     this.players.delete(u.id);
     this.flow.delete(u.id);
@@ -327,7 +331,7 @@ export class Room {
       let xp = t.xp * XP_RATE * (this.players.size > 1 ? 0.8 : 1);
       if (ch.level > this.floor + 5) xp *= Math.max(0.05, 1 - (ch.level - this.floor - 5) * 0.15);
       gainXp(this, p, xp);
-      const gold = Math.round((2 + Math.random() * 3) * floorScale(this.floor).gold * (t.elite ? 3 : 1) * (t.boss ? 25 : 1));
+      const gold = Math.round((2 + Math.random() * 3) * floorScale(this.floor, this.dungeon).gold * (t.elite ? 3 : 1) * (t.boss ? 25 : 1));
       ch.gold += gold;
       p.session.meDirty = true;
       this.ev({ e: "gold", id: p.id, v: gold, x: t.x | 0, y: t.y | 0, own: p.id });
@@ -342,7 +346,9 @@ export class Room {
       // 층을 깬 순간 '깬 층'으로 기록 → 마을로 나갔다 와도 다음 층부터 이어서 도전 가능
       for (const p of this.players.values()) {
         const c = p.session.char;
-        if (c.best < this.floor) { c.best = this.floor; this.world.save?.(p.session); this.world.sendChar?.(p.session); }
+        if (this.dungeon === 2) c.best2 = Math.max(c.best2 ?? 0, this.floor);
+        else c.best = Math.max(c.best, this.floor);
+        this.world.save?.(p.session); this.world.sendChar?.(p.session);
       }
       this.ev({ e: "exit", open: 1 });
       this.ev({ e: "msg", text: "층 클리어! 보상 상자가 나타나고 바닥 아이템을 모두 주웠어요.", kind: "info" });
@@ -381,13 +387,18 @@ export class Room {
       if (p.dead || c.opened.has(p.userId) || Math.hypot(p.x - c.x, p.y - c.y) > 34) continue;
       c.opened.add(p.userId);
       const s = p.session, ch = s.char;
-      const gold = Math.round(12 + this.floor * 6 + Math.random() * this.floor * 3);
+      const gold = Math.round((12 + this.floor * 6 + Math.random() * this.floor * 3) * floorScale(this.floor, this.dungeon).gold);
       ch.gold += gold; s.meDirty = true; s.dirty = true;
       const n = 1 + (Math.random() < 0.35 ? 1 : 0);
       const names = [];
       for (let i = 0; i < n; i++) {
         const it = rollItem(secureRandom, { ilvl: Math.max(1, this.floor), cls: ch.cls, tier: "elite" });
         if (this.world.pickup(p, it)) names.push(it.name); else this.dropLoot(p.userId, it, c.x + (Math.random() * 40 - 20), c.y + 20);
+      }
+      if (this.dungeon === 2 && Math.random() < 0.2) {
+        ch.riftCrystals = Math.min(999999, (ch.riftCrystals ?? 0) + 1); s.dirty = true;
+        this.world.sendChar?.(s);
+        s.send({ t: "ev", list: [{ e: "msg", text: "균열 결정 1개를 획득했어요.", kind: "legend" }] });
       }
       if (Math.random() < 0.5) this.world.pickup(p, { cons: Math.random() < 0.6 ? "hp_potion" : "mp_potion", n: 1 });
       s.send({ t: "ev", list: [{ e: "chestopen", id: "reward", x: c.x, y: c.y, gold }, { e: "msg", text: `보상 상자: ${gold}G${names.length ? " + " + names.join(", ") : ""}`, kind: "legend" }] });
@@ -397,6 +408,13 @@ export class Room {
 
   rollDrops(p, t) {
     const tier = t.boss ? "boss" : t.elite ? "elite" : "normal";
+    if (this.dungeon === 2 && Math.random() < (t.boss ? 0.75 : t.elite ? 0.28 : 0.12)) {
+      const ch = p.session.char;
+      ch.riftCrystals = Math.min(999999, (ch.riftCrystals ?? 0) + 1);
+      p.session.dirty = true; p.session.meDirty = true;
+      this.world.sendChar?.(p.session);
+      p.session.send({ t: "ev", list: [{ e: "msg", text: "균열 결정 1개를 획득했어요.", kind: "legend" }] });
+    }
     const n = t.boss ? (t.mid ? 1 + (Math.random() < 0.5) : 2 + (Math.random() < 0.5)) : Math.random() < (t.elite ? 0.35 : 0.07) ? 1 : 0;
     for (let i = 0; i < n; i++) {
       const it = rollItem(secureRandom, { ilvl: Math.max(1, this.floor), cls: p.session.char.cls, tier });
@@ -432,8 +450,17 @@ export class Room {
     this.exitOpen = true;
     this.schedule(2.0, () => this.collectAll()); // 보스가 떨어뜨린 아이템도 자동으로
     const isMain = !b.mid;
-    const portal = { kind: "portal", id: isMain ? "safe" : "exit", x: b.x, y: b.y, label: isMain ? (this.floor >= 100 ? "마을로 (던전 정복!)" : "안전 구역으로") : `${this.floor + 1}층으로` };
-    if (this.floor >= 100) portal.id = "victory";
+    const finalFloor = this.dungeon === 2 ? 30 : 100;
+    const isFinal = isMain && this.floor >= finalFloor;
+    const portal = { kind: "portal", id: isFinal ? "victory" : isMain ? "safe" : "exit", x: b.x, y: b.y, label: isFinal ? (this.dungeon === 2 ? "마을로 (심연 정복!)" : "마을로 (던전 정복!)") : isMain ? "안전 구역으로" : `${this.floor + 1}층으로` };
+    if (this.dungeon === 2 && isFinal) {
+      for (const p of this.players.values()) {
+        const ch = p.session.char;
+        ch.abyssKeys = Math.min(9999, (ch.abyssKeys ?? 0) + 1);
+        p.session.dirty = true;
+        p.session.send({ t: "ev", list: [{ e: "msg", text: "심연의 열쇠를 획득했어요! 마을의 심연 보관고에서 사용할 수 있어요.", kind: "legend" }] });
+      }
+    }
     this.map.objects.push(portal);
     this.ev({ e: "obj", o: portal });
     this.world.onBossCleared(this, isMain);
@@ -449,11 +476,13 @@ export class Room {
       this.timers = this.timers.filter((t) => t.at > now);
       for (const t of due) try { t.fn(now); } catch (e) { console.error(e); }
     }
-    if (now >= this.flowAt) { this.updateFlow(); this.flowAt = now + 0.5; }
+    if (now >= this.flowAt) { this.updateFlow(); this.flowAt = now + (this.units.size > 24 ? 0.65 : 0.5); }
     if (this.wave) this.tickWaves(now);
     if (this.wave && this.wave.spawned >= this.total && !this.exitOpen && now >= (this.rescueAt ?? 0)) { this.rescueAt = now + 8; this.rescueStragglers(); }
     if (this.map.traps?.length) this.tickTraps(now);
     for (const u of this.players.values()) this.tickPlayer(u, now);
+    this.rebuildMobGrid();
+    // 틱 도중 소환·삭제되는 유닛이 있어도 현재 틱의 순회 목록을 고정한다.
     for (const u of [...this.units.values()]) {
       if (u.type === "p" || u.dead) continue;
       tickStatuses(this, u, now);
@@ -737,14 +766,40 @@ export class Room {
     }
   }
 
+  // 몬스터 충돌 계산 공간 분할: 주변 셀만 검사해 군집 상황의 O(n²) 비용을 줄인다.
+  rebuildMobGrid() {
+    const cell = 96, cols = Math.ceil((this.map.w * TILE) / cell), buckets = new Map();
+    for (const u of this.units.values()) {
+      if (u.team !== "m" || u.dead || u.type === "d") continue;
+      const cx = Math.floor(u.x / cell), cy = Math.floor(u.y / cell);
+      const key = cy * cols + cx;
+      let a = buckets.get(key); if (!a) buckets.set(key, (a = []));
+      a.push(u);
+    }
+    this.mobGrid = { cell, cols, buckets, tick: this.tickN };
+  }
+  nearbyMobs(x, y, radius = 96) {
+    const g = this.mobGrid;
+    if (!g) return this.units.values();
+    const { cell, cols, buckets } = g;
+    const x0 = Math.floor((x - radius) / cell), x1 = Math.floor((x + radius) / cell);
+    const y0 = Math.floor((y - radius) / cell), y1 = Math.floor((y + radius) / cell);
+    const out = [];
+    for (let cy = y0; cy <= y1; cy++) for (let cx = x0; cx <= x1; cx++) {
+      const a = buckets.get(cy * cols + cx); if (a) for (const u of a) out.push(u);
+    }
+    return out;
+  }
   // ── 흐름장(길찾기): 플레이어까지 타일 거리
   updateFlow() {
-    const { w, h } = this.map;
+    const { w, h } = this.map, size = w * h;
     for (const p of this.players.values()) {
       if (p.dead) { this.flow.delete(p.id); continue; }
-      const dist = new Int16Array(w * h).fill(-1);
+      let buf = this.flowBuffers.get(p.id);
+      if (!buf || buf.dist.length !== size) { buf = { dist: new Int16Array(size), q: new Int32Array(size) }; this.flowBuffers.set(p.id, buf); }
+      const dist = buf.dist, q = buf.q;
+      dist.fill(-1);
       const sx = Math.floor(p.x / TILE), sy = Math.floor(p.y / TILE);
-      const q = new Int32Array(w * h);
       let qh = 0, qt = 0;
       if (sx < 0 || sy < 0 || sx >= w || sy >= h) continue;
       dist[sy * w + sx] = 0;
@@ -752,7 +807,7 @@ export class Room {
       while (qh < qt) {
         const i = q[qh++], x = i % w, y = (i / w) | 0, d = dist[i];
         if (d > 250) continue;
-        for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        for (const [dx, dy] of FLOW_DIRS) {
           const nx = x + dx, ny = y + dy;
           if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
           const j = ny * w + nx;
@@ -841,6 +896,15 @@ export class Room {
           onTown.add(p);
           if (p.townAt == null) { p.townAt = now; p.session.send({ t: "ev", list: [{ e: "msg", text: "잠시 서 있으면 마을로 돌아가요.", kind: "info" }] }); }
           else if (now - p.townAt >= 1.5) { p.townAt = null; this.world.toTown(p.session, "포탈을 타고 마을로 돌아왔어요."); }
+        }
+        continue;
+      }
+      // 마을은 전체 이용자가 같은 방을 공유하므로, 관문을 밟은 사람의 파티만 입장시킨다.
+      if (this.kind === "town" && (o.id === "dungeon" || o.id === "dungeon2")) {
+        const trigger = on[0];
+        if (now >= (trigger.gateAt ?? 0)) {
+          trigger.gateAt = now + 1.5;
+          this.world.enterDungeon(trigger.session, 1, o.id === "dungeon2" ? 2 : 1);
         }
         continue;
       }

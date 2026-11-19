@@ -145,6 +145,7 @@ export function baseStats(slot, type, ilvl, rarityIndex, variant = 1) {
 
 /** 아이템 이름 */
 export function itemName(it) {
+  if (typeof it.relicName === "string" && it.relicName) return it.relicName;
   // 재료 이름: 관리자가 정한 게 있으면 그대로(it.mat), 아니면 아이템 레벨에 따라
   const mat = Number.isInteger(it.mat) && MATERIALS[it.mat] ? MATERIALS[it.mat] : MATERIALS[Math.min(MATERIALS.length - 1, Math.floor((it.ilvl - 1) / 10))];
   let n;
@@ -223,6 +224,31 @@ export function makeItem(spec) {
   if (Number.isInteger(mat) && mat >= 0 && mat < MATERIALS.length) it.mat = mat; // 재료 이름 고정 (신화가 레벨 따라 커져도 유지)
   it.name = itemName(it);
   it.dur = it.maxDur = maxDurability(it);
+  return it;
+}
+
+// 제2 던전 전용 유물: 기존 장비 슬롯/전투 계산과 호환되면서 이름·색·보너스 조합이 고정된 희귀 보상.
+const ABYSS_RELICS = [
+  { id: "rift-edge", name: "균열 절단자", color: "#ff647d", slot: "weapon", base: { dmg: 0.14, crit: 0.025 } },
+  { id: "null-aegis", name: "무효의 방벽", color: "#65d9e5", slot: "offhand", base: { def: 34, hp: 190, dr: 0.045 } },
+  { id: "eclipse-visor", name: "일식의 면갑", color: "#c18aff", slot: "helmet", base: { def: 24, hp: 165, critDmg: 0.09 } },
+  { id: "chrono-mantle", name: "무음의 망토", color: "#65d9e5", slot: "armor", base: { def: 48, hp: 260, move: 0.035, dr: 0.035 } },
+  { id: "star-heart", name: "심연의 인장", color: "#d0a0ff", slot: "trinket", base: { hp: 180, mp: 110, atkPct: 0.07, crit: 0.025 } },
+];
+export function rollAbyssRelic(R, { ilvl, cls = "adventurer" } = {}) {
+  const gear = CLASS_GEAR[cls] ?? CLASS_GEAR.adventurer;
+  const relic = pick(R, ABYSS_RELICS);
+  const ri = RARITIES.indexOf("전설");
+  const type = relic.slot === "weapon" ? pick(R, gear.w) : relic.slot === "offhand" ? pick(R, gear.o) : undefined;
+  const variant = relic.slot === "helmet" || relic.slot === "armor" || relic.slot === "trinket" ? Math.floor(R() * 4) : 0;
+  const it = makeItem({ slot: relic.slot, type, variant, rarity: "전설", ilvl: Math.max(1, Math.min(100, Math.floor(ilvl || 1))) });
+  if (!it) return null;
+  it.relic = relic.id;
+  it.relicName = relic.name;
+  it.relicColor = relic.color;
+  for (const [k, v] of Object.entries(relic.base)) it.base[k] = (it.base[k] ?? 0) + v;
+  it.opts = [{ k: relic.slot === "weapon" ? "dmg" : relic.slot === "offhand" ? "dr" : relic.slot === "trinket" ? "atkPct" : "hp", v: relic.slot === "weapon" ? 0.045 : relic.slot === "offhand" || relic.slot === "armor" ? 0.025 : relic.slot === "trinket" ? 0.04 : 70 }];
+  it.name = relic.name;
   return it;
 }
 
