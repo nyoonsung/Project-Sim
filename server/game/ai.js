@@ -252,7 +252,8 @@ export function tickBoss(room, b, now) {
   const dt = 0.05;
   if (isHardCC(b)) return;
   const def = b.def_;
-  if (b.phase === 1 && b.hp < b.maxHp * 0.5) {
+  const phase2Threshold = room.dungeon === 2 ? 0.66 : 0.5;
+  if (b.phase === 1 && b.hp < b.maxHp * phase2Threshold) {
     b.phase = 2;
     b.speed *= 1.15;
     room.ev({ e: "msg", text: `${b.name}이(가) 힘을 끌어올렸어요! (2페이즈)`, kind: "boss" });
@@ -260,7 +261,7 @@ export function tickBoss(room, b, now) {
     b.patternAt = now + 1;
   }
   // 심연 보스의 3페이즈: 20% 이하에서 분노. 기존 텔레그래프는 유지해 회피 여지를 남긴다.
-  if (room.dungeon === 2 && b.phase === 2 && b.hp < b.maxHp * 0.2) {
+  if (room.dungeon === 2 && b.phase === 2 && b.hp < b.maxHp * 0.3) {
     b.phase = 3;
     b.speed *= 1.18;
     room.ev({ e: "msg", text: `${b.name}이(가) 완전히 폭주합니다! (분노 상태)`, kind: "boss" });
@@ -280,16 +281,37 @@ export function tickBoss(room, b, now) {
   if (now >= b.patternAt) {
     // 보스 고유 패턴 + 층에 따라 추가되는 공용 고급 패턴(추적 폭격·십자·안팎 폭발·나선 탄막·줄 공격)
     const extra = EXTRA_PATTERNS.filter((x) => room.floor >= x.from).map((x) => x.p);
-    const pats = [...def.patterns.filter((p) => !p.phase2 || b.phase >= 2), ...extra];
-    if (!pats.length) return;
-    const p = pats[(b.patIdx++ * 7 + Math.floor(Math.random() * pats.length)) % pats.length];
-    startPattern(room, b, p, t, now);
-    // 2페이즈: 가끔 고급 패턴을 겹쳐서 연계 (예: 십자 + 추적 폭격)
-    if (b.phase >= 2 && extra.length && Math.random() < (room.dungeon === 2 ? (b.phase === 3 ? 0.62 : 0.46) : 0.35)) {
-      const p2 = extra[Math.floor(Math.random() * extra.length)];
-      room.schedule(0.8, () => { if (!b.dead) { const keep = b.pattern; startPattern(room, b, p2, pickTarget(room, b, room.now) ?? t, room.now); if (keep && keep.end > (b.pattern?.end ?? 0)) b.pattern = keep; } });
+    const native = def.patterns.filter((p) => !p.phase2 || b.phase >= 2);
+    // 제2 던전은 어느 보스든 추적 폭격·십자 베기·잔류 장판을 추가로 사용한다.
+    const abyssExtra = room.dungeon === 2 ? [
+      { type: "chase", n: b.phase === 3 ? 4 : 3, gap: 0.42, radius: 46, tel: 0.82, pow: 1.0, fx: "impacts/ground-slam" },
+      { type: "cross", len: 420, width: 40, tel: 0.86, pow: 1.2, fx: "shadow/dark-explosion" },
+      { type: "pools", n: b.phase === 3 ? 7 : 5, radius: 40, dur: 6, pow: 0.52, fx: "shadow/shadow-flames" },
+    ] : [];
+    const allPats = [...native, ...extra, ...abyssExtra];
+    if (!allPats.length) return;
+    const pickIndex = (b.patIdx++ * 7 + Math.floor(Math.random() * allPats.length)) % allPats.length;
+    const chosen = allPats[pickIndex];
+    const tune = (pat) => room.dungeon === 2
+      ? { ...pat, ...(pat.tel == null ? {} : { tel: Math.max(0.68, pat.tel * 0.8) }), pow: (pat.pow ?? 1) * 1.13 }
+      : pat;
+    startPattern(room, b, tune(chosen), t, now);
+    // 심연 보스는 2·3페이즈에서 서로 다른 공격을 겹쳐 압박한다.
+    const comboPool = room.dungeon === 2 ? allPats.filter((x) => x !== chosen) : extra;
+    const comboChance = room.dungeon === 2 ? (b.phase === 3 ? 0.78 : 0.62) : 0.35;
+    if (b.phase >= 2 && comboPool.length && Math.random() < comboChance) {
+      const p2 = tune(comboPool[Math.floor(Math.random() * comboPool.length)]);
+      room.schedule(room.dungeon === 2 ? 0.62 : 0.8, () => {
+        if (!b.dead) {
+          const keep = b.pattern;
+          startPattern(room, b, p2, pickTarget(room, b, room.now) ?? t, room.now);
+          if (keep && keep.end > (b.pattern?.end ?? 0)) b.pattern = keep;
+        }
+      });
     }
-    b.patternAt = now + (room.dungeon === 2 ? (b.phase === 3 ? 1.55 : b.phase === 2 ? 2.05 : 2.9) : (b.phase === 2 ? 2.1 : 2.9)) + Math.random() * 0.45;
+    b.patternAt = now + (room.dungeon === 2
+      ? (b.phase === 3 ? 1.05 : b.phase === 2 ? 1.45 : 2.15)
+      : (b.phase === 2 ? 2.1 : 2.9)) + Math.random() * (room.dungeon === 2 ? 0.35 : 0.45);
     return;
   }
   // 평타 (가까우면)
@@ -373,7 +395,7 @@ function startPattern(room, b, p, t, now) {
     case "barrage": {
       const waves = b.phase === 2 ? 3 : 2;
       // 사전 경고: 100층 보스는 3초, 다른 보스는 1.5초 동안 탄이 날아갈 길을 크게 보여 준 뒤 발사 (근접 직업이 피할 시간)
-      const delay = room.floor >= 100 ? 3 : 1.5;
+      const delay = room.dungeon === 2 ? 0.95 : room.floor >= 100 ? 3 : 1.5;
       b.pattern.end = now + delay + 0.1 + waves * 0.5;
       room.ev({ e: "anim", id: b.id, a: "cast" });
       room.ev({ e: "warn", id: b.id, k: "barrage", d: delay, n: p.count, w: waves, x: b.x | 0, y: (b.y - 10) | 0 });
@@ -443,7 +465,7 @@ function startPattern(room, b, p, t, now) {
         const q = ply[k % Math.max(1, ply.length)];
         const x = (q?.x ?? b.x) + (Math.random() - 0.5) * 160, y = (q?.y ?? b.y) + (Math.random() - 0.5) * 160;
         if (circleHitsWall(room.map, x, y, 6)) continue;
-        room.addArea({ team: "m", shape: "c", x, y, r: p.radius, tel: 0.9, fire: () => {
+        room.addArea({ team: "m", shape: "c", x, y, r: p.radius, tel: room.dungeon === 2 ? 0.72 : 0.9, fire: () => {
           room.addZone({ team: "m", owner: b.id, x, y, r: p.radius, dur: p.dur, interval: 0.5, fx: p.fx, tick: (t0, z) => {
             for (const q2 of bossTargets(room)) if (Math.hypot(q2.x - z.x, q2.y - z.y) <= z.r - SH) hitTarget(room, b, q2, p.pow, t0, { unblockable: true });
           } });
