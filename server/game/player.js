@@ -14,7 +14,9 @@ export function newCharacter(name) {
     skills: ["c_thrust", "c_slash", null, null, null, null, "c_dash", "c_firstaid"],
     equip: { weapon: { uid: 1, ...g.weapon }, offhand: { uid: 2, ...g.offhand }, helmet: null, armor: null, trinket: null },
     inv: [], nextUid: 3, cons: { hp_potion: 5, antidote: 2, mp_potion: 2 }, gold: 100,
-    best: 0, checkpoint: 1, cleared: false, kills: 0, deaths: 0, playtime: 0, created: Date.now(),
+    best: 0, checkpoint: 1, cleared: false,
+    best2: 0, checkpoint2: 1, cleared2: false, abyssKeys: 0, riftCrystals: 0,
+    kills: 0, deaths: 0, playtime: 0, created: Date.now(),
   };
 }
 
@@ -25,6 +27,12 @@ export function sanitizeChar(c, name) {
   const out = { ...d, ...c, name };
   if (!CLASS_INFO[out.cls]) out.cls = "adventurer";
   out.level = Math.max(1, Math.min(MAX_LEVEL, out.level | 0));
+  // 새 진행도 필드는 기존 저장 데이터에도 기본값을 채워 세이브 호환성을 유지한다.
+  out.best2 = Math.max(0, Math.min(30, Number.isFinite(out.best2) ? out.best2 | 0 : 0));
+  out.checkpoint2 = Math.max(1, Math.min(30, Number.isFinite(out.checkpoint2) ? out.checkpoint2 | 0 : 1));
+  out.cleared2 = !!out.cleared2;
+  out.abyssKeys = Math.max(0, Math.min(9999, Number.isFinite(out.abyssKeys) ? out.abyssKeys | 0 : 0));
+  out.riftCrystals = Math.max(0, Math.min(999999, Number.isFinite(out.riftCrystals) ? out.riftCrystals | 0 : 0));
   if (!Array.isArray(out.skills) || out.skills.length !== 8) out.skills = d.skills;
   if (!Array.isArray(out.inv)) out.inv = [];
   out.cons = { ...d.cons, ...(out.cons ?? {}) };
