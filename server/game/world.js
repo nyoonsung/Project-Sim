@@ -124,7 +124,7 @@ export class World {
   }
   onClose(conn) {
     const s = this.sessions.get(conn.user.id);
-    if (!s || s.conn !== conn) return;
+    if (!s || s.conn !== conn || s.deleted) return;
     // 던전에서 끊기면 30초 동안 자리 유지(몬스터가 무시, 피해 없음) → 다시 접속하면 그대로 이어감
     if (s.unit.room && s.unit.room !== this.town && !s.unit.dead) {
       s.linkdead = Date.now();
@@ -187,6 +187,7 @@ export class World {
     this.sessions.delete(s.userId);
   }
   save(s) {
+    if (s.deleted) return; // 관리자가 지운 계정: 다시 저장하지 않음
     try { Q.saveChar.run(s.userId, JSON.stringify(s.char), s.char.level, s.char.cls, s.char.best, Date.now()); s.dirty = false; } catch (e) { console.error("save", e); }
   }
   saveAll() {
@@ -768,6 +769,47 @@ export class World {
     if (!s) return false;
     s.send({ t: "kick", why: why || "관리자에 의해 연결이 끊겼어요." });
     setTimeout(() => s.conn.close(4002, "kicked"), 100);
+    return true;
+  }
+  /** 관리자: 닉네임 강제 변경 (1시간 제한 없음). 실패하면 이유 문자열 */
+  gmRename(userId, name) {
+    name = String(name ?? "").trim();
+    if (!USERNAME_RE.test(name)) return "닉네임은 2~12자, 한글·영문·숫자·_ 만 쓸 수 있어요.";
+    const other = Q.userByName.get(name);
+    if (other && other.id !== userId) return "이미 있는 닉네임이에요.";
+    const u = Q.userById.get(userId);
+    if (!u) return "없는 플레이어예요.";
+    if (u.username === name) return "지금 닉네임과 같아요.";
+    try { Q.renameUser.run(name, userId); } catch { return "이미 있는 닉네임이에요."; }
+    const s = this.sessions.get(userId), old = u.username;
+    if (s) {
+      s.name = name; s.char.name = name; s.unit.name = name;
+      this.save(s);
+      s.send({ t: "renamed", name });
+      this.sendChar(s);
+      s.unit.room?.ev({ e: "add", ...s.unit.room.describe(s.unit) });
+      const p = this.partyOf(s); if (p) this.sendParty(p);
+      s.notice(`관리자가 닉네임을 ${name}(으)로 바꿨어요. 다음 로그인부터 새 닉네임으로 들어오세요.`);
+    } else this.gmApplyChar(userId, (c) => { c.name = name; });
+    this.broadcastSys(`${old}님의 닉네임이 ${name}(으)로 바뀌었어요.`, "join");
+    return null;
+  }
+  /** 관리자: 계정 완전히 삭제 (접속 중이면 내보내고, 캐릭터·로그인 기록까지 지움). 되돌릴 수 없음 */
+  gmDeleteAccount(userId) {
+    const s = this.sessions.get(userId);
+    if (s) {
+      s.deleted = true;
+      if (s.trade) endTrade(s, `${s.name}님의 계정이 삭제돼 거래가 취소됐어요.`);
+      s.send({ t: "kick", why: "관리자에 의해 계정이 삭제됐어요." });
+      const conn = s.conn;
+      setTimeout(() => conn.close?.(4002, "deleted"), 100);
+      this.leaveParty(s, true);
+      s.unit.room?.removePlayer(s.unit);
+      this.sessions.delete(userId);
+    }
+    Q.deleteUserSessions.run(userId);
+    Q.deleteChar.run(userId);
+    Q.deleteUser.run(userId);
     return true;
   }
   gmAnnounce(text) {

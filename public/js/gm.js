@@ -127,6 +127,7 @@ async function openPlayer(id) {
           h("div", { class: "form" }, ...field("디자인", titleD), ...field("칭호", titleT), ...field("색", h("div", { class: "flexrow" }, ...TITLE_COLORS.map((col) => { const b = h("button", { class: "btn small swatch" + (titleC.v === col ? " on" : ""), style: { background: col, width: "22px", height: "18px", padding: 0 }, title: col, onclick: () => { titleC.v = col; for (const x of b.parentNode.children) x.classList.toggle("on", x === b); } }); return b; })))),
           h("button", { class: "btn small primary", onclick: act("give-title", () => ({ text: titleT.value, color: titleC.v })) }, "칭호 주기"),
           h("div", { class: "note" }, ...((c?.titles ?? []).length ? c.titles.map((t) => h("span", { class: "gm-title", style: { color: t.color } }, `「${t.text}」${c.title === t.id ? "(장착)" : ""} `, h("button", { class: "btn small danger", onclick: act("remove-title", () => ({ tid: t.id })) }, "회수"))) : ["가진 칭호 없음"]))),
+        accountBox(u, act, msg),
         h("div", { class: "box" }, h("h3", { text: "제재 · 이동" }),
           h("div", { class: "form" },
             ...field("차단(시간)", h("div", { class: "flexrow" }, banH, banR, h("button", { class: "btn small danger", onclick: act("ban", () => ({ hours: +banH.value, reason: banR.value })) }, "차단"), h("button", { class: "btn small", onclick: act("ban", () => ({ hours: 0 })) }, "해제"))),
@@ -247,4 +248,24 @@ function exactGiveBox(c, act) {
     h("div", { class: "gm-give" }, form, preview),
     h("div", { class: "note", text: "옵션 값은 기본으로 그 레벨·등급의 일반 최대치가 들어가요. (최대 3배까지 입력 가능, % 옵션은 % 숫자로) 신화는 받는 사람 레벨에 맞춰 아이템 레벨이 자동으로 바뀌어요." }),
     h("button", { class: "btn small primary", onclick: act("give-exact", () => ({ spec: spec() })) }, "이 아이템 지급"));
+}
+
+// ── 닉네임 강제 변경 · 계정 삭제
+function accountBox(u, act, msg) {
+  const nameIn = h("input", { maxlength: 12, placeholder: "새 닉네임 (2~12자)", value: "" });
+  const delIn = h("input", { maxlength: 12, placeholder: `확인: ${u.username} 입력` });
+  const del = async () => {
+    if (delIn.value !== u.username) return flash(msg, false, `삭제하려면 아래 칸에 닉네임 '${u.username}'을(를) 그대로 입력하세요.`);
+    if (!confirm(`정말 ${u.username} 계정을 삭제할까요?\n캐릭터·아이템·골드가 모두 사라지고 되돌릴 수 없어요.`)) return;
+    try {
+      await api(`/api/gm/player/${u.id}/delete-account`, { confirm: delIn.value });
+      flash(msg, true, `${u.username} 계정을 삭제했어요.`);
+      setTimeout(() => { tab = "players"; render(); }, 900);
+    } catch (e) { flash(msg, false, e.message); }
+  };
+  return h("div", { class: "box" }, h("h3", { text: "닉네임 · 계정" }),
+    h("div", { class: "form" },
+      h("span", { text: "닉네임 변경" }), h("div", { class: "flexrow" }, nameIn, h("button", { class: "btn small primary", onclick: act("rename", () => ({ name: nameIn.value })) }, "강제 변경")),
+      h("span", { text: "계정 삭제" }), h("div", { class: "flexrow" }, delIn, h("button", { class: "btn small danger", onclick: del }, "계정 삭제"))),
+    h("div", { class: "note", text: "닉네임 변경은 1시간 제한 없이 바로 바뀌고, 플레이어는 새 닉네임으로 로그인해야 해요. 계정 삭제는 캐릭터까지 완전히 지우며 되돌릴 수 없어요(기록은 감사 로그에 남아요)." }));
 }

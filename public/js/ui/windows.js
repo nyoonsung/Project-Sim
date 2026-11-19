@@ -499,6 +499,7 @@ export function openKeys() {
   openWin("keys", "설정", () => [
     h("h4", { text: "계정" }),
     h("div", { class: "flexrow" }, h("span", { class: "note", text: `지금 계정: ${G.name ?? G.char?.name ?? ""} · 계정은 여러 개 만들 수 있어요` }), h("button", { class: "btn small danger", onclick: () => G.ui.logout() }, "로그아웃 · 다른 계정으로")),
+    globalThis.__LOCAL_NET ? null : passwordForm(),
     h("h4", { text: "그래픽" }),
     h("div", { class: "seg" }, ...modes.map(([m, n]) => h("button", { class: "btn small" + (Q.mode === m ? " primary" : ""), onclick: () => { setMode(m); refreshWin("keys"); } }, n))),
     h("div", { class: "note", text: Q.mode === "auto" ? `자동: 지금 ${preset().name} (느려지면 알아서 낮추고, 넉넉하면 다시 올려요)` : "낮을수록 빛 번짐·입자·날씨 효과가 줄어 가벼워져요." }),
@@ -660,4 +661,29 @@ export function openTrade() {
       c.inv.length ? bag : h("div", { class: "note", text: "가방이 비어 있어요." }),
     ];
   }, { w: 640, onClose: () => { if (G.trade) { send({ t: "trade", op: "cancel" }); G.trade = null; } tradeGold = ""; } });
+}
+
+// 비밀번호 바꾸기 (설정 창): 현재 비밀번호 확인 → 새 비밀번호(8자 이상) 두 번 → 바뀌면 모든 기기에서 로그아웃, 다시 로그인
+function passwordForm() {
+  const inp = (ph) => { const e = h("input", { class: "txt", type: "password", placeholder: ph, autocomplete: ph.startsWith("현재") ? "current-password" : "new-password", maxlength: 100 }); e.addEventListener("keydown", (ev) => ev.stopPropagation()); return e; };
+  const cur = inp("현재 비밀번호"), nx = inp("새 비밀번호 (8자 이상)"), nx2 = inp("새 비밀번호 한 번 더");
+  const msg = h("div", { class: "note" });
+  const go = async (btn) => {
+    if (!cur.value || !nx.value) return (msg.textContent = "현재 비밀번호와 새 비밀번호를 넣어 주세요.");
+    if (nx.value !== nx2.value) return (msg.textContent = "새 비밀번호 두 칸이 서로 달라요.");
+    if (nx.value.length < 8) return (msg.textContent = "새 비밀번호는 8자 이상이어야 해요.");
+    if (nx.value === cur.value) return (msg.textContent = "지금 비밀번호와 같아요.");
+    btn.disabled = true; msg.textContent = "바꾸는 중…";
+    try {
+      const r = await fetch("/api/password", { method: "POST", headers: { "Content-Type": "application/json" }, credentials: "same-origin", body: JSON.stringify({ current: cur.value, next: nx.value }) });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) { msg.textContent = j.error ?? "바꾸지 못했어요."; btn.disabled = false; return; }
+      cur.value = nx.value = nx2.value = "";
+      msg.textContent = "비밀번호가 바뀌었어요. 모든 기기에서 로그아웃돼요. 새 비밀번호로 다시 로그인해 주세요.";
+      setTimeout(() => { try { sessionStorage.removeItem("psim_go"); } catch {} location.reload(); }, 2500);
+    } catch { msg.textContent = "서버에 연결하지 못했어요."; btn.disabled = false; }
+  };
+  const btn = h("button", { class: "btn small primary", onclick: (e) => go(e.currentTarget) }, "비밀번호 바꾸기");
+  return h("details", { class: "pw-box" }, h("summary", { text: "🔑 비밀번호 바꾸기" }),
+    h("div", { class: "pw-form" }, cur, nx, nx2, btn, msg));
 }

@@ -2,8 +2,10 @@
 import { G, localStep, moveDir } from "../game.js";
 import { titleDesign } from "/shared/titles.js";
 import { tickQuality, preset } from "../quality.js";
-import { frame as dtFrame } from "./dt2.js";
+import { frame as dtFrame, drawFoot as drawDTFoot } from "./dt2.js";
 import { weatherLoop } from "./fx.js";
+// 수호 골렘 색: 강철 몸 + 놋쇠 기운
+const GOLEM_TINT = { m: "#c8d4e0", s: "#1a1206", sat: 0.35 };
 // 바둑판으로 이어 붙일 수 없는 한 장짜리 날씨(빛줄기): 화면에 한 번만
 const WHOLE_SCREEN = new Set(["weather/god-rays"]);
 import { itemIcon } from "../ui/icons.js";
@@ -716,9 +718,32 @@ export class Renderer {
       ctx.fillStyle = "#8890a0"; for (let k = -24; k <= 24; k += 12) ctx.fillRect(k, -14, 3, 3);
       ctx.restore();
     } else if (d === "golem") {
-      const s = sprite({ armor: ["#f0d080", "#c8a050", "#987030", "#604418"], core: ["#4a4a52", "#34343a", "#202024"], mark: "#40e0ff", weapon: "hammer", head: "helm", headColor: "#c8a050" }, "golem", e.anim && t - e.anim.t0 < 0.4 ? "smash" : "idle", e.anim && t - e.anim.t0 < 0.4 ? Math.min(2, Math.floor((t - e.anim.t0) / 0.13)) : Math.floor(t * 2) % 2, Math.sin(e.facing) > 0.6 ? 0.6 : 0, 1);
-      this.shadow(ctx, x, y, 12);
-      ctx.save(); ctx.translate(x, y); if (Math.cos(e.facing) < 0) ctx.scale(-1, 1); ctx.drawImage(s.canvas, -s.ox, -s.oy); ctx.restore();
+      // 수호 골렘 7호: 강철·놋쇠 거구 + 가슴의 하늘색 동력 코어 + '7' 명판. 걸을 땐 걷는 동작, 내려찍을 땐 앞으로 덮침
+      if (e._gx !== e.x || e._gy !== e.y) { e._gx = e.x; e._gy = e.y; e._gMove = t; }
+      const moving = t - (e._gMove ?? -9) < 0.15;
+      const slam = e.anim && t - e.anim.t0 < 0.4 ? (t - e.anim.t0) / 0.4 : 0;
+      const flip = Math.cos(e.facing) < 0, dir = flip ? -1 : 1;
+      const lunge = slam ? Math.round(Math.sin(slam * Math.PI) * 6) * dir : 0;
+      const bob = slam ? -Math.round(Math.sin(slam * Math.PI) * 3) : 0;
+      const name = (moving ? "ogre_run_anim_f" : "ogre_idle_anim_f") + (Math.floor(t * (moving ? 9 : 5)) % 4);
+      this.shadow(ctx, x, y, 16);
+      const gx = Math.round(x + lunge), gy = Math.round(y + bob);
+      drawDTFoot(ctx, name, gx, gy, { tint: GOLEM_TINT, scale: 2, flip });
+      // 동력 코어 (맥박처럼 빛남) + 눈빛
+      const pulse = 0.6 + Math.sin(t * 6) * 0.25 + (slam ? 0.4 : 0);
+      ctx.save();
+      ctx.globalCompositeOperation = "lighter";
+      ctx.fillStyle = `rgba(80,220,255,${Math.min(1, pulse) * 0.35})`; ctx.beginPath(); ctx.arc(gx, gy - 26, 9, 0, Math.PI * 2); ctx.fill();
+      ctx.restore();
+      ctx.fillStyle = "#1a2a3a"; ctx.fillRect(gx - 4, gy - 30, 8, 8);
+      ctx.fillStyle = "#5ae8ff"; ctx.fillRect(gx - 3, gy - 29, 6, 6);
+      ctx.fillStyle = "#e8ffff"; ctx.fillRect(gx - 2, gy - 28, 2, 2);
+      ctx.fillStyle = "#7ae8ff"; ctx.fillRect(gx + dir * 3 - 1, gy - 46, 2, 2); ctx.fillRect(gx + dir * 8 - 1, gy - 46, 2, 2); // 눈
+      // '7' 놋쇠 명판 (어깨)
+      ctx.fillStyle = "#3a2410"; ctx.fillRect(gx - dir * 10 - 4, gy - 40, 8, 9);
+      ctx.fillStyle = "#e8b84a"; ctx.fillRect(gx - dir * 10 - 3, gy - 39, 6, 7);
+      ctx.fillStyle = "#3a2410"; ctx.fillRect(gx - dir * 10 - 2, gy - 38, 4, 1); ctx.fillRect(gx - dir * 10 + 1, gy - 37, 1, 2); ctx.fillRect(gx - dir * 10, gy - 35, 1, 2);
+      if (slam > 0.45 && slam < 0.7) { ctx.fillStyle = "rgba(255,240,200,0.5)"; ctx.fillRect(gx + dir * 14 - 6, gy - 2, 12, 2); }
     } else if (d === "circuit") { /* 빔으로 그림 */ }
   }
 

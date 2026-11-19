@@ -64,6 +64,8 @@ const SQL = {
   sessionByHash: "SELECT * FROM sessions WHERE token_hash = ? AND expires_at > ?",
   deleteSession: "DELETE FROM sessions WHERE token_hash = ?",
   deleteUserSessions: "DELETE FROM sessions WHERE user_id = ?",
+  deleteUser: "DELETE FROM users WHERE id = ?",
+  deleteChar: "DELETE FROM characters WHERE user_id = ?",
   purgeSessions: "DELETE FROM sessions WHERE expires_at <= ?",
   charByUser: "SELECT * FROM characters WHERE user_id = ?",
   saveChar: `INSERT INTO characters (user_id, data, level, cls, best_floor, updated_at) VALUES (?, ?, ?, ?, ?, ?)

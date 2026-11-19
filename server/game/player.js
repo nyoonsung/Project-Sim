@@ -40,6 +40,13 @@ export function sanitizeChar(c, name) {
   out.titles = (Array.isArray(out.titles) ? out.titles : []).filter((t) => t && Number.isInteger(t.id) && typeof t.text === "string" && t.text.length >= 1 && t.text.length <= TITLE_MAX)
     .map((t) => ({ id: t.id, text: t.text, color: TITLE_COLORS.includes(t.color) ? t.color : TITLE_COLORS[0], at: t.at ?? 0 })).slice(0, 50);
   if (!out.titles.some((t) => t.id === out.title)) out.title = null;
+  // 스킬 해금 단계가 바뀌어 아직 못 쓰는 스킬이 장착돼 있으면 빼고, 빈칸은 기본 스킬로 채움
+  try {
+    const avail = new Set(availableSkills(out).map((x) => x.id));
+    out.skills = out.skills.map((id) => (id && avail.has(id) ? id : null));
+    const def = defaultLoadout(out);
+    out.skills.forEach((id, i) => { if (!id && def[i] && !out.skills.includes(def[i])) out.skills[i] = def[i]; });
+  } catch {}
   for (const it of out.inv) { ensureDur(it); upgradeMythic(it); }
   for (const it of Object.values(out.equip)) { ensureDur(it); upgradeMythic(it); }
   syncMythic(out);

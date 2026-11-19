@@ -572,21 +572,41 @@ export class Room {
         }
       }
     } else if (d.kind === "golem" && owner) {
-      if (now >= d.nextHit) {
-        d.nextHit = now + 1;
-        let best = null, bd = 90;
-        for (const m of this.units.values()) {
-          if (m.team !== "m" || m.dead || m.dummy) continue;
-          const dist = Math.hypot(m.x - d.x, m.y - d.y);
-          if (dist < bd) { bd = dist; best = m; }
-          // 주변 적의 위협을 골렘(주인)에게
-          if (dist < 160 && !m.boss) m.tauntBy = { id: d.id, until: now + 1.2 };
-        }
-        if (best) {
-          d.facing = Math.atan2(best.y - d.y, best.x - d.x);
-          this.ev({ e: "anim", id: d.id, a: "smash" });
-          dealDamage(this, owner, best, { pow: o.pow, threat: 4 }, now);
-        }
+      // 수호 골렘 7호: 주인 근처(380 안)의 가장 가까운 적에게 걸어가서 내려찍음. 적이 없으면 주인을 따라다님
+      let best = null, bd = 1e9;
+      for (const m of this.units.values()) {
+        if (m.team !== "m" || m.dead || m.dummy) continue;
+        if (Math.hypot(m.x - owner.x, m.y - owner.y) > 380) continue;
+        const dist = Math.hypot(m.x - d.x, m.y - d.y);
+        if (dist < bd) { bd = dist; best = m; }
+      }
+      if (now >= (d.nextTaunt ?? 0)) { // 주변 적의 위협을 골렘에게 (1초마다)
+        d.nextTaunt = now + 1;
+        for (const m of this.units.values()) if (m.team === "m" && !m.dead && !m.boss && Math.hypot(m.x - d.x, m.y - d.y) < 160) m.tauntBy = { id: d.id, until: now + 1.2 };
+      }
+      let tx, ty, stopAt;
+      if (best) { tx = best.x; ty = best.y; stopAt = d.r + best.r + 8; }
+      else { const f = owner.facing ?? 0; tx = owner.x - Math.cos(f) * 46 + Math.sin(f) * 18; ty = owner.y - Math.sin(f) * 30 + 10; stopAt = 14; } // 주인 뒤쪽 옆에서 따라감
+      const dx = tx - d.x, dy = ty - d.y, dist = Math.hypot(dx, dy);
+      const busy = now < (d.slamUntil ?? 0); // 내려찍는 동안은 멈춤
+      if (!busy && dist > stopAt) {
+        const step = Math.min(115 * TICK_DT * (dist > 260 ? 1.8 : 1), dist - stopAt); // 멀리 떨어지면 빨리 따라감
+        const [nx, ny] = moveCircle(this.map, d.x, d.y, (dx / dist) * step, (dy / dist) * step, d.r);
+        d.x = nx; d.y = ny;
+        d.facing = Math.atan2(dy, dx);
+      }
+      if (best && dist <= stopAt + 16 && now >= d.nextHit) {
+        d.nextHit = now + 0.95; d.slamUntil = now + 0.4;
+        d.facing = Math.atan2(best.y - d.y, best.x - d.x);
+        this.ev({ e: "anim", id: d.id, a: "smash" });
+        const tgt = best;
+        this.schedule(0.22, (t0) => { // 망치가 땅에 닿는 순간 피해: 대상 + 주변(반경 46) 적에게 절반
+          if (d.dead || !this.units.has(d.id)) return;
+          const x = tgt.x, y = tgt.y;
+          this.ev({ e: "fx", fx: "impacts/ground-slam", x: x | 0, y: y | 0, s: 0.45 });
+          if (!tgt.dead) dealDamage(this, owner, tgt, { pow: o.pow, threat: 4 }, t0);
+          for (const m of this.units.values()) if (m !== tgt && m.team === "m" && !m.dead && Math.hypot(m.x - x, m.y - y) <= 46 + m.r) dealDamage(this, owner, m, { pow: o.pow * 0.5, threat: 2 }, t0);
+        });
       }
     } else if (d.kind === "circuit" && owner) {
       if (now >= d.nextHit) {

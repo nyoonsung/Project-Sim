@@ -173,6 +173,19 @@ export async function handleGm(req, res, path, { readJson, send, isAdmin, ip, ur
       audit("reset_password", target, null);
       return send(res, 200, { ok: true, tempPassword: pw });
     }
+    case "rename": {
+      const err = world.gmRename(id, b.name);
+      if (err) return send(res, 400, { error: err });
+      audit("rename", target, { from: target.username, to: String(b.name).trim() });
+      return send(res, 200, { ok: true });
+    }
+    case "delete-account": {
+      // 실수 방지: 닉네임을 그대로 입력해야 지워짐
+      if (b.confirm !== target.username) return send(res, 400, { error: "확인용 닉네임이 맞지 않아요." });
+      audit("delete_account", target, { username: target.username, level: Q.charByUser.get(id)?.level ?? null });
+      world.gmDeleteAccount(id);
+      return send(res, 200, { ok: true, deleted: true });
+    }
     case "kick": {
       const ok = world.gmKick(id, typeof b.reason === "string" ? b.reason.slice(0, 100) : "");
       audit("kick", target, { reason: b.reason });

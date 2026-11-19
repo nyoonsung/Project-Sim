@@ -430,9 +430,48 @@ add("smith", [
     fx: { area: "holy/feather-burst", palette: ["#200c00", "#803000", "#e06010", "#ffa050", "#ffe0b0", "#ffffff"] },
     steps: [{ do: "shield", target: "party", radius: 160, pow: 2.4, dur: 5 }, { do: "taunt", radius: 160, dur: 4 }] },
   { id: "sm_golem", name: "수호 골렘 7호", grade: "전설", kind: "ultimate", cd: 45, cost: { parts: 2 }, aim: "point", range: 160, anim: "cast",
-    desc: "중형 수호 기계를 불러 지정 구역을 지키게 한다. 주변 적을 공격해 위협을 생성하고, 정해진 횟수만큼 공격을 대신 받아낸다.",
-    limit: "8초 지속, 공격 흡수 횟수(10회) 제한, 파괴 가능. 보스 궁극기를 무한 흡수할 수 없음.",
-    fx: { area: "spawn/summon-rise" }, steps: [{ do: "device", kind: "golem", dur: 8, hp: 10, pow: 0.7 }] },
+    desc: "강철 수호 골렘을 불러낸다. 골렘은 주변 적에게 직접 걸어가 망치로 내려찍고(주변 적도 절반 피해), 적이 없으면 주인을 따라다닌다. 주변 적의 위협을 끌어오고 정해진 횟수만큼 공격을 대신 받아낸다.",
+    limit: "12초 지속, 공격 흡수 횟수(10회) 제한, 파괴 가능. 주인에게서 380 이상 떨어진 적은 쫓지 않음.",
+    fx: { area: "spawn/summon-rise" }, steps: [{ do: "device", kind: "golem", dur: 12, hp: 10, pow: 1.1 }] },
+]);
+
+// ─────────────────────────── 중반 단계를 채우는 추가 스킬 ───────────────────────────
+add("rogue", [
+  { id: "ro_fan", name: "칼날 부채", grade: "희귀", kind: "active", cd: 7, cost: { mp: 10 }, aim: "dir", anim: "stab",
+    desc: "단검 다섯 자루를 부채꼴로 던져 앞쪽 적들을 꿰뚫는다.", limit: "멀리 갈수록 피해가 줄어든다.",
+    fx: { proj: "projectiles/arrow", hit: "impacts/hit-spark", palette: ["#100818", "#301848", "#6030a0", "#a070e0", "#e0d0ff", "#ffffff"] },
+    steps: [{ do: "proj", speed: 560, range: 240, pow: 0.9, radius: 6, count: 5, spread: 60, pierce: 1, falloff: 0.3 }] },
+  { id: "ro_bloodmoon", name: "혈월참", grade: "영웅", kind: "active", cd: 14, cost: { mp: 16 }, aim: "self", anim: "spin",
+    desc: "붉은 달처럼 주위를 크게 베어 주변 적 모두에게 큰 피해를 주고 5초간 출혈(독) 피해를 남긴다.", limit: "대상 8명까지.",
+    fx: { swing: "melee/spin-slash", hit: "impacts/crit-hit", palette: ["#200408", "#701020", "#d02a40", "#ff6a7a", "#ffd0d8", "#ffffff"] },
+    steps: [{ do: "circle", radius: 84, pow: 2.4, max: 8, status: { type: "poison", dur: 5, pow: 0.35 } }] },
+]);
+add("mage", [
+  { id: "ma_chain", name: "연쇄 번개", grade: "희귀", kind: "active", cd: 7, cost: { mp: 16 }, aim: "dir", anim: "cast",
+    desc: "번개 구슬을 날려, 맞은 자리에서 번개가 튀어 주변 적 5명까지 감전시킨다.", limit: "튄 번개는 직격보다 약하다.",
+    fx: { proj: "lightning/ball-lightning", scale: 0.5, hit: "lightning/chain-lightning" },
+    steps: [{ do: "proj", speed: 520, range: 300, pow: 1.8, radius: 8, explode: { radius: 80, pow: 1.0, max: 5 }, status: { type: "shock", dur: 2 } }] },
+  { id: "ma_blizzard", name: "눈보라", grade: "영웅", kind: "active", cd: 16, cost: { mp: 28 }, aim: "point", range: 280, anim: "cast",
+    desc: "지정한 곳에 2초간 눈보라를 일으켜 계속 피해를 주고 크게 느리게 만든다.", limit: "대상 10명까지.",
+    fx: { area: "weather/snow", tick: "ice/ice-lance" },
+    steps: [{ do: "area", radius: 100, pow: 0.75, ticks: 7, interval: 0.3, telegraph: 0.3, max: 10, status: { type: "slow", dur: 2, v: 0.5 } }] },
+]);
+add("priest", [
+  { id: "pr_lightray", name: "심판의 빛", grade: "희귀", kind: "active", cd: 8, cost: { holy: 15 }, aim: "point", range: 260, anim: "cast",
+    desc: "지정한 곳에 빛줄기를 내려 적에게 피해를 주고, 빛에 닿은 아군은 회복시킨다.", limit: "짧은 예고(0.3초).",
+    fx: { area: "holy/smite" }, steps: [{ do: "area", radius: 60, pow: 2.0, telegraph: 0.3, max: 6, healAllies: 0.6 }] },
+  { id: "pr_grace", name: "은총의 물결", grade: "영웅", kind: "active", cd: 16, cost: { holy: 25, mp: 12 }, aim: "self", anim: "cast",
+    desc: "주변 파티원 모두를 크게 회복시키고 6초 동안 꾸준히 더 회복시킨다.", limit: "주변 220 안의 파티원.",
+    fx: { self: "holy/heal-aoe" }, steps: [{ do: "heal", target: "party", radius: 220, pow: 1.6, hot: { pow: 0.25, dur: 6, interval: 1 } }] },
+]);
+add("smith", [
+  { id: "sm_rivetgun", name: "리벳 연사", grade: "희귀", kind: "active", cd: 6, aim: "dir", anim: "cast",
+    desc: "리벳 총으로 쇠못 네 발을 빠르게 쏜다. 대장장이의 원거리 공격.", limit: "사거리 중간.",
+    fx: { proj: "projectiles/laser-bolt", scale: 0.5, palette: ["#201008", "#604020", "#a07040", "#e0b070", "#fff0d0", "#ffffff"], hit: "impacts/hit-spark" },
+    steps: [{ do: "proj", speed: 620, range: 260, pow: 0.8, radius: 6, count: 4, burst: 0.08, threat: 1.5 }] },
+  { id: "sm_overload", name: "과부하 해머", grade: "영웅", kind: "active", cd: 14, cost: { parts: 1 }, aim: "dir", anim: "smash",
+    desc: "망치에 과전류를 흘려 앞쪽을 크게 내려친다. 4명까지 큰 피해·기절·밀쳐내기.", limit: "부품 1개 소모.",
+    fx: { hit: "lightning/thunderclap", swing: "melee/hammer-smash" }, steps: [{ do: "melee", range: 60, arc: 120, pow: 2.8, max: 4, knock: 50, cc: { type: "stun", dur: 0.8 }, groggy: 20, threat: 4 }] },
 ]);
 
 // ─────────────────────────── 최종 단계 신화 스킬 (각 직업의 마지막 성장 단계에서 해금) ───────────────────────────
@@ -468,11 +507,23 @@ add("smith", [{ id: "sm_final", name: "천공의 망치", grade: "신화", kind:
 export const SKILLS = Object.fromEntries(S.map((s) => [s.id, s]));
 export const SKILL_LIST = S;
 
-// 직업별 스킬 해금 단계 (등급 기준, 단계 수에 비례)
-const GRADE_AT = { 일반: 0, 희귀: 0.1, 영웅: 0.25, 전설: 0.45, 신화: 1 }; // 신화 = 마지막 성장 단계
+// 직업별 스킬 해금 단계: 일반 = 처음부터, 신화 = 마지막 단계, 나머지(희귀→영웅→전설 순)는
+//  둘째 단계부터 마지막 바로 전 단계까지 고르게 나눔 → 단계가 오를 때마다 새 스킬이 열림
+const GRADE_ORDER = ["일반", "희귀", "영웅", "전설", "신화"];
+const stageMaps = new Map();
 export function unlockStage(skill, stagesInClass) {
-  if (skill.cls === "common") return 0;
-  return Math.round((GRADE_AT[skill.grade] ?? 0) * (stagesInClass - 1));
+  if (skill.cls === "common" || skill.grade === "일반" || stagesInClass <= 1) return 0;
+  if (skill.grade === "신화") return stagesInClass - 1;
+  const key = skill.cls + "|" + stagesInClass;
+  let m = stageMaps.get(key);
+  if (!m) {
+    const list = S.filter((s) => s.cls === skill.cls && !s.weaponBasic && s.grade !== "일반" && s.grade !== "신화")
+      .sort((a, b) => GRADE_ORDER.indexOf(a.grade) - GRADE_ORDER.indexOf(b.grade));
+    const span = Math.max(1, stagesInClass - 2);
+    m = new Map(list.map((s, i) => [s.id, 1 + Math.floor((i * span) / list.length)]));
+    stageMaps.set(key, m);
+  }
+  return m.get(skill.id) ?? 1;
 }
 /** 직업의 스킬 목록 */
 export function skillsOf(cls) {

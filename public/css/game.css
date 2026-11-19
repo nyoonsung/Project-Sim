@@ -759,3 +759,7 @@ body.touch .trade-cols { grid-template-columns: 1fr; }
 /* 거래 수락 창은 화면 아래쪽(거래창의 상대 아이템을 가리지 않게) */
 .invite.trade-ask { top: auto !important; bottom: 128px; z-index: 60; }
 body.touch .invite.trade-ask { bottom: 150px; }
+
+.pw-box { margin: 6px 0 2px; } .pw-box summary { cursor: pointer; color: #e8d4a8; }
+.pw-form { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; max-width: 280px; }
+.pw-form input.txt { padding: 5px 8px; }
