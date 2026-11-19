@@ -237,7 +237,7 @@ export class World {
     if (syncMythic(s.char) && s.unit) refreshStats(s.unit); // 새로 얻은 신화도 내 레벨로
     // 파티원 정보(레벨·직업·체크포인트)도 최신으로
     const pp = this.partyOf(s);
-    if (pp) { const k = `${s.char.level}|${s.char.cls}|${s.char.checkpoint}|${s.char.best}|${s.char.checkpoint2}|${s.char.best2}|${s.char.cleared2}`; if (k !== s.partyKey) { s.partyKey = k; this.sendParty(pp); } }
+    if (pp) { const k = `${s.char.level}|${s.char.cls}|${s.char.checkpoint}|${s.char.best}|${s.char.cleared}|${s.char.checkpoint2}|${s.char.best2}|${s.char.cleared2}`; if (k !== s.partyKey) { s.partyKey = k; this.sendParty(pp); } }
     s.dirty = true; s.send({ t: "char", char: this.publicChar(s) });
   }
   sendMe(s) {
@@ -477,6 +477,7 @@ export class World {
         } else {
           if (!g.char.cleared) this.broadcastSys(`🏆 ${g.name}님이 던전 100층을 정복했어요!`, "legend");
           g.char.cleared = true;
+          this.sendChar(g);
           this.toTown(g, "던전의 왕을 쓰러뜨렸어요! 축하해요!");
         }
       }
