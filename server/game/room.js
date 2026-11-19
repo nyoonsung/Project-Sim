@@ -19,6 +19,11 @@ const NEAR_ONLY = new Set(["fx", "anim", "cast", "casting", "cx", "st", "stx", "
 const EV_RANGE_X = 1000, EV_RANGE_Y = 760, CROWD_EV_CAP = 24;
 
 const XP_RATE = 0.4; // 경험치 배율 (성장 속도)
+/** 제2 던전은 캐릭터 레벨과 층 차이에 따른 경험치 감소를 적용하지 않는다. */
+export function levelGapXpMultiplier(level, floor, dungeon = 1) {
+  if (dungeon === 2 || level <= floor + 5) return 1;
+  return Math.max(0.05, 1 - (level - floor - 5) * 0.15);
+}
 /** 몸 두께(반지름)를 고려한 직선 통로: 가운데와 양옆 선이 모두 벽에 안 막힘 */
 // 걸어서 지나갈 수 없는 칸 (흐름장과 같은 기준: 벽·물·구덩이 등. 화살은 넘어가도 몸은 못 지나감)
 const walkBlocked = (map, x, y) => { const t = tileAt(map, Math.floor(x / TILE), Math.floor(y / TILE)); return t === 0 || t === 2 || t === 4 || t === 5 || (t === 3 && !map.doorsOpen); };
@@ -327,9 +332,9 @@ export class Room {
     for (const p of this.players.values()) {
       if (p.dead || Math.hypot(p.x - t.x, p.y - t.y) > 700) continue;
       const ch = p.session.char;
-      // 성장 속도 하향: 경험치 40%만, 층보다 5레벨 넘게 높으면 레벨 차이만큼 크게 감소
+      // 기본 경험치 배율은 유지하고, 층-레벨 차이 감소는 제1 던전에만 적용한다.
       let xp = t.xp * XP_RATE * (this.players.size > 1 ? 0.8 : 1);
-      if (ch.level > this.floor + 5) xp *= Math.max(0.05, 1 - (ch.level - this.floor - 5) * 0.15);
+      xp *= levelGapXpMultiplier(ch.level, this.floor, this.dungeon);
       gainXp(this, p, xp);
       const gold = Math.round((2 + Math.random() * 3) * floorScale(this.floor, this.dungeon).gold * (t.elite ? 3 : 1) * (t.boss ? 25 : 1));
       ch.gold += gold;
