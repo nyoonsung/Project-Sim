@@ -236,7 +236,7 @@ export function floorScale(floor, dungeon = 1) {
   return {
     hp: bend(1.05, 1.04, floor) * d.hp * e * (harder ? 5 : 1),
     dmg: bend(1.04, 1.027, floor) * d.dmg * e * (harder ? 5 : 1),
-    speed: d.speed * (harder ? 1.25 : 1),
+    speed: d.speed, // 제2 던전은 이동 속도를 올리지 않고 체력·공격력만 5배
     xp: Math.pow(1.045, floor - 1) * (harder ? 1.55 : 1),
     gold: Math.pow(1.04, floor - 1) * (harder ? 1.35 : 1),
     level: floor,
