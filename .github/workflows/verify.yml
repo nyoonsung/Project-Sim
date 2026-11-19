@@ -1,5 +1,6 @@
 name: Verify game build
 on:
+  workflow_dispatch:
   push:
     branches: [feature/dungeon-two, main]
   pull_request:
