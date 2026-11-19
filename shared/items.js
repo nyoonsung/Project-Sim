@@ -143,7 +143,8 @@ export function baseStats(slot, type, ilvl, rarityIndex, variant = 1) {
 
 /** 아이템 이름 */
 export function itemName(it) {
-  const mat = MATERIALS[Math.min(MATERIALS.length - 1, Math.floor((it.ilvl - 1) / 10))];
+  // 재료 이름: 관리자가 정한 게 있으면 그대로(it.mat), 아니면 아이템 레벨에 따라
+  const mat = Number.isInteger(it.mat) && MATERIALS[it.mat] ? MATERIALS[it.mat] : MATERIALS[Math.min(MATERIALS.length - 1, Math.floor((it.ilvl - 1) / 10))];
   let n;
   if (it.slot === "weapon") n = `${mat} ${WEAPON_TYPES[it.type].name}`;
   else if (it.slot === "offhand") n = `${mat} ${OFFHAND_TYPES[it.type].name}`;
@@ -186,7 +187,7 @@ export function optionMax(k, ilvl, ri) { return OPTIONS[k].roll(ilvl, ri, () => 
 export const MYTHIC_TITLE_LIST = MYTHIC_TITLES;
 /**
  * 관리자가 고른 그대로 장비 만들기 (무작위 아님). 잘못된 값은 고치거나 null.
- * spec: { slot, type?, variant?, rarity, ilvl, enh?, opts?: [{k, v}], mythic?, title?, ench? }
+ * spec: { slot, type?, variant?, rarity, ilvl, enh?, opts?: [{k, v}], mythic?, title?, ench?, mat?: 재료 번호(없으면 레벨대로) }
  */
 export function makeItem(spec) {
   const slot = SLOTS.includes(spec.slot) ? spec.slot : null;
@@ -215,6 +216,8 @@ export function makeItem(spec) {
     it.title = MYTHIC_TITLES.includes(spec.title) ? spec.title : MYTHIC_TITLES[0];
   }
   if (spec.ench && ENCHANTS[spec.ench]) it.ench = spec.ench;
+  const mat = Number(spec.mat);
+  if (Number.isInteger(mat) && mat >= 0 && mat < MATERIALS.length) it.mat = mat; // 재료 이름 고정 (신화가 레벨 따라 커져도 유지)
   it.name = itemName(it);
   it.dur = it.maxDur = maxDurability(it);
   return it;

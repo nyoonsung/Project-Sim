@@ -108,7 +108,7 @@ export async function handleGm(req, res, path, { readJson, send, isAdmin, ip, ur
       const spec = b.spec && typeof b.spec === "object" ? b.spec : {};
       const opts = Array.isArray(spec.opts) ? spec.opts.slice(0, 4).map((o) => ({ k: String(o?.k ?? ""), v: Number(o?.v) })) : [];
       const clean = { slot: String(spec.slot ?? ""), type: String(spec.type ?? ""), variant: Number(spec.variant) || 0, rarity: String(spec.rarity ?? ""), ilvl: Number(spec.ilvl) || 1, enh: Number(spec.enh) || 0, opts,
-        mythic: String(spec.mythic ?? ""), title: String(spec.title ?? ""), ench: spec.ench ? String(spec.ench) : null };
+        mythic: String(spec.mythic ?? ""), title: String(spec.title ?? ""), ench: spec.ench ? String(spec.ench) : null, mat: spec.mat === "" || spec.mat == null ? null : Number(spec.mat) };
       if (!SLOTS.includes(clean.slot) || !RARITIES.includes(clean.rarity)) return send(res, 400, { error: "부위·등급을 골라 주세요." });
       let made = null;
       const ok = world.gmApplyChar(id, (c) => {

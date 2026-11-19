@@ -4,7 +4,7 @@ import { TITLE_DESIGNS } from "/shared/titles.js";
 import { itemTip } from "./ui/windows.js";
 import { itemIcon } from "./ui/icons.js";
 import { CLASS_INFO } from "/shared/classes.js";
-import { RARITIES, SLOT_NAME, SLOTS, WEAPON_TYPES, OFFHAND_TYPES, ARMOR_NAMES, VARIANT_TRAITS, RARITY_OPTS, OPTIONS, MYTHIC_EFFECTS, MYTHIC_TITLE_LIST, ENCHANTS, MAX_ENH, makeItem, optionMax } from "/shared/items.js";
+import { MATERIALS, RARITIES, SLOT_NAME, SLOTS, WEAPON_TYPES, OFFHAND_TYPES, ARMOR_NAMES, VARIANT_TRAITS, RARITY_OPTS, OPTIONS, MYTHIC_EFFECTS, MYTHIC_TITLE_LIST, ENCHANTS, MAX_ENH, makeItem, optionMax } from "/shared/items.js";
 import { ITEMS, TITLE_COLORS } from "/shared/constants.js";
 
 const main = $("#gm-main");
@@ -204,7 +204,7 @@ boot();
 const isPct = (k) => OPTIONS[k].fmt(0.1).includes("%");
 function exactGiveBox(c, act) {
   const field = (lbl, el) => [h("span", { text: lbl }), el];
-  const st = { slot: "weapon", type: "sword", variant: 0, rarity: "전설", ilvl: Math.max(1, c?.level || 1), enh: 0, opts: [], mythic: Object.keys(MYTHIC_EFFECTS)[0], title: MYTHIC_TITLE_LIST[0], ench: "" };
+  const st = { slot: "weapon", type: "sword", variant: 0, rarity: "전설", ilvl: Math.max(1, c?.level || 1), enh: 0, opts: [], mythic: Object.keys(MYTHIC_EFFECTS)[0], title: MYTHIC_TITLE_LIST[0], ench: "", mat: "" };
   const form = h("div", { class: "form" }), preview = h("div", { class: "gm-preview" });
   const sel = (val, list, on) => { const e = h("select", { onchange: () => on(e.value) }, ...list.map(([v, t]) => h("option", { value: v, ...(String(v) === String(val) ? { selected: true } : {}) }, t))); return e; };
   const num = (val, min, max, on, step = 1) => h("input", { type: "number", min, max, step, value: val, oninput: (e) => on(e.target.value) });
@@ -215,7 +215,7 @@ function exactGiveBox(c, act) {
     st.opts = st.opts.slice(0, n);
     while (st.opts.length < n) { const k = keys.find((x) => !st.opts.some((o) => o.k === x)); st.opts.push({ k, v: defVal(k) }); }
   };
-  const spec = () => ({ ...st, opts: st.opts.map((o) => ({ k: o.k, v: isPct(o.k) ? Number(o.v) / 100 : Number(o.v) })), ench: st.ench || null });
+  const spec = () => ({ ...st, opts: st.opts.map((o) => ({ k: o.k, v: isPct(o.k) ? Number(o.v) / 100 : Number(o.v) })), ench: st.ench || null, mat: st.mat === "" ? null : +st.mat });
   const draw = () => {
     fitOpts();
     const types = st.slot === "weapon" ? Object.entries(WEAPON_TYPES).map(([k, v]) => [k, `${v.name} (${v.cls.filter((x) => x !== "adventurer").map((x) => CLASS_INFO[x]?.name ?? x).join("·") || "모험가"})`])
@@ -226,6 +226,7 @@ function exactGiveBox(c, act) {
     const rows = [
       ["부위", sel(st.slot, SLOTS.map((k) => [k, SLOT_NAME[k]]), (v) => { st.slot = v; draw(); })],
       ["종류", st.slot === "weapon" || st.slot === "offhand" ? sel(st.type, types, (v) => { st.type = v; draw(); }) : sel(st.variant, types, (v) => { st.variant = +v; draw(); })],
+      ["재료(이름)", sel(st.mat, [["", "레벨에 맞춤 (자동)"], ...MATERIALS.map((m, i) => [i, `${m} (${i * 10 + 1}~${i * 10 + 10}층 재료)`])], (v) => { st.mat = v; upd(); })],
       ["등급", sel(st.rarity, RARITIES.map((r) => [r, r]), (v) => { st.rarity = v; for (const o of st.opts) o.v = defVal(o.k); draw(); })],
       ["아이템 레벨", h("input", { type: "number", min: 1, max: 100, value: st.ilvl, onchange: (e) => { st.ilvl = Math.max(1, Math.min(100, +e.target.value || 1)); for (const o of st.opts) o.v = defVal(o.k); draw(); } })],
       ["강화", num(st.enh, 0, MAX_ENH, (v) => { st.enh = +v || 0; upd(); })],
