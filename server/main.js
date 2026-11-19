@@ -13,7 +13,7 @@ import { setAdminKey, newAdminKey } from "./admin.js";
 import { attachSocket, initWorld } from "./net.js";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
-const PUBLIC = join(ROOT, "public"), SHARED = join(ROOT, "shared");
+const PUBLIC = process.env.PUBLIC_DIR ? join(ROOT, process.env.PUBLIC_DIR) : join(ROOT, "public"), SHARED = join(ROOT, "shared");
 const dbPath = CONFIG.dbPath ?? join(ROOT, "data", "game.db");
 mkdirSync(dirname(dbPath), { recursive: true });
 const sqlite = new DatabaseSync(dbPath);
