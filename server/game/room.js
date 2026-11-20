@@ -75,8 +75,23 @@ export class Room {
 
   // ── 이벤트
   ev(e) { this.events.push(e); }
+  // 균열 망령의 순간이동 구체 효과는 방 전체에서 초당 최대 3회만 표시한다.
+  allowAbyssOrbFx(now = this.now) {
+    if (this.dungeon !== 2) return true;
+    if (now - (this.abyssOrbFxWindowAt ?? -Infinity) >= 1) {
+      this.abyssOrbFxWindowAt = now;
+      this.abyssOrbFxCount = 0;
+    }
+    if ((this.abyssOrbFxCount ?? 0) >= 3) return false;
+    this.abyssOrbFxCount = (this.abyssOrbFxCount ?? 0) + 1;
+    return true;
+  }
   aliveMonsters() { let n = 0; for (const u of this.units.values()) if (u.type === "m" && !u.dead && !u.dummy && u.team === "m") n++; return n + this.timers.filter((t) => t.spawn).length; }
-  schedule(delay, fn) { this.timers.push({ at: this.now + delay, fn }); }
+  schedule(delay, fn) {
+    const timer = { at: this.now + delay, fn };
+    this.timers.push(timer);
+    return timer;
+  }
 
   // ── 유닛 생성
   spawnMonster(mid, x, y, elite = false, opts = {}) {
@@ -206,52 +221,103 @@ export class Room {
   onFrontGuard(u, now) { onFrontGuard(this, u, now); }
   onPlayerHit(u, t, dmg, crit, now, o) { skillOnPlayerHit(this, u, t, dmg, crit, now, o); }
 
-  // ── 웨이브: 남은 몬스터가 적어지거나 22초가 지나면 다음 무리가 가장자리 소환진에서 나타남
+  // ── 웨이브: 남은 적이 줄거나 제한 시간이 지나면 다음 무리가 가장자리 소환진에서 나타남
   tickWaves(now) {
     const W = this.map.waves, st = this.wave;
-    if (!this.players.size || st.spawned >= W.total || now < st.nextAt) return;
+    if (!W || !st || !this.players.size || st.spawned >= W.total || now < st.nextAt) return;
+    const players = [...this.players.values()].filter((p) => !p.dead && !p.ghost);
+    if (!players.length) return;
     const per = Math.ceil(W.total / W.waves);
     let alive = 0;
-    for (const u of this.units.values()) if (u.type === "m" && !u.dead) alive++;
-    // 다음 웨이브: 남은 적이 35% 이하이거나, 22초가 지났고 70% 이하일 때 (웨이브가 겹겹이 쌓이지 않게)
-    if (st.n > 0 && alive > Math.max(2, Math.floor(per * 0.35)) && (now < st.forceAt || alive > per * 0.7)) return;
+    for (const u of this.units.values()) if (u.type === "m" && !u.dead && !u.dummy && u.team === "m") alive++;
+    const lowCount = alive <= Math.max(2, Math.floor(per * 0.35));
+    const timedRelease = now >= (st.forceAt ?? 0);
+    // 기존 층은 몬스터 수가 줄어야 다음 웨이브, D2는 22초 뒤 전투가 정체되지 않게 합류.
+    if (st.n > 0 && !lowCount && (this.dungeon !== 2 || !timedRelease)) return;
+
+    // 데이터가 비거나 막힌 소환 좌표가 있어도 빈 배열 인덱싱으로 틱이 중단되지 않게 한다.
+    let pts = (Array.isArray(W.points) ? W.points : []).filter(([x, y]) =>
+      Number.isFinite(x) && Number.isFinite(y) && !circleHitsWall(this.map, x, y, 12)
+    );
+    const distant = pts.filter(([x, y]) => players.every((p) => Math.hypot(p.x - x, p.y - y) > 220));
+    if (distant.length >= 4) pts = distant;
+    if (!pts.length) {
+      // 시작 위치 주변에서 도보 가능한 대체 소환 지점을 찾는다.
+      for (const p of players) {
+        for (const radius of [145, 185, 225, 265]) {
+          for (let i = 0; i < 16 && pts.length < 24; i++) {
+            const a = (i / 16) * Math.PI * 2;
+            const x = p.x + Math.cos(a) * radius, y = p.y + Math.sin(a) * radius;
+            if (!circleHitsWall(this.map, x, y, 12)) pts.push([x, y]);
+          }
+          if (pts.length) break;
+        }
+      }
+    }
+    if (!pts.length && this.map.start && !circleHitsWall(this.map, this.map.start[0], this.map.start[1], 12)) {
+      pts = [this.map.start];
+    }
+    const pool = (Array.isArray(W.pool) ? W.pool : []).filter((id) => MONSTERS[id]);
+    const mobPool = pool.length ? pool : zoneOf(this.floor, this.dungeon).monsters.filter((id) => MONSTERS[id]);
+    if (!pts.length || !mobPool.length) {
+      st.nextAt = now + 1;
+      return;
+    }
+
     st.n++;
     const n = Math.min(per, W.total - st.spawned);
     st.spawned += n;
-    st.nextAt = now + 3;
-    st.forceAt = now + 22;
+    st.nextAt = now + (this.dungeon === 2 ? 1.8 : 3);
+    st.forceAt = now + (this.dungeon === 2 ? 22 : 22);
     this.ev({ e: "wave", n: st.n, of: W.waves });
-    const players = [...this.players.values()].filter((p) => !p.dead);
-    let pts = W.points.filter(([x, y]) => players.every((p) => Math.hypot(p.x - x, p.y - y) > 220));
-    if (pts.length < 4) pts = W.points;
     for (let i = pts.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [pts[i], pts[j]] = [pts[j], pts[i]]; }
     for (let i = 0; i < n; i++) {
       const [bx, by] = pts[i % pts.length];
       const x = bx + (Math.random() * 16 - 8), y = by + (Math.random() * 16 - 8);
-      const mid = W.pool[Math.floor(Math.random() * W.pool.length)];
-      const elite = Math.random() < W.elite;
+      const mid = mobPool[Math.floor(Math.random() * mobPool.length)];
+      const elite = Math.random() < (Number(W.elite) || 0);
       this.ev({ e: "fx", fx: "arcane/portal", x: x | 0, y: y | 0, s: 0.45 });
-      this.schedule(0.9 + Math.random() * 0.4, () => this.spawnMonster(mid, x, y, elite, { aggro: true }));
-      this.timers[this.timers.length - 1].spawn = true;
+      const timer = this.schedule(0.9 + Math.random() * 0.4, () => this.spawnMonster(mid, x, y, elite, { aggro: true }));
+      timer.spawn = true;
     }
   }
 
+  // 웨이브를 마친 뒤 멀리 떨어져 길찾기에서 이탈한 몬스터는 수에 상관없이 플레이어 근처로 재배치한다.
   rescueStragglers() {
-    const ps = [...this.players.values()].filter((p) => !p.dead);
+    const ps = [...this.players.values()].filter((p) => !p.dead && !p.ghost);
     if (!ps.length) return;
     const left = [...this.units.values()].filter((u) => u.type === "m" && !u.dead && !u.dummy && u.team === "m");
-    if (left.length > 4) return;
     let moved = 0;
     for (const m of left) {
-      if (ps.some((p) => Math.hypot(p.x - m.x, p.y - m.y) < 330)) continue;
-      moved++;
-      const p = ps[Math.floor(Math.random() * ps.length)];
-      const pts = this.map.waves.points.filter(([x, y]) => { const d = Math.hypot(x - p.x, y - p.y); return d > 120 && d < 320; });
-      const [x, y] = pts.length ? pts[Math.floor(Math.random() * pts.length)] : this.map.start;
+      let p = null, nearest = Infinity;
+      for (const candidate of ps) {
+        const d = Math.hypot(candidate.x - m.x, candidate.y - m.y);
+        if (d < nearest) { nearest = d; p = candidate; }
+      }
+      if (!p || nearest < 330) continue;
+      const radius = Math.max(10, Math.min(18, (m.r ?? 12) * 0.8));
+      let pts = (this.map.waves?.points ?? []).filter(([x, y]) => {
+        const d = Math.hypot(x - p.x, y - p.y);
+        return d > 120 && d < 320 && !circleHitsWall(this.map, x, y, radius);
+      });
+      if (!pts.length) {
+        for (const r of [145, 185, 225, 265]) {
+          for (let i = 0; i < 16; i++) {
+            const a = (i / 16) * Math.PI * 2;
+            const x = p.x + Math.cos(a) * r, y = p.y + Math.sin(a) * r;
+            if (!circleHitsWall(this.map, x, y, radius)) pts.push([x, y]);
+          }
+          if (pts.length) break;
+        }
+      }
+      if (!pts.length) continue;
+      const [x, y] = pts[Math.floor(Math.random() * pts.length)];
       this.ev({ e: "fx", fx: "arcane/portal", x: x | 0, y: y | 0, s: 0.45 });
-      m.x = x; m.y = y; m.aggro = true; m.threat?.set(p.id, (m.threat.get(p.id) ?? 0) + 1);
+      m.x = x; m.y = y; m.home = [x, y]; m.stuckFor = 0; m.aggro = true;
+      m.threat?.set(p.id, (m.threat.get(p.id) ?? 0) + 1);
+      moved++;
     }
-    if (moved) this.ev({ e: "msg", text: `남은 몬스터 ${left.length}마리가 가까이 다가와요!`, kind: "info" });
+    if (moved) this.ev({ e: "msg", text: `남은 몬스터 ${moved}마리가 가까이 다가와요!`, kind: "info" });
   }
 
   // ── 파티 이동 투표: 파티원 전원이 동의해야 다음 층으로
@@ -676,6 +742,15 @@ export class Room {
 
   // ── 투사체
   addProjectile(p) {
+    // 심연 보스의 중첩 탄막과 구형 공허 탄환이 화면·서버에 무한히 쌓이지 않게 방별 상한을 둔다.
+    if (this.dungeon === 2 && p.team === "m") {
+      const enemyCount = this.projectiles.reduce((n, q) => n + (q.team === "m"), 0);
+      if (enemyCount >= 48) return null;
+      if (p.fx === "shadow/void-orb") {
+        const orbCount = this.projectiles.reduce((n, q) => n + (q.team === "m" && q.fx === "shadow/void-orb"), 0);
+        if (orbCount >= 8) return null;
+      }
+    }
     p.id = newUnitId();
     p.hit = new Set();
     p.travelled = 0;

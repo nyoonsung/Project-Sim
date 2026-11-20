@@ -230,12 +230,14 @@ const bend = (base, late, f) => f <= 60 ? Math.pow(base, f - 1) : Math.pow(base,
 export const diffMul = (f) => ({ hp: 1 + 0.025 * (f - 1), dmg: 1 + 0.016 * (f - 1), speed: Math.min(1.25, 1 + 0.003 * (f - 1)) });
 // 95층부터는 너무 어렵다는 의견 → 체력·공격력 75%
 export const LATE_EASE = (f) => (f >= 95 ? 0.75 : 1);
-// ── 제2 던전 난이도 (대폭 상향)
-//  예전: 층 번호 1~30을 그대로 써서 '제1 던전 1~30층 ×5' → 레벨 100 이상에게는 1층이 제1 던전 100층보다 10배 쉬웠고,
-//        몬스터 레벨이 1~30이라 방어력이 피해를 거의 다 막았으며, 드롭 아이템도 1~30레벨짜리였음.
-//  지금: 제2 던전 n층 = 실제 레벨 100 + n×5/3 (1층 102 → 30층 150).
-//        체력·공격력은 '제1 던전 100층' 기준 1층부터 체력 ×2.5 · 공격력 ×1.8, 층마다 체력 +3% · 공격력 +1.8% (30층: ×4.7 · ×2.7)
+// ── 제2 던전 난이도
+// 제2 던전 n층 = 실제 레벨 100 + n×5/3 (1층 102 → 30층 150).
+// 기존 제2 던전 수치(제1 던전 100층 대비 체력 ×2.5 · 공격력 ×1.8, 층별 성장)에
+// 별도 ×100을 곱한다. 이동 속도는 기존 ×1.1만 유지해 이동 판정이 망가지지 않도록 한다.
 export const D2_HARD = { hp: 2.5, dmg: 1.8, hpStep: 0.03, dmgStep: 0.018, speed: 1.1 };
+export const D2_EXTREME_MULTIPLIER = 100;
+export const D1_BOSS_HP_MULTIPLIER = 11;
+export const D1_BOSS_DAMAGE_MULTIPLIER = 10;
 export const d2Level = (floor) => 100 + Math.round((floor * 5) / 3);
 /** 그 층의 실제 레벨 (제1 던전은 층 = 레벨) */
 export const effLevel = (floor, dungeon = 1) => (dungeon === 2 ? d2Level(floor) : floor);
@@ -243,8 +245,8 @@ export function floorScale(floor, dungeon = 1) {
   if (dungeon === 2) {
     const b = floorScale(100, 1), n = Math.max(0, floor - 1), L = d2Level(floor);
     return {
-      hp: b.hp * D2_HARD.hp * (1 + D2_HARD.hpStep * n),
-      dmg: b.dmg * D2_HARD.dmg * (1 + D2_HARD.dmgStep * n),
+      hp: b.hp * D2_HARD.hp * (1 + D2_HARD.hpStep * n) * D2_EXTREME_MULTIPLIER,
+      dmg: b.dmg * D2_HARD.dmg * (1 + D2_HARD.dmgStep * n) * D2_EXTREME_MULTIPLIER,
       speed: b.speed * D2_HARD.speed,
       xp: Math.pow(1.045, L - 1) * 1.5,
       gold: Math.pow(1.04, L - 1) * 1.3,
@@ -301,9 +303,11 @@ export function bossStats(id, floor, party = 1, dungeon = 1) {
   const pScale = 1 + 0.7 * (party - 1);
   const hpMul = def.mid ? 36 : 64;
   const capBonus = dungeon === 1 && floor >= 100 ? 1.5 : 1;
+  const bossHpMultiplier = dungeon === 1 ? D1_BOSS_HP_MULTIPLIER : 1;
+  const bossDamageMultiplier = dungeon === 1 ? D1_BOSS_DAMAGE_MULTIPLIER : 1;
   return {
-    hp: Math.round(baseHp * hpMul * pScale * capBonus * (dungeon === 2 && floor >= DUNGEON2_MAX_FLOOR ? 1.5 : 1) * hpBoost(party, effLevel(floor, dungeon))),
-    dmg: baseDmg * (def.mid ? 1.5 : 1.7),
+    hp: Math.round(baseHp * hpMul * pScale * capBonus * (dungeon === 2 && floor >= DUNGEON2_MAX_FLOOR ? 1.5 : 1) * hpBoost(party, effLevel(floor, dungeon)) * bossHpMultiplier),
+    dmg: baseDmg * (def.mid ? 1.5 : 1.7) * bossDamageMultiplier,
     xp: (def.xp ?? 25) * 6 * s.xp,
     level: effLevel(floor, dungeon),
   };

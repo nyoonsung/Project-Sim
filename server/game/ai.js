@@ -136,7 +136,7 @@ export function tickMonster(room, m, now) {
         const x = t.x + Math.cos(a) * 54, y = t.y + Math.sin(a) * 54;
         if (!circleHitsWall(room.map, x, y, m.r * 0.7)) {
           m.x = x; m.y = y; m.blinkAt = now + 4.8; m.atkReady = now + 0.8;
-          room.ev({ e: "fx", fx: "shadow/void-orb", x: x | 0, y: y | 0, s: 0.7 });
+          if (room.allowAbyssOrbFx?.(now) ?? true) room.ev({ e: "fx", fx: "shadow/void-orb", x: x | 0, y: y | 0, s: 0.7 });
         } else moveToward(room, m, room.pathDir(m, t), spd, dt);
       } else if (dist <= def.range + t.r && ready) {
         m.windup = { at: now + 0.28, interruptible: true, fire: (t0) => { const tt = room.units.get(t.id); if (tt && !tt.dead && Math.hypot(tt.x - m.x, tt.y - m.y) <= def.range + tt.r + 10) hitTarget(room, m, tt, 1.25, t0); } };
@@ -357,6 +357,14 @@ const EXTRA_PATTERNS = [
   { from: 70, p: { type: "lanes", n: 5, width: 56, len: 460, tel: 1.1, pow: 1.0, fx: "lightning/zap-hit" } },
 ];
 function startPattern(room, b, p, t, now) {
+  // 제2 던전 보스는 탄막·조준 사격·나선 탄막을 겹쳐 발사하지 않는다.
+  // 기존 탄이 화면에 남아 있는 동안 같은 보스가 새 투사체 패턴을 연속 예약하지 않도록 잠근다.
+  if (room.dungeon === 2 && ["barrage", "aimed", "spiral"].includes(p.type)) {
+    const lockedUntil = b.projectilePatternUntil ?? 0;
+    if (now < lockedUntil) return;
+    const hold = p.type === "spiral" ? (p.dur ?? 2.5) + 4 : p.type === "barrage" ? 5.5 : 3.5;
+    b.projectilePatternUntil = now + hold;
+  }
   const def = b.def_;
   const ply = bossTargets(room);
   const pw = p.pow ?? 1;
