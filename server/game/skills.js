@@ -11,6 +11,11 @@ const RES_NAME = { mp: "MP", ki: "내력", holy: "성광", parts: "부품", gap:
 const RES_MAX = { ki: 100, holy: 100, parts: 3, gap: 3 };
 
 const enemies = (room, u) => [...room.units.values()].filter((t) => !t.dead && t.team !== u.team && (t.type !== "d" || t.targetable));
+const pointSegmentDistance = (px, py, x0, y0, x1, y1) => {
+  const dx = x1 - x0, dy = y1 - y0;
+  const t = Math.max(0, Math.min(1, ((px - x0) * dx + (py - y0) * dy) / (dx * dx + dy * dy || 1)));
+  return Math.hypot(px - x0 - dx * t, py - y0 - dy * t);
+};
 const allies = (room, u) => [...room.players.values()].filter((p) => !p.dead);
 const healPower = (u) => u.stats.atk * u.stats.heal * (u.stats.dmgType === "mag" ? u.stats.mag : u.stats.phys) * 0.85;
 const msg = (u, text) => u.session.notice(text);
@@ -392,10 +397,12 @@ const STEP = {
     room.ev({ e: "dash", id: u.id, a: Math.round(dir * 1000), d: st.dist, v: st.speed });
     u.dash = {
       dir, left: st.dist, speed: st.speed,
-      onStep: (t0) => {
+      onStep: (t0, fromX = u.x, fromY = u.y) => {
         if (!st.hit) return;
+        // 고속 돌진은 한 틱 이동량이 커서 도착점만 검사하면 적을 통과할 수 있다.
+        // 직전 위치부터 현재 위치까지의 선분을 검사해 경로상 적중을 놓치지 않는다.
         for (const t of enemies(room, u)) {
-          if (hitSet.has(t.id) || Math.hypot(t.x - u.x, t.y - u.y) > t.r + u.r + 6) continue;
+          if (hitSet.has(t.id) || pointSegmentDistance(t.x, t.y, fromX, fromY, u.x, u.y) > t.r + u.r + 6) continue;
           hitSet.add(t.id);
           strike(room, u, t, { ...st.hit, cc: st.hit.cc, groggy: st.hit.groggy, threat: st.hit.threat }, ctx, t0, { melee: true });
           if (st.stopOnHit) { u.dash.stop = true; break; }
