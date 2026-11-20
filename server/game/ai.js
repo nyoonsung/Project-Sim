@@ -136,7 +136,7 @@ export function tickMonster(room, m, now) {
         const x = t.x + Math.cos(a) * 54, y = t.y + Math.sin(a) * 54;
         if (!circleHitsWall(room.map, x, y, m.r * 0.7)) {
           m.x = x; m.y = y; m.blinkAt = now + 4.8; m.atkReady = now + 0.8;
-          room.ev({ e: "fx", fx: "shadow/void-orb", x: x | 0, y: y | 0, s: 0.7 });
+          if (room.allowAbyssOrbFx?.(now) ?? true) room.ev({ e: "fx", fx: "shadow/void-orb", x: x | 0, y: y | 0, s: 0.7 });
         } else moveToward(room, m, room.pathDir(m, t), spd, dt);
       } else if (dist <= def.range + t.r && ready) {
         m.windup = { at: now + 0.28, interruptible: true, fire: (t0) => { const tt = room.units.get(t.id); if (tt && !tt.dead && Math.hypot(tt.x - m.x, tt.y - m.y) <= def.range + tt.r + 10) hitTarget(room, m, tt, 1.25, t0); } };
