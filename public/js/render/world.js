@@ -4,6 +4,7 @@ import { titleDesign } from "/shared/titles.js";
 import { tickQuality, preset } from "../quality.js";
 import { frame as dtFrame, drawFoot as drawDTFoot } from "./dt2.js";
 import { weatherLoop } from "./fx.js";
+import { objectDepthY } from "./depth.js";
 // 수호 골렘 색: 강철 몸 + 놋쇠 기운
 const GOLEM_TINT = { m: "#c8d4e0", s: "#1a1206", sat: 0.35 };
 // 바둑판으로 이어 붙일 수 없는 한 장짜리 날씨(빛줄기): 화면에 한 번만
@@ -531,7 +532,8 @@ export class Renderer {
   drawSorted(ctx, cx, cy, t) {
     const list = [];
     const inView = (x, y, m = 80) => x - cx > -m && y - cy > -m && x - cx < VW + m && y - cy < VH + m * 1.5;
-    for (const o of G.objects) if (inView(o.x, o.y, 160)) list.push({ y: o.flatY ?? (o.kind === "torch" ? o.y - 20 : o.flat ? o.y - 14 : o.y), o });
+    const players = [...G.ents.values()].filter((e) => e.k === "p" && !e.dead);
+    for (const o of G.objects) if (inView(o.x, o.y, 160)) list.push({ y: objectDepthY(o, players), o });
     for (const e of G.ents.values()) if (inView(e.rx, e.ry)) list.push({ y: e.ry, e });
     if (G.kind === "town") for (const f of folkList()) if (inView(f.x, f.y)) list.push({ y: f.y, f });
     list.sort((a, b) => a.y - b.y);
