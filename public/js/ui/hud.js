@@ -11,7 +11,7 @@ import { skillIconURL } from "./icons.js";
 import { pixImg } from "./pix.js";
 
 const RES = { sword: ["ki", "내력", 100], fist: ["ki", "내력", 100], priest: ["holy", "성광", 100], smith: ["parts", "부품", 3], rogue: ["gap", "틈", 3] };
-const BUFF_NAME = { riposte: "반격 기회", imun: "이문정주", sidestep: "횡이동", dance: "권무", acupoint: "점혈", evasion: "이베이젼", absolute: "앱솔루트", footwork: "발놀림", poison_blade: "독날", afterimage: "잔영", track: "약점 추적", precise: "정밀 시전", echo: "잔향", eo_burst: "어검발산", hymn_atk: "축복(공격)", hymn_def: "축복(방어)", zone_dr: "회랑", circuit: "회로", swift_kill: "질주", m_guard: "가호" };
+const BUFF_NAME = { riposte: "반격 기회", imun: "이문정주", sidestep: "횡이동", dance: "권무", acupoint: "점혈", evasion: "이베이젼", absolute: "앱솔루트", footwork: "발놀림", poison_blade: "독날", afterimage: "잔영", track: "약점 추적", precise: "정밀 시전", echo: "잔향", eo_burst: "어검발산", hymn_atk: "축복(공격)", hymn_def: "축복(방어)", zone_dr: "회랑", circuit: "회로", swift_kill: "질주", m_guard: "가호", flash_edge: "일섬 여진", eo_tempest: "회천 폭풍", king_resolve: "권왕의 결의", night_hunt: "밤의 사냥", forge_oath: "대장간 서약" };
 const ST_NAME = { burn: "화상", poison: "중독", bleed: "출혈", slow: "감속", root: "속박", stun: "기절", down: "넘어짐", freeze: "빙결", shock: "감전", weaken: "약화", blind: "실명" };
 
 let slotEls = [];
