@@ -17,12 +17,12 @@ const CRIT_POINTS = 180;
 const DAMAGE_POINTS = 447 - CRIT_POINTS;
 
 
-// 기본 체력 배율: 검사·도적·마법사는 소폭 상향. 검사는 체력보다 방어를 더 보강한다.
+// 직업 내구도·전용 보너스: 검사 방어, 도적 체력·회피, 마법사 체력·방어·마나·시전 속도.
 {
   const expected = {
     sword: { hpMul: 1.20, defMul: 1.18, hpAtLv10: 408, defAtLv10: 32 },
-    rogue: { hpMul: 0.88, defMul: 0.85, hpAtLv10: 299, defAtLv10: 23 },
-    mage: { hpMul: 1.03, defMul: 0.9, hpAtLv10: 350, defAtLv10: 24 },
+    rogue: { hpMul: 1.0, defMul: 0.95, hpAtLv10: 340, defAtLv10: 26 },
+    mage: { hpMul: 1.12, defMul: 1.0, hpAtLv10: 381, defAtLv10: 27 },
   };
   for (const [cls, exp] of Object.entries(expected)) {
     assert.equal(CLASS_INFO[cls].hpMul, exp.hpMul, `${cls}: base HP multiplier`);
@@ -30,9 +30,15 @@ const DAMAGE_POINTS = 447 - CRIT_POINTS;
     const s = deriveStats({ cls, level: 10, stats: {}, equip: {}, skills: [] });
     assert.equal(s.maxHp, exp.hpAtLv10, `${cls}: level 10 base HP`);
     assert.equal(s.def, exp.defAtLv10, `${cls}: level 10 base defense`);
+    if (cls === "rogue") assert.equal(s.evade, 0.06, "rogue: baseline evasion");
+    if (cls === "mage") {
+      assert.equal(s.cast, 1.12, "mage: baseline cast speed");
+      assert.equal(s.mpRegen, 2.5, "mage: level 10 mana regeneration");
+      assert.equal(s.maxMp, 210, "mage: level 10 maximum MP");
+    }
   }
 }
-console.log("✓ 검사·도적·마법사 HP 상향 및 검사 방어력 상향");
+console.log("✓ 검사 방어력 / 도적·마법사 전반 능력치 상향");
 
 const BUILDS = [
   {
