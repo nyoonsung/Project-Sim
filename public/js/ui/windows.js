@@ -516,7 +516,8 @@ export function openAbyssVault() {
     return [
       h("div", { class: "note", text: "심연의 열쇠 1개와 균열 결정 5개를 바치면 제2 던전 전용 전설 유물을 하나 얻어요." }),
       h("div", { class: "note", text: `보유량 — 심연의 열쇠: ${keys}개 / 균열 결정: ${crystals}개` }),
-      h("button", { class: "btn primary", disabled: keys < 1 || crystals < 5, onclick: () => send({ t: "vault" }) }, "열쇠와 결정으로 보관고 열기"),
+      h("div", { class: "note", text: "재료 보유량은 서버에서 최종 확인해요. 표시가 늦게 갱신돼도 버튼을 눌러 확인할 수 있어요." }),
+      h("button", { class: "btn primary", onclick: () => send({ t: "vault" }) }, "열쇠와 결정으로 보관고 열기"),
     ];
   }, { w: 360 });
 }
