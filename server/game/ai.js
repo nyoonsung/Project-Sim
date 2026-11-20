@@ -632,7 +632,7 @@ function startPattern(room, b, p, t, now) {
           const a = rot + (k * Math.PI) / 2;
           room.addArea({ team: "m", shape: "r", x: b.x, y: b.y, ang: a, l: p.len, w: p.width, tel: p.tel, fire: (t0) => {
             fxAt(p.fx, b.x + Math.cos(a) * p.len * 0.5, b.y + Math.sin(a) * p.len * 0.5, 0.7);
-            hitIn((q) => { const dx = q.x - b.x, dy = q.y - b.y, al = dx * Math.cos(a) + dy * Math.sin(a), ac = Math.abs(-dx * Math.sin(a) + dy * Math.cos(a)); return al > 0 && al < p.len && ac < p.width / 2 - 2; }, pw, t0, { unblockable: true });
+            hitIn((q) => { const dx = q.x - b.x, dy = q.y - b.y, al = dx * Math.cos(a) + dy * Math.sin(a), ac = Math.abs(-dx * Math.sin(a) + dy * Math.cos(a)); return al > SH && al < p.len - SH && ac < p.width / 2 - SH; }, pw, t0, { unblockable: true });
           } });
         }
       });
