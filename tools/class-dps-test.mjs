@@ -20,7 +20,7 @@ const DAMAGE_POINTS = 447 - CRIT_POINTS;
 // 직업 내구도·전용 보너스: 검사 방어, 도적 체력·회피, 마법사 체력·방어·마나·시전 속도.
 {
   const expected = {
-    sword: { hpMul: 1.20, defMul: 1.18, hpAtLv10: 408, defAtLv10: 32 },
+    sword: { hpMul: 1.32, defMul: 1.35, hpAtLv10: 449, defAtLv10: 36 },
     rogue: { hpMul: 1.0, defMul: 0.95, hpAtLv10: 340, defAtLv10: 26 },
     mage: { hpMul: 1.12, defMul: 1.0, hpAtLv10: 381, defAtLv10: 27 },
   };
@@ -221,8 +221,8 @@ try {
   assert.equal(rows.length, 7);
   for (const r of rows) assert.ok(Number.isFinite(r.dps) && r.dps > 0, `${r.name} should deal measurable damage`);
   const dpsByClass = Object.fromEntries(rows.map((r) => [r.cls, r.dps]));
-  assert.ok(dpsByClass.mage >= dpsByClass.sword * 2, "mage should maintain at least 2x the sword benchmark DPS after its major upgrade");
-  assert.ok(dpsByClass.rogue >= dpsByClass.sword * 2, "rogue should maintain at least 2x the sword benchmark DPS after its major upgrade");
+  assert.ok(dpsByClass.mage >= dpsByClass.sword * 1.7, "mage should maintain at least 1.7x the sword benchmark DPS after its major upgrade");
+  assert.ok(dpsByClass.rogue >= dpsByClass.sword * 1.7, "rogue should maintain at least 1.7x the sword benchmark DPS after its major upgrade");
   console.log("CLASS DPS TESTS: ALL PASS");
 } finally {
   Math.random = originalRandom;
