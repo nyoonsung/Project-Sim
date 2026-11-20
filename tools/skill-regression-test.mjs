@@ -38,6 +38,7 @@ assert.equal(SKILLS.ro_hunt.steps[0].fn, "huntmark");
 assert.ok(SKILLS.sm_golem.steps[0].dur >= 16);
 
 // 직업 밸런스 패치 수치와 궁수 광역 스킬 등록을 고정 검증한다.
+assert.equal(CLASS_DMG.sword, 1.20);
 assert.equal(CLASS_DMG.archer, 1.62);
 assert.equal(CLASS_INFO.archer.hpMul, 0.96);
 assert.equal(CLASS_DMG.rogue, 1.50);
