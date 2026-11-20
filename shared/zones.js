@@ -241,6 +241,8 @@ export const D1_BOSS_HP_REDUCTION = 0.9;
 export const D1_BOSS_DAMAGE_MULTIPLIER = 10;
 export const D1_FINAL_BOSS_DAMAGE_MULTIPLIER = 1.2;
 export const D2_MONSTER_DAMAGE_MULTIPLIER = 0.5;
+// 제2 던전 일반·정예 몬스터의 HP·공격력·방어력은 현재 능력치에서 1/30로 조정. 보스·이동속도·경험치는 제외.
+export const D2_MONSTER_STAT_MULTIPLIER = 1 / 30;
 export const d2Level = (floor) => 100 + Math.round((floor * 5) / 3);
 /** 그 층의 실제 레벨 (제1 던전은 층 = 레벨) */
 export const effLevel = (floor, dungeon = 1) => (dungeon === 2 ? d2Level(floor) : floor);
@@ -291,8 +293,8 @@ export function monsterStats(id, floor, party = 1, dungeon = 1) {
   const pScale = 1 + 0.55 * (party - 1);
   const L = effLevel(floor, dungeon), fx = dungeon === 2 ? D2_FIX : { hp: 1, dmg: 1 };
   return {
-    hp: Math.round((def.hp / norm[zi].hp) * fx.hp * s.hp * pScale * hpBoost(party, L)),
-    dmg: (def.dmg / norm[zi].dmg) * fx.dmg * s.dmg * (dungeon === 2 ? D2_MONSTER_DAMAGE_MULTIPLIER : 1),
+    hp: Math.round((def.hp / norm[zi].hp) * fx.hp * s.hp * pScale * hpBoost(party, L) * (dungeon === 2 ? D2_MONSTER_STAT_MULTIPLIER : 1)),
+    dmg: (def.dmg / norm[zi].dmg) * fx.dmg * s.dmg * (dungeon === 2 ? D2_MONSTER_DAMAGE_MULTIPLIER * D2_MONSTER_STAT_MULTIPLIER : 1),
     xp: def.xp * 6 * s.xp,
     level: L,
   };
