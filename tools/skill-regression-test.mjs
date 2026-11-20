@@ -26,14 +26,31 @@ assert.equal(SKILLS.ma_resonance.steps[0].copyMul, 0.55);
 assert.equal(SKILLS.ro_hunt.steps[0].fn, "huntmark");
 assert.ok(SKILLS.sm_golem.steps[0].dur >= 16);
 
+// 신화 스킬은 7개 직업 모두 전용 역할과 충분한 효과를 갖춰야 한다.
+const mythic = SKILL_LIST.filter((s) => s.grade === "신화");
+assert.equal(mythic.length, 7, "7개 직업에 신화 궁극기가 하나씩 있어야 한다.");
+for (const cls of ["sword", "fist", "archer", "rogue", "mage", "priest", "smith"]) {
+  const skill = mythic.find((s) => s.cls === cls);
+  assert.ok(skill && skill.kind === "ultimate" && skill.steps?.length >= 2, `${cls}: 강화된 신화 궁극기가 있어야 한다.`);
+  assert.ok(skill.cd <= 42, `${skill.id}: 신화 스킬 쿨타임이 개선되어야 한다.`);
+}
+assert.ok(SKILLS.sw_final.steps[0].length >= 420 && SKILLS.sw_final.steps[0].pow >= 11);
+assert.ok(SKILLS.fi_final.steps.find((st) => st.do === "circle").pow >= 8);
+assert.ok(SKILLS.ar_final.steps.find((st) => st.do === "area").ticks >= 14);
+assert.ok(SKILLS.ro_final.steps.find((st) => st.do === "melee").hits >= 8);
+assert.ok(SKILLS.ma_final.steps.find((st) => st.do === "area").ticks >= 5);
+assert.ok(SKILLS.pr_final.steps.some((st) => st.do === "heal") && SKILLS.pr_final.steps.some((st) => st.do === "shield"));
+assert.ok(SKILLS.sm_final.steps.find((st) => st.do === "shield").pow >= 4);
+
 const expectedRanges = [
   ["sw_flash", 194],
   ["sw_eo_vortex", 96],
-  ["sw_final", 340],
-  ["fi_final", 250],
-  ["ar_final", 460],
-  ["pr_final", 400],
-  ["sm_final", 345],
+  ["sw_final", 420],
+  ["fi_final", 295],
+  ["ar_final", 550],
+  ["ma_final", 550],
+  ["pr_final", 455],
+  ["sm_final", 430],
 ];
 for (const [id, min] of expectedRanges) {
   assert.ok(skillReach(SKILLS[id]) >= min, `${id}: 실제 광역·돌진 범위가 자동 사용 사거리에 반영돼야 한다.`);
@@ -102,4 +119,4 @@ assert.ok(target.hp < before, "고속 돌진 경로에 있는 적에게 피해�
   assert.ok(smith.session.meDirty, "부품 충전은 HUD 동기화를 예약해야 한다.");
 }
 
-console.log("직업별 전설 스킬·대장장이 부품 충전·돌진 판정 테스트 통과");
+console.log("직업별 전설·신화 스킬·대장장이 부품 충전·돌진 판정 테스트 통과");
