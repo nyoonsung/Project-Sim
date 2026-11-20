@@ -7,7 +7,7 @@ import { profOf, profCost } from "/shared/prof.js";
 import { onTown } from "./update.js";
 import { sfx, onEnemyHit, onEnemyDie, onMeHurt } from "./feel.js";
 import { TICK_DT, PLAYER_RADIUS, SLOT_KEYS, VIEW_W, VIEW_H, ITEMS } from "/shared/constants.js";
-import { SKILLS } from "/shared/skills.js";
+import { SKILLS, skillReach } from "/shared/skills.js";
 import { zoneOf, ZONES } from "/shared/zones.js";
 import { TileMap } from "./render/tiles.js";
 import { makeClock } from "./netclock.js";
@@ -430,12 +430,7 @@ export function setAuto(id, on) {
   try { localStorage.setItem(AUTO_KEY, JSON.stringify([...G.autoSkills])); } catch {}
 }
 /** 스킬이 닿는 대략의 거리 */
-function reachOf(sk) {
-  if (sk.range) return sk.range;
-  let r = 0;
-  for (const st of sk.steps ?? []) if (st.range) r = Math.max(r, st.range + (st.do === "melee" ? 10 : 0));
-  return r || 150;
-}
+const reachOf = skillReach;
 const isHeal = (sk) => (sk.steps ?? []).some((st) => st.do === "heal");
 /** 가장 가까운 살아 있는 적 */
 export function nearestEnemy(range = 320) {
