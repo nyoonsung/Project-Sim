@@ -638,11 +638,12 @@ export class Room {
       // 돌진 중: 강제 이동
       const d = u.dash;
       const step = Math.min(d.left, d.speed * TICK_DT);
+      const fromX = u.x, fromY = u.y;
       const [nx, ny] = moveCircle(this.map, u.x, u.y, Math.cos(d.dir) * step, Math.sin(d.dir) * step, u.r);
       const moved = Math.hypot(nx - u.x, ny - u.y);
       u.x = nx; u.y = ny;
       d.left -= step;
-      d.onStep?.(now);
+      d.onStep?.(now, fromX, fromY);
       if (d.left <= 0.5 || moved < step * 0.3 || d.stop) { u.dash = null; d.onEnd?.(now); }
       u.facing = d.dir;
       return;
