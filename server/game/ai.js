@@ -6,6 +6,29 @@ import { dealDamage, applyStatus, isHardCC, moveMul, angDiff } from "./combat.js
 
 const TAU = Math.PI * 2;
 
+// 제2 던전 일반·정예 몬스터는 능력치가 낮아진 만큼 공격 모양과 연계 빈도를 보완한다.
+// 보스 패턴은 별도 로직이므로 이 튜닝의 영향을 받지 않는다.
+export const D2_MOB_PATTERN = Object.freeze({
+  attackRate: 0.9,
+  meleeWindup: 0.85,
+  stalkerTelegraph: 0.58,
+  stalkerDash: 205,
+  stalkerCooldown: 3.8,
+  guardRadius: 102,
+  guardTelegraph: 0.95,
+  chargerDistance: 190,
+  chargerWidth: 40,
+  chargerTelegraph: 0.68,
+  chargerCooldown: 3.6,
+  volleyShots: 2,
+  volleyGap: 0.16,
+  volleyPow: 0.72,
+  casterFollowDelay: 0.5,
+  casterFollowRadius: 34,
+  casterFollowTelegraph: 0.62,
+  casterFollowPow: 0.72,
+});
+
 function pickTarget(room, m, now) {
   if (m.tauntBy && now < m.tauntBy.until) {
     const t = room.units.get(m.tauntBy.id);
@@ -90,7 +113,7 @@ export function tickMonster(room, m, now) {
     if (now >= w.at) {
       m.windup = null;
       w.fire(now);
-      m.atkReady = now + def.atkCd * (0.85 + Math.random() * 0.3);
+      m.atkReady = now + def.atkCd * (room.dungeon === 2 ? D2_MOB_PATTERN.attackRate : 1) * (0.85 + Math.random() * 0.3);
     }
     return;
   }
@@ -98,10 +121,11 @@ export function tickMonster(room, m, now) {
   switch (m.ai) {
     case "stalker": {
       // 짧은 예고 후 빠르게 거리를 좁히는 추적 돌진
-      if (ready && dist > 70 && dist < 230 && now >= (m.dashAt ?? 0) && lineOfSight(room.map, m.x, m.y, t.x, t.y)) {
-        const a = ang, len = Math.min(190, dist - 28);
-        room.addArea({ team: "m", shape: "r", x: m.x, y: m.y, ang: a, l: len, w: 38, tel: 0.72, fire: () => {} });
-        m.windup = { at: now + 0.72, interruptible: true, fire: (t0) => {
+      if (ready && dist > 70 && dist < 245 && now >= (m.dashAt ?? 0) && lineOfSight(room.map, m.x, m.y, t.x, t.y)) {
+        const a = ang, len = Math.min(room.dungeon === 2 ? D2_MOB_PATTERN.stalkerDash : 190, dist - 28);
+        const tel = room.dungeon === 2 ? D2_MOB_PATTERN.stalkerTelegraph : 0.72;
+        room.addArea({ team: "m", shape: "r", x: m.x, y: m.y, ang: a, l: len, w: 42, tel, fire: () => {} });
+        m.windup = { at: now + tel, interruptible: true, fire: (t0) => {
           const hit = new Set(); let left = len;
           const step = () => {
             if (m.dead) return;
@@ -109,9 +133,9 @@ export function tickMonster(room, m, now) {
             for (const p of room.players.values()) if (!p.dead && !hit.has(p.id) && Math.hypot(p.x - m.x, p.y - m.y) < p.r + m.r + 14) { hit.add(p.id); hitTarget(room, m, p, 1.35, room.now); }
             if (left > 0 && Math.hypot(m.x - ox, m.y - oy) > 2) room.schedule(dt, step);
           };
-          step(); m.dashAt = t0 + 4.2;
+          step(); m.dashAt = t0 + (room.dungeon === 2 ? D2_MOB_PATTERN.stalkerCooldown : 4.2);
         } };
-        m.atkReady = now + 4.2;
+        m.atkReady = now + (room.dungeon === 2 ? D2_MOB_PATTERN.stalkerCooldown : 4.2);
       } else if (dist <= def.range + t.r) {
         if (ready) m.windup = { at: now + 0.32, interruptible: true, fire: (t0) => { const tt = room.units.get(t.id); if (tt && !tt.dead && Math.hypot(tt.x - m.x, tt.y - m.y) <= def.range + tt.r + 12) hitTarget(room, m, tt, 1.1, t0); } };
       } else moveToward(room, m, room.pathDir(m, t), spd * 1.12, dt);
@@ -119,13 +143,15 @@ export function tickMonster(room, m, now) {
     }
     case "guard": {
       // 파편 골렘은 느리지만 단단하고 범위 강타로 공간을 압박한다.
-      if (dist < 105 && ready) {
+      const radius = room.dungeon === 2 ? D2_MOB_PATTERN.guardRadius : 92;
+      const tel = room.dungeon === 2 ? D2_MOB_PATTERN.guardTelegraph : 1.05;
+      if (dist < radius + 13 && ready) {
         const x = m.x, y = m.y;
-        room.addArea({ team: "m", shape: "c", x, y, r: 92, tel: 1.05, fire: (t0) => {
+        room.addArea({ team: "m", shape: "c", x, y, r: radius, tel, fire: (t0) => {
           room.ev({ e: "fx", fx: "impacts/ground-slam", x: x | 0, y: y | 0, s: 0.85 });
-          for (const p of room.players.values()) if (!p.dead && Math.hypot(p.x - x, p.y - y) <= 92 + p.r) hitTarget(room, m, p, 1.55, t0);
+          for (const p of room.players.values()) if (!p.dead && Math.hypot(p.x - x, p.y - y) <= radius + p.r) hitTarget(room, m, p, room.dungeon === 2 ? 1.65 : 1.55, t0);
         } });
-        m.atkReady = now + def.atkCd;
+        m.atkReady = now + def.atkCd * (room.dungeon === 2 ? D2_MOB_PATTERN.attackRate : 1);
       } else if (dist > def.range + t.r) moveToward(room, m, room.pathDir(m, t), spd, dt);
       break;
     }
@@ -147,7 +173,7 @@ export function tickMonster(room, m, now) {
     case "swarm": {
       if (dist <= def.range + t.r) {
         if (ready) {
-          const tel = m.ai === "swarm" ? 0.25 : 0.4;
+          const tel = (m.ai === "swarm" ? 0.25 : 0.4) * (room.dungeon === 2 ? D2_MOB_PATTERN.meleeWindup : 1);
           room.ev({ e: "anim", id: m.id, a: "slash" });
           m.windup = { at: now + tel, interruptible: true, fire: (t0) => {
             const tt = room.units.get(t.id);
@@ -159,10 +185,12 @@ export function tickMonster(room, m, now) {
       break;
     }
     case "charger": {
-      if (ready && dist < 210 && lineOfSight(room.map, m.x, m.y, t.x, t.y)) {
-        const a = ang, len = 170;
-        room.addArea({ team: "m", shape: "r", x: m.x, y: m.y, ang: a, l: len, w: 34, tel: 0.8, fire: () => {} });
-        m.windup = { at: now + 0.8, interruptible: true, fire: (t0) => {
+      if (ready && dist < (room.dungeon === 2 ? 235 : 210) && lineOfSight(room.map, m.x, m.y, t.x, t.y)) {
+        const a = ang, len = room.dungeon === 2 ? D2_MOB_PATTERN.chargerDistance : 170;
+        const width = room.dungeon === 2 ? D2_MOB_PATTERN.chargerWidth : 34;
+        const tel = room.dungeon === 2 ? D2_MOB_PATTERN.chargerTelegraph : 0.8;
+        room.addArea({ team: "m", shape: "r", x: m.x, y: m.y, ang: a, l: len, w: width, tel, fire: () => {} });
+        m.windup = { at: now + tel, interruptible: true, fire: (t0) => {
           const hit = new Set();
           let left = len;
           const step = () => {
@@ -179,7 +207,7 @@ export function tickMonster(room, m, now) {
           };
           step();
         } };
-        m.atkReady = now + 4; // 돌진이 끊겨도 4초 뒤엔 다시 공격 (예전엔 99초 동안 공격 안 함)
+        m.atkReady = now + (room.dungeon === 2 ? D2_MOB_PATTERN.chargerCooldown : 4); // 돌진이 끊겨도 재공격
       } else if (dist <= def.range + t.r) {
         if (ready) m.windup = { at: now + 0.45, interruptible: true, fire: (t0) => { if (Math.hypot(t.x - m.x, t.y - m.y) <= def.range + t.r + 12) hitTarget(room, m, t, 1, t0); } };
       } else moveToward(room, m, room.pathDir(m, t), spd, dt);
@@ -207,20 +235,33 @@ export function tickMonster(room, m, now) {
       if (ready && los && dist <= def.range) {
         room.ev({ e: "anim", id: m.id, a: m.ai === "ranged" ? "shoot" : "cast" });
         if (m.ai === "ranged") {
-          m.windup = { at: now + 0.35, interruptible: true, fire: () => {
-            const tt = room.units.get(t.id) ?? t;
-            const a = Math.atan2(tt.y - m.y, tt.x - m.x);
-            room.addProjectile({ team: "m", src: m.id, x: m.x, y: m.y - 8, vx: Math.cos(a) * 240, vy: Math.sin(a) * 240, range: def.range + 60, r: 6, pierce: 0, fx: def.proj, scale: def.projSmall ? 0.45 : null,
-              onHit: (p, t1) => hitTarget(room, m, p, 1, t1) });
+          m.windup = { at: now + (room.dungeon === 2 ? 0.28 : 0.35), interruptible: true, fire: () => {
+            const fireShot = (spread, pow) => {
+              const tt = room.units.get(t.id) ?? t;
+              const a = Math.atan2(tt.y - m.y, tt.x - m.x) + spread;
+              room.addProjectile({ team: "m", src: m.id, x: m.x, y: m.y - 8, vx: Math.cos(a) * 250, vy: Math.sin(a) * 250, range: def.range + 60, r: 6, pierce: 0, fx: def.proj, scale: def.projSmall ? 0.45 : null,
+                onHit: (p, t1) => hitTarget(room, m, p, pow, t1) });
+            };
+            if (room.dungeon === 2) {
+              // 심연 원거리 몬스터는 짧은 좌우 2연사를 사용해 이동 경로를 압박한다.
+              fireShot(-0.075, D2_MOB_PATTERN.volleyPow);
+              room.schedule(D2_MOB_PATTERN.volleyGap, () => !m.dead && fireShot(0.075, D2_MOB_PATTERN.volleyPow));
+            } else fireShot(0, 1);
           } };
         } else {
           const tx = t.x, ty = t.y, R = 46;
           const status = m.ai === "spore" ? { type: "slow", dur: 2.8, v: 0.42 } : def.aoe?.includes("ice") ? { type: "slow", dur: 2, v: 0.35 } : def.aoe?.includes("poison") || def.aoe?.includes("spore") ? { type: "poison", dur: 4, pow: 0.3 } : def.aoe?.includes("lightning") ? { type: "shock", dur: 3 } : null;
-          m.windup = { at: now + 0.3, interruptible: true, fire: () => {
-            room.addArea({ team: "m", shape: "c", x: tx, y: ty, r: R, tel: 1.0, fire: (t1) => {
-              room.ev({ e: "fx", fx: def.aoe, x: tx | 0, y: ty | 0, s: 0.55 });
-              for (const p of room.players.values()) if (!p.dead && Math.hypot(p.x - tx, p.y - ty) <= R + p.r) hitTarget(room, m, p, 1.3, t1, { unblockable: true, status });
+          m.windup = { at: now + (room.dungeon === 2 ? 0.25 : 0.3), interruptible: true, fire: () => {
+            const burst = (cx, cy, radius, telegraph, power) => room.addArea({ team: "m", shape: "c", x: cx, y: cy, r: radius, tel: telegraph, fire: (t1) => {
+              room.ev({ e: "fx", fx: def.aoe, x: cx | 0, y: cy | 0, s: 0.55 });
+              for (const p of room.players.values()) if (!p.dead && Math.hypot(p.x - cx, p.y - cy) <= radius + p.r) hitTarget(room, m, p, power, t1, { unblockable: true, status });
             } });
+            burst(tx, ty, R, room.dungeon === 2 ? 0.84 : 1.0, 1.3);
+            if (room.dungeon === 2) room.schedule(D2_MOB_PATTERN.casterFollowDelay, () => {
+              if (m.dead) return;
+              const target = room.units.get(t.id) ?? t;
+              burst(target.x, target.y, D2_MOB_PATTERN.casterFollowRadius, D2_MOB_PATTERN.casterFollowTelegraph, D2_MOB_PATTERN.casterFollowPow);
+            });
           } };
         }
       }
@@ -229,10 +270,11 @@ export function tickMonster(room, m, now) {
     case "bomber": {
       if (dist <= 46) {
         if (ready) {
-          room.addArea({ team: "m", shape: "c", x: m.x, y: m.y, r: 54, tel: 0.8, fire: () => {} });
-          m.windup = { at: now + 0.8, interruptible: false, fire: (t0) => {
+          const radius = room.dungeon === 2 ? 60 : 54, tel = room.dungeon === 2 ? 0.68 : 0.8;
+          room.addArea({ team: "m", shape: "c", x: m.x, y: m.y, r: radius, tel, fire: () => {} });
+          m.windup = { at: now + tel, interruptible: false, fire: (t0) => {
             room.ev({ e: "fx", fx: "explosions/small-explosion", x: m.x | 0, y: m.y | 0, s: 0.45 });
-            for (const p of room.players.values()) if (!p.dead && Math.hypot(p.x - m.x, p.y - m.y) <= 54 + p.r) hitTarget(room, m, p, 1.8, t0, { unblockable: true });
+            for (const p of room.players.values()) if (!p.dead && Math.hypot(p.x - m.x, p.y - m.y) <= radius + p.r) hitTarget(room, m, p, room.dungeon === 2 ? 1.9 : 1.8, t0, { unblockable: true });
             room.kill(m, null, t0);
           } };
         }
@@ -558,171 +600,3 @@ function startPattern(room, b, p, t, now) {
     }
     case "donut": {
       // 안팎 폭발: 먼저 가운데 큰 원(밖으로) → 이어서 바깥 고리(다시 안으로)
-      room.addArea({ team: "m", shape: "c", x: b.x, y: b.y, r: p.inner, tel: p.tel, fire: (t0) => {
-        room.ev({ e: "anim", id: b.id, a: "smash" }); fxAt("impacts/ground-slam", b.x, b.y); room.ev({ e: "shake", v: 4 });
-        hitIn((q) => Math.hypot(q.x - b.x, q.y - b.y) <= p.inner - SH, pw, t0, { unblockable: true });
-      } });
-      room.schedule(p.tel * 0.55, () => !b.dead && room.addArea({ team: "m", shape: "ring", x: b.x, y: b.y, r: p.inner, r2: p.outer, tel: p.tel, fire: (t0) => {
-        fxAt(p.fx ?? "shadow/dark-explosion", b.x, b.y, 1.2); room.ev({ e: "shake", v: 5 });
-        hitIn((q) => { const d = Math.hypot(q.x - b.x, q.y - b.y); return d >= p.inner + SH && d <= p.outer - SH; }, pw, t0, { unblockable: true });
-      } }));
-      b.pattern.end = now + p.tel * 1.55 + 0.3;
-      break;
-    }
-    case "spiral": {
-      // 나선 탄막: 경고 뒤 팔 3개로 도는 탄
-      const delay = 1.0;
-      room.ev({ e: "anim", id: b.id, a: "cast" });
-      room.ev({ e: "warn", id: b.id, k: "spiral", d: delay, n: p.arms * 4, w: 1, x: b.x | 0, y: (b.y - 10) | 0 });
-      const base = Math.random() * TAU, dir = Math.random() < 0.5 ? 1 : -1, n = Math.round(p.dur / 0.12);
-      for (let k = 0; k < n; k++) room.schedule(delay + k * 0.12, () => {
-        if (b.dead) return;
-        for (let arm = 0; arm < p.arms; arm++) {
-          const a = base + dir * k * 0.33 + (arm * TAU) / p.arms;
-          room.addProjectile({ team: "m", src: b.id, x: b.x, y: b.y - 10, vx: Math.cos(a) * p.speed, vy: Math.sin(a) * p.speed, range: 480, r: BOSS_HIT.proj, pierce: 0, fx: p.fx, scale: 0.4, onHit: (q, t1) => hitTarget(room, b, q, pw, t1) });
-        }
-      });
-      b.pattern.end = now + delay + p.dur + 0.2;
-      break;
-    }
-    case "lanes": {
-      // 줄 공격: 보스 앞쪽으로 평행한 줄 여러 개, 한 줄만 비어 있음
-      const a = Math.atan2(t.y - b.y, t.x - b.x), nx = -Math.sin(a), ny = Math.cos(a);
-      const safe = Math.floor(Math.random() * p.n);
-      for (let k = 0; k < p.n; k++) {
-        if (k === safe) continue;
-        const off = (k - (p.n - 1) / 2) * p.width;
-        const sx = b.x + nx * off - Math.cos(a) * 60, sy = b.y + ny * off - Math.sin(a) * 60;
-        room.addArea({ team: "m", shape: "r", x: sx, y: sy, ang: a, l: p.len, w: p.width - 4, tel: p.tel, fire: (t0) => {
-          fxAt(p.fx, sx + Math.cos(a) * p.len * 0.5, sy + Math.sin(a) * p.len * 0.5, 0.6);
-          hitIn((q) => { const dx = q.x - sx, dy = q.y - sy, al = dx * Math.cos(a) + dy * Math.sin(a), ac = Math.abs(-dx * Math.sin(a) + dy * Math.cos(a)); return al > 0 && al < p.len && ac < (p.width - 4) / 2 - 2; }, pw, t0, { unblockable: true });
-        } });
-      }
-      b.pattern.end = now + p.tel + 0.3;
-      break;
-    }
-    case "safespot": {
-      // 안전지대: 투기장 전체가 터지고 빛나는 원 하나만 안전 → 그 원으로 달려가야 함
-      const A = room.map.arena;
-      let sx = b.x, sy = b.y;
-      for (let k = 0; k < 20; k++) {
-        const x = A ? A.x0 + 60 + Math.random() * (A.x1 - A.x0 - 120) : t.x + (Math.random() - 0.5) * 400;
-        const y = A ? A.y0 + 60 + Math.random() * (A.y1 - A.y0 - 120) : t.y + (Math.random() - 0.5) * 300;
-        const far = Math.hypot(x - t.x, y - t.y);
-        if (!circleHitsWall(room.map, x, y, p.safe) && far > 120 && far < 330) { sx = x; sy = y; break; }
-      }
-      room.ev({ e: "anim", id: b.id, a: "cast" });
-      room.ev({ e: "msg", text: "빛나는 원 안으로 피하세요!", kind: "warn" });
-      room.addArea({ team: "m", shape: "ring", x: sx, y: sy, r: p.safe, r2: 1400, tel: p.tel, fire: (t0) => {
-        fxAt(p.fx, b.x, b.y, 1.6);
-        room.ev({ e: "shake", v: 8 });
-        hitIn((q) => Math.hypot(q.x - sx, q.y - sy) > p.safe + q.r * 0.5, pw, t0, { unblockable: true });
-      } });
-      b.pattern.end = now + p.tel + 0.5;
-      break;
-    }
-    case "grid": {
-      // 격자: 가로줄(빈 줄 섞임) → 곧바로 세로줄. 안전한 칸이 계속 바뀜
-      const A = room.map.arena ?? { x0: b.x - 300, y0: b.y - 220, x1: b.x + 300, y1: b.y + 220 };
-      const W = A.x1 - A.x0, H = A.y1 - A.y0;
-      const band = (horiz, k, n, delay) => room.schedule(delay, () => {
-        if (b.dead) return;
-        const w = (horiz ? H : W) / n;
-        const c = (horiz ? A.y0 : A.x0) + w * (k + 0.5);
-        const x = horiz ? A.x0 : c, y = horiz ? c : A.y0, ang = horiz ? 0 : Math.PI / 2, len = horiz ? W : H;
-        room.addArea({ team: "m", shape: "r", x, y, ang, l: len, w: w - 2, tel: p.tel, fire: (t0) => {
-          fxAt(p.fx, x + Math.cos(ang) * len * 0.5, y + Math.sin(ang) * len * 0.5, 0.6);
-          hitIn((q) => (horiz ? Math.abs(q.y - c) < w / 2 - 3 : Math.abs(q.x - c) < w / 2 - 3), pw, t0, { unblockable: true });
-        } });
-      });
-      const n = p.n, off = Math.random() < 0.5 ? 0 : 1;
-      for (let k = 0; k < n; k++) if ((k + off) % 2 === 0) band(true, k, n, 0);
-      for (let k = 0; k < n; k++) if ((k + off) % 2 === 1) band(true, k, n, p.tel + 0.1);
-      const v0 = Math.random() < 0.5 ? 0 : 1;
-      for (let k = 0; k < n; k++) if ((k + v0) % 2 === 0) band(false, k, n, (p.tel + 0.1) * 2);
-      room.ev({ e: "anim", id: b.id, a: "cast" });
-      b.pattern.end = now + (p.tel + 0.1) * 2 + 0.4;
-      break;
-    }
-    case "multicharge": {
-      // 연속 돌진: 매번 다시 조준해서 n번
-      const go = (i) => {
-        if (b.dead || i >= p.n) return;
-        const tt = pickTarget(room, b, room.now) ?? t;
-        const a = Math.atan2(tt.y - b.y, tt.x - b.x);
-        room.addArea({ team: "m", shape: "r", x: b.x, y: b.y, ang: a, l: p.dist, w: p.width, tel: p.tel, fire: () => {
-          const hit = new Set();
-          let left = p.dist;
-          room.ev({ e: "anim", id: b.id, a: "dash" });
-          const step = () => {
-            if (b.dead) return;
-            const d = Math.min(left, 40), ox = b.x, oy = b.y;
-            moveToward(room, b, a, d / 0.05, 0.05);
-            left -= d;
-            for (const q of bossTargets(room)) if (!hit.has(q.id) && Math.hypot(q.x - b.x, q.y - b.y) < b.r * 0.8 + p.width / 4) { hit.add(q.id); hitTarget(room, b, q, pw, room.now); }
-            if (left > 0 && Math.hypot(b.x - ox, b.y - oy) > 2) room.schedule(0.05, step);
-            else { fxAt("impacts/heavy-landing", b.x, b.y); room.ev({ e: "shake", v: 3 }); room.schedule(0.15, () => go(i + 1)); }
-          };
-          step();
-        } });
-      };
-      go(0);
-      b.pattern.end = now + p.n * (p.tel + 0.6) + 0.3;
-      break;
-    }
-    case "walk": {
-      // 행진 폭발: 보스에서 대상 쪽으로 폭발이 줄지어 다가옴 (2줄: 지금 위치, 잠시 뒤 바뀐 위치)
-      const line = (delay) => room.schedule(delay, () => {
-        if (b.dead) return;
-        const tt = pickTarget(room, b, room.now) ?? t;
-        const a = Math.atan2(tt.y - b.y, tt.x - b.x);
-        for (let k = 1; k <= p.n; k++) {
-          const x = b.x + Math.cos(a) * p.step * k, y = b.y + Math.sin(a) * p.step * k;
-          if (circleHitsWall(room.map, x, y, 6)) break;
-          room.schedule(k * p.gap, () => !b.dead && room.addArea({ team: "m", shape: "c", x, y, r: p.radius, tel: p.tel, fire: (t0) => {
-            fxAt(p.fx, x, y, 0.55);
-            hitIn((q) => Math.hypot(q.x - x, q.y - y) <= p.radius - SH, pw, t0, { unblockable: true });
-          } }));
-        }
-      });
-      room.ev({ e: "anim", id: b.id, a: "cast" });
-      line(0); line(0.7);
-      b.pattern.end = now + 0.7 + p.n * p.gap + p.tel + 0.2;
-      break;
-    }
-    case "nova": {
-      // 파도 고리: 안쪽부터 바깥으로 고리가 차례로 터짐 → 이미 터진 안쪽으로 파고들어야 안전
-      room.ev({ e: "anim", id: b.id, a: "smash" });
-      for (let k = 0; k < p.n; k++) {
-        const r0 = k * p.step, r1 = (k + 1) * p.step;
-        room.schedule(k * 0.45, () => !b.dead && room.addArea({ team: "m", shape: k === 0 ? "c" : "ring", x: b.x, y: b.y, r: k === 0 ? r1 : r0, r2: k === 0 ? 0 : r1, tel: p.tel, fire: (t0) => {
-          fxAt(p.fx, b.x, b.y, 0.6 + k * 0.35);
-          room.ev({ e: "shake", v: 3 });
-          hitIn((q) => { const d = Math.hypot(q.x - b.x, q.y - b.y); return d >= (k === 0 ? 0 : r0 + SH) && d <= r1 - SH; }, pw, t0, { unblockable: true });
-        } }));
-      }
-      b.pattern.end = now + (p.n - 1) * 0.45 + p.tel + 0.3;
-      break;
-    }
-    case "beam": {
-      const a0 = Math.atan2(t.y - b.y, t.x - b.x);
-      const dir = Math.random() < 0.5 ? 1 : -1, rot = (70 * Math.PI) / 180 * dir, len = 420;
-      room.addArea({ team: "m", shape: "r", x: b.x, y: b.y, ang: a0, l: len, w: p.width, tel: 0.9, fire: () => {} });
-      room.ev({ e: "bbeam", id: b.id, a: Math.round(a0 * 1000), rot: Math.round(rot * 1000), d: p.dur, w: p.width, l: len, fx: p.fx, at: 0.9 });
-      const t0 = now + 0.9;
-      for (let k = 0; k < p.dur / 0.2; k++) {
-        room.schedule(0.9 + k * 0.2, (tn) => {
-          if (b.dead || isHardCC(b)) return;
-          const a = a0 + rot * (tn - t0);
-          hitIn((q) => {
-            const dx = q.x - b.x, dy = q.y - b.y;
-            const along = dx * Math.cos(a) + dy * Math.sin(a), across = Math.abs(-dx * Math.sin(a) + dy * Math.cos(a));
-            return along > 0 && along < len && across < p.width / 2 - 2;
-          }, pw, tn, { unblockable: true });
-        });
-      }
-      b.pattern.end = now + 0.9 + p.dur;
-      break;
-    }
-  }
-}
