@@ -76,7 +76,11 @@ export class Room {
   // ── 이벤트
   ev(e) { this.events.push(e); }
   aliveMonsters() { let n = 0; for (const u of this.units.values()) if (u.type === "m" && !u.dead && !u.dummy && u.team === "m") n++; return n + this.timers.filter((t) => t.spawn).length; }
-  schedule(delay, fn) { this.timers.push({ at: this.now + delay, fn }); }
+  schedule(delay, fn) {
+    const timer = { at: this.now + delay, fn };
+    this.timers.push(timer);
+    return timer;
+  }
 
   // ── 유닛 생성
   spawnMonster(mid, x, y, elite = false, opts = {}) {
@@ -730,10 +734,10 @@ export class Room {
     // 심연 보스의 중첩 탄막과 구형 공허 탄환이 화면·서버에 무한히 쌓이지 않게 방별 상한을 둔다.
     if (this.dungeon === 2 && p.team === "m") {
       const enemyCount = this.projectiles.reduce((n, q) => n + (q.team === "m"), 0);
-      if (enemyCount >= 72) return null;
+      if (enemyCount >= 48) return null;
       if (p.fx === "shadow/void-orb") {
         const orbCount = this.projectiles.reduce((n, q) => n + (q.team === "m" && q.fx === "shadow/void-orb"), 0);
-        if (orbCount >= 18) return null;
+        if (orbCount >= 8) return null;
       }
     }
     p.id = newUnitId();
