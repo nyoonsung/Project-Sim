@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import {
-  BOSSES, D1_BOSS_DAMAGE_MULTIPLIER, D1_BOSS_HP_MULTIPLIER,
-  D2_EXTREME_MULTIPLIER, DUNGEON2_MAX_FLOOR, DUNGEON2_ZONES, MONSTERS, ZONES,
+  BOSSES, D1_BOSS_DAMAGE_MULTIPLIER, D1_BOSS_HP_MULTIPLIER, D1_BOSS_HP_REDUCTION,
+  D1_FINAL_BOSS_DAMAGE_MULTIPLIER, D2_EXTREME_MULTIPLIER, D2_MONSTER_DAMAGE_MULTIPLIER,
+  DUNGEON2_MAX_FLOOR, DUNGEON2_ZONES, MONSTERS, ZONES,
   bossStats, floorKind, floorScale, monsterStats, zoneOf, effLevel,
 } from "../shared/zones.js";
 import { CLASS_DMG } from "../shared/stats.js";
@@ -9,7 +10,7 @@ import { SKILLS } from "../shared/skills.js";
 import { Room } from "../server/game/room.js";
 import { rollAbyssRelic } from "../shared/items.js";
 import { makeFloor, mapPayload, makeTown, safeZone } from "../server/game/dungeon.js";
-import { levelGapXpMultiplier } from "../server/game/room.js";
+import { levelGapXpMultiplier, unitXpMultiplier } from "../server/game/room.js";
 
 const ok = (condition, label) => {
   assert.ok(condition, label);
@@ -32,22 +33,29 @@ const ok = (condition, label) => {
 }
 ok(true, "제2 던전 체력·공격력 기존 수치 대비 각각 정확히 100배 / 실제 레벨 102~150");
 
-// 제1 던전의 중간보스·주요 보스만 체력 11배·공격력 10배. 제2 던전에는 이 보정이 섞이지 않는다.
+// 제1 던전 전체 보스 HP는 기존 대비 10% 감소. 100층 최종 보스만 공격력 추가 20%.
 {
   assert.equal(D1_BOSS_HP_MULTIPLIER, 11);
+  assert.equal(D1_BOSS_HP_REDUCTION, 0.9);
   assert.equal(D1_BOSS_DAMAGE_MULTIPLIER, 10);
+  assert.equal(D1_FINAL_BOSS_DAMAGE_MULTIPLIER, 1.2);
   const avgHp = ZONES[0].monsters.reduce((sum, id) => sum + MONSTERS[id].hp, 0) / ZONES[0].monsters.length;
   const avgDmg = ZONES[0].monsters.reduce((sum, id) => sum + MONSTERS[id].dmg, 0) / ZONES[0].monsters.length;
-  const scale = floorScale(10, 1);
+  const soloHpBoost = (floor) => 1 + 2.5 * Math.min(1, Math.max(0, (floor - 1) / 9));
   const d1Boss = bossStats("skeleton_lord", 10, 1, 1);
-  assert.equal(d1Boss.hp, Math.round(avgHp * scale.hp * 64 * 3.5 * 11));
-  assert.ok(Math.abs(d1Boss.dmg - avgDmg * scale.dmg * 1.7 * 10) < 1e-7);
+  assert.equal(d1Boss.hp, Math.round(avgHp * floorScale(10, 1).hp * 64 * soloHpBoost(10) * 11 * 0.9));
+  assert.ok(Math.abs(d1Boss.dmg - avgDmg * floorScale(10, 1).dmg * 1.7 * 10) < 1e-7);
+  const midBoss = bossStats(zoneOf(5).mid, 5, 1, 1);
+  assert.equal(midBoss.hp, Math.round(avgHp * floorScale(5, 1).hp * 36 * soloHpBoost(5) * 11 * 0.9));
+  const finalBoss = bossStats(zoneOf(100).boss, 100, 1, 1);
+  assert.equal(finalBoss.hp, Math.round(avgHp * floorScale(100, 1).hp * 64 * soloHpBoost(100) * 1.5 * 11 * 0.9));
+  assert.ok(Math.abs(finalBoss.dmg - avgDmg * floorScale(100, 1).dmg * 1.7 * 10 * 1.2) < 1e-7);
   const d2Boss = bossStats("scarlet_regent", 10, 1, 2);
   const d2Scale = floorScale(10, 2);
   assert.equal(d2Boss.hp, Math.round(avgHp * d2Scale.hp * 64 * 3.5));
   assert.ok(Math.abs(d2Boss.dmg - avgDmg * d2Scale.dmg * 1.7) < 1e-7);
 }
-ok(true, "제1 던전 보스 ×11 HP·×10 공격력 / 제2 던전 보스에는 D1 보정 미적용");
+ok(true, "제1 던전 전체 보스 HP -10% / 100층 최종 보스 공격력 +20% / 제2 던전 보스 유지");
 
 // 구역마다 몬스터 구성이 서로 다름 (예전엔 1구역과 3구역이 똑같았음)
 assert.notDeepEqual([...DUNGEON2_ZONES[0].monsters].sort(), [...DUNGEON2_ZONES[2].monsters].sort());
@@ -61,7 +69,10 @@ for (const floor of [1, 10, 30]) {
   assert.ok(levelGapXpMultiplier(floor + 6, floor, 1) < 1);
 }
 assert.equal(levelGapXpMultiplier(250, 30, 2), 1);
-ok(true, "제2 던전 레벨 차이 경험치 감소 없음 / 제1 던전 기존 규칙 유지");
+assert.equal(unitXpMultiplier(250, 100, 1, { boss: true, mid: false }), 1, "D1 floor-100 final boss XP must ignore level-gap reduction");
+assert.ok(unitXpMultiplier(250, 100, 1, { boss: false }) < 1, "D1 floor-100 normal mobs keep level-gap reduction");
+assert.ok(unitXpMultiplier(250, 90, 1, { boss: true, mid: false }) < 1, "other D1 bosses keep level-gap reduction");
+ok(true, "제2 던전 및 제1 던전 100층 최종 보스 경험치 레벨 차이 감소 없음");
 
 // 세 구역, 층별 몬스터 정의, 보스 정의 확인.
 assert.equal(DUNGEON2_MAX_FLOOR, 30);
@@ -106,6 +117,25 @@ for (const id of [DUNGEON2_ZONES[0].mid, DUNGEON2_ZONES[0].boss, DUNGEON2_ZONES[
   assert.ok(Number.isFinite(s.dmg) && s.dmg > 0);
 }
 ok(true, "제2 던전 몬스터·보스 능력치 산출");
+
+// 제2 던전 일반·정예 몬스터 공격력은 기존보다 50% 감소하며, 보스에는 적용하지 않는다.
+{
+  assert.equal(D2_MONSTER_DAMAGE_MULTIPLIER, 0.5);
+  const id = DUNGEON2_ZONES[0].monsters[0];
+  const def = MONSTERS[id];
+  const d2Avg = DUNGEON2_ZONES[0].monsters.reduce((sum, mid) => sum + MONSTERS[mid].dmg, 0) / DUNGEON2_ZONES[0].monsters.length;
+  const d1Avg = ZONES[0].monsters.reduce((sum, mid) => sum + MONSTERS[mid].dmg, 0) / ZONES[0].monsters.length;
+  const oldDamage = (def.dmg / d2Avg) * (d1Avg / d2Avg) * floorScale(1, 2).dmg;
+  const st = monsterStats(id, 1, 1, 2);
+  assert.ok(Math.abs(st.dmg / oldDamage - 0.5) < 1e-10);
+  const d1Id = ZONES[0].monsters[0];
+  const d1 = monsterStats(d1Id, 1, 1, 1);
+  const d1Norm = ZONES[0].monsters.reduce((sum, mid) => sum + MONSTERS[mid].dmg, 0) / ZONES[0].monsters.length;
+  assert.ok(Math.abs(d1.dmg - (MONSTERS[d1Id].dmg / d1Norm) * floorScale(1, 1).dmg) < 1e-10);
+  const d2Boss = bossStats(DUNGEON2_ZONES[0].boss, 10, 1, 2);
+  assert.ok(Math.abs(d2Boss.dmg - d1Avg * floorScale(10, 2).dmg * 1.7) < 1e-7);
+}
+ok(true, "제2 던전 일반·정예 몬스터 공격력 -50% / 보스·제1 던전 영향 없음");
 
 // 드롭: 제2 던전 장비는 아이템 레벨 100, 소환된 몬스터는 아이템·결정 없음, 보관고 유물도 레벨 100
 {
