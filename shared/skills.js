@@ -550,3 +550,34 @@ export const WEAPON_BASIC = { bow: "c_shot", staff: "c_bolt", club: "c_bash", ma
 export function adventurerBasic(weaponType) {
   return WEAPON_BASIC[weaponType] ?? "c_thrust";
 }
+
+/** 자동 사용 AI가 스킬의 실제 도달 범위를 계산한다. */
+export function skillReach(skill) {
+  if (!skill) return 150;
+  const steps = Array.isArray(skill.steps) ? skill.steps : [];
+  const maxRadius = steps.reduce((r, st) =>
+    Math.max(r, Number(st.radius) || 0, st.do === "taunt" ? Number(st.radius) || 0 : 0), 0);
+
+  if (skill.aim === "ally") return Number(skill.range) || 240;
+  if (skill.aim === "point") return (Number(skill.range) || 200) + maxRadius;
+  if (skill.aim === "self") return maxRadius || 150;
+
+  let travel = 0, reach = 0;
+  for (const st of steps) {
+    if (st.do === "dash" || st.do === "blink") {
+      travel += Number(st.dist) || 0;
+      if (st.hit) reach = Math.max(reach, travel + 24);
+    } else if (st.do === "melee") {
+      reach = Math.max(reach, travel + (Number(st.range) || 0) + 10);
+    } else if (st.do === "proj") {
+      reach = Math.max(reach, Number(st.range) || 0);
+    } else if (st.do === "line") {
+      reach = Math.max(reach, Number(st.length) || 0);
+    } else if (st.do === "custom") {
+      reach = Math.max(reach, travel + (Number(st.range) || 0));
+    } else if (st.do === "area" || st.do === "circle" || st.do === "zone" || st.do === "taunt") {
+      reach = Math.max(reach, travel + (Number(st.radius) || 0));
+    }
+  }
+  return Math.max(150, reach);
+}
