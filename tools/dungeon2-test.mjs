@@ -130,8 +130,7 @@ ok(true, "제2 던전 몬스터·보스 능력치 산출");
   assert.ok(Math.abs(st.dmg / oldDamage - 0.5) < 1e-10);
   const d1Id = ZONES[0].monsters[0];
   const d1 = monsterStats(d1Id, 1, 1, 1);
-  const d1Norm = ZONES[0].monsters.reduce((sum, mid) => sum + MONSTERS[mid].dmg, 0) / ZONES[0].monsters.length;
-  assert.ok(Math.abs(d1.dmg - (MONSTERS[d1Id].dmg / d1Norm) * floorScale(1, 1).dmg) < 1e-10);
+  assert.ok(Math.abs(d1.dmg - MONSTERS[d1Id].dmg * floorScale(1, 1).dmg) < 1e-10);
   const d2Boss = bossStats(DUNGEON2_ZONES[0].boss, 10, 1, 2);
   assert.ok(Math.abs(d2Boss.dmg - d1Avg * floorScale(10, 2).dmg * 1.7) < 1e-7);
 }
