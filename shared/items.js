@@ -262,12 +262,12 @@ export const DUR_HIT = { armor: 0.1, helmet: 0.08, offhand: 0.1 };     // 맞을
 export const isBroken = (it) => it?.dur != null && it.dur <= 0;
 export const DUR_DEATH = 0.1;
 export const BROKEN_MUL = 0.3;
-export const DURABILITY_VERSION = 2;
+export const DURABILITY_VERSION = 3;
 /** 일반~전설은 기존 최대치의 3배, 신화는 4배 */
 export function maxDurability(it) {
   const rarityIndex = Math.max(0, RARITIES.indexOf(it?.rarity));
   const oldMaximum = 100 + rarityIndex * 20;
-  return oldMaximum * (rarityIndex === 4 ? 4 : 3);
+  return oldMaximum * (rarityIndex === 4 ? 6 : 4.5);
 }
 /** 신화 장비는 아이템 레벨이 캐릭터 레벨을 따라 같이 성장 (능력치·재료 이름 다시 계산). 바뀌었으면 true */
 export function syncMythic(ch) {
