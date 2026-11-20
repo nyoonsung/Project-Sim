@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { CLASS_GEAR, makeItem } from "../shared/items.js";
 import { CLASS_INFO } from "../shared/classes.js";
+import { deriveStats } from "../shared/stats.js";
 import { SKILLS } from "../shared/skills.js";
 import { PROF_TOTAL } from "../shared/prof.js";
 import { makeFloor } from "../server/game/dungeon.js";
@@ -14,6 +15,23 @@ const TOTAL = 68;
 const SAMPLE_SECONDS = TOTAL - WARMUP;
 const CRIT_POINTS = 180;
 const DAMAGE_POINTS = 447 - CRIT_POINTS;
+
+
+// 기본 체력 배율: 검사·도적·마법사 소폭 상향. 방어 배율은 그대로 유지한다.
+{
+  const expected = {
+    sword: { hpMul: 1.24, defMul: 1.1, hpAtLv10: 422 },
+    rogue: { hpMul: 0.88, defMul: 0.85, hpAtLv10: 299 },
+    mage: { hpMul: 1.03, defMul: 0.9, hpAtLv10: 350 },
+  };
+  for (const [cls, exp] of Object.entries(expected)) {
+    assert.equal(CLASS_INFO[cls].hpMul, exp.hpMul, `${cls}: base HP multiplier`);
+    assert.equal(CLASS_INFO[cls].defMul, exp.defMul, `${cls}: defense multiplier unchanged`);
+    const s = deriveStats({ cls, level: 10, stats: {}, equip: {}, skills: [] });
+    assert.equal(s.maxHp, exp.hpAtLv10, `${cls}: level 10 base HP`);
+  }
+}
+console.log("✓ 검사·도적·마법사 기본 HP 상향 / 방어 배율 유지");
 
 const BUILDS = [
   {
