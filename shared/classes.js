@@ -44,7 +44,7 @@ export const CLASS_INFO = {
     name: "검사", role: "근접 딜러", position: "체력이 비교적 높은 근접 딜러",
     desc: "자세 전환과 내력 관리, 반격과 검술 연계. 탱커보다 생존력이 높은 공격수.",
     stats: ["str2", "vit2", "swm", "crit"],
-    hpMul: 1.24, defMul: 1.1, mpBase: 40, dmgType: "phys", resource: "ki",
+    hpMul: 1.20, defMul: 1.18, mpBase: 40, dmgType: "phys", resource: "ki",
     ranks: tiers3(["소드 러너", "소드 유저", "소드 익스퍼트", "소드마스터"]),
     look: { armor: ["#e8edf6", "#a9b6cc", "#6f7f9c", "#47536b"], core: ["#2f5ea8", "#22447a", "#152b4f"], mark: "#5aa9ff", weapon: "sword", head: null },
   },
