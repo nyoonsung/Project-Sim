@@ -1,7 +1,7 @@
 // 방(마을·던전 한 층·안전 구역) 시뮬레이션: 서버가 모든 판정을 한다
 import { TILE, TICK_DT, PLAYER_RADIUS } from "../../shared/constants.js";
 import { applyInput, moveCircle, circleHitsWall, blocksShot, lineOfSight, tileAt } from "../../shared/move.js";
-import { MONSTERS, BOSSES, monsterStats, bossStats, floorScale, zoneOf, effLevel, D2_MONSTER_STAT_MULTIPLIER } from "../../shared/zones.js";
+import { MONSTERS, BOSSES, monsterStats, bossStats, floorScale, zoneOf, effLevel, D2_MONSTER_STAT_MULTIPLIER, D2_BOSS_STAT_MULTIPLIER } from "../../shared/zones.js";
 import { rollItem, rollAbyssRelic } from "../../shared/items.js";
 import { wearOnDeath } from "./wear.js";
 const KI_BASE = 30; // 내력 기본치
@@ -119,7 +119,7 @@ export class Room {
     const st = bossStats(bid, this.floor, this.partySize, this.dungeon);
     const b = {
       id: newUnitId(), team: "m", type: "b", bid, name: def.name, x, y, r: 14 * Math.min(2.2, def.look.scale ?? 1),
-      hp: st.hp, maxHp: st.hp, atk: st.dmg, def: 6 + this.lvl * 2.2, level: st.level, xp: st.xp, speed: def.speed,
+      hp: st.hp, maxHp: st.hp, atk: st.dmg, def: (6 + this.lvl * 2.2) * (this.dungeon === 2 ? D2_BOSS_STAT_MULTIPLIER : 1), level: st.level, xp: st.xp, speed: def.speed,
       boss: true, mid: def.mid, def_: def, dungeon: this.dungeon, status: new Map(), buffs: new Map(), threat: new Map(), facing: Math.PI / 2,
       aggro: true, patternAt: 2, pattern: null, phase: 1, groggyGauge: 0, dead: false, fly: !!def.fly, patIdx: 0,
     };
