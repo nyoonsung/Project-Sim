@@ -97,10 +97,17 @@ add("sword", [
     desc: "번개 속성 주력 공격. 주변 적에게 번개가 연쇄된다.", limit: "연쇄 대상 수(3)·감전 지속시간(3초) 상한.",
     fx: { swing: "melee/thrust", hit: "lightning/zap-hit", chain: "lightning/chain-lightning" },
     steps: [{ do: "melee", range: 60, arc: 40, pow: 2.2, max: 1, chain: { n: 3, range: 90, pow: 0.9 }, status: { type: "shock", dur: 3 } }] },
-  { id: "sw_flash", name: "일섬", grade: "전설", kind: "ultimate", cd: 25, stance: "발도술", cost: { ki: 50 }, aim: "dir", anim: "dash", moveSkill: true,
-    desc: "적을 관통하며 높은 단일 피해를 주는 직선형 필살기.", limit: "명중·경로 조건을 두고 피해 상한을 적용한다. 파티 보호·도발 효과는 없다.",
-    fx: { self: "arcane/blink-out", hit: "impacts/crit-hit", line: "impacts/impact-frame" },
-    steps: [{ do: "dash", dist: 170, speed: 1400, through: true, hit: { pow: 5.0, critBonus: 0.15 } }] },
+  {
+  id: "sw_flash", name: "일섬", grade: "전설", kind: "ultimate", cd: 24, stance: "발도술", cost: { ki: 45 }, aim: "dir", anim: "dash", moveSkill: true,
+  desc: "전장을 가로지르는 초고속 발도. 지나간 적을 베고 착지 지점에 검풍을 폭발시킨 뒤 공격력이 상승한다.",
+  limit: "돌진 경로와 착지 주변을 모두 공격하며, 보스에게도 그로기를 누적한다.",
+  fx: { self: "arcane/blink-out", hit: "impacts/crit-hit", line: "impacts/impact-frame" },
+  steps: [
+    { do: "dash", dist: 200, speed: 1500, through: true, hit: { pow: 6.2, critBonus: 0.2, groggy: 22 } },
+    { do: "circle", radius: 78, pow: 2.6, max: 8, groggy: 14 },
+    { do: "buff", target: "self", id: "flash_edge", dur: 5, mods: { dmg: 0.18 } },
+  ],
+},
   // 어검 자세
   { id: "sw_eo_burst", name: "어검발산", grade: "영웅", kind: "active", cd: 18, stance: "어검", cost: { ki: 20 }, aim: "self", anim: "cast",
     desc: "주변 적을 공격하고 내력을 회복하며 짧은 공격 버프를 얻는다.", limit: "대상 수(5)와 자원 회복량 제한. 방어 버프는 소폭.",
@@ -114,14 +121,23 @@ add("sword", [
     desc: "원거리 광역 지속 피해를 준다.", limit: "지속시간(3초)과 대상별 적중 횟수를 제한하고 틱당 피해를 낮춘다.",
     fx: { area: "melee/dagger-flurry", palette: ["#0a1430", "#1f3a80", "#3f74d0", "#8fc0ff", "#d8ecff", "#ffffff"] },
     steps: [{ do: "area", radius: 60, pow: 0.45, ticks: 6, interval: 0.5, telegraph: 0.3 }] },
-  { id: "sw_eo_vortex", name: "회천령", grade: "전설", kind: "ultimate", cd: 35, stance: "어검", cost: { ki: 50 }, aim: "self", anim: "cast",
-    desc: "어검을 소환해 주변 넓은 범위를 휘감아 피해를 준다.", limit: "범위·표적 수(8)를 제한하고 대상별 피해를 낮춘다.",
-    fx: { area: "fire/fire-tornado", palette: ["#0a1430", "#1f3a80", "#3f74d0", "#8fc0ff", "#d8ecff", "#ffffff"] },
-    steps: [{ do: "zone", at: "self", follow: true, radius: 96, dur: 3, interval: 0.5, pow: 0.8, max: 8 }] },
-  { id: "sw_eo_bolt", name: "번개베기", grade: "전설", kind: "ultimate", cd: 35, stance: "어검", cost: { ki: 50 }, aim: "point", range: 240, anim: "cast",
-    desc: "어검을 소환해 지정 범위에 번개를 내리쳐 피해를 준다.", limit: "범위·표적 수(8)를 제한하고 대상별 피해를 낮춘다.",
-    fx: { area: "lightning/lightning-strike" },
-    steps: [{ do: "area", radius: 80, pow: 1.4, ticks: 3, interval: 0.35, telegraph: 0.5, max: 8, status: { type: "shock", dur: 2 } }] },
+  {
+  id: "sw_eo_vortex", name: "회천령", grade: "전설", kind: "ultimate", cd: 30, stance: "어검", cost: { ki: 45 }, aim: "self", anim: "cast",
+  desc: "어검의 폭풍이 자신을 따라다니며 주변 적을 연속으로 베고, 시전자의 공격력을 끌어올린다.",
+  limit: "넓은 추적 범위와 최대 대상 수를 유지해 다수전에 강하다.",
+  fx: { area: "fire/fire-tornado", palette: ["#0a1430", "#1f3a80", "#3f74d0", "#8fc0ff", "#d8ecff", "#ffffff"] },
+  steps: [
+    { do: "zone", at: "self", follow: true, radius: 108, dur: 4, interval: 0.4, pow: 0.95, max: 12 },
+    { do: "buff", target: "self", id: "eo_tempest", dur: 6, mods: { dmg: 0.15 } },
+  ],
+},
+  {
+  id: "sw_eo_bolt", name: "번개베기", grade: "전설", kind: "ultimate", cd: 30, stance: "어검", cost: { ki: 45 }, aim: "point", range: 260, anim: "cast",
+  desc: "지정 지점에 세 차례 강력한 낙뢰를 내리꽂아 적 무리를 감전시킨다.",
+  limit: "낙뢰 범위와 대상 수가 증가하고 감전 지속시간도 길어졌다.",
+  fx: { area: "lightning/lightning-strike" },
+  steps: [{ do: "area", radius: 98, pow: 1.95, ticks: 3, interval: 0.32, telegraph: 0.42, max: 10, status: { type: "shock", dur: 3 } }],
+},
 ]);
 
 // ─────────────────────────── 2. 권투사 ───────────────────────────
@@ -195,14 +211,23 @@ add("fist", [
   { id: "fi_suppress", name: "제압", grade: "영웅", kind: "active", cd: 16, cost: { ki: 25 }, aim: "dir", anim: "smash",
     desc: "상태이상에 걸린 적을 눌러 움직임을 막고 추가 공격·위협을 가한다.", limit: "보스에는 짧은 제압 불가 타격만, 큰 공격을 맞으면 중단.",
     fx: { hit: "impacts/ground-slam" }, steps: [{ do: "melee", range: 46, arc: 60, pow: 1.6, max: 1, threat: 6, vsCC: 0.8, ccIfCC: { type: "root", dur: 2.5 } }] },
-  { id: "fi_collapse", name: "붕권", grade: "전설", kind: "ultimate", cd: 18, cost: { ki: 40 }, aim: "dir", anim: "punch",
-    desc: "기절·그로기 적에게 조건부 강한 타격을 주고 위협을 생성한다.", limit: "상태이상 조건을 요구하며 피해를 제한한다. 위협 생성으로 보상.",
-    fx: { hit: "explosions/plasma-explosion", palette: ["#200800", "#802008", "#e05020", "#ffa040", "#ffe8a0", "#ffffff"] },
-    steps: [{ do: "melee", range: 48, arc: 50, pow: 2.2, max: 1, threat: 10, vsCC: 1.2 }] },
-  { id: "fi_kingblow", name: "권왕일격", grade: "전설", kind: "ultimate", cd: 30, cost: { ki: 40 }, aim: "dir", anim: "punch",
-    desc: "점혈 4단계 또는 제압 종료를 활용하는 마무리 타격.", limit: "위협을 생성하되 1회 피해와 자원 비용 제한, 장시간 방어 버프와 중첩하지 않는다.",
-    fx: { hit: "explosions/cartoon-pow", area: "impacts/ground-slam" },
-    steps: [{ do: "melee", range: 52, arc: 60, pow: 3.0, max: 1, threat: 12, ifAcupoint4: 0.6, knock: 80, groggy: 40 }] },
+  {
+  id: "fi_collapse", name: "붕권", grade: "전설", kind: "ultimate", cd: 16, cost: { ki: 35 }, aim: "dir", anim: "punch",
+  desc: "기절·그로기 상태의 적을 무너뜨리는 강력한 붕권. 조건이 맞지 않아도 묵직한 피해와 큰 위협을 준다.",
+  limit: "상태이상 대상에게 추가 피해를 주며 보스 그로기 누적에도 유용하다.",
+  fx: { hit: "explosions/plasma-explosion", palette: ["#200800", "#802008", "#e05020", "#ffa040", "#ffe8a0", "#ffffff"] },
+  steps: [{ do: "melee", range: 58, arc: 78, pow: 3.5, max: 1, threat: 12, vsCC: 0.8, groggy: 34, critBonus: 0.1 }],
+},
+  {
+  id: "fi_kingblow", name: "권왕일격", grade: "전설", kind: "ultimate", cd: 25, cost: { ki: 40 }, aim: "dir", anim: "punch",
+  desc: "점혈의 힘을 실은 권왕의 연속 일격. 두 번의 강타로 적을 밀어내고 짧은 시간 공격과 방어가 강화된다.",
+  limit: "점혈 4단계 또는 제압 직후에는 첫 타격이 더 강해진다.",
+  fx: { hit: "explosions/cartoon-pow", area: "impacts/ground-slam" },
+  steps: [
+    { do: "melee", range: 64, arc: 90, pow: 4.2, max: 1, threat: 14, ifAcupoint4: 0.8, knock: 80, groggy: 50 },
+    { do: "buff", target: "self", id: "king_resolve", dur: 4, mods: { dmg: 0.18, dr: 0.08 } },
+  ],
+},
 ]);
 
 // ─────────────────────────── 3. 궁수 ───────────────────────────
@@ -250,16 +275,27 @@ add("archer", [
     desc: "활시위를 끝까지 당겨 일직선의 모든 적을 꿰뚫는 관통 사격(길이 420). 맞은 적은 3초간 느려진다.", limit: "짧은 조준 0.25초.",
     fx: { line: "projectiles/laser-bolt", palette: ["#08201a", "#18604a", "#30b088", "#80f0c8", "#e0fff4", "#ffffff"] },
     steps: [{ do: "line", length: 420, width: 34, pow: 3.6, telegraph: 0.1, status: { type: "slow", dur: 3, v: 0.35 } }] },
-  { id: "ar_rain", name: "애로우 레인", grade: "전설", kind: "ultimate", cd: 25, cost: { mp: 30 }, aim: "point", range: 300, anim: "shoot",
-    desc: "넓은 범위에 화살비를 내려 다수 적에게 누적 피해를 준다.", limit: "낙하지점을 예고하고 대상 수(10)·총 피해를 제한한다.",
-    fx: { area: "weather/rain", tick: "projectiles/arrow" }, steps: [{ do: "area", radius: 90, pow: 0.55, ticks: 8, interval: 0.3, telegraph: 0.6, max: 10 }] },
-  { id: "ar_snipe", name: "스나이핑", grade: "전설", kind: "ultimate", cd: 17, cost: { mp: 25 }, aim: "dir", anim: "shoot", cast: 0.8,
-    desc: "초장거리 조준 사격으로 높은 단일 피해를 주고 일반 적을 낮은 확률(20%)로 기절시킨다.", limit: "조준(0.8초) 조건, 보스는 기절 면역.",
-    fx: { proj: "projectiles/laser-bolt", palette: ["#201808", "#806018", "#d0a830", "#ffe080", "#fff8d0", "#ffffff"], hit: "impacts/crit-hit" },
-    steps: [{ do: "proj", speed: 1100, range: 620, pow: 5.0, radius: 6, pierce: 0, cc: { type: "stun", dur: 1.5, chance: 0.2 } }] },
-  { id: "ar_pinpoint", name: "핀포인트 샷", grade: "전설", kind: "ultimate", cd: 21, cost: { mp: 25 }, aim: "dir", anim: "shoot",
-    desc: "대상의 방어·회피 효과 일부를 관통해 치명타를 노린다.", limit: "관통 범위(방어 50%)와 치명타 피해 상한(200%)을 명시한다.",
-    fx: { proj: "projectiles/energy-disc", hit: "impacts/crit-hit" }, steps: [{ do: "proj", speed: 800, range: 400, pow: 3.8, radius: 6, pen: 0.5, critBonus: 0.35 }] },
+  {
+  id: "ar_rain", name: "애로우 레인", grade: "전설", kind: "ultimate", cd: 23, cost: { mp: 35 }, aim: "point", range: 340, anim: "shoot",
+  desc: "넓은 범위에 별빛 화살비를 퍼부어 적 무리를 쓸어버린다.",
+  limit: "화살 낙하 횟수와 범위를 늘리고 예고 시간을 줄였다.",
+  fx: { area: "weather/rain", tick: "projectiles/arrow" },
+  steps: [{ do: "area", radius: 112, pow: 0.72, ticks: 10, interval: 0.25, telegraph: 0.48, max: 12 }],
+},
+  {
+  id: "ar_snipe", name: "스나이핑", grade: "전설", kind: "ultimate", cd: 15, cost: { mp: 25 }, aim: "dir", anim: "shoot", cast: 0.55,
+  desc: "긴 조준 끝에 초장거리 관통 저격을 날린다. 강력한 일격은 일반 적을 높은 확률로 기절시킨다.",
+  limit: "시전 시간이 짧아졌고 사거리·피해·기절 확률이 증가했다.",
+  fx: { proj: "projectiles/laser-bolt", palette: ["#201808", "#806018", "#d0a830", "#ffe080", "#fff8d0", "#ffffff"], hit: "impacts/crit-hit" },
+  steps: [{ do: "proj", speed: 1250, range: 720, pow: 7.0, radius: 7, pierce: 0, pen: 0.2, critBonus: 0.25, cc: { type: "stun", dur: 1.5, chance: 0.35 } }],
+},
+  {
+  id: "ar_pinpoint", name: "핀포인트 샷", grade: "전설", kind: "ultimate", cd: 18, cost: { mp: 25 }, aim: "dir", anim: "shoot",
+  desc: "약점을 꿰뚫는 정밀 사격. 방어를 크게 무시하고 높은 치명타 피해를 노린다.",
+  limit: "관통과 치명타 보정이 강화되어 단단한 적과 보스에게 효과적이다.",
+  fx: { proj: "projectiles/energy-disc", hit: "impacts/crit-hit" },
+  steps: [{ do: "proj", speed: 900, range: 520, pow: 5.4, radius: 7, pen: 0.65, critBonus: 0.45, pierce: 1 }],
+},
 ]);
 
 // ─────────────────────────── 4. 도적 ───────────────────────────
@@ -298,13 +334,20 @@ add("rogue", [
   { id: "ro_track", name: "약점 추적", grade: "영웅", kind: "passive",
     desc: "급소 표식 대상 공격 시 피해가 최대 3중첩 증가한다(중첩당 8%).", limit: "표식 종료 시 해제, 대상별 발동 간격 2초.",
     passive: { trigger: { on: "hit_marked", icd: 2, stack: { id: "track", max: 3, per: 0.08 } } } },
-  { id: "ro_finale", name: "종막: 무음 처형", grade: "전설", kind: "ultimate", cd: 35, cost: { gap: 1 }, aim: "dir", anim: "stab", cast: 0.6, fragile: true,
-    desc: "준비 후 단일 대상에게 높은 피해. 틈 중첩과 대상 체력이 낮을수록 강화된다.", limit: "준비 중 피격으로 취소되며 틈이 필요하다. 마무리 피해에 상한.",
-    fx: { self: "shadow/curse", hit: "shadow/dark-explosion" }, steps: [{ do: "melee", range: 56, arc: 50, pow: 3.0, max: 1, perGap: 1.0, consumeGap: true, execute: 0.8 }] },
-  { id: "ro_hunt", name: "밤의 사냥 표식", grade: "전설", kind: "ultimate", cd: 40, cost: { mp: 20 }, aim: "dir", anim: "cast",
-    desc: "적 하나를 사냥 표적으로 지정해 짧은 시간 피해를 높이고 측·후방 틈 획득을 지원한다.", limit: "표적 한 명·틈 최대 3, 지속시간 갱신 불가.",
-    fx: { hit: "shadow/hex-sigil", palette: ["#180008", "#500018", "#a02040", "#ff6080", "#ffd0e0", "#ffffff"] },
-    steps: [{ do: "custom", fn: "huntmark", range: 300, dur: 8 }] },
+  {
+  id: "ro_finale", name: "종막: 무음 처형", grade: "전설", kind: "ultimate", cd: 28, cost: { gap: 1 }, aim: "dir", anim: "stab", cast: 0.4, fragile: true,
+  desc: "틈을 모아 단일 표적을 처형한다. 대상의 체력이 낮을수록 피해가 크게 증가한다.",
+  limit: "준비 시간이 단축되고 사거리·기본 피해·틈 계수가 증가한다. 틈을 모두 소모한다.",
+  fx: { self: "shadow/curse", hit: "shadow/dark-explosion" },
+  steps: [{ do: "melee", range: 66, arc: 68, pow: 4.6, max: 1, perGap: 1.4, consumeGap: true, execute: 1.1 }],
+},
+  {
+  id: "ro_hunt", name: "밤의 사냥 표식", grade: "전설", kind: "ultimate", cd: 34, cost: { mp: 18 }, aim: "dir", anim: "cast",
+  desc: "표적을 사냥감으로 지정한다. 표식이 유지되는 동안 도적의 공격력과 치명타가 상승하고 측·후방 공격으로 틈을 얻는다.",
+  limit: "표식 지속시간이 늘고 시전자에게 강력한 사냥꾼 강화 효과를 부여한다.",
+  fx: { hit: "shadow/hex-sigil", palette: ["#180008", "#500018", "#a02040", "#ff6080", "#ffd0e0", "#ffffff"] },
+  steps: [{ do: "custom", fn: "huntmark", range: 340, dur: 10 }],
+},
 ]);
 
 // ─────────────────────────── 5. 마법사 ───────────────────────────
@@ -339,12 +382,20 @@ add("mage", [
   { id: "ma_recall", name: "마력 회수", grade: "영웅", kind: "active", cd: 18, aim: "self", anim: "channel",
     desc: "2초 집중해 마나를 회복한다(최대 MP 35%).", limit: "방해받으면 회복량이 절반이며 1회 회복량에 상한.",
     fx: { self: "arcane/rune-circle" }, steps: [{ do: "channel", dur: 2, mpPct: 0.35 }] },
-  { id: "ma_doom", name: "종말성 낙하", grade: "전설", kind: "ultimate", cd: 40, cost: { mp: 60 }, aim: "point", range: 320, anim: "cast", cast: 1.6, fragile: true,
-    desc: "긴 시전 후 넓은 지점에 높은 광역 피해를 주되, 한 번에 적을 처치하지 않도록 피해 상한을 둔다.", limit: "시전 취소 가능, 군중제어 없음.",
-    fx: { area: "explosions/big-explosion", pre: "arcane/magic-circle-cast" }, steps: [{ do: "area", radius: 110, pow: 6.0, telegraph: 1.0, capPct: 0.45 }] },
-  { id: "ma_resonance", name: "차원 공명장", grade: "전설", kind: "ultimate", cd: 45, cost: { mp: 40 }, aim: "point", range: 220, anim: "cast",
-    desc: "고정된 영역 안에서 처음 세 번 시전한 직접 피해 주문을 낮은 비율(40%)로 복제한다.", limit: "이동 추종 없음, 복제 피해는 재발동·궁극기 복제 불가.",
-    fx: { area: "arcane/portal" }, steps: [{ do: "zone", at: "point", radius: 120, dur: 12, kind: "resonance", charges: 3 }] },
+  {
+  id: "ma_doom", name: "종말성 낙하", grade: "전설", kind: "ultimate", cd: 34, cost: { mp: 50 }, aim: "point", range: 360, anim: "cast", cast: 1.15, fragile: true,
+  desc: "짧은 시전 뒤 거대한 별의 파편을 떨어뜨려 넓은 범위를 초토화한다.",
+  limit: "시전 시간이 줄고 범위·피해 상한이 증가했다. 보스에게도 기존보다 높은 피해를 준다.",
+  fx: { area: "explosions/big-explosion", pre: "arcane/magic-circle-cast" },
+  steps: [{ do: "area", radius: 135, pow: 7.5, telegraph: 0.75, capPct: 0.65, max: 18 }],
+},
+  {
+  id: "ma_resonance", name: "차원 공명장", grade: "전설", kind: "ultimate", cd: 38, cost: { mp: 32 }, aim: "point", range: 260, anim: "cast",
+  desc: "고정된 공명장 안에서 직접 피해 주문을 네 번 복제한다. 복제 주문은 원래 피해의 55% 위력을 가진다.",
+  limit: "공명장 크기·지속시간·복제 횟수·복제 피해가 모두 증가했다. 궁극기는 복제하지 않는다.",
+  fx: { area: "arcane/portal" },
+  steps: [{ do: "zone", at: "point", radius: 150, dur: 14, kind: "resonance", charges: 4, copyMul: 0.55 }],
+},
 ]);
 
 // ─────────────────────────── 6. 성직자 ───────────────────────────
@@ -396,16 +447,27 @@ add("priest", [
   { id: "pr_martyr", name: "순교자의 각인", grade: "영웅", kind: "passive",
     desc: "아군이 위기(체력 30% 이하)에 빠질 때 자동으로 작은 보호막을 제공.", limit: "대상별 재발동 간격 20초, 자동 부활·치명타 무효 없음.",
     passive: { trigger: { on: "ally_low", icd: 20, shield: 0.12 } } },
-  { id: "pr_dawn", name: "새벽의 재판", grade: "전설", kind: "ultimate", cd: 45, cost: { holy: 60 }, aim: "point", range: 260, anim: "cast", cast: 0.8,
-    desc: "성광을 크게 소모해 지정 범위 적에게 낮은 피해를 주고 아군을 소량 회복한다.", limit: "시전 취소 가능. 보스 피해는 낮추며 위기 회복에 초점.",
-    fx: { area: "holy/holy-pillar" }, steps: [{ do: "area", radius: 100, pow: 1.4, telegraph: 0.4, bossMul: 0.6, healAllies: 1.2 }] },
-  { id: "pr_belltower", name: "자비의 종탑", grade: "전설", kind: "ultimate", cd: 45, cost: { holy: 50 }, aim: "self", anim: "channel",
-    desc: "주변 파티원을 여러 차례 소량 회복하고 적에게 매우 낮은 피해를 주는 집중 지원 영역.", limit: "성직자 이동 시 종료, 아군별 회복 횟수(6회) 상한.",
-    fx: { area: "holy/sunburst" }, steps: [{ do: "zone", at: "self", radius: 130, dur: 6, interval: 1, heal: 0.45, pow: 0.15, endOnMove: true }] },
-  { id: "pr_apocalypse", name: "종말의 대심판", grade: "전설", kind: "ultimate", cd: 38, cost: { holy: 55, mp: 30 }, aim: "point", range: 320, anim: "cast", cast: 0.85,
-    desc: "광대한 성역에 세 차례 심판의 빛을 쏟아부어 다수의 적을 공격하고, 빛에 닿은 아군을 회복한다.", limit: "반경 185, 최대 22명, 3회 타격. 보스 피해는 조정된다.",
-    fx: { area: "holy/holy-pillar", pre: "arcane/magic-circle-cast" },
-    steps: [{ do: "area", radius: 185, pow: 5.8, ticks: 3, interval: 0.5, telegraph: 0.8, max: 22, bossMul: 0.75, healAllies: 0.7 }] },
+  {
+  id: "pr_dawn", name: "새벽의 재판", grade: "전설", kind: "ultimate", cd: 38, cost: { holy: 50 }, aim: "point", range: 280, anim: "cast", cast: 0.65,
+  desc: "새벽의 빛이 지정 구역을 심판해 적에게 피해를 주고 아군을 크게 회복시킨다.",
+  limit: "공격력과 회복량이 증가하고 보스에게 주는 피해 감소도 완화됐다.",
+  fx: { area: "holy/holy-pillar" },
+  steps: [{ do: "area", radius: 118, pow: 2.4, telegraph: 0.35, bossMul: 0.85, healAllies: 1.4, max: 18 }],
+},
+  {
+  id: "pr_belltower", name: "자비의 종탑", grade: "전설", kind: "ultimate", cd: 38, cost: { holy: 45 }, aim: "self", anim: "channel",
+  desc: "종탑의 성역을 펼쳐 주변 파티원을 지속 회복하고, 침입한 적에게 신성한 파동을 반복해서 가한다.",
+  limit: "범위·지속시간·회복과 피해가 증가한다. 이동하면 성역이 종료된다.",
+  fx: { area: "holy/sunburst" },
+  steps: [{ do: "zone", at: "self", radius: 150, dur: 8, interval: 0.8, heal: 0.72, pow: 0.28, endOnMove: true }],
+},
+  {
+  id: "pr_apocalypse", name: "종말의 대심판", grade: "전설", kind: "ultimate", cd: 34, cost: { holy: 50, mp: 25 }, aim: "point", range: 330, anim: "cast", cast: 0.7,
+  desc: "광대한 성역에 세 차례 심판의 빛을 쏟아부어 적을 공격하고 빛에 닿은 아군을 크게 회복한다.",
+  limit: "범위·피해·아군 회복이 증가하고 시전 시간과 쿨타임이 줄었다.",
+  fx: { area: "holy/holy-pillar", pre: "arcane/magic-circle-cast" },
+  steps: [{ do: "area", radius: 195, pow: 6.8, ticks: 3, interval: 0.42, telegraph: 0.6, max: 24, bossMul: 0.85, healAllies: 0.95 }],
+},
 ]);
 
 // ─────────────────────────── 7. 대장장이 ───────────────────────────
@@ -441,14 +503,24 @@ add("smith", [
   { id: "sm_circuit", name: "교차 회로", grade: "영웅", kind: "active", cd: 18, aim: "self", anim: "cast",
     desc: "설치한 방어 장치 두 개를 연결해 적의 진입을 견제하고 아군 방어를 보조한다.", limit: "장치 2개 필요, 적중 주기 제한, 보스 감속 면역.",
     fx: { line: "lightning/spark-arc" }, steps: [{ do: "custom", fn: "circuit", dur: 6 }] },
-  { id: "sm_fortress", name: "대장간 요새", grade: "전설", kind: "ultimate", cd: 45, cost: { parts: 2 }, aim: "self", anim: "smash",
-    desc: "자신과 주변 파티원에게 중간 크기 보호막을 주고, 짧은 시간 적의 위협을 자신에게 집중시킨다.", limit: "지속시간 짧음(5초), 보호막 상한·중첩 불가. 보스 특수 패턴은 무효화하지 않음.",
-    fx: { area: "holy/feather-burst", palette: ["#200c00", "#803000", "#e06010", "#ffa050", "#ffe0b0", "#ffffff"] },
-    steps: [{ do: "shield", target: "party", radius: 160, pow: 2.4, dur: 5 }, { do: "taunt", radius: 160, dur: 4 }] },
-  { id: "sm_golem", name: "수호 골렘 7호", grade: "전설", kind: "ultimate", cd: 45, cost: { parts: 2 }, aim: "point", range: 160, anim: "cast",
-    desc: "강철 수호 골렘을 불러낸다. 골렘은 주변 적에게 직접 걸어가 망치로 내려찍고(주변 적도 절반 피해), 적이 없으면 주인을 따라다닌다. 주변 적의 위협을 끌어오고 정해진 횟수만큼 공격을 대신 받아낸다.",
-    limit: "12초 지속, 공격 흡수 횟수(10회) 제한, 파괴 가능. 주인에게서 380 이상 떨어진 적은 쫓지 않음.",
-    fx: { area: "spawn/summon-rise" }, steps: [{ do: "device", kind: "golem", dur: 12, hp: 10, pow: 1.1 }] },
+  {
+  id: "sm_fortress", name: "대장간 요새", grade: "전설", kind: "ultimate", cd: 40, cost: { parts: 2 }, aim: "self", anim: "smash",
+  desc: "자신과 주변 파티원에게 강력한 보호막을 부여하고, 적의 위협을 끌어오며 공격과 방어를 강화한다.",
+  limit: "보호막·도발 범위가 증가하고 파티 전체에 짧은 공격·방어 강화 효과를 추가한다.",
+  fx: { area: "holy/feather-burst", palette: ["#200c00", "#803000", "#e06010", "#ffa050", "#ffe0b0", "#ffffff"] },
+  steps: [
+    { do: "shield", target: "party", radius: 190, pow: 3.3, dur: 6 },
+    { do: "taunt", radius: 200, dur: 5 },
+    { do: "buff", target: "party", radius: 190, id: "forge_oath", dur: 5, mods: { dr: 0.12, dmg: 0.08 } },
+  ],
+},
+  {
+  id: "sm_golem", name: "수호 골렘 7호", grade: "전설", kind: "ultimate", cd: 38, cost: { parts: 2 }, aim: "point", range: 200, anim: "cast",
+  desc: "강철 수호 골렘을 소환한다. 골렘은 적을 쫓아 망치로 공격하고 주변 적의 위협을 끌어오며 주인을 대신해 공격을 받아낸다.",
+  limit: "소환 시간·내구도·공격력이 증가하고 주변 적도 충격파에 휘말린다.",
+  fx: { area: "spawn/summon-rise" },
+  steps: [{ do: "device", kind: "golem", dur: 16, hp: 16, pow: 1.6 }],
+},
 ]);
 
 // ─────────────────────────── 중반 단계를 채우는 추가 스킬 ───────────────────────────

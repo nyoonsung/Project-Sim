@@ -42,6 +42,14 @@ function gain(room, u, g, now) {
   u.session.meDirty = true;
 }
 
+/** 대장장이 자원: 직접 공격 적중 또는 정면 방어 성공 시 1.5초마다 부품 1개 */
+function gainPart(room, u, now) {
+  if (u.cls !== "smith" || (u.parts ?? 0) >= RES_MAX.parts || now < (u.icd.get("parts") ?? 0)) return false;
+  u.icd.set("parts", now + 1.5);
+  gain(room, u, { parts: 1 }, now);
+  return true;
+}
+
 export function cancelCast(room, u, why) {
   if (!u.casting) return;
   u.casting = null;
@@ -140,7 +148,7 @@ export function castSkill(room, u, slot, ax, ay, tx, now, exp) {
       if (Math.hypot(px - rz.x, py - rz.y) <= rz.r) {
         rz.charges--;
         room.ev({ e: "fx", fx: "arcane/mana-burst", x: rz.x | 0, y: rz.y | 0, s: 0.6 });
-        room.schedule(0.4, (t2) => runSteps(room, u, { ...ctx, mul: ctx.mul - 0.6, copy: true }, sk.steps.filter((s) => s.pow), 0, t2));
+        room.schedule(0.4, (t2) => runSteps(room, u, { ...ctx, mul: ctx.mul - (1 - (rz.copyMul ?? 0.4)), copy: true }, sk.steps.filter((s) => s.pow), 0, t2));
       }
     }
   };
@@ -474,7 +482,7 @@ const STEP = {
     const healed = new Map();
     const z = room.addZone({
       team: u.team, owner: u.id, x: pt.x, y: pt.y, r: st.radius, dur: st.dur, interval: st.interval ?? 1, fx: ctx.sk.fx?.area ?? null, pal: ctx.sk.fx?.palette ?? null,
-      follow: st.follow ? u.id : 0, endOnMove: st.endOnMove, sx: u.x, sy: u.y, charges: st.charges ?? 0, kind: st.kind,
+      follow: st.follow ? u.id : 0, endOnMove: st.endOnMove, sx: u.x, sy: u.y, charges: st.charges ?? 0, copyMul: st.copyMul ?? 0.4, kind: st.kind,
       tick: (t0, zz) => {
         if (st.pow) for (const t of enemies(room, u).filter((t) => Math.hypot(t.x - zz.x, t.y - zz.y) - t.r <= zz.r).slice(0, st.max ?? 99)) {
           strike(room, u, t, st, ctx, t0);
@@ -589,6 +597,8 @@ const CUSTOM = {
     if (t.status.has("huntmark")) return msg(u, "이미 표식이 있는 적이에요. (지속시간 갱신 불가)");
     t.status.set("huntmark", { until: now + st.dur, src: u.id, v: 0 });
     room.ev({ e: "st", id: t.id, s: "huntmark", d: st.dur });
+    u.buffs.set("night_hunt", { until: now + st.dur, mods: { dmg: 0.22, crit: 0.12 } });
+    room.ev({ e: "buff", id: u.id, b: "night_hunt", d: st.dur });
     room.ev({ e: "fx", fx: "shadow/hex-sigil", x: t.x | 0, y: t.y | 0, s: 0.6, pal: ctx.sk.fx?.palette ?? null });
   },
   hymn(room, u, ctx, st, now) {
@@ -648,7 +658,10 @@ export function onParry(room, u, src, now) {
 
 /** 정면 방어(리벳 방패) — 피해 감소 처리 후 호출 */
 export function onFrontGuard(room, u, now) {
-  if (now >= (u.icd.get("rivet") ?? 0)) { u.icd.set("rivet", now + 2); gain(room, u, { parts: 1 }, now); room.ev({ e: "fx", fx: "impacts/shield-block", x: u.x | 0, y: u.y | 0, s: 0.5 }); }
+  if (now >= (u.icd.get("rivet") ?? 0)) {
+    u.icd.set("rivet", now + 2);
+    if (gainPart(room, u, now)) room.ev({ e: "fx", fx: "impacts/shield-block", x: u.x | 0, y: u.y | 0, s: 0.5 });
+  }
 }
 
 /** 패시브 발동 */
@@ -694,6 +707,8 @@ export function onPlayerHit(room, u, t, dmg, crit, now, o) {
     }
   }
   if (o?.dot) return;
+  // 대장장이는 특정 기본 공격만이 아니라 모든 직접 공격으로 부품을 수급한다.
+  gainPart(room, u, now);
   if (u.mythic?.has("thunder_echo") && crit && Math.random() < 0.25 && now >= (u.icd.get("m_thunder") ?? 0)) {
     u.icd.set("m_thunder", now + 0.8);
     room.ev({ e: "fx", fx: "lightning/zap-hit", x: t.x | 0, y: t.y | 0 });
