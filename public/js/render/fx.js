@@ -175,12 +175,14 @@ export class FxLayer {
     const mod = mods.get(id);
     if (!mod) { loadFx(id).then((m) => m && this.spawn(id, x, y, o)); return; }
     const { flip, angle } = orient(o.a);
+    const requestedLife = Number.isFinite(o.life) && o.life > 0 ? o.life : null;
+    const life = requestedLife ?? (mod.meta?.loop && !id.startsWith("weather/") ? Math.min(3, Math.max(0.8, mod.meta.duration ?? 1.2)) : null);
     // 최적화: 이미 구워 둔 이펙트는 이미지로 재생 (매 프레임 계산 없음). 처음 쓰는 이펙트는 이번엔 실시간, 한가할 때 굽기
     const bkey = id + "|" + (o.pal ? o.pal.join(",") : "");
     const b = id.startsWith("weather/") ? null : bakedReady.get(bkey);
     if (b) {
       const now = performance.now() / 1000;
-      const e = { b, t0: now, x, y, s: o.s ?? 1, flip, angle, follow: o.follow ?? null, dy: o.dy ?? 0, until: o.life ? now + o.life : null };
+      const e = { b, t0: now, x, y, s: o.s ?? 1, flip, angle, follow: o.follow ?? null, dy: o.dy ?? 0, until: life ? now + life : null };
       this.bk.push(e);
       if (this.bk.length > 220) this.bk.shift();
       return e;
@@ -192,7 +194,7 @@ export class FxLayer {
     const opts = { x, y, flip, angle, seed: (Math.random() * 1e6) | 0 };
     if (o.pal) opts.palette = o.pal;
     const inst = createFx(mod, opts);
-    const e = { inst, follow: o.follow ?? null, until: o.life ? performance.now() / 1000 + o.life : null, s: o.s && o.s !== 1 ? o.s : 1, dy: o.dy ?? 0,
+    const e = { inst, follow: o.follow ?? null, until: life ? performance.now() / 1000 + life : null, s: o.s && o.s !== 1 ? o.s : 1, dy: o.dy ?? 0,
       bkey: id.startsWith("weather/") ? null : bkey, flip, angle, t0: performance.now() / 1000 };
     if (e.s !== 1) {
       const [w, h] = mod.meta.size;

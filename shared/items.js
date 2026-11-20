@@ -8,10 +8,10 @@ export const RARITY_WEIGHTS = {
   elite: [40, 38, 16, 5.5, 0.5],
   boss: [22, 42, 26, 9.5, 0.5],
 };
-export const RARITY_MUL = [1, 1.12, 1.26, 1.42, 3.7, 4.35]; // 심연은 신화보다 기본 능력치 약 18% 높음
+export const RARITY_MUL = [1, 1.12, 1.26, 1.42, 3.7, 5.22]; // 기존 심연 깡스탯 대비 1.2배 상향
 export const MYTHIC_OPT_MUL = 2;                              // 신화 추가 옵션 값 2배
 const MYTHIC_V = 3;                                           // 신화 성능 버전 (옛 신화를 한 번만 올려 주기용)
-const ABYSS_V = 2;                                             // 심연 능력치 레벨 동기화 버전
+const ABYSS_V = 3;                                             // 심연 깡스탯 1.2배 상향 마이그레이션 버전
 export const RARITY_OPTS = [0, 1, 2, 3, 4, 5];              // 추가 옵션 수
 
 export const SLOTS = ["weapon", "offhand", "helmet", "armor", "trinket"];
@@ -109,7 +109,7 @@ export const ABYSS_EFFECTS = {
   star_bloom: { name: "성운 개화", desc: "적 처치 시 HP와 MP 각각 최대치의 8% 회복" },
 };
 const ABYSS_KEYS = Object.keys(ABYSS_EFFECTS);
-export const ABYSS_WEAPON_BONUS = { dmg: 0.18 };
+export const ABYSS_WEAPON_BONUS = { dmg: 0.216 };
 /** 신화 무기 기본 추가 능력치 */
 export const MYTHIC_WEAPON_BONUS = { dmg: 0.12 }; // 2배 상향 (6% → 12%)
 const MYTHIC_KEYS = Object.keys(MYTHIC_EFFECTS);
@@ -268,11 +268,11 @@ export function makeItem(spec) {
 
 // 제2 던전 전용 심연 유물: 다섯 종류 모두 심연 등급, 고정 능력치와 고유 효과 2개를 가진다.
 const ABYSS_RELICS = [
-  { id: "rift-edge", name: "균열 절단자", color: "#ff647d", slot: "weapon", base: { dmg: 0.22, crit: 0.04 }, effects: ["rift_surge", "rift_hunt"] },
-  { id: "null-aegis", name: "무효의 방벽", color: "#65d9e5", slot: "offhand", base: { def: 55, hp: 300, dr: 0.07 }, effects: ["null_guard", "null_rebound"] },
-  { id: "eclipse-visor", name: "일식의 면갑", color: "#c18aff", slot: "helmet", base: { def: 36, hp: 220, critDmg: 0.13 }, effects: ["eclipse_focus", "eclipse_mark"] },
-  { id: "chrono-mantle", name: "무음의 망토", color: "#65d9e5", slot: "armor", base: { def: 68, hp: 360, move: 0.05, dr: 0.06 }, effects: ["chrono_step", "chrono_guard"] },
-  { id: "star-heart", name: "심연의 인장", color: "#d0a0ff", slot: "trinket", base: { hp: 240, mp: 160, atkPct: 0.10, crit: 0.04 }, effects: ["star_siphon", "star_bloom"] },
+  { id: "rift-edge", name: "균열 절단자", color: "#ff647d", slot: "weapon", base: { dmg: 0.264, crit: 0.048 }, effects: ["rift_surge", "rift_hunt"] },
+  { id: "null-aegis", name: "무효의 방벽", color: "#65d9e5", slot: "offhand", base: { def: 66, hp: 360, dr: 0.084 }, effects: ["null_guard", "null_rebound"] },
+  { id: "eclipse-visor", name: "일식의 면갑", color: "#c18aff", slot: "helmet", base: { def: 43.2, hp: 264, critDmg: 0.156 }, effects: ["eclipse_focus", "eclipse_mark"] },
+  { id: "chrono-mantle", name: "무음의 망토", color: "#65d9e5", slot: "armor", base: { def: 81.6, hp: 432, move: 0.06, dr: 0.072 }, effects: ["chrono_step", "chrono_guard"] },
+  { id: "star-heart", name: "심연의 인장", color: "#d0a0ff", slot: "trinket", base: { hp: 288, mp: 192, atkPct: 0.12, crit: 0.048 }, effects: ["star_siphon", "star_bloom"] },
 ];
 export function rollAbyssRelic(R, { ilvl, cls = "adventurer" } = {}) {
   const gear = CLASS_GEAR[cls] ?? CLASS_GEAR.adventurer;

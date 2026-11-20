@@ -165,6 +165,11 @@ export class Room {
 
   // ── 플레이어 입장/퇴장
   addPlayer(u, at) {
+    // 파티 방 이동·재접속 중 낡은 ID나 팀 값이 남아도 플레이어로 안전하게 복구한다.
+    if ((this.units.has(u.id) && this.units.get(u.id) !== u) || (this.players.has(u.id) && this.players.get(u.id) !== u)) u.id = newUnitId();
+    u.team = "p";
+    u.type = "p";
+    u.userId ??= u.session?.userId;
     const [x, y] = at ?? this.map.start;
     u.x = x + (Math.random() * 24 - 12);
     u.y = y + (Math.random() * 24 - 12);
@@ -1064,6 +1069,8 @@ export class Room {
         let others = 0;
         for (const q of evParts) {
           if (q.x == null || q.who === p.id) { mine.push(q.s); continue; } // 전체 알림·나와 관련된 것은 항상
+          // 레이드·파티 보스전은 파티원의 피해 이벤트를 거리와 관계없이 파티 전체에 동기화한다.
+          if (this.partyId && q.dmg && this.players.has(q.who)) { mine.push(q.s); continue; }
           const dx = Math.abs(q.x - p.x), dy = Math.abs(q.y - p.y);
           if (dx >= EV_RANGE_X || dy >= EV_RANGE_Y) continue;
           // 붐빌 때: 남의 피해 숫자는 가까운 것만, 남의 화면 효과는 틱당 최대 개수까지

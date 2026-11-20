@@ -367,8 +367,25 @@ const STEP = {
       fire: (t0, a) => {
         let cx = a.x, cy = a.y;
         if (st.scatter) { cx += (Math.random() - 0.5) * 2 * st.scatter; cy += (Math.random() - 0.5) * 2 * st.scatter; }
-        if (ctx.sk.fx?.area && (first || st.scatter || (ctx.sk.fx.tick == null))) room.ev({ e: "fx", fx: ctx.sk.fx.area, x: cx | 0, y: cy | 0, s: ctx.sk.fx.scale ?? null, pal: ctx.sk.fx.palette ?? null });
-        else if (ctx.sk.fx?.tick) room.ev({ e: "fx", fx: "impacts/hit-spark", x: (cx + (Math.random() - 0.5) * st.radius) | 0, y: (cy + (Math.random() - 0.5) * st.radius) | 0 });
+        if (ctx.sk.fx?.area && (first || st.scatter || (ctx.sk.fx.tick == null))) {
+          const life = ctx.sk.fx.areaLife ?? Math.max(0.55, ((a.ticksLeft ?? 1) - 1) * (a.interval ?? 0.25) + 0.55);
+          room.ev({ e: "fx", fx: ctx.sk.fx.area, x: cx | 0, y: cy | 0, s: ctx.sk.fx.scale ?? null, pal: ctx.sk.fx.palette ?? null, life, src: u.id });
+        }
+        if (ctx.sk.fx?.tick) {
+          const count = Math.max(1, Math.min(8, Math.floor(ctx.sk.fx.tickCount ?? 1)));
+          for (let k = 0; k < count; k++) {
+            const angle = Math.random() * Math.PI * 2;
+            const radius = Math.sqrt(Math.random()) * st.radius * 0.88;
+            const fxX = cx + Math.cos(angle) * radius;
+            const fxY = cy + Math.sin(angle) * radius;
+            room.ev({
+              e: "fx", fx: ctx.sk.fx.tick, x: fxX | 0, y: fxY | 0,
+              a: Math.round((ctx.sk.fx.tickAngle ?? 0) * 1000),
+              s: ctx.sk.fx.tickScale ?? null, pal: ctx.sk.fx.palette ?? null,
+              life: ctx.sk.fx.tickLife ?? 0.8, src: u.id,
+            });
+          }
+        }
         first = false;
         const list = enemies(room, u).filter((t) => Math.hypot(t.x - cx, t.y - cy) - t.r <= st.radius * PLAYER_HIT.area).slice(0, st.max ?? 99);
         for (const t of list) strike(room, u, t, st, ctx, t0);
@@ -401,7 +418,7 @@ const STEP = {
     }
     const hitSet = new Set();
     room.ev({ e: "anim", id: u.id, a: "dash" });
-    if (ctx.sk.fx?.self) room.ev({ e: "fx", fx: ctx.sk.fx.self, x: u.x | 0, y: u.y | 0, a: Math.round(dir * 1000), s: 0.6, pal: ctx.sk.fx.palette ?? null });
+    if (ctx.sk.fx?.self) room.ev({ e: "fx", fx: ctx.sk.fx.self, x: u.x | 0, y: u.y | 0, a: Math.round(dir * 1000), s: 0.6, pal: ctx.sk.fx.palette ?? null, life: Math.max(0.4, (st.dist ?? 0) / Math.max(1, st.speed ?? 1) + 0.45), at: u.id });
     room.ev({ e: "dash", id: u.id, a: Math.round(dir * 1000), d: st.dist, v: st.speed });
     u.dash = {
       dir, left: st.dist, speed: st.speed,
@@ -439,7 +456,7 @@ const STEP = {
       t.buffs.set(st.id, { until: now + st.dur, mods: st.mods ?? {}, nextHit: st.nextHit ?? null });
       room.ev({ e: "buff", id: t.id, b: st.id, d: st.dur });
     }
-    if (ctx.sk.fx?.self) room.ev({ e: "fx", fx: ctx.sk.fx.self, x: u.x | 0, y: u.y | 0, at: u.id, pal: ctx.sk.fx.palette ?? null });
+    if (ctx.sk.fx?.self) room.ev({ e: "fx", fx: ctx.sk.fx.self, x: u.x | 0, y: u.y | 0, at: u.id, pal: ctx.sk.fx.palette ?? null, life: st.dur ?? 1 });
   },
   heal(room, u, ctx, st, now) {
     let targets;
@@ -459,7 +476,7 @@ const STEP = {
         t.buffs.set("hot_" + ctx.sk.id, { until: now + hot.dur, mods: {} });
         for (let k = 1; k <= hot.dur / hot.interval; k++) room.schedule(k * hot.interval, (t1) => heal(room, u, t, per, t1));
       }
-      if (ctx.sk.fx?.self) room.ev({ e: "fx", fx: ctx.sk.fx.self, x: t.x | 0, y: t.y | 0, at: t.id, pal: ctx.sk.fx.palette ?? null });
+      if (ctx.sk.fx?.self) room.ev({ e: "fx", fx: ctx.sk.fx.self, x: t.x | 0, y: t.y | 0, at: t.id, pal: ctx.sk.fx.palette ?? null, life: hot?.dur ?? st.dur ?? 1 });
     }
   },
   shield(room, u, ctx, st, now) {
@@ -472,9 +489,9 @@ const STEP = {
       let amt = (st.pctMax ? t.maxHp * st.pctMax : healPower(u) * st.pow * u.stats.shield) * (1 + profPow(ctx.prof ?? 0));
       if (t === u && st.selfMul) amt *= st.selfMul;
       giveShield(room, t, amt, st.dur, now);
-      if (ctx.sk.fx?.self) room.ev({ e: "fx", fx: ctx.sk.fx.self, x: t.x | 0, y: t.y | 0, at: t.id, pal: ctx.sk.fx.palette ?? null });
+      if (ctx.sk.fx?.self) room.ev({ e: "fx", fx: ctx.sk.fx.self, x: t.x | 0, y: t.y | 0, at: t.id, pal: ctx.sk.fx.palette ?? null, life: st.dur ?? 1 });
     }
-    if (ctx.sk.fx?.area) room.ev({ e: "fx", fx: ctx.sk.fx.area, x: u.x | 0, y: u.y | 0, pal: ctx.sk.fx.palette ?? null });
+    if (ctx.sk.fx?.area) room.ev({ e: "fx", fx: ctx.sk.fx.area, x: u.x | 0, y: u.y | 0, pal: ctx.sk.fx.palette ?? null, life: st.dur ?? 1, src: u.id });
   },
   zone(room, u, ctx, st, now) {
     const pt = st.at === "self" ? { x: u.x, y: u.y } : clampPoint(room, u, ctx.ax, ctx.ay, ctx.sk.range ?? 200);
@@ -539,7 +556,7 @@ const STEP = {
   channel(room, u, ctx, st, now) {
     u.channel = { until: now + st.dur, mpPct: st.mpPct, interrupted: false };
     room.ev({ e: "anim", id: u.id, a: "channel" });
-    if (ctx.sk.fx?.self) room.ev({ e: "fx", fx: ctx.sk.fx.self, x: u.x | 0, y: u.y | 0, at: u.id });
+    if (ctx.sk.fx?.self) room.ev({ e: "fx", fx: ctx.sk.fx.self, x: u.x | 0, y: u.y | 0, at: u.id, life: st.dur ?? 1 });
   },
   custom(room, u, ctx, st, now) {
     CUSTOM[st.fn]?.(room, u, ctx, st, now);
@@ -572,7 +589,7 @@ const CUSTOM = {
     u.acupoint = Math.min(4, (u.acupoint ?? 0) + 1);
     u.acuLastHit = now;
     u.buffs.set("acupoint", { until: now + 16, mods: { crit: 0.03 * u.acupoint, dmg: 0.04 * u.acupoint } });
-    room.ev({ e: "fx", fx: "status/rage", x: u.x | 0, y: u.y | 0, at: u.id });
+    room.ev({ e: "fx", fx: "status/rage", x: u.x | 0, y: u.y | 0, at: u.id, life: 16 });
     room.ev({ e: "msg", text: `점혈 ${u.acupoint}단계`, kind: "self", id: u.id });
   },
   shadowstep(room, u, ctx, st, now) {
@@ -599,7 +616,7 @@ const CUSTOM = {
     room.ev({ e: "st", id: t.id, s: "huntmark", d: st.dur });
     u.buffs.set("night_hunt", { until: now + st.dur, mods: { dmg: 0.32, crit: 0.18 } });
     room.ev({ e: "buff", id: u.id, b: "night_hunt", d: st.dur });
-    room.ev({ e: "fx", fx: "shadow/hex-sigil", x: t.x | 0, y: t.y | 0, s: 0.6, pal: ctx.sk.fx?.palette ?? null });
+    room.ev({ e: "fx", fx: "shadow/hex-sigil", x: t.x | 0, y: t.y | 0, s: 0.6, pal: ctx.sk.fx?.palette ?? null, life: st.dur, src: u.id });
   },
   hymn(room, u, ctx, st, now) {
     u.hymnMode = u.hymnMode === "atk" ? "def" : "atk";
@@ -609,7 +626,7 @@ const CUSTOM = {
       p.buffs.delete("hymn_atk"); p.buffs.delete("hymn_def");
       p.buffs.set("hymn_" + u.hymnMode, { until: now + st.dur, mods });
       room.ev({ e: "buff", id: p.id, b: "hymn_" + u.hymnMode, d: st.dur });
-      room.ev({ e: "fx", fx: "holy/blessing", x: p.x | 0, y: p.y | 0, at: p.id });
+      room.ev({ e: "fx", fx: "holy/blessing", x: p.x | 0, y: p.y | 0, at: p.id, life: st.dur });
     }
     msg(u, u.hymnMode === "atk" ? "성가의 축복: 공격 (+4%)" : "성가의 축복: 방어 (+5%)");
   },

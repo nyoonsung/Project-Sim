@@ -7,6 +7,7 @@ import { CLASS_INFO } from "../shared/classes.js";
 import { CLASS_DMG } from "../shared/stats.js";
 import { TICK_DT } from "../shared/constants.js";
 import { moveCircle } from "../shared/move.js";
+import { dealDamage } from "../server/game/combat.js";
 
 for (const sk of SKILL_LIST.filter((s) => s.kind === "ultimate")) {
   assert.ok(Number.isFinite(skillReach(sk)) && skillReach(sk) > 0, `${sk.id}: 유효한 자동 사용 사거리가 있어야 한다.`);
@@ -32,6 +33,10 @@ assert.ok(SKILLS.ro_final.steps.find((st) => st.do === "melee").hits >= 10);
 assert.ok(SKILLS.ma_arcane.steps[0].pow >= 1.15);
 assert.ok(SKILLS.ma_chain.steps[0].pow >= 2.4);
 assert.ok(SKILLS.ma_blizzard.steps[0].ticks >= 8);
+assert.equal(SKILLS.ar_rain.fx.area, "arcane/star-fall", "애로우 레인은 화면 전체 날씨 FX를 쓰지 않는다.");
+assert.equal(SKILLS.ar_bombard.fx.area, "arcane/star-fall", "화살 폭격도 지정 영역 FX만 사용한다.");
+assert.equal(SKILLS.ma_blizzard.fx.area, "ice/blizzard-vortex", "눈보라는 지정 영역 눈보라만 표시한다.");
+assert.ok(SKILLS.ar_rain.fx.tickCount >= 4 && SKILLS.ma_blizzard.fx.tickCount >= 3, "광역 스킬은 한 번의 판정 틱마다 다수 낙하 FX를 만든다.");
 assert.ok(SKILLS.ma_final.steps.find((st) => st.do === "area").ticks >= 6);
 assert.ok(SKILLS.ma_blink.steps.some((st) => st.do === "buff" && st.mods?.dr >= 0.25));
 assert.equal(SKILLS.ro_hunt.steps[0].fn, "huntmark");
@@ -153,4 +158,53 @@ assert.ok(target.hp < before, "고속 돌진 경로에 있는 적에게 피해�
   assert.ok(smith.session.meDirty, "부품 충전은 HUD 동기화를 예약해야 한다.");
 }
 
-console.log("직업별 전설·신화 스킬·대장장이 부품 충전·돌진 판정 테스트 통과");
+
+ // 파티 레이드: 서로 다른 파티원의 공격이 공유 대상 HP와 모든 파티원의 피해 이벤트에 반영된다.
+{
+  const partyMap = makeFloor(20, 54321, 3);
+  const partyRoom = new Room(world, { id: "party-damage-regression", kind: "dungeon", floor: 20, map: partyMap, partyId: "party-regression", partySize: 3 });
+  const makeMember = (id, name) => {
+    const char = newCharacter(name);
+    char.level = 120;
+    char.cls = "archer";
+    const sent = [];
+    const session = { userId: id, role: "player", char, sent, send: (m) => sent.push(m), notice() {}, sendMe() {} };
+    const unit = makePlayerUnit(session);
+    session.unit = unit;
+    return { session, unit };
+  };
+  const one = makeMember(9001, "RaidOne");
+  const two = makeMember(9002, "RaidTwo");
+  const three = makeMember(9003, "RaidThree");
+  partyRoom.addPlayer(one.unit, partyMap.start);
+  partyRoom.addPlayer(two.unit, [partyMap.start[0] + 20, partyMap.start[1]]);
+  // 이전 방 데이터의 중복 ID/잘못된 팀 값도 입장 시 복구한다.
+  three.unit.id = one.unit.id;
+  three.unit.team = "m";
+  three.unit.type = "m";
+  partyRoom.addPlayer(three.unit, [partyMap.start[0] + 40, partyMap.start[1]]);
+  assert.notEqual(three.unit.id, one.unit.id, "중복 유닛 ID는 파티원을 덮어쓰면 안 된다.");
+  assert.equal(three.unit.team, "p");
+  assert.equal(three.unit.type, "p");
+  assert.equal(partyRoom.players.size, 3);
+  assert.ok(partyRoom.units.has(one.unit.id) && partyRoom.units.has(two.unit.id) && partyRoom.units.has(three.unit.id));
+
+  const target = partyRoom.spawnDummy(partyMap.start[0] + 60, partyMap.start[1]);
+  const hpBefore = target.hp;
+  dealDamage(partyRoom, one.unit, target, { fixed: 125, dot: true }, partyRoom.now);
+  dealDamage(partyRoom, two.unit, target, { fixed: 275, dot: true }, partyRoom.now);
+  assert.equal(target.hp, hpBefore - 400, "파티원 두 명의 공격이 같은 대상 HP를 각각 감소시켜야 한다.");
+  const sourceIds = new Set(partyRoom.events.filter((e) => e.e === "dmg" && e.id === target.id).map((e) => e.b));
+  assert.ok(sourceIds.has(one.unit.id) && sourceIds.has(two.unit.id), "피해 이벤트는 공격한 파티원 ID를 보존해야 한다.");
+
+  // 세 번째 파티원은 피해 위치에서 멀어도 레이드 피해 수치를 수신해야 한다.
+  three.unit.x = target.x + 1500;
+  partyRoom.flush();
+  for (const member of [one, two, three]) {
+    const snapshot = member.session.sent.filter((m) => typeof m === "string" && m.startsWith('{"t":"s"')).map((m) => JSON.parse(m)).at(-1);
+    assert.ok(snapshot?.v?.some((e) => e.e === "dmg" && e.b === one.unit.id), "모든 파티원에게 첫 번째 공격의 피해 이벤트가 전송되어야 한다.");
+    assert.ok(snapshot?.v?.some((e) => e.e === "dmg" && e.b === two.unit.id), "모든 파티원에게 두 번째 공격의 피해 이벤트가 전송되어야 한다.");
+  }
+}
+
+console.log("직업별 전설·신화 스킬·대장장이 부품 충전·파티 피해 동기화·돌진 판정 테스트 통과");

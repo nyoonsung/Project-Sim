@@ -168,9 +168,9 @@ function onEvent(e) {
     case "fx": {
       // 사람이 많을 때: 내 것·내 근처 것은 다 보여 주고, 남의 이펙트는 일부만 (메이플처럼 붐비면 남의 이펙트를 줄임)
       // 내 것: 내가 낸 이펙트, 또는 붐비지 않을 때 내 근처 이펙트
-      const me = G.ents.get(G.you), mine = e.at === G.you || ((G.crowdK ?? 1) >= 1 && me && Math.hypot(e.x - me.rx, e.y - me.ry) < 140);
+      const me = G.ents.get(G.you), mine = e.at === G.you || e.src === G.you || ((G.crowdK ?? 1) >= 1 && me && Math.hypot(e.x - me.rx, e.y - me.ry) < 140);
       if (!mine && (G.crowdK ?? 1) < 1 && Math.random() > G.crowdK) break;
-      R?.fx(e.fx, e.x, e.y, { a: e.a != null ? e.a / 1000 : undefined, pal: e.pal ?? undefined, s: e.s ?? undefined, follow: e.at ?? undefined, other: !mine });
+      R?.fx(e.fx, e.x, e.y, { a: e.a != null ? e.a / 1000 : undefined, pal: e.pal ?? undefined, s: e.s ?? undefined, follow: e.at ?? undefined, life: e.life ?? undefined, other: !mine });
       break;
     }
     case "anim": if (ent) {

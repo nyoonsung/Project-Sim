@@ -276,7 +276,7 @@ add("archer", [
     fx: { proj: "fire/fireball", scale: 0.5, hit: "explosions/small-explosion" }, steps: [{ do: "proj", speed: 560, range: 340, pow: 2.4, radius: 8, explode: { radius: 70, pow: 1.6, max: 8 } }] },
   { id: "ar_bombard", name: "화살 폭격", grade: "영웅", kind: "active", cd: 14, cost: { mp: 24 }, aim: "point", range: 320, anim: "shoot", cast: 0.25,
     desc: "지정한 지점에 화살을 연속으로 퍼부어 넓은 범위의 적 무리를 공격한다.", limit: "폭격 지점에 잠시 예고가 표시되며, 한 대상에게 피해가 집중된다.",
-    fx: { area: "weather/rain", tick: "projectiles/arrow" }, steps: [{ do: "area", radius: 86, pow: 0.82, ticks: 4, interval: 0.3, telegraph: 0.35, max: 12 }] },
+    fx: { area: "arcane/star-fall", areaLife: 1.8, tick: "projectiles/arrow", tickCount: 3, tickScale: 0.34, tickAngle: 1.5708, tickLife: 0.62 }, steps: [{ do: "area", radius: 86, pow: 0.82, ticks: 4, interval: 0.3, telegraph: 0.35, max: 12 }] },
   { id: "ar_pierce", name: "피어싱 애로우", grade: "영웅", kind: "active", cd: 7, cost: { mp: 18 }, aim: "dir", anim: "shoot", cast: 0.25,
     desc: "활시위를 끝까지 당겨 일직선의 모든 적을 꿰뚫는 관통 사격(길이 420). 맞은 적은 3초간 느려진다.", limit: "짧은 조준 0.25초.",
     fx: { line: "projectiles/laser-bolt", palette: ["#08201a", "#18604a", "#30b088", "#80f0c8", "#e0fff4", "#ffffff"] },
@@ -285,7 +285,7 @@ add("archer", [
   id: "ar_rain", name: "애로우 레인", grade: "전설", kind: "ultimate", cd: 23, cost: { mp: 35 }, aim: "point", range: 340, anim: "shoot",
   desc: "넓은 범위에 별빛 화살비를 퍼부어 적 무리를 쓸어버린다.",
   limit: "화살 낙하 횟수와 범위를 늘리고 예고 시간을 줄였다.",
-  fx: { area: "weather/rain", tick: "projectiles/arrow" },
+  fx: { area: "arcane/star-fall", areaLife: 2.5, tick: "projectiles/arrow", tickCount: 4, tickScale: 0.38, tickAngle: 1.5708, tickLife: 0.66 },
   steps: [{ do: "area", radius: 112, pow: 0.72, ticks: 10, interval: 0.25, telegraph: 0.48, max: 12 }],
 },
   {
@@ -547,7 +547,7 @@ add("mage", [
     steps: [{ do: "proj", speed: 520, range: 300, pow: 2.4, radius: 8, explode: { radius: 90, pow: 1.5, max: 5 }, status: { type: "shock", dur: 2 } }] },
   { id: "ma_blizzard", name: "눈보라", grade: "영웅", kind: "active", cd: 14, cost: { mp: 24 }, aim: "point", range: 300, anim: "cast",
     desc: "지정한 곳에 2초간 눈보라를 일으켜 계속 피해를 주고 크게 느리게 만든다.", limit: "대상 10명까지.",
-    fx: { area: "weather/snow", tick: "ice/ice-lance" },
+    fx: { area: "ice/blizzard-vortex", areaLife: 2.55, tick: "ice/ice-lance", tickCount: 3, tickScale: 0.7, tickLife: 0.9 },
     steps: [{ do: "area", radius: 112, pow: 1.0, ticks: 8, interval: 0.28, telegraph: 0.25, max: 10, status: { type: "slow", dur: 2, v: 0.5 } }] },
 ]);
 add("priest", [
@@ -582,7 +582,7 @@ add("fist", [{ id: "fi_final", name: "권왕멸천", grade: "신화", kind: "ult
 add("archer", [{ id: "ar_final", name: "천궁 강림", grade: "신화", kind: "ultimate", cd: 30, cost: { mp: 38 }, aim: "point", range: 400, anim: "shoot",
   desc: "지정한 지역에 별빛 화살을 14회 쏟아붓는다. 12초간 공격 속도 60%, 공격력 35%가 상승해 보스전과 다수전에 모두 강하다.",
   limit: "넓은 범위에 지속 피해를 주며 최대 16명을 공격한다.",
-  fx: { area: "arcane/star-fall", tick: "projectiles/arrow", self: "arcane/spell-charge" },
+  fx: { area: "arcane/star-fall", areaLife: 3.6, tick: "projectiles/arrow", tickCount: 4, tickScale: 0.38, tickAngle: 1.5708, tickLife: 0.66, self: "arcane/spell-charge" },
   steps: [{ do: "buff", target: "self", id: "heaven_bow", dur: 12, mods: { aspd: 0.6, dmg: 0.35 } }, { do: "area", radius: 150, pow: 1.65, ticks: 14, interval: 0.22, telegraph: 0.35, max: 16 }] }]);
 add("rogue", [{ id: "ro_final", name: "섀도우 처형", grade: "신화", kind: "ultimate", cd: 30, cost: { mp: 22 }, aim: "dir", anim: "stab", moveSkill: true,
   desc: "표적의 뒤로 순간 이동해 10연속 급소 공격을 가한다. 처형 후 10초간 공격력과 공격 속도가 상승한다.",

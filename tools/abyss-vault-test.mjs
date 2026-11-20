@@ -14,6 +14,7 @@ const rng = (seed = 0x5eed1234) => () => {
 };
 
 assert.equal(RARITIES[5], "심연");
+assert.ok(Math.abs(RARITY_MUL[5] / 4.35 - 1.2) < 1e-9, "Abyss raw stats must be exactly 1.2x the previous multiplier");
 assert.ok(RARITY_MUL[5] > RARITY_MUL[4], "Abyss base stat multiplier must exceed Mythic");
 assert.equal(RARITY_OPTS[5], 5, "Abyss gear must have five random options");
 assert.ok(maxDurability({ rarity: "심연" }) > maxDurability({ rarity: "신화" }));
