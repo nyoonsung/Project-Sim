@@ -232,9 +232,8 @@ export const diffMul = (f) => ({ hp: 1 + 0.025 * (f - 1), dmg: 1 + 0.016 * (f - 
 export const LATE_EASE = (f) => (f >= 95 ? 0.75 : 1);
 // ── 제2 던전 난이도
 // 제2 던전 n층 = 실제 레벨 100 + n×5/3 (1층 102 → 30층 150).
-// 기존 제2 던전 수치(제1 던전 100층 대비 체력 ×2.5 · 공격력 ×1.8, 층별 성장)에
-// 별도 ×100을 곱한다. 이동 속도는 기존 ×1.1만 유지해 이동 판정이 망가지지 않도록 한다.
-export const D2_HARD = { hp: 2.5, dmg: 1.8, hpStep: 0.03, dmgStep: 0.018, speed: 1.1 };
+// 기존 제2 던전의 HP·공격 배율은 유지하되, 현재 밸런스 기준 이동 속도는 20% 낮춘다.
+export const D2_HARD = { hp: 2.5, dmg: 1.8, hpStep: 0.03, dmgStep: 0.018, speed: 0.88 };
 export const D2_EXTREME_MULTIPLIER = 100;
 export const D1_BOSS_HP_MULTIPLIER = 11;
 export const D1_BOSS_HP_REDUCTION = 0.9;
@@ -245,6 +244,7 @@ export const D2_MONSTER_DAMAGE_MULTIPLIER = 0.5;
 // 보스도 별도 배율로 HP·공격력·방어력을 현재의 1/5로 낮춘다. 이동속도·경험치·보상은 유지.
 export const D2_MONSTER_STAT_MULTIPLIER = 1 / 150;
 export const D2_BOSS_STAT_MULTIPLIER = 0.2;
+export const D2_BOSS_SPEED_MULTIPLIER = 0.8;
 export const d2Level = (floor) => 100 + Math.round((floor * 5) / 3);
 /** 그 층의 실제 레벨 (제1 던전은 층 = 레벨) */
 export const effLevel = (floor, dungeon = 1) => (dungeon === 2 ? d2Level(floor) : floor);
