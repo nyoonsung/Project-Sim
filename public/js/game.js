@@ -40,6 +40,7 @@ export function onMessage(m) {
     case "ents": for (const d of m.list) addEnt(d); break;
     case "s": if (m.v) for (const e of m.v) onEvent(e); onSnapshot(m); break;
     case "ev": for (const e of m.list) onEvent(e); break;
+    case "vaultResult": G.ui.onVaultResult?.(m); break;
     case "me":
       G.me = m; G.meAt = now(); G.ui.onMe();
       if (m.pf && G.char) { G.char.prof ??= {}; for (const [k, v] of Object.entries(m.pf)) { G.char.prof[k] = v; } G.ui.onProf?.(); }
