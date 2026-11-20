@@ -41,9 +41,9 @@ const TABS = {
     return [
       h("div", { class: "toolbar" }, q, h("button", { class: "btn small", onclick: () => { lastQ = q.value.trim(); render(); } }, "검색")),
       h("table", { class: "tbl" },
-        h("tr", {}, ...["", "닉네임", "직업", "Lv", "최고 층", "위치", "가입", "최근 접속", "상태"].map((t) => h("th", { text: t }))),
+        h("tr", {}, ...["", "닉네임", "직업", "Lv", "제1 던전 최고 층", "제2 던전 최고 층", "위치", "가입", "최근 접속", "상태"].map((t) => h("th", { text: t }))),
         ...list.list.map((p) => h("tr", { class: "click", onclick: () => openPlayer(p.id) },
-          h("td", {}, h("span", { class: "on-dot" + (p.online ? " y" : "") })), h("td", { text: p.username }), h("td", { text: CLASS_INFO[p.cls]?.name ?? "-" }), h("td", { text: p.level ?? "-" }), h("td", { text: p.best_floor ?? "-" }),
+          h("td", {}, h("span", { class: "on-dot" + (p.online ? " y" : "") })), h("td", { text: p.username }), h("td", { text: CLASS_INFO[p.cls]?.name ?? "-" }), h("td", { text: p.level ?? "-" }), h("td", { text: p.best_floor ?? "-" }), h("td", { text: p.best2 ?? 0 }),
           h("td", { text: p.online ? (p.room === "town" ? "마을" : `${p.floor}층`) : "-" }), h("td", { text: fmtT(p.created_at) }), h("td", { text: fmtT(p.last_login) }),
           h("td", {}, p.banned_until > Date.now() ? h("span", { class: "badge ban", text: "차단" }) : null, p.muted_until > Date.now() ? h("span", { class: "badge mute", text: "채금" }) : null)))),
     ];
@@ -141,7 +141,7 @@ async function openPlayer(id) {
       ),
       h("div", {},
         c ? h("div", { class: "box" }, h("h3", { text: `${c.name} · Lv.${c.level} ${CLASS_INFO[c.cls]?.name}` }),
-          h("div", { class: "note", text: `경험치 ${c.xp} · 골드 ${c.gold.toLocaleString()} · 최고 ${c.best}층 · 체크포인트 ${c.checkpoint}층 · 처치 ${c.kills} · 쓰러짐 ${c.deaths} · 플레이 ${fmtDur(c.playtime)}${c.cleared ? " · 🏆 정복" : ""}` }),
+          h("div", { class: "note", text: `경험치 ${c.xp} · 골드 ${c.gold.toLocaleString()} · 제1 던전 최고 ${c.best ?? 0}층 · 제2 던전 최고 ${c.best2 ?? 0}층 · 체크포인트 ${c.checkpoint}층 · 처치 ${c.kills} · 쓰러짐 ${c.deaths} · 플레이 ${fmtDur(c.playtime)}${c.cleared ? " · 🏆 정복" : ""}` }),
           h("div", { class: "note", text: "스탯: " + JSON.stringify(c.stats) + ` · 남은 ${c.unspent}` }),
           h("div", { class: "note", text: "스킬: " + c.skills.filter(Boolean).join(", ") }),
           h("h4", { text: "장착" }), h("div", { class: "items" }, ...Object.values(c.equip).filter(Boolean).map((it) => itemCell(it, "장착"))),
