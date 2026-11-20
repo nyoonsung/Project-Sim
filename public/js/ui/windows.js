@@ -486,9 +486,9 @@ export async function openBoard() {
   let list = [];
   try { list = (await (await fetch("/api/ranking")).json()).list ?? []; } catch {}
   openWin("board", "모험가 게시판 — 랭킹", () => [
-    h("table", {}, h("tr", {}, h("td", { text: "#" }), h("td", { text: "이름" }), h("td", { text: "직업" }), h("td", { text: "Lv" }), h("td", { text: "최고 층" })),
-      ...list.map((r, i) => h("tr", {}, h("td", { text: i + 1 }), h("td", { text: r.username }), h("td", { text: CLASS_INFO[r.cls]?.name ?? "" }), h("td", { text: r.level }), h("td", { text: r.best_floor })))),
-  ], { w: 380 });
+    h("table", {}, h("tr", {}, h("td", { text: "#" }), h("td", { text: "이름" }), h("td", { text: "직업" }), h("td", { text: "Lv" }), h("td", { text: "제1 던전 최고 층" }), h("td", { text: "제2 던전 최고 층" })),
+      ...list.map((r, i) => h("tr", {}, h("td", { text: i + 1 }), h("td", { text: r.username }), h("td", { text: CLASS_INFO[r.cls]?.name ?? "" }), h("td", { text: r.level }), h("td", { text: r.best_floor }), h("td", { text: r.best2 ?? 0 })))),
+  ], { w: 520 });
 }
 
 export function openTrainer() {
