@@ -326,7 +326,8 @@ export function makeTown() {
   objs.push({ kind: "portal", id: "dungeon2", x: P(36), y: P(12) + 12, label: "심연의 균열", color: "dungeon2" });
   for (const ty of [14, 17]) objs.push({ kind: "flag", c: "flag_red", x: P(38) + 4, y: P(ty) });
   objs.push({ kind: "npc", id: "gate2", name: "심연의 관문지기", x: P(33) + 16, y: P(13) + 20 });
-  objs.push({ kind: "npc", id: "vault", name: "심연 보관고", x: P(38) + 2, y: P(15) + 20 });
+  // 보관고 NPC를 광장 안쪽 타일 중앙으로 옮겨 벽·화면 가장자리와 겹치지 않게 한다.
+  objs.push({ kind: "npc", id: "vault", name: "심연 보관고", x: P(37) + 16, y: P(15) + 16 });
   // 분수 (광장 가운데, 둘레 돌)
   set(m, 19, 16, T.WALL); set(m, 20, 16, T.WALL);
   objs.push({ kind: "fountain", fx: "water/fountain", x: P(20), y: P(17) - 4 });
