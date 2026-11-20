@@ -6,6 +6,7 @@ import { SKILLS } from "./skills.js";
 
 // 직업 피해 배율: 궁수의 단일 화력을 소폭 낮추고, 저평가된 직업의 전투 기여도를 보정한다.
 export const CLASS_DMG = {
+  sword: 1.20,
   archer: 1.62, // 기존 대비 피해량 약 10% 감소
   rogue: 1.50,
   mage: 1.55,
