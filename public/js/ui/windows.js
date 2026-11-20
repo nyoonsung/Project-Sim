@@ -22,7 +22,7 @@ const RES_NAME = { mp: "MP", ki: "내력", holy: "성광", parts: "부품", gap:
 // 직업별 유지력의 특징. 수치 비교와 달리 스킬 운용에 따라 체감이 달라지는 부분.
 const CLASS_SURVIVAL = {
   adventurer: { grade: "보통", detail: "직업 전용 방어 기술이 없는 전직 전 기본형" },
-  sword: { grade: "높음", detail: "준수한 체력·방어력과 타이밍형 정면 막기" },
+  sword: { grade: "매우 높음", detail: "상향된 체력·방어력과 타이밍형 정면 막기" },
   fist: { grade: "매우 높음", detail: "높은 체력·방어력, 반격과 짧은 피해 감소 기술" },
   archer: { grade: "회피형·중상", detail: "기본 내구는 낮지만 7초간 회피율 60% 버프를 사용 가능" },
   rogue: { grade: "기동형·높음", detail: "보강된 체력·방어력과 기본 회피, 이동기·잔영 피해 감소로 생존" },
