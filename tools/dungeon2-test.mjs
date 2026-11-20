@@ -94,7 +94,7 @@ for (const floor of [1, 5, 10, 15, 20, 25, 30]) {
 }
 ok(true, "제2 던전 일반층·중간보스층·보스층 생성 및 전송");
 
-// 스탯 산출이 정상이고 5배가 적용되는지 확인.
+// 스탯 산출이 유한한 양수인지 확인.
 for (const id of DUNGEON2_ZONES[0].monsters) {
   const s = monsterStats(id, 1, 1, 2);
   assert.ok(Number.isFinite(s.hp) && s.hp > 0);
@@ -179,8 +179,13 @@ ok(true, "6마리 고립 몬스터 구조 처리");
   for (let i = 0; i < 60; i++) room.addProjectile(projectile("projectiles/laser-bolt"));
   assert.equal(room.projectiles.length, 48, "all enemy projectiles must cap at 48");
   assert.equal(room.addProjectile(projectile("shadow/void-orb")), null);
+  assert.equal(room.allowAbyssOrbFx(0), true);
+  assert.equal(room.allowAbyssOrbFx(0), true);
+  assert.equal(room.allowAbyssOrbFx(0), true);
+  assert.equal(room.allowAbyssOrbFx(0), false, "ambient void-orb effect must cap at three per second");
+  assert.equal(room.allowAbyssOrbFx(1.1), true, "ambient effect budget should reset each second");
 }
-ok(true, "제2 던전 구형 투사체 및 적 투사체 상한");
+ok(true, "제2 던전 구형 투사체·순간이동 이펙트 및 적 투사체 상한");
 
 // 기존 마을·안전 구역 생성 경로 회귀 확인.
 const town = makeTown();
