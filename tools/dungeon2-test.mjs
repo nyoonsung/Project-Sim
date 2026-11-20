@@ -13,6 +13,8 @@ import { makeFloor, mapPayload, makeTown, safeZone } from "../server/game/dungeo
 import { levelGapXpMultiplier, unitXpMultiplier } from "../server/game/room.js";
 import { World } from "../server/game/world.js";
 import { D2_MOB_PATTERN, D2_BOSS_PATTERN } from "../server/game/ai.js";
+import { TILE } from "../shared/constants.js";
+import { circleHitsWall } from "../shared/move.js";
 
 const ok = (condition, label) => {
   assert.ok(condition, label);
@@ -184,15 +186,31 @@ ok(true, "제2 던전 몬스터·보스 능력치 1/5 완화와 이동속도 조
 ok(true, "제2 던전 드롭 레벨 100 · 소환물 드롭 없음 · 유물 레벨 100");
 
 
-// 심연 보관고: NPC 접근, 서버 재료 판정, 유물 수령 성공 시에만 재료 소모.
-// 클라이언트 표시값이 늦게 갱신돼도 서버 요청은 정상 처리할 수 있어야 한다.
+// 심연 보관고: 실제 마을 타일 경로, 거리와 무관한 마을 내 서버 접근, 재료·가방 검사.
 {
   const town = makeTown();
   const vault = town.objects.find((o) => o.kind === "npc" && o.id === "vault");
-  assert.ok(vault, "town must contain the Abyss Vault NPC");
+  const gate = town.objects.find((o) => o.kind === "npc" && o.id === "gate2");
+  assert.ok(vault && gate, "town must contain the Abyss Vault and second-dungeon gate NPCs");
+
+  // 마을 시작 위치에서 보관고 NPC 타일까지 플레이어 반지름 9px로 걸어갈 수 있어야 한다.
+  const canStand = (x, y) => !circleHitsWall(town, x * TILE + TILE / 2, y * TILE + TILE / 2, 9);
+  const sx = Math.floor(town.start[0] / TILE), sy = Math.floor(town.start[1] / TILE);
+  const tx = Math.floor(vault.x / TILE), ty = Math.floor(vault.y / TILE);
+  const queue = [[sx, sy]], visited = new Set([sy * town.w + sx]);
+  for (let i = 0; i < queue.length; i++) {
+    const [x, y] = queue[i];
+    for (const [dx, dy] of [[1,0],[-1,0],[0,1],[0,-1]]) {
+      const nx = x + dx, ny = y + dy, key = ny * town.w + nx;
+      if (nx < 0 || ny < 0 || nx >= town.w || ny >= town.h || visited.has(key) || !canStand(nx, ny)) continue;
+      visited.add(key); queue.push([nx, ny]);
+    }
+  }
+  assert.ok(visited.has(ty * town.w + tx), "vault NPC tile must be reachable on foot from town spawn");
+
   const world = Object.create(World.prototype);
-  const received = [];
-  const notices = [];
+  world.town = { map: town };
+  const received = [], notices = [];
   world.pickup = (_unit, item) => { received.push(item); return true; };
   world.save = () => {};
   world.sendChar = () => {};
@@ -200,10 +218,10 @@ ok(true, "제2 던전 드롭 레벨 100 · 소환물 드롭 없음 · 유물 레
     char: { cls: "sword", abyssKeys: 1, riftCrystals: 5 },
     notice: (message) => notices.push(message),
   };
-  session.unit = { room: { map: town }, x: vault.x, y: vault.y };
-  assert.equal(world.nearNpc(session, "vault", 90), true, "vault should be interactable at the NPC");
+  // NPC와 떨어진 마을 시작점에서도 서버 요청이 성공해야 한다.
+  session.unit = { room: world.town, x: town.start[0], y: town.start[1] };
   world.openAbyssVault(session);
-  assert.equal(received.length, 1, "one relic should be awarded");
+  assert.equal(received.length, 1, "one relic should be awarded anywhere in town");
   assert.equal(session.char.abyssKeys, 0, "one abyss key should be consumed");
   assert.equal(session.char.riftCrystals, 0, "five rift crystals should be consumed");
   assert.ok(notices.some((x) => x.includes("심연 보관고가 열렸어요")), "successful opening should notify the player");
@@ -212,13 +230,23 @@ ok(true, "제2 던전 드롭 레벨 100 · 소환물 드롭 없음 · 유물 레
     char: { cls: "sword", abyssKeys: 1, riftCrystals: 5 },
     notice: (message) => notices.push(message),
   };
-  failed.unit = { room: { map: town }, x: vault.x, y: vault.y };
+  failed.unit = { room: world.town, x: town.start[0], y: town.start[1] };
   world.pickup = () => false; // 가방이 가득 찬 상황
   world.openAbyssVault(failed);
   assert.equal(failed.char.abyssKeys, 1, "failed pickup must not consume the key");
   assert.equal(failed.char.riftCrystals, 5, "failed pickup must not consume crystals");
+
+  const outside = {
+    char: { cls: "sword", abyssKeys: 1, riftCrystals: 5 },
+    notice: (message) => notices.push(message),
+  };
+  outside.unit = { room: { map: town }, x: town.start[0], y: town.start[1] };
+  world.pickup = (_unit, item) => { received.push(item); return true; };
+  world.openAbyssVault(outside);
+  assert.equal(received.length, 1, "vault must reject requests outside the town room");
+  assert.equal(outside.char.abyssKeys, 1, "out-of-town requests must not consume keys");
 }
-ok(true, "심연 보관고 상호작용·재료 소모·가방 부족 시 재료 보존");
+ok(true, "심연 보관고 통행 경로·마을 전체 접근·재료·가방·던전 차단 테스트");
 
 // 직업 피해 배율: 대장장이는 탱커 역할을 유지하면서 피해 기여도가 상향되고, 궁수는 단일 화력이 약 10% 낮아졌다.
 assert.equal(CLASS_DMG.smith, 0.9);
