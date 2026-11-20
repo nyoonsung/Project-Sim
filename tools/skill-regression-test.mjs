@@ -167,8 +167,8 @@ assert.ok(target.hp < before, "고속 돌진 경로에 있는 적에게 피해�
     const char = newCharacter(name);
     char.level = 120;
     char.cls = "archer";
-    const sent = [];
-    const session = { userId: id, role: "player", char, sent, send: (m) => sent.push(m), notice() {}, sendMe() {} };
+    const outbox = [];
+    const session = { userId: id, role: "player", char, outbox, send: (m) => outbox.push(m), notice() {}, sendMe() {} };
     const unit = makePlayerUnit(session);
     session.unit = unit;
     return { session, unit };
@@ -201,7 +201,7 @@ assert.ok(target.hp < before, "고속 돌진 경로에 있는 적에게 피해�
   three.unit.x = target.x + 1500;
   partyRoom.flush();
   for (const member of [one, two, three]) {
-    const snapshot = member.session.sent.filter((m) => typeof m === "string" && m.startsWith('{"t":"s"')).map((m) => JSON.parse(m)).at(-1);
+    const snapshot = member.session.outbox.filter((m) => typeof m === "string" && m.startsWith('{"t":"s"')).map((m) => JSON.parse(m)).at(-1);
     assert.ok(snapshot?.v?.some((e) => e.e === "dmg" && e.b === one.unit.id), "모든 파티원에게 첫 번째 공격의 피해 이벤트가 전송되어야 한다.");
     assert.ok(snapshot?.v?.some((e) => e.e === "dmg" && e.b === two.unit.id), "모든 파티원에게 두 번째 공격의 피해 이벤트가 전송되어야 한다.");
   }
