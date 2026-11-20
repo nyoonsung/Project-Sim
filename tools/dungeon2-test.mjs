@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import {
   BOSSES, D1_BOSS_DAMAGE_MULTIPLIER, D1_BOSS_HP_MULTIPLIER, D1_BOSS_HP_REDUCTION,
-  D1_FINAL_BOSS_DAMAGE_MULTIPLIER, D2_EXTREME_MULTIPLIER, D2_MONSTER_DAMAGE_MULTIPLIER, D2_MONSTER_STAT_MULTIPLIER, D2_BOSS_STAT_MULTIPLIER,
+  D1_FINAL_BOSS_DAMAGE_MULTIPLIER, D2_EXTREME_MULTIPLIER, D2_MONSTER_DAMAGE_MULTIPLIER, D2_MONSTER_STAT_MULTIPLIER, D2_BOSS_STAT_MULTIPLIER, D2_BOSS_SPEED_MULTIPLIER,
   DUNGEON2_MAX_FLOOR, DUNGEON2_ZONES, MONSTERS, ZONES,
   bossStats, floorKind, floorScale, monsterStats, zoneOf, effLevel,
 } from "../shared/zones.js";
@@ -26,7 +26,7 @@ const ok = (condition, label) => {
   assert.ok(Math.abs(d1.hp / top.hp - 2.5 * 100) < 1e-7);
   assert.ok(Math.abs(d1.dmg / top.dmg - 1.8 * 100) < 1e-7);
   assert.ok(d30.hp > d1.hp * 1.8 && d30.dmg > d1.dmg * 1.4);
-  assert.ok(d1.speed > top.speed);
+  assert.ok(d1.speed < top.speed);
   assert.equal(effLevel(1, 2), 102); assert.equal(effLevel(30, 2), 150); assert.equal(effLevel(45, 1), 45);
   for (const f of [1, 15, 30]) for (const id of zoneOf(f, 2).monsters) assert.equal(monsterStats(id, f, 1, 2).level, effLevel(f, 2));
   const top1 = monsterStats(zoneOf(100).monsters[0], 100, 1, 1);
@@ -124,6 +124,7 @@ ok(true, "제2 던전 몬스터·보스 능력치 산출");
   assert.equal(D2_MONSTER_DAMAGE_MULTIPLIER, 0.5);
   assert.equal(D2_MONSTER_STAT_MULTIPLIER, 1 / 150);
   assert.equal(D2_BOSS_STAT_MULTIPLIER, 0.2);
+  assert.equal(D2_BOSS_SPEED_MULTIPLIER, 0.8);
   const id = DUNGEON2_ZONES[0].monsters[0];
   const def = MONSTERS[id];
   const d2AvgHp = DUNGEON2_ZONES[0].monsters.reduce((sum, mid) => sum + MONSTERS[mid].hp, 0) / DUNGEON2_ZONES[0].monsters.length;
@@ -152,8 +153,9 @@ ok(true, "제2 던전 몬스터·보스 능력치 산출");
   assert.equal(bossUnit.hp, d2Boss.hp);
   assert.equal(bossUnit.atk, d2Boss.dmg);
   assert.ok(Math.abs(bossUnit.def / (6 + bossRoom.lvl * 2.2) - 0.2) < 1e-10);
+  assert.equal(bossUnit.speed, BOSSES[DUNGEON2_ZONES[0].boss].speed * D2_BOSS_SPEED_MULTIPLIER);
 }
-ok(true, "제2 던전 일반·정예 몬스터와 보스 HP·공격력·방어력은 현재의 1/5 / 이동속도·경험치 유지");
+ok(true, "제2 던전 몬스터·보스 HP·공격력·방어력은 현재의 1/5, 이동속도는 80% / 경험치 유지");
 
 // 드롭: 제2 던전 장비는 아이템 레벨 100, 소환된 몬스터는 아이템·결정 없음, 보관고 유물도 레벨 100
 {
