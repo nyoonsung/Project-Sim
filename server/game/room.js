@@ -75,6 +75,17 @@ export class Room {
 
   // ── 이벤트
   ev(e) { this.events.push(e); }
+  // 균열 망령의 순간이동 구체 효과는 방 전체에서 초당 최대 3회만 표시한다.
+  allowAbyssOrbFx(now = this.now) {
+    if (this.dungeon !== 2) return true;
+    if (now - (this.abyssOrbFxWindowAt ?? -Infinity) >= 1) {
+      this.abyssOrbFxWindowAt = now;
+      this.abyssOrbFxCount = 0;
+    }
+    if ((this.abyssOrbFxCount ?? 0) >= 3) return false;
+    this.abyssOrbFxCount = (this.abyssOrbFxCount ?? 0) + 1;
+    return true;
+  }
   aliveMonsters() { let n = 0; for (const u of this.units.values()) if (u.type === "m" && !u.dead && !u.dummy && u.team === "m") n++; return n + this.timers.filter((t) => t.spawn).length; }
   schedule(delay, fn) {
     const timer = { at: this.now + delay, fn };
