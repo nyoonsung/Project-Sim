@@ -5,6 +5,33 @@ const SH = BOSS_HIT.shrink; // 보스 공격은 표시된 범위보다 살짝 �
 import { dealDamage, applyStatus, isHardCC, moveMul, angDiff } from "./combat.js";
 
 const TAU = Math.PI * 2;
+const BOSS_GROUND_Y_SCALE = 0.75;
+
+// 보스 장판 예고는 지면 원근 때문에 세로 75% 타원으로 보인다.
+// 서버도 같은 좌표계에서 검사하고, 가장자리는 추가로 좁혀 예고 밖 피격을 막는다.
+export function bossGroundDistance(x, y, cx, cy) {
+  return Math.hypot(x - cx, (y - cy) / BOSS_GROUND_Y_SCALE);
+}
+export function bossCircleContains(x, y, cx, cy, radius, shrink = SH) {
+  return bossGroundDistance(x, y, cx, cy) <= Math.max(0, radius - shrink);
+}
+export function bossRingContains(x, y, cx, cy, inner, outer, shrink = SH) {
+  const d = bossGroundDistance(x, y, cx, cy);
+  return d >= inner + shrink && d <= outer - shrink;
+}
+export function bossConeContains(x, y, cx, cy, radius, angle, halfArc, shrink = SH) {
+  const dx = x - cx, dy = (y - cy) / BOSS_GROUND_Y_SCALE;
+  return Math.hypot(dx, dy) <= Math.max(0, radius - shrink)
+    && angDiff(Math.atan2(dy, dx), angle) <= halfArc;
+}
+function distanceToSegment(px, py, x0, y0, x1, y1) {
+  const dx = x1 - x0, dy = y1 - y0;
+  const t = Math.max(0, Math.min(1, ((px - x0) * dx + (py - y0) * dy) / (dx * dx + dy * dy || 1)));
+  return Math.hypot(px - x0 - dx * t, py - y0 - dy * t);
+}
+export function bossDashContains(x, y, x0, y0, x1, y1, width, shrink = SH) {
+  return distanceToSegment(x, y, x0, y0, x1, y1) <= Math.max(0, width / 2 - shrink);
+}
 
 // 제2 던전의 일반·정예 몬스터는 낮아진 능력치에 맞춰 예고 시간을 늘리고 연계 빈도를 낮춘다.
 export const D2_MOB_PATTERN = Object.freeze({
@@ -398,7 +425,7 @@ export function tickBoss(room, b, now) {
     const a = ang;
     room.addArea({ team: "m", shape: "cone", x: b.x, y: b.y, r: 70 + b.r * 0.5, ang: a, arc: 100, tel: 0.5, fire: (t0) => {
       room.ev({ e: "anim", id: b.id, a: "slash" });
-      for (const p of bossTargets(room)) if (Math.hypot(p.x - b.x, p.y - b.y) <= 70 + b.r * 0.5 - SH && angDiff(Math.atan2(p.y - b.y, p.x - b.x), a) <= (46 * Math.PI) / 180) hitTarget(room, b, p, 1, t0);
+      for (const p of bossTargets(room)) if (bossConeContains(p.x, p.y, b.x, b.y, 70 + b.r * 0.5, a, (46 * Math.PI) / 180)) hitTarget(room, b, p, 1, t0);
     } });
     b.pattern = { end: now + 0.6 };
     return;
@@ -436,7 +463,7 @@ function startPattern(room, b, p, t, now) {
       room.addArea({ team: "m", shape: "cone", x: b.x, y: b.y, r: p.range, ang: a, arc: p.arc, tel: p.tel, fire: (t0) => {
         room.ev({ e: "anim", id: b.id, a: "slash" });
         fxAt(p.fx ?? "melee/heavy-cleave", b.x + Math.cos(a) * 30, b.y + Math.sin(a) * 30);
-        hitIn((q) => Math.hypot(q.x - b.x, q.y - b.y) <= p.range - SH && angDiff(Math.atan2(q.y - b.y, q.x - b.x), a) <= (p.arc * Math.PI) / 360 - 0.06, pw, t0);
+        hitIn((q) => bossConeContains(q.x, q.y, b.x, b.y, p.range, a, (p.arc * Math.PI) / 360 - 0.06), pw, t0);
       } });
       break;
     }
@@ -445,7 +472,7 @@ function startPattern(room, b, p, t, now) {
         room.ev({ e: "anim", id: b.id, a: "smash" });
         fxAt(p.fx ?? "impacts/ground-slam", b.x, b.y);
         room.ev({ e: "shake", v: 4 });
-        hitIn((q) => Math.hypot(q.x - b.x, q.y - b.y) <= p.radius - SH, pw, t0, { unblockable: true, status: p.freeze ? { type: "freeze", dur: 0.8 } : null });
+        hitIn((q) => bossCircleContains(q.x, q.y, b.x, b.y, p.radius), pw, t0, { unblockable: true, status: p.freeze ? { type: "freeze", dur: 0.8 } : null });
       } });
       break;
     }
@@ -453,7 +480,7 @@ function startPattern(room, b, p, t, now) {
       room.addArea({ team: "m", shape: "ring", x: b.x, y: b.y, r: p.inner, r2: p.outer, tel: p.tel, fire: (t0) => {
         fxAt(p.fx ?? "impacts/ground-slam", b.x, b.y, 1.2);
         room.ev({ e: "shake", v: 5 });
-        hitIn((q) => { const d = Math.hypot(q.x - b.x, q.y - b.y); return d >= p.inner + SH && d <= p.outer - SH; }, pw, t0, { unblockable: true });
+        hitIn((q) => { return bossRingContains(q.x, q.y, b.x, b.y, p.inner, p.outer); }, pw, t0, { unblockable: true });
       } });
       break;
     }
@@ -469,7 +496,7 @@ function startPattern(room, b, p, t, now) {
           const ox = b.x, oy = b.y;
           moveToward(room, b, a, d / 0.05, 0.05);
           left -= d;
-          for (const q of bossTargets(room)) if (!hit.has(q.id) && Math.hypot(q.x - b.x, q.y - b.y) < b.r * 0.8 + p.width / 4) { hit.add(q.id); hitTarget(room, b, q, pw, room.now); }
+          for (const q of bossTargets(room)) if (!hit.has(q.id) && bossDashContains(q.x, q.y, ox, oy, b.x, b.y, p.width)) { hit.add(q.id); hitTarget(room, b, q, pw, room.now); }
           if (left > 0 && Math.hypot(b.x - ox, b.y - oy) > 2) room.schedule(0.05, step);
           else { fxAt("impacts/heavy-landing", b.x, b.y); room.ev({ e: "shake", v: 3 }); }
         };
@@ -525,7 +552,7 @@ function startPattern(room, b, p, t, now) {
       pts.forEach(([x, y], i) => {
         room.schedule(i * 0.12, () => !b.dead && room.addArea({ team: "m", shape: "c", x, y, r: p.radius, tel: p.tel, fire: (t0) => {
           fxAt(p.fx, x, y, 0.5);
-          hitIn((q) => Math.hypot(q.x - x, q.y - y) <= p.radius - SH, pw, t0, { unblockable: true });
+          hitIn((q) => bossCircleContains(q.x, q.y, x, y, p.radius), pw, t0, { unblockable: true });
         } }));
       });
       b.pattern.end = now + 1.2;
@@ -553,7 +580,7 @@ function startPattern(room, b, p, t, now) {
         if (circleHitsWall(room.map, x, y, 6)) continue;
         room.addArea({ team: "m", shape: "c", x, y, r: p.radius, tel: room.dungeon === 2 ? 0.72 : 0.9, fire: () => {
           room.addZone({ team: "m", owner: b.id, x, y, r: p.radius, dur: p.dur, interval: 0.5, fx: p.fx, tick: (t0, z) => {
-            for (const q2 of bossTargets(room)) if (Math.hypot(q2.x - z.x, q2.y - z.y) <= z.r - SH) hitTarget(room, b, q2, p.pow, t0, { unblockable: true });
+            for (const q2 of bossTargets(room)) if (bossCircleContains(q2.x, q2.y, z.x, z.y, z.r)) hitTarget(room, b, q2, p.pow, t0, { unblockable: true });
           } });
         } });
       }
@@ -564,15 +591,15 @@ function startPattern(room, b, p, t, now) {
       room.addArea({ team: "m", shape: "c", x: b.x, y: b.y, r: p.radius, tel: p.tel, fire: (t0) => {
         fxAt("explosions/implosion", b.x, b.y, 1);
         for (const q of bossTargets(room)) {
-          const d = Math.hypot(q.x - b.x, q.y - b.y);
-          if (d > p.radius) continue;
+          const d = bossGroundDistance(q.x, q.y, b.x, b.y);
+          if (!bossCircleContains(q.x, q.y, b.x, b.y, p.radius, 0)) continue;
           const a = Math.atan2(b.y - q.y, b.x - q.x), pull = Math.max(0, d - b.r - 30);
           [q.x, q.y] = moveCircle(room.map, q.x, q.y, Math.cos(a) * pull, Math.sin(a) * pull, q.r);
           q.session.send({ t: "tp", x: q.x, y: q.y });
         }
         room.addArea({ team: "m", shape: "c", x: b.x, y: b.y, r: 90, tel: 0.7, fire: (t1) => {
           fxAt("shadow/dark-explosion", b.x, b.y, 0.6);
-          hitIn((q) => Math.hypot(q.x - b.x, q.y - b.y) <= 90 - SH, pw, t1, { unblockable: true });
+          hitIn((q) => bossCircleContains(q.x, q.y, b.x, b.y, 90), pw, t1, { unblockable: true });
         } });
       } });
       b.pattern.end = now + p.tel + 1.0;
@@ -588,7 +615,7 @@ function startPattern(room, b, p, t, now) {
             const x = q.x, y = q.y;
             room.addArea({ team: "m", shape: "c", x, y, r: p.radius, tel: p.tel, fire: (t0) => {
               fxAt(p.fx, x, y, 0.55);
-              hitIn((q2) => Math.hypot(q2.x - x, q2.y - y) <= p.radius - SH, pw, t0, { unblockable: true });
+              hitIn((q2) => bossCircleContains(q2.x, q2.y, x, y, p.radius), pw, t0, { unblockable: true });
             } });
           }
         });
@@ -605,7 +632,7 @@ function startPattern(room, b, p, t, now) {
           const a = rot + (k * Math.PI) / 2;
           room.addArea({ team: "m", shape: "r", x: b.x, y: b.y, ang: a, l: p.len, w: p.width, tel: p.tel, fire: (t0) => {
             fxAt(p.fx, b.x + Math.cos(a) * p.len * 0.5, b.y + Math.sin(a) * p.len * 0.5, 0.7);
-            hitIn((q) => { const dx = q.x - b.x, dy = q.y - b.y, al = dx * Math.cos(a) + dy * Math.sin(a), ac = Math.abs(-dx * Math.sin(a) + dy * Math.cos(a)); return al > 0 && al < p.len && ac < p.width / 2 - 2; }, pw, t0, { unblockable: true });
+            hitIn((q) => { const dx = q.x - b.x, dy = q.y - b.y, al = dx * Math.cos(a) + dy * Math.sin(a), ac = Math.abs(-dx * Math.sin(a) + dy * Math.cos(a)); return al > SH && al < p.len - SH && ac < p.width / 2 - SH; }, pw, t0, { unblockable: true });
           } });
         }
       });
@@ -618,11 +645,11 @@ function startPattern(room, b, p, t, now) {
       // 안팎 폭발: 먼저 가운데 큰 원(밖으로) → 이어서 바깥 고리(다시 안으로)
       room.addArea({ team: "m", shape: "c", x: b.x, y: b.y, r: p.inner, tel: p.tel, fire: (t0) => {
         room.ev({ e: "anim", id: b.id, a: "smash" }); fxAt("impacts/ground-slam", b.x, b.y); room.ev({ e: "shake", v: 4 });
-        hitIn((q) => Math.hypot(q.x - b.x, q.y - b.y) <= p.inner - SH, pw, t0, { unblockable: true });
+        hitIn((q) => bossCircleContains(q.x, q.y, b.x, b.y, p.inner), pw, t0, { unblockable: true });
       } });
       room.schedule(p.tel * 0.55, () => !b.dead && room.addArea({ team: "m", shape: "ring", x: b.x, y: b.y, r: p.inner, r2: p.outer, tel: p.tel, fire: (t0) => {
         fxAt(p.fx ?? "shadow/dark-explosion", b.x, b.y, 1.2); room.ev({ e: "shake", v: 5 });
-        hitIn((q) => { const d = Math.hypot(q.x - b.x, q.y - b.y); return d >= p.inner + SH && d <= p.outer - SH; }, pw, t0, { unblockable: true });
+        hitIn((q) => { return bossRingContains(q.x, q.y, b.x, b.y, p.inner, p.outer); }, pw, t0, { unblockable: true });
       } }));
       b.pattern.end = now + p.tel * 1.55 + 0.3;
       break;
@@ -653,7 +680,7 @@ function startPattern(room, b, p, t, now) {
         const sx = b.x + nx * off - Math.cos(a) * 60, sy = b.y + ny * off - Math.sin(a) * 60;
         room.addArea({ team: "m", shape: "r", x: sx, y: sy, ang: a, l: p.len, w: p.width - 4, tel: p.tel, fire: (t0) => {
           fxAt(p.fx, sx + Math.cos(a) * p.len * 0.5, sy + Math.sin(a) * p.len * 0.5, 0.6);
-          hitIn((q) => { const dx = q.x - sx, dy = q.y - sy, al = dx * Math.cos(a) + dy * Math.sin(a), ac = Math.abs(-dx * Math.sin(a) + dy * Math.cos(a)); return al > 0 && al < p.len && ac < (p.width - 4) / 2 - 2; }, pw, t0, { unblockable: true });
+          hitIn((q) => { const dx = q.x - sx, dy = q.y - sy, al = dx * Math.cos(a) + dy * Math.sin(a), ac = Math.abs(-dx * Math.sin(a) + dy * Math.cos(a)); return al > SH && al < p.len - SH && ac < (p.width - 4) / 2 - SH; }, pw, t0, { unblockable: true });
         } });
       }
       b.pattern.end = now + p.tel + 0.3;
@@ -674,7 +701,7 @@ function startPattern(room, b, p, t, now) {
       room.addArea({ team: "m", shape: "ring", x: sx, y: sy, r: p.safe, r2: 1400, tel: p.tel, fire: (t0) => {
         fxAt(p.fx, b.x, b.y, 1.6);
         room.ev({ e: "shake", v: 8 });
-        hitIn((q) => Math.hypot(q.x - sx, q.y - sy) > p.safe + q.r * 0.5, pw, t0, { unblockable: true });
+        hitIn((q) => bossGroundDistance(q.x, q.y, sx, sy) > p.safe + q.r * 0.5, pw, t0, { unblockable: true });
       } });
       b.pattern.end = now + p.tel + 0.5;
       break;
@@ -690,7 +717,7 @@ function startPattern(room, b, p, t, now) {
         const x = horiz ? A.x0 : c, y = horiz ? c : A.y0, ang = horiz ? 0 : Math.PI / 2, len = horiz ? W : H;
         room.addArea({ team: "m", shape: "r", x, y, ang, l: len, w: w - 2, tel: p.tel, fire: (t0) => {
           fxAt(p.fx, x + Math.cos(ang) * len * 0.5, y + Math.sin(ang) * len * 0.5, 0.6);
-          hitIn((q) => (horiz ? Math.abs(q.y - c) < w / 2 - 3 : Math.abs(q.x - c) < w / 2 - 3), pw, t0, { unblockable: true });
+          hitIn((q) => (horiz ? Math.abs(q.y - c) < (w - 2) / 2 - SH : Math.abs(q.x - c) < (w - 2) / 2 - SH), pw, t0, { unblockable: true });
         } });
       });
       const n = p.n, off = Math.random() < 0.5 ? 0 : 1;
@@ -717,7 +744,7 @@ function startPattern(room, b, p, t, now) {
             const d = Math.min(left, 40), ox = b.x, oy = b.y;
             moveToward(room, b, a, d / 0.05, 0.05);
             left -= d;
-            for (const q of bossTargets(room)) if (!hit.has(q.id) && Math.hypot(q.x - b.x, q.y - b.y) < b.r * 0.8 + p.width / 4) { hit.add(q.id); hitTarget(room, b, q, pw, room.now); }
+            for (const q of bossTargets(room)) if (!hit.has(q.id) && bossDashContains(q.x, q.y, ox, oy, b.x, b.y, p.width)) { hit.add(q.id); hitTarget(room, b, q, pw, room.now); }
             if (left > 0 && Math.hypot(b.x - ox, b.y - oy) > 2) room.schedule(0.05, step);
             else { fxAt("impacts/heavy-landing", b.x, b.y); room.ev({ e: "shake", v: 3 }); room.schedule(0.15, () => go(i + 1)); }
           };
@@ -739,7 +766,7 @@ function startPattern(room, b, p, t, now) {
           if (circleHitsWall(room.map, x, y, 6)) break;
           room.schedule(k * p.gap, () => !b.dead && room.addArea({ team: "m", shape: "c", x, y, r: p.radius, tel: p.tel, fire: (t0) => {
             fxAt(p.fx, x, y, 0.55);
-            hitIn((q) => Math.hypot(q.x - x, q.y - y) <= p.radius - SH, pw, t0, { unblockable: true });
+            hitIn((q) => bossCircleContains(q.x, q.y, x, y, p.radius), pw, t0, { unblockable: true });
           } }));
         }
       });
@@ -756,16 +783,17 @@ function startPattern(room, b, p, t, now) {
         room.schedule(k * 0.45, () => !b.dead && room.addArea({ team: "m", shape: k === 0 ? "c" : "ring", x: b.x, y: b.y, r: k === 0 ? r1 : r0, r2: k === 0 ? 0 : r1, tel: p.tel, fire: (t0) => {
           fxAt(p.fx, b.x, b.y, 0.6 + k * 0.35);
           room.ev({ e: "shake", v: 3 });
-          hitIn((q) => { const d = Math.hypot(q.x - b.x, q.y - b.y); return d >= (k === 0 ? 0 : r0 + SH) && d <= r1 - SH; }, pw, t0, { unblockable: true });
+          hitIn((q) => { const d = bossGroundDistance(q.x, q.y, b.x, b.y); return d >= (k === 0 ? 0 : r0 + SH) && d <= r1 - SH; }, pw, t0, { unblockable: true });
         } }));
       }
       b.pattern.end = now + (p.n - 1) * 0.45 + p.tel + 0.3;
       break;
     }
     case "beam": {
-      const a0 = Math.atan2(t.y - b.y, t.x - b.x);
+      const originY = b.y - 16; // bbeam 및 화면 예고와 실제 광선의 시작점을 통일
+      const a0 = Math.atan2(t.y - originY, t.x - b.x);
       const dir = Math.random() < 0.5 ? 1 : -1, rot = (70 * Math.PI) / 180 * dir, len = 420;
-      room.addArea({ team: "m", shape: "r", x: b.x, y: b.y, ang: a0, l: len, w: p.width, tel: 0.9, fire: () => {} });
+      room.addArea({ team: "m", shape: "r", x: b.x, y: originY, ang: a0, l: len, w: p.width, tel: 0.9, fire: () => {} });
       room.ev({ e: "bbeam", id: b.id, a: Math.round(a0 * 1000), rot: Math.round(rot * 1000), d: p.dur, w: p.width, l: len, fx: p.fx, at: 0.9 });
       const t0 = now + 0.9;
       for (let k = 0; k < p.dur / 0.2; k++) {
@@ -773,9 +801,9 @@ function startPattern(room, b, p, t, now) {
           if (b.dead || isHardCC(b)) return;
           const a = a0 + rot * (tn - t0);
           hitIn((q) => {
-            const dx = q.x - b.x, dy = q.y - b.y;
+            const dx = q.x - b.x, dy = q.y - originY;
             const along = dx * Math.cos(a) + dy * Math.sin(a), across = Math.abs(-dx * Math.sin(a) + dy * Math.cos(a));
-            return along > 0 && along < len && across < p.width / 2 - 2;
+            return along > SH && along < len - SH && across < p.width / 2 - SH;
           }, pw, tn, { unblockable: true });
         });
       }

@@ -232,19 +232,19 @@ export const diffMul = (f) => ({ hp: 1 + 0.025 * (f - 1), dmg: 1 + 0.016 * (f - 
 export const LATE_EASE = (f) => (f >= 95 ? 0.75 : 1);
 // ── 제2 던전 난이도
 // 제2 던전 n층 = 실제 레벨 100 + n×5/3 (1층 102 → 30층 150).
-// 현재 완화 후 이동 속도는 이전 제2 던전 기준으로 복구한다.
-export const D2_HARD = { hp: 2.5, dmg: 1.8, hpStep: 0.03, dmgStep: 0.018, speed: 1.1 };
+// 제2 던전 몬스터 이동 속도도 완화했던 값으로 되돌린다.
+export const D2_HARD = { hp: 2.5, dmg: 1.8, hpStep: 0.03, dmgStep: 0.018, speed: 0.88 };
 export const D2_EXTREME_MULTIPLIER = 100;
 export const D1_BOSS_HP_MULTIPLIER = 11;
 export const D1_BOSS_HP_REDUCTION = 0.9;
 export const D1_BOSS_DAMAGE_MULTIPLIER = 10;
 export const D1_FINAL_BOSS_DAMAGE_MULTIPLIER = 1.2;
 export const D2_MONSTER_DAMAGE_MULTIPLIER = 0.5;
-// 제2 던전 몬스터의 현재 HP·공격력·방어력을 직전 완화 수치의 4배로 상향(완화 전 밸런스의 약 80%).
-// 보스도 같은 비율로 상향하며 이동 속도는 완화 전 수준으로 복구한다. 경험치·보상은 유지.
-export const D2_MONSTER_STAT_MULTIPLIER = 4 / 150;
-export const D2_BOSS_STAT_MULTIPLIER = 0.8;
-export const D2_BOSS_SPEED_MULTIPLIER = 1;
+// 제2 던전 일반·정예 몬스터는 완화된 HP·공격력·방어력을 사용한다.
+// 보스도 HP·공격력·방어력을 1/5로 낮추고 이동 속도를 80%로 조정한다. 경험치·보상은 유지.
+export const D2_MONSTER_STAT_MULTIPLIER = 1 / 150;
+export const D2_BOSS_STAT_MULTIPLIER = 0.2;
+export const D2_BOSS_SPEED_MULTIPLIER = 0.8;
 export const d2Level = (floor) => 100 + Math.round((floor * 5) / 3);
 /** 그 층의 실제 레벨 (제1 던전은 층 = 레벨) */
 export const effLevel = (floor, dungeon = 1) => (dungeon === 2 ? d2Level(floor) : floor);
