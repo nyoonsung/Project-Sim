@@ -267,12 +267,12 @@ async function startGame() {
   bindInput();
   watchUpdates({ inTown: () => G.kind === "town", show: (t) => HUD.center(t), notice: (t) => HUD.toast(t, "legend") });
   setInterval(inputTick, 50);
+  // 전투 HUD는 애니메이션 프레임마다 갱신할 필요가 없으므로 초당 10회로 제한한다.
+  setInterval(() => { HUD.updateSkillbar(); HUD.updateBoss(); }, 100);
   setInterval(() => { HUD.drawMinimap(); HUD.updateParty(); HUD.updateInteract(); }, 200);
   const loop = () => {
     if (G.touch) touchAimTick(); else updateMouseWorld();
     G.renderer.frame();
-    HUD.updateSkillbar();
-    HUD.updateBoss();
     requestAnimationFrame(loop);
   };
   loop();

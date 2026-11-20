@@ -13,7 +13,12 @@ import { addTrauma } from "../feel.js";
 const now = () => performance.now() / 1000;
 const GT = { 일반: 0, 희귀: 1, 영웅: 2, 전설: 3, 신화: 3 };
 const FX = { rings: [], runes: [], pillars: [], streaks: [], motes: [], stars: [], sweeps: [] };
-export const SFX_LIMITS = { motes: 420 };
+export const SFX_LIMITS = { motes: 420, rings: 100, runes: 56, pillars: 36, streaks: 140, stars: 64, sweeps: 80 };
+function pushFx(kind, effect) {
+  const list = FX[kind], limit = SFX_LIMITS[kind] ?? 64;
+  if (list.length >= limit) list.shift();
+  list.push(effect);
+}
 
 const beams = new Map();
 function beam(col) {
@@ -48,7 +53,7 @@ function burst(x, y, n, cols, spd = 140, opt = {}) {
       life: (opt.life ?? 0.45) * (0.6 + Math.random() * 0.8), c: cols[(Math.random() * cols.length) | 0], s: Math.random() < 0.25 ? 3 : 2, tw: Math.random() < 0.3 });
   }
 }
-function ring(x, y, r0, r1, col, life, w = 2, k = 0.5) { FX.rings.push({ x, y, r0, r1, col, life, w, k, t0: now() }); }
+function ring(x, y, r0, r1, col, life, w = 2, k = 0.5) { pushFx("rings", { x, y, r0, r1, col, life, w, k, t0: now() }); }
 
 // 스킬 이름으로 속성 색 (불·얼음·번개·독·빛·어둠·바람·땅)
 const ELEM = [
@@ -75,7 +80,7 @@ export function castFx(e, ent) {
   if (e.id !== G.you) { const k = othersScale(); if (k < 0.5) { tier = Math.min(tier, k < 0.3 ? 1 : 2); pt = 0; } if (Math.random() > k + 0.2) return; }
   // 근접 공격: 실제로 닿는 거리(사거리 + 적 몸 크기)에 휘두름 궤적을 그림 → 보이는 것 = 맞는 범위
   const mel = (sk.steps ?? []).find((s) => s.do === "melee");
-  if (mel && ent) FX.sweeps.push({ id: e.id, r: mel.range * PLAYER_HIT.melee + PLAYER_HIT.meleeReach, arc: (mel.arc ?? 60) + PLAYER_HIT.meleeArc, a: (e.a ?? 0) / 1000, t0: now(), life: 0.18, col: sk.kind === "basic" ? "#ffffff" : skillColor(sk) });
+  if (mel && ent) pushFx("sweeps", { id: e.id, r: mel.range * PLAYER_HIT.melee + PLAYER_HIT.meleeReach, arc: (mel.arc ?? 60) + PLAYER_HIT.meleeArc, a: (e.a ?? 0) / 1000, t0: now(), life: 0.18, col: sk.kind === "basic" ? "#ffffff" : skillColor(sk) });
   const el = elemColors(sk);
   const col = el?.[0] ?? skillColor(sk), hi = el?.[1] ?? lighten(col, 0.55);
   const x = ent?.rx ?? e.x, y = ent?.ry ?? e.y;
@@ -91,7 +96,7 @@ export function castFx(e, ent) {
   // 기본 공격: 앞쪽 섬광 + 작은 불꽃 (숙련도가 오르면 더 크게)
   if (sk.kind === "basic") {
     burst(x + Math.cos(aim) * 16, y - 12 + Math.sin(aim) * 10, 4 + pt * 3, pt >= 2 ? ["#fff6c0", "#ffd35a", hi] : [hi, "#ffffff", col], 120, { dir: aim, spread: 0.9, life: 0.25 });
-    if (ranged) FX.streaks.push({ x, y: y - 14, x2: x + Math.cos(aim) * 40, y2: y - 14 + Math.sin(aim) * 40, col, hi, t0: now(), life: 0.12, w: 2 });
+    if (ranged) pushFx("streaks", { x, y: y - 14, x2: x + Math.cos(aim) * 40, y2: y - 14 + Math.sin(aim) * 40, col, hi, t0: now(), life: 0.12, w: 2 });
     addGlow(x + Math.cos(aim) * 14, y - 12, 30 + pt * 10, pt >= 2 ? "#ffd35a" : col, 0.18 + pt * 0.05);
     return;
   }
@@ -100,14 +105,14 @@ export function castFx(e, ent) {
   if (kinds.has("dash") || kinds.has("blink")) {
     // 잔상 줄기 + 출발점 먼지
     const dist = (sk.steps.find((s) => s.dist)?.dist ?? 100);
-    FX.streaks.push({ x, y: y - 10, x2: x + Math.cos(aim) * dist, y2: y - 10 + Math.sin(aim) * dist, col, hi, t0: now(), life: 0.3, w: 4 + tier });
+    pushFx("streaks", { x, y: y - 10, x2: x + Math.cos(aim) * dist, y2: y - 10 + Math.sin(aim) * dist, col, hi, t0: now(), life: 0.3, w: 4 + tier });
     burst(x, y - 4, 8 + tier * 3, [hi, "#ffffff", col], 90, { dir: aim + Math.PI, spread: 1.2, life: 0.4 });
   }
   if (kinds.has("buff") || kinds.has("shield") || kinds.has("parry") || kinds.has("taunt")) {
     // 위로 솟는 오라 + 두 겹 고리
     ring(x, y, 8, 34 + tier * 6, hi, 0.5, 2, 0.5); ring(x, y, 4, 22 + tier * 4, col, 0.4, 3, 0.5);
     burst(x, y - 6, 10 + tier * 4, [col, hi, "#ffffff"], 50, { life: 0.9, lift: 80, g: -40 });
-    FX.pillars.push({ x, y, col, hi, t0: now(), life: 0.45, w: 8 + tier * 3 });
+    pushFx("pillars", { x, y, col, hi, t0: now(), life: 0.45, w: 8 + tier * 3 });
   }
   if (kinds.has("heal")) {
     const hc = ["#8aff9a", "#e0ffe0", "#ffffff"];
@@ -122,29 +127,29 @@ export function castFx(e, ent) {
   if (ranged) {
     // 발사 섬광 + 궤적
     burst(x + Math.cos(aim) * 14, y - 14 + Math.sin(aim) * 8, 6 + tier * 3, [hi, "#ffffff", col], 150, { dir: aim, spread: 0.7, life: 0.25 });
-    FX.streaks.push({ x, y: y - 14, x2: x + Math.cos(aim) * Math.min(d, range), y2: y - 14 + Math.sin(aim) * Math.min(d, range), col, hi, t0: now(), life: 0.18, w: 1 + tier });
+    pushFx("streaks", { x, y: y - 14, x2: x + Math.cos(aim) * Math.min(d, range), y2: y - 14 + Math.sin(aim) * Math.min(d, range), col, hi, t0: now(), life: 0.18, w: 1 + tier });
   }
   if (kinds.has("circle") || kinds.has("zone") || kinds.has("area") || kinds.has("device")) {
-    FX.runes.push({ x: tx, y: ty, r: 22 + tier * 6, col, hi, t0: now(), life: 0.6, n: 6 + tier * 2 });
+    pushFx("runes", { x: tx, y: ty, r: 22 + tier * 6, col, hi, t0: now(), life: 0.6, n: 6 + tier * 2 });
   }
   // 1단계(희귀~): 발밑 충격파
   ring(x, y, 6, 30 + tier * 9 + pt * 6, col, 0.35 + tier * 0.05, 2);
   addGlow(x, y - 8, 60 + tier * 25, col, 0.25 + tier * 0.08);
   burst(x, y - 10, 5 + tier * 5 + pt * 6, [col, hi, "#ffffff"], 110 + tier * 25, { life: 0.4 + tier * 0.06 });
   // 2단계(영웅~): 회전 룬 진 + 궤적 섬광
-  if (tier >= 2 || pt >= 1) FX.runes.push({ x, y, r: 26 + tier * 6, col, hi, t0: now(), life: 0.55 + tier * 0.1, n: 6 + tier * 2 });
-  if (ranged && tier >= 2) FX.streaks.push({ x, y: y - 14, x2: x + Math.cos(aim) * Math.min(d, range), y2: y - 14 + Math.sin(aim) * Math.min(d, range), col, hi, t0: now(), life: 0.22, w: 2 + tier });
+  if (tier >= 2 || pt >= 1) pushFx("runes", { x, y, r: 26 + tier * 6, col, hi, t0: now(), life: 0.55 + tier * 0.1, n: 6 + tier * 2 });
+  if (ranged && tier >= 2) pushFx("streaks", { x, y: y - 14, x2: x + Math.cos(aim) * Math.min(d, range), y2: y - 14 + Math.sin(aim) * Math.min(d, range), col, hi, t0: now(), life: 0.22, w: 2 + tier });
   if (areaAt && tier >= 1) { ring(tx, ty, 4, 34 + tier * 12, col, 0.5, 3, 0.5); ring(tx, ty, 2, 20 + tier * 8, hi, 0.4, 1.5, 0.5); }
   // 3단계(전설~): 빛 기둥 + 두 겹 고리 + 화면 흔들림
   if (tier >= 3) {
-    FX.pillars.push({ x: tx, y: ty, col, hi, t0: now(), life: 0.55 + (tier - 3) * 0.25, w: 14 + (tier - 3) * 10 });
+    pushFx("pillars", { x: tx, y: ty, col, hi, t0: now(), life: 0.55 + (tier - 3) * 0.25, w: 14 + (tier - 3) * 10 });
     ring(tx, ty, 10, 70 + (tier - 3) * 30, "#ffffff", 0.5, 2, 0.45);
     burst(tx, ty - 20, 18 + (tier - 3) * 14, [hi, "#ffffff", col, "#ffe08a"], 220, { life: 0.7, lift: 60 });
     addGlow(tx, ty - 20, 150 + (tier - 3) * 60, col, 0.55);
     if (mine) addTrauma(tier >= 4 ? 0.5 : 0.35);
   } else if (tier >= 2 && mine) addTrauma(0.18);
   // 4단계(궁극기): 사방으로 뻗는 빛살 별
-  if (tier >= 4) FX.stars.push({ x: tx, y: ty - 18, col, hi, t0: now(), life: 0.7, n: 12 });
+  if (tier >= 4) pushFx("stars", { x: tx, y: ty - 18, col, hi, t0: now(), life: 0.7, n: 12 });
   // 숙련 Lv.5: 푸른 잔광, Lv.10: 황금 오라
   if (pt >= 1) burst(x, y - 18, 6, pt >= 2 ? ["#ffd35a", "#fff6c0", "#ffb347"] : ["#8ae0ff", "#d0f4ff"], 60, { life: 0.8, lift: 70, g: -30 });
   if (pt >= 2) { ring(x, y, 4, 46, "#ffd35a", 0.6, 2, 0.5); addGlow(x, y - 10, 90, "#ffb347", 0.35); }
@@ -161,24 +166,43 @@ export function hitFx(ent, e) {
   const col = el?.[0] ?? skillColor(sk), hi = el?.[1] ?? lighten(col, 0.6);
   burst(ent.rx, ent.ry - 14, 4 + tier * 3 + (e.c ? 6 : 0), [col, hi, "#ffffff"], 150 + tier * 20, { life: 0.35 });
   if (tier >= 3 || e.c) ring(ent.rx, ent.ry - 2, 4, 22 + tier * 4, e.c ? "#ffe08a" : col, 0.28, 2, 0.5);
-  if (e.c && tier >= 3) FX.stars.push({ x: ent.rx, y: ent.ry - 16, col: "#ffe08a", hi: "#ffffff", t0: now(), life: 0.3, n: 8, small: true });
+  if (e.c && tier >= 3) pushFx("stars", { x: ent.rx, y: ent.ry - 16, col: "#ffe08a", hi: "#ffffff", t0: now(), life: 0.3, n: 8, small: true });
   addGlow(ent.rx, ent.ry - 12, 36 + tier * 10, col, 0.25 + (e.c ? 0.2 : 0));
 }
 
 /** 숙련도 레벨업: 황금 기둥 + 별빛 */
 export function profUpFx(e, ent) {
   const x = ent?.rx ?? e.x, y = ent?.ry ?? e.y, big = e.lv >= 5;
-  FX.pillars.push({ x, y, col: big ? "#ffb347" : "#8ab0ff", hi: "#ffffff", t0: now(), life: big ? 1.1 : 0.7, w: big ? 20 : 12 });
+  pushFx("pillars", { x, y, col: big ? "#ffb347" : "#8ab0ff", hi: "#ffffff", t0: now(), life: big ? 1.1 : 0.7, w: big ? 20 : 12 });
   ring(x, y, 6, big ? 80 : 50, big ? "#ffd35a" : "#9ad0ff", 0.8, 3, 0.45);
   burst(x, y - 24, big ? 40 : 20, big ? ["#ffd35a", "#fff6c0", "#ffffff", "#ffb347"] : ["#9ad0ff", "#ffffff"], 170, { life: 1, lift: 90, g: 20 });
   addGlow(x, y - 20, big ? 200 : 120, big ? "#ffb347" : "#8ab0ff", 0.6);
 }
 
 export function tickSkillFx(dt) {
-  for (const p of FX.motes) { p.t += dt; p.x += p.vx * dt; p.y += p.vy * dt; p.vy += p.g * dt; p.vx *= 1 - 3 * dt; }
-  if (FX.motes.length) FX.motes = FX.motes.filter((p) => p.t < p.life);
+  // 모트는 제자리에서 압축해 만료 목록을 정리한다(매 프레임 새 배열 생성 방지).
+  let write = 0;
+  for (let i = 0; i < FX.motes.length; i++) {
+    const p = FX.motes[i];
+    p.t += dt; p.x += p.vx * dt; p.y += p.vy * dt; p.vy += p.g * dt; p.vx *= 1 - 3 * dt;
+    if (p.t < p.life) FX.motes[write++] = p;
+  }
+  FX.motes.length = Math.min(write, SFX_LIMITS.motes);
   const t = now();
-  for (const k of ["rings", "runes", "pillars", "streaks", "stars", "sweeps"]) if (FX[k].length) FX[k] = FX[k].filter((o) => t - o.t0 < o.life);
+  for (const key of ["rings", "runes", "pillars", "streaks", "stars", "sweeps"]) {
+    const list = FX[key], limit = SFX_LIMITS[key] ?? 64;
+    let kept = 0;
+    for (let i = 0; i < list.length; i++) {
+      const effect = list[i];
+      if (t - effect.t0 < effect.life) list[kept++] = effect;
+    }
+    if (kept > limit) {
+      const excess = kept - limit;
+      for (let i = 0; i < limit; i++) list[i] = list[i + excess];
+      kept = limit;
+    }
+    list.length = kept;
+  }
 }
 
 export function drawSkillFx(ctx, cx, cy) {
