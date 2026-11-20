@@ -175,10 +175,10 @@ ok(true, "제2 던전 몬스터·보스 능력치 1/5 완화와 이동속도 조
 }
 ok(true, "제2 던전 드롭 레벨 100 · 소환물 드롭 없음 · 유물 레벨 100");
 
-// 직업 피해 배율: 대장장이는 일반 공격·장치 공격의 최종 피해가 0.7배가 된다.
-assert.equal(CLASS_DMG.smith, 0.7);
-assert.equal(CLASS_DMG.archer, 1.8);
-ok(true, "대장장이 피해량 30% 감소");
+// 직업 피해 배율: 대장장이는 탱커 역할을 유지하면서 피해 기여도가 상향되고, 궁수는 단일 화력이 약 10% 낮아졌다.
+assert.equal(CLASS_DMG.smith, 0.9);
+assert.equal(CLASS_DMG.archer, 1.62);
+ok(true, "대장장이 피해 기여도 상향 · 궁수 단일 피해량 10% 감소");
 
 // 성직자 신규 광역기 4종이 실제 서버 판정용 area 단계·큰 반경·강한 계수를 가진다.
 for (const id of ["pr_halo", "pr_sanctum", "pr_radiance", "pr_apocalypse"]) {
