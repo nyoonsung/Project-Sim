@@ -17,21 +17,22 @@ const CRIT_POINTS = 180;
 const DAMAGE_POINTS = 447 - CRIT_POINTS;
 
 
-// 기본 체력 배율: 검사·도적·마법사 소폭 상향. 방어 배율은 그대로 유지한다.
+// 기본 체력 배율: 검사·도적·마법사는 소폭 상향. 검사는 체력보다 방어를 더 보강한다.
 {
   const expected = {
-    sword: { hpMul: 1.24, defMul: 1.1, hpAtLv10: 422 },
-    rogue: { hpMul: 0.88, defMul: 0.85, hpAtLv10: 299 },
-    mage: { hpMul: 1.03, defMul: 0.9, hpAtLv10: 350 },
+    sword: { hpMul: 1.20, defMul: 1.18, hpAtLv10: 408, defAtLv10: 32 },
+    rogue: { hpMul: 0.88, defMul: 0.85, hpAtLv10: 299, defAtLv10: 23 },
+    mage: { hpMul: 1.03, defMul: 0.9, hpAtLv10: 350, defAtLv10: 24 },
   };
   for (const [cls, exp] of Object.entries(expected)) {
     assert.equal(CLASS_INFO[cls].hpMul, exp.hpMul, `${cls}: base HP multiplier`);
-    assert.equal(CLASS_INFO[cls].defMul, exp.defMul, `${cls}: defense multiplier unchanged`);
+    assert.equal(CLASS_INFO[cls].defMul, exp.defMul, `${cls}: defense multiplier`);
     const s = deriveStats({ cls, level: 10, stats: {}, equip: {}, skills: [] });
     assert.equal(s.maxHp, exp.hpAtLv10, `${cls}: level 10 base HP`);
+    assert.equal(s.def, exp.defAtLv10, `${cls}: level 10 base defense`);
   }
 }
-console.log("✓ 검사·도적·마법사 기본 HP 상향 / 방어 배율 유지");
+console.log("✓ 검사·도적·마법사 HP 상향 및 검사 방어력 상향");
 
 const BUILDS = [
   {
