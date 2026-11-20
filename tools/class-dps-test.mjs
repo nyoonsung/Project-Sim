@@ -220,6 +220,9 @@ try {
   }
   assert.equal(rows.length, 7);
   for (const r of rows) assert.ok(Number.isFinite(r.dps) && r.dps > 0, `${r.name} should deal measurable damage`);
+  const dpsByClass = Object.fromEntries(rows.map((r) => [r.cls, r.dps]));
+  assert.ok(dpsByClass.mage >= dpsByClass.sword * 2, "mage should maintain at least 2x the sword benchmark DPS after its major upgrade");
+  assert.ok(dpsByClass.rogue >= dpsByClass.sword * 2, "rogue should maintain at least 2x the sword benchmark DPS after its major upgrade");
   console.log("CLASS DPS TESTS: ALL PASS");
 } finally {
   Math.random = originalRandom;
