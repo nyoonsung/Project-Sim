@@ -275,7 +275,7 @@ function strike(room, u, t, st, ctx, now, extra = {}) {
   if (st.gapOnFlank || u.cls === "rogue") {
     const marked = t.status.has("vitalmark") || t.status.get("huntmark")?.src === u.id;
     if (flank || marked && extra.melee) {
-      const icd = t.status.get("huntmark")?.src === u.id ? 1.5 : 3;
+      const icd = t.status.get("huntmark")?.src === u.id ? 1.0 : 2.2;
       if (now >= (u.icd.get("gap") ?? 0) && (st.gapOnFlank || marked)) { u.icd.set("gap", now + icd); u.gap = Math.min(3, u.gap + 1); u.session.meDirty = true; room.ev({ e: "gap", id: u.id, n: u.gap }); }
     }
   }
