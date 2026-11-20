@@ -243,9 +243,13 @@ export function tickMonster(room, m, now) {
                 onHit: (p, t1) => hitTarget(room, m, p, pow, t1) });
             };
             if (room.dungeon === 2) {
-              // 심연 원거리 몬스터는 짧은 좌우 2연사를 사용해 이동 경로를 압박한다.
-              fireShot(-0.075, D2_MOB_PATTERN.volleyPow);
-              room.schedule(D2_MOB_PATTERN.volleyGap, () => !m.dead && fireShot(0.075, D2_MOB_PATTERN.volleyPow));
+              // 심연 원거리 몬스터는 짧은 좌우 연사를 사용해 이동 경로를 압박한다.
+              const count = D2_MOB_PATTERN.volleyShots;
+              for (let i = 0; i < count; i++) {
+                const spread = count <= 1 ? 0 : (i / (count - 1) - 0.5) * 0.15;
+                const fire = () => !m.dead && fireShot(spread, D2_MOB_PATTERN.volleyPow);
+                if (i === 0) fire(); else room.schedule(i * D2_MOB_PATTERN.volleyGap, fire);
+              }
             } else fireShot(0, 1);
           } };
         } else {
