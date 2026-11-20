@@ -292,7 +292,7 @@ function drawMapOn(cv, maxS, big) {
 export function interactTarget() {
   const me = G.ents.get(G.you);
   if (!me) return null;
-  let best = null, bd = 90;
+  let best = null, bd = 145;
   for (const o of G.objects) {
     if (o.kind !== "npc") continue;
     const d = Math.hypot(o.x - me.rx, o.y - me.ry);
