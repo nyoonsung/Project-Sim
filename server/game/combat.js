@@ -116,7 +116,7 @@ export function dealDamage(room, src, t, o, now) {
         const chance = Math.min(CRIT.CHANCE_CAP, src.stats.crit + buffSum(src, "crit") + (o.critBonus ?? 0));
         if (Math.random() < chance) {
           crit = true;
-          dmg *= Math.min(CRIT.DAMAGE_CAP, src.stats.critDmg + buffSum(src, "critDmg"));
+          dmg *= Math.min(CRIT.DAMAGE_CAP, src.stats.critDmg + buffSum(src, "critDmg") + (src.abyss?.has("eclipse_focus") ? 0.20 : 0));
         }
       }
     }
@@ -132,6 +132,10 @@ export function dealDamage(room, src, t, o, now) {
   if (t.team === "p") {
     let dr = (t.stats?.dr ?? 0) + buffSum(t, "dr");
     if (t.mythicIron && t.hp / t.maxHp <= 0.4) dr += 0.3;
+    if (t.abyss?.has("chrono_guard") && now >= (t.icd.get("a_chrono_guard") ?? 0)) {
+      dr += 0.18;
+      t.icd.set("a_chrono_guard", now + 12);
+    }
     dmg *= 1 - Math.min(0.6, dr);
     dmg *= 1 - frontDr;
   }
@@ -148,6 +152,20 @@ export function dealDamage(room, src, t, o, now) {
   const real = dmg - absorbed;
   t.hp = Math.max(0, t.hp - real);
   t.lastHurt = now;
+  if (t.team === "p" && real > 0) {
+    if (t.abyss?.has("null_guard") && t.hp > 0 && t.hp / t.maxHp <= 0.4 && now >= (t.icd.get("a_null_guard") ?? 0)) {
+      t.icd.set("a_null_guard", now + 18);
+      giveShield(room, t, t.maxHp * 0.20, 5, now);
+    }
+    if (!o.dot && t.abyss?.has("chrono_step") && now >= (t.icd.get("a_chrono_step") ?? 0)) {
+      t.icd.set("a_chrono_step", now + 8);
+      t.buffs.set("a_chrono_step", { until: now + 2.5, mods: { move: 0.25 } });
+    }
+    if (!o.dot && src?.team === "m" && t.abyss?.has("null_rebound") && now >= (t.icd.get("a_null_rebound") ?? 0)) {
+      t.icd.set("a_null_rebound", now + 3);
+      room.schedule(0.03, (t2) => dealDamage(room, t, src, { pow: 0.5, crit: "none", noProcs: true }, t2));
+    }
+  }
   if (t.type === "p" && real > 0 && !o.dot) wearOnHit(room, t);
   const ev = { e: "dmg", id: t.id, v: dmg, c: crit ? 1 : 0, a: absorbed > 0 ? 1 : 0, d: o.dot ? 1 : 0, p: t.team === "p" ? 1 : 0 };
   if (o.skill && !o.dot && src?.type === "p") ev.sk = o.skill; // 스킬별 적중 연출용
@@ -162,7 +180,7 @@ export function dealDamage(room, src, t, o, now) {
   // 시전 중 피격 → 취소 (시전 안정 스탯으로 버팀)
   if (t.team === "p" && t.casting && t.casting.fragile && !o.dot && Math.random() > (t.stats.steady ?? 0)) room.cancelCast(t, "피격으로 시전이 취소됐어요.");
   if (t.team === "p" && t.channel && !o.dot) t.channel.interrupted = true;
-  if (src?.team === "p" && !o.dot) room.onPlayerHit(src, t, dmg, crit, now, o);
+  if (src?.team === "p" && !o.dot && !o.noProcs) room.onPlayerHit(src, t, dmg, crit, now, o);
   if (t.hp <= 0) room.kill(t, src, now);
   return { dmg, crit };
 }

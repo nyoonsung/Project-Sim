@@ -13,7 +13,7 @@ import { CLASS_INFO, STATS, stageOf, stageLevel, xpToNext } from "/shared/classe
 import { SKILLS, skillsOf, unlockStage } from "/shared/skills.js";
 import { deriveStats, defReduction } from "/shared/stats.js";
 import { SKILL_SLOTS, SLOT_KEYS, ITEMS, GRADE_COLOR } from "/shared/constants.js";
-import { RARITY_COLOR, SLOT_NAME, OPTIONS, MYTHIC_EFFECTS, WEAPON_TYPES, OFFHAND_TYPES, VARIANT_TRAITS, RARITIES, RARITY_WEIGHTS, RARITY_MUL, MATERIALS, ARMOR_NAMES, repairCost, ENH_PCT, ENCHANTS, enchantOdds, enchantCost, enhanceOdds, enhanceCost, enhMul, sellPrice, canEquip, MAX_ENH } from "/shared/items.js";
+import { RARITY_COLOR, SLOT_NAME, OPTIONS, MYTHIC_EFFECTS, ABYSS_EFFECTS, WEAPON_TYPES, OFFHAND_TYPES, VARIANT_TRAITS, RARITIES, RARITY_WEIGHTS, RARITY_MUL, MATERIALS, ARMOR_NAMES, repairCost, ENH_PCT, ENCHANTS, enchantOdds, enchantCost, enhanceOdds, enhanceCost, enhMul, sellPrice, canEquip, MAX_ENH } from "/shared/items.js";
 import { sprite, playerLook } from "../render/sprites.js";
 
 const fmtPct = (v) => (v * 100).toFixed(1) + "%";
@@ -114,7 +114,11 @@ export function itemTip(it, compare) {
   const ep = ENH_PCT[it.slot];
   if (ep && it.enh) els.push(h("div", { class: "tt-opt" + (broken ? " off" : ""), text: `강화 보너스 · ${ep.name} +${it.enh}%${broken ? " (부서져서 꺼짐)" : ""}` }));
   for (const o of it.opts) els.push(h("div", { class: "tt-opt", text: `${OPTIONS[o.k].name} ${OPTIONS[o.k].fmt(o.v)}` }));
-  if (it.mythic) els.push(h("div", { class: "tt-myth", text: `◆ ${MYTHIC_EFFECTS[it.mythic].name}: ${MYTHIC_EFFECTS[it.mythic].desc}` }));
+  if (it.mythic && MYTHIC_EFFECTS[it.mythic]) els.push(h("div", { class: "tt-myth", text: `◆ ${MYTHIC_EFFECTS[it.mythic].name}: ${MYTHIC_EFFECTS[it.mythic].desc}` }));
+  for (const key of it.abyssEffects ?? []) {
+    const effect = ABYSS_EFFECTS[key];
+    if (effect) els.push(h("div", { class: "tt-abyss", text: `✦ ${effect.name}: ${effect.desc}` }));
+  }
   const allowed = it.slot === "weapon" ? WEAPON_TYPES[it.type].cls : it.slot === "offhand" ? OFFHAND_TYPES[it.type].cls : null;
   if (allowed) els.push(h("div", { class: "tt-sub", text: "착용: " + allowed.map((c) => CLASS_INFO[c].name).join(", ") }));
   if (it.enh < MAX_ENH) { const o = enhanceOdds(it.enh); els.push(h("div", { class: "tt-sub", text: `다음 강화: 성공 ${fmtPct(o.success)} · 파괴 1% · 비용 ${enhanceCost(it)}G` })); }
@@ -248,7 +252,7 @@ export function openInv(pos = {}) {
       h("div", { class: "flexrow" },
         h("span", { text: `${picked.size}개 선택 · ${pickedGold.toLocaleString()}G` }),
         h("button", { class: "btn primary small", disabled: !picked.size, onclick: () => {
-          const rare = pickedItems.filter((x) => ["영웅", "전설", "신화"].includes(x.rarity) || x.enh >= 5).length;
+          const rare = pickedItems.filter((x) => ["영웅", "전설", "신화", "심연"].includes(x.rarity) || x.enh >= 5).length;
           if (rare && !G.sellConfirm) { G.sellConfirm = true; G.ui.toast?.(`영웅 이상·강화된 아이템 ${rare}개가 섞여 있어요. 정말 팔려면 한 번 더 누르세요.`); setTimeout(() => (G.sellConfirm = false), 4000); return; }
           G.sellConfirm = false;
           send({ t: "sellMany", uids: [...picked] }); picked.clear();
@@ -274,7 +278,7 @@ export function openInv(pos = {}) {
         el.addEventListener("dblclick", () => !multi && send({ t: "equip", uid: it.uid }));
         el.addEventListener("contextmenu", (e) => { e.preventDefault(); if (multi || it.locked) return;
           // 영웅 이상·+5 이상은 한 번 더 눌러야 팔림 (어디서든 팔 수 있어서 실수 방지)
-          if ((["영웅", "전설", "신화"].includes(it.rarity) || it.enh >= 5) && G.sellOne !== it.uid) { G.sellOne = it.uid; setTimeout(() => G.sellOne === it.uid && (G.sellOne = null), 3000); return G.ui.toast?.(`${it.name}: 한 번 더 오른쪽 클릭하면 팔아요.`); }
+          if ((["영웅", "전설", "신화", "심연"].includes(it.rarity) || it.enh >= 5) && G.sellOne !== it.uid) { G.sellOne = it.uid; setTimeout(() => G.sellOne === it.uid && (G.sellOne = null), 3000); return G.ui.toast?.(`${it.name}: 한 번 더 오른쪽 클릭하면 팔아요.`); }
           G.sellOne = null; send({ t: "sell", uid: it.uid }); });
         tipOn(el, () => itemTip(it, c.equip[it.slot]));
       }
@@ -377,9 +381,9 @@ export function openSmithy(pos = {}) {
       const o = enhanceOdds(sel.enh), cost = enhanceCost(sel);
       box = h("div", { class: "enh-box" },
         h("div", { style: { color: RARITY_COLOR[sel.rarity] }, text: `${sel.name} +${sel.enh}` }),
-        sel.enh >= MAX_ENH ? h("div", { text: "최대 강화 +99" }) : h("div", { class: "enh-odds" }, h("span", { class: "s", text: `성공 ${fmtPct(o.success)}` }), h("span", { class: "f", text: `실패 ${fmtPct(o.fail)}` }), h("span", { class: "d", text: sel.rarity === "신화" ? `폭발(+0) ${fmtPct(o.destroy)}` : `파괴 ${fmtPct(o.destroy)}` })),
+        sel.enh >= MAX_ENH ? h("div", { text: "최대 강화 +99" }) : h("div", { class: "enh-odds" }, h("span", { class: "s", text: `성공 ${fmtPct(o.success)}` }), h("span", { class: "f", text: `실패 ${fmtPct(o.fail)}` }), h("span", { class: "d", text: ["신화", "심연"].includes(sel.rarity) ? `폭발(+0) ${fmtPct(o.destroy)}` : `파괴 ${fmtPct(o.destroy)}` })),
         h("div", { class: "note", text: `강화 단계마다 기본 능력치 +2%, ${ENH_PCT[sel.slot]?.name ?? "능력치"} +1% · 비용 ${cost.toLocaleString()}G (보유 ${c.gold.toLocaleString()}G)` }),
-        h("div", { class: "enh-result " + (lastEnh?.result ?? ""), text: lastEnh ? { success: `성공! +${lastEnh.enh}`, fail: "실패… (단계 유지)", reset: "폭발! 신화라 +0으로 (아이템은 그대로)", destroy: "파괴됐어요…" }[lastEnh.result] : "" }),
+        h("div", { class: "enh-result " + (lastEnh?.result ?? ""), text: lastEnh ? { success: `성공! +${lastEnh.enh}`, fail: "실패… (단계 유지)", reset: "상위 등급이라 +0으로 (아이템은 그대로)", destroy: "파괴됐어요…" }[lastEnh.result] : "" }),
         h("button", { class: "btn primary", disabled: sel.enh >= MAX_ENH || c.gold < cost, onclick: () => send({ t: "enhance", uid: sel.uid }) }, `강화하기 (+${sel.enh} → +${sel.enh + 1})`));
     }
     return [repairBox, h("h4", { text: "강화" }), box, h("h4", { text: "장비 선택" }), pick];
@@ -641,13 +645,15 @@ export function openCodex() {
   const dropCount = { normal: "7% 확률로 1개", elite: "35% 확률로 1개", boss: "중간보스 1~2개 · 주요 보스 2~3개" };
   openWin("codex", "아이템 도감", () => [
     h("h4", { text: "등급별 드롭 확률" }),
-    h("div", { class: "note", text: "장비가 하나 떨어질 때 등급이 정해지는 확률이에요. 신화는 어디서나 0.5%." }),
+    h("div", { class: "note", text: "일반 몬스터·정예·보스 드롭은 일반~신화 확률표를 사용해요. 심연 등급은 심연 보관고 전용이에요." }),
     h("table", { class: "codex-t" },
-      h("tr", {}, h("th", { text: "" }), ...RARITIES.map((r) => h("th", { style: { color: RARITY_COLOR[r] }, text: r }))),
+      h("tr", {}, h("th", { text: "" }), ...RARITIES.slice(0, 5).map((r) => h("th", { style: { color: RARITY_COLOR[r] }, text: r }))),
       ...Object.keys(RARITY_WEIGHTS).map((t) => h("tr", {}, h("td", { text: tierName[t] }), ...RARITY_WEIGHTS[t].map((w) => h("td", { text: pct(w) }))))),
     h("div", { class: "note" }, ...Object.keys(dropCount).map((t) => h("div", { text: `• ${tierName[t]}: 장비 ${dropCount[t]}` })), h("div", { text: "• 층을 깨면 보상 상자에서 장비 1~2개 + 골드" })),
+    h("h4", { text: "심연 보관고 확률" }),
+    h("div", { class: "note", text: "심연 유물 5종은 각각 1%(총 5%). 나머지 95%는 일반·희귀·영웅·전설 장비이며, 보관고에서는 신화 장비가 나오지 않아요." }),
     h("h4", { text: "등급별 성능" }),
-    h("div", { class: "note" }, ...RARITIES.map((r, i) => h("div", { style: { color: RARITY_COLOR[r] }, text: `${r}: 기본 능력치 ×${RARITY_MUL[i]} · 추가 옵션 ${i}개${i === 4 ? " + 신화 고유 효과 · 무기는 주는 피해 +6%" : ""}` }))),
+    h("div", { class: "note" }, ...RARITIES.map((r, i) => h("div", { style: { color: RARITY_COLOR[r] }, text: `${r}: 기본 능력치 ×${RARITY_MUL[i]} · 추가 옵션 ${i}개${i === 4 ? " + 신화 고유 효과 · 무기는 주는 피해 +12%" : i === 5 ? " + 심연 고유 효과 2개" : ""}` }))),
     h("h4", { text: "재료 (아이템 레벨 = 떨어진 층)" }),
     h("div", { class: "note", text: MATERIALS.map((m, i) => `${m} ${i * 10 + 1}~${i * 10 + 10}층`).join(" · ") }),
     h("h4", { text: "무기" }),
@@ -657,6 +663,8 @@ export function openCodex() {
       ...VARIANT_TRAITS[slot].map((tr, v) => h("div", { text: `• ${ARMOR_NAMES[slot][v]}: ${tr.desc}` })))),
     h("h4", { text: "신화 고유 효과" }),
     h("div", { class: "note" }, ...Object.values(MYTHIC_EFFECTS).map((m) => h("div", { text: `◆ ${m.name}: ${m.desc}` }))),
+    h("h4", { text: "심연 고유 효과" }),
+    h("div", { class: "note" }, ...Object.values(ABYSS_EFFECTS).map((m) => h("div", { text: `✦ ${m.name}: ${m.desc}` }))),
   ], { w: 520 });
 }
 

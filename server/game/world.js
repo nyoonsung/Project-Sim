@@ -3,7 +3,7 @@ import { Q, secLog, itemLog } from "../db.js";
 import { TICK_RATE, ITEMS, MAX_PARTY, SKILL_SLOTS } from "../../shared/constants.js";
 import { CLASS_INFO, STATS } from "../../shared/classes.js";
 import { SKILLS, adventurerBasic } from "../../shared/skills.js";
-import { canEquip, enhanceOdds, enhanceCost, sellPrice, MAX_ENH, SLOTS, CLASS_GEAR, baseStats, itemName, ensureDur, repairCost, syncMythic, enchantCost, rollEnchant, rollAbyssRelic } from "../../shared/items.js";
+import { canEquip, enhanceOdds, enhanceCost, sellPrice, MAX_ENH, SLOTS, CLASS_GEAR, baseStats, itemName, ensureDur, repairCost, syncMythic, enchantCost, rollEnchant, rollAbyssVaultItem } from "../../shared/items.js";
 import { floorKind, DUNGEON2_MAX_FLOOR } from "../../shared/zones.js";
 import { Room } from "./room.js";
 import { makeFloor, makeTown, safeZone } from "./dungeon.js";
@@ -518,9 +518,9 @@ export class World {
     if ((c.abyssKeys ?? 0) < 1) return fail("심연의 열쇠가 필요해요. 심연의 감시자를 처치해 얻을 수 있어요.");
     if ((c.riftCrystals ?? 0) < 5) return fail(`균열 결정이 부족해요. 5개가 필요해요. (보유: ${c.riftCrystals ?? 0}개)`);
     if ((c.inv?.length ?? 0) >= INV_SIZE) return fail("가방이 가득 찼어요! 아이템을 정리한 뒤 다시 시도해 주세요.");
-    // 제2 던전 전용 전설 유물은 최고 아이템 레벨(100)로 생성한다.
-    const it = rollAbyssRelic(secureRandom, { ilvl: 100, cls: c.cls });
-    if (!this.pickup(s.unit, it)) return fail("유물을 가방에 넣지 못했어요. 가방 공간을 확인해 주세요.");
+    // 심연 유물 5종은 각각 1%, 나머지 95%는 일반~전설 장비로 생성한다.
+    const it = rollAbyssVaultItem(secureRandom, { ilvl: 100, cls: c.cls });
+    if (!it || !this.pickup(s.unit, it)) return fail("보상을 가방에 넣지 못했어요. 가방 공간을 확인해 주세요.");
     c.abyssKeys--;
     c.riftCrystals -= 5;
     this.save(s);
@@ -691,7 +691,7 @@ export class World {
     const it = { ...item, uid: c.nextUid++ };
     c.inv.push(it);
     this.saveSoon(s); // 주운 장비는 바로 저장 (1초에 한 번까지)
-    if (["전설", "신화"].includes(it.rarity)) itemLog(s.userId, "drop", { name: it.name, rarity: it.rarity, ilvl: it.ilvl });
+    if (["전설", "신화", "심연"].includes(it.rarity)) itemLog(s.userId, "drop", { name: it.name, rarity: it.rarity, ilvl: it.ilvl });
     s.send({ t: "ev", list: [{ e: "got", item: it }] });
     this.sendChar(s);
     s.dirty = true;
@@ -732,7 +732,7 @@ export class World {
     const it = c.inv.splice(i, 1)[0];
     const g = sellPrice(it);
     c.gold += g;
-    if (["전설", "신화"].includes(it.rarity) || it.enh >= 10) itemLog(s.userId, "sell", { name: it.name, rarity: it.rarity, enh: it.enh, gold: g });
+    if (["전설", "신화", "심연"].includes(it.rarity) || it.enh >= 10) itemLog(s.userId, "sell", { name: it.name, rarity: it.rarity, enh: it.enh, gold: g });
     this.sendChar(s);
     s.notice(`${it.name}을(를) ${g}G에 팔았어요.`);
   }
@@ -746,7 +746,7 @@ export class World {
       if (it.locked) { skipped++; return true; }
       const g = sellPrice(it);
       gold += g; n++;
-      if (["전설", "신화"].includes(it.rarity) || it.enh >= 10) itemLog(s.userId, "sell", { name: it.name, rarity: it.rarity, enh: it.enh, gold: g });
+      if (["전설", "신화", "심연"].includes(it.rarity) || it.enh >= 10) itemLog(s.userId, "sell", { name: it.name, rarity: it.rarity, enh: it.enh, gold: g });
       return false;
     });
     if (!n) return s.notice(skipped ? "잠긴 아이템은 팔 수 없어요." : "팔 아이템을 골라 주세요.");
@@ -827,8 +827,8 @@ export class World {
     const odds = enhanceOdds(it.enh);
     const r = secureRandom();
     let result;
-    if (r < odds.destroy && it.rarity === "신화") {
-      // 신화는 터져도 사라지지 않고 강화 단계만 +0으로
+    if (r < odds.destroy && ["신화", "심연"].includes(it.rarity)) {
+      // 신화·심연은 터져도 사라지지 않고 강화 단계만 +0으로
       result = "reset";
       it.enh = 0;
       if (where === "equip") refreshStats(s.unit);

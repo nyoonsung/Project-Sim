@@ -182,8 +182,10 @@ ok(true, "제2 던전 몬스터·보스 능력치 1/5 완화와 이동속도 조
   room.rollDrops = orig;
   const relic = rollAbyssRelic(Math.random, { ilvl: 100, cls: "sword" });
   assert.equal(relic.ilvl, 100);
+  assert.equal(relic.rarity, "심연");
+  assert.equal(relic.abyssEffects?.length, 2);
 }
-ok(true, "제2 던전 드롭 레벨 100 · 소환물 드롭 없음 · 유물 레벨 100");
+ok(true, "제2 던전 드롭 레벨 100 · 소환물 드롭 없음 · 심연 유물 레벨·효과 100");
 
 
 // 심연 보관고: 마을 접근, 전용 유물 지급, 재료 차감, 실패 시 명시적 응답.
@@ -221,11 +223,15 @@ ok(true, "제2 던전 드롭 레벨 100 · 소환물 드롭 없음 · 유물 레
   session.unit = { room: world.town, x: town.start[0], y: town.start[1] };
   world.openAbyssVault(session);
   assert.equal(received.length, 1, "one relic should be awarded anywhere in town");
-  assert.equal(received[0].relic != null, true, "reward must be a dedicated Abyss relic, not ordinary gear");
-  assert.equal(received[0].ilvl, 100, "Abyss relic should use item level 100");
+  assert.ok(["일반", "희귀", "영웅", "전설", "심연"].includes(received[0].rarity), "vault reward must be a valid normal-to-abyss item");
+  if (received[0].rarity === "심연") {
+    assert.ok(received[0].relic != null, "Abyss-rarity vault reward must be a dedicated relic");
+    assert.equal(received[0].abyssEffects?.length, 2, "Abyss relic must carry exactly two special effects");
+  }
+  assert.equal(received[0].ilvl, 100, "vault reward should use item level 100");
   assert.equal(session.char.abyssKeys, 0, "one abyss key should be consumed");
   assert.equal(session.char.riftCrystals, 0, "five rift crystals should be consumed");
-  assert.ok(packets.some((p) => p.t === "vaultResult" && p.ok && p.item?.relic), "successful opening must send a dedicated result packet");
+  assert.ok(packets.some((p) => p.t === "vaultResult" && p.ok && p.item?.rarity === received[0].rarity), "successful opening must return the awarded item's rarity");
 
   const failed = {
     char: { cls: "sword", abyssKeys: 1, riftCrystals: 5, inv: [] },

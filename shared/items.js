@@ -1,17 +1,17 @@
 // 장비 아이템: 등급(일반~신화), 옵션, 강화(최대 +99). 쿨타임 감소 효과는 이 게임에 존재하지 않는다.
 
-export const RARITIES = ["일반", "희귀", "영웅", "전설", "신화"];
-export const RARITY_COLOR = { 일반: "#c9d1d9", 희귀: "#58a6ff", 영웅: "#d2a8ff", 전설: "#ffb347", 신화: "#ff5a6e" };
+export const RARITIES = ["일반", "희귀", "영웅", "전설", "신화", "심연"];
+export const RARITY_COLOR = { 일반: "#c9d1d9", 희귀: "#58a6ff", 영웅: "#d2a8ff", 전설: "#ffb347", 신화: "#ff5a6e", 심연: "#70f4e8" };
 // 드롭 등급 확률(합 100). 신화는 항상 0.5%
 export const RARITY_WEIGHTS = {
   normal: [62, 26, 9, 2.5, 0.5],
   elite: [40, 38, 16, 5.5, 0.5],
   boss: [22, 42, 26, 9.5, 0.5],
 };
-export const RARITY_MUL = [1, 1.12, 1.26, 1.42, 3.7];       // 기본 능력치 배율 (신화 2배 상향: 1.85 → 3.7)
+export const RARITY_MUL = [1, 1.12, 1.26, 1.42, 3.7, 4.35]; // 심연은 신화보다 기본 능력치 약 18% 높음
 export const MYTHIC_OPT_MUL = 2;                              // 신화 추가 옵션 값 2배
 const MYTHIC_V = 3;                                           // 신화 성능 버전 (옛 신화를 한 번만 올려 주기용)
-export const RARITY_OPTS = [0, 1, 2, 3, 4];                // 추가 옵션 수
+export const RARITY_OPTS = [0, 1, 2, 3, 4, 5];              // 추가 옵션 수
 
 export const SLOTS = ["weapon", "offhand", "helmet", "armor", "trinket"];
 export const SLOT_NAME = { weapon: "무기", offhand: "보조장비", helmet: "투구", armor: "갑옷", trinket: "장신구" };
@@ -68,6 +68,19 @@ export const OPTIONS = {
   heal: { name: "치유량", fmt: (v) => `+${(v * 100).toFixed(1)}%`, roll: (l, r, R) => +(0.03 + R() * 0.04).toFixed(3) },
 };
 const OPTION_KEYS = Object.keys(OPTIONS);
+function rollOptions(R, ilvl, rarityIndex, existing = []) {
+  const out = Array.isArray(existing)
+    ? existing.filter((o) => o && OPTIONS[o.k] && Number.isFinite(o.v)).slice(0, RARITY_OPTS[rarityIndex])
+    : [];
+  const used = new Set(out.map((o) => o.k));
+  const keys = OPTION_KEYS.filter((k) => !used.has(k));
+  while (out.length < RARITY_OPTS[rarityIndex] && keys.length) {
+    const k = keys.splice(Math.floor(R() * keys.length), 1)[0];
+    const v = OPTIONS[k].roll(ilvl, rarityIndex, R);
+    out.push({ k, v: rarityIndex === 4 ? +(v * MYTHIC_OPT_MUL).toFixed(3) : v });
+  }
+  return out;
+}
 
 // 신화 고유 효과 (상향됨)
 export const MYTHIC_EFFECTS = {
@@ -80,6 +93,22 @@ export const MYTHIC_EFFECTS = {
   berserk: { name: "광전사의 피", desc: "HP 50% 이하일 때 주는 피해 +24%" },
   ember: { name: "잔불", desc: "적중 시 15% 확률로 화상 (3초간 초당 공격력 60%)" },
 };
+
+// 심연 고유 효과. 다섯 유물은 서로 다른 효과 2개씩 고정으로 가진다.
+export const ABYSS_EFFECTS = {
+  rift_surge: { name: "균열 폭주", desc: "직접 공격 적중 시 12% 확률로 공격력 160% 추가 피해 (재사용 1.2초)" },
+  rift_hunt: { name: "차원 사냥", desc: "적 처치 시 4초간 이동 속도 +25%, 주는 피해 +12%" },
+  null_guard: { name: "무효 장벽", desc: "HP가 40% 이하로 떨어지면 최대 HP 20% 보호막 (재사용 18초)" },
+  null_rebound: { name: "공허 반사", desc: "몬스터에게 피격되면 공격력 50% 피해 반사 (재사용 3초)" },
+  eclipse_focus: { name: "일식 집중", desc: "치명타 피해 +20%p" },
+  eclipse_mark: { name: "황혼 각인", desc: "직접 공격 적중 시 20% 확률로 4초간 대상에게 주는 피해 +15% (재사용 3초)" },
+  chrono_step: { name: "시간 도약", desc: "피격 시 2.5초간 이동 속도 +25% (재사용 8초)" },
+  chrono_guard: { name: "시간의 방패", desc: "피격 시 받는 피해 18% 감소 (재사용 12초)" },
+  star_siphon: { name: "별빛 흡수", desc: "직접 공격 피해의 7%만큼 HP 회복 (초당 최대 HP 10% 제한)" },
+  star_bloom: { name: "성운 개화", desc: "적 처치 시 HP와 MP 각각 최대치의 8% 회복" },
+};
+const ABYSS_KEYS = Object.keys(ABYSS_EFFECTS);
+export const ABYSS_WEAPON_BONUS = { dmg: 0.18 };
 /** 신화 무기 기본 추가 능력치 */
 export const MYTHIC_WEAPON_BONUS = { dmg: 0.12 }; // 2배 상향 (6% → 12%)
 const MYTHIC_KEYS = Object.keys(MYTHIC_EFFECTS);
@@ -168,18 +197,16 @@ export function rollItem(R, { ilvl, cls = "adventurer", tier = "normal", rarity 
   if (slot === "weapon") type = R() < 0.75 ? pick(R, gear.w) : pick(R, Object.keys(WEAPON_TYPES));
   else if (slot === "offhand") type = R() < 0.75 ? pick(R, gear.o) : pick(R, Object.keys(OFFHAND_TYPES));
   else variant = Math.floor(R() * 4);
-  const it = { slot, type, variant, rarity: RARITIES[ri], ilvl, enh: 0, base: baseStats(slot, type, ilvl, ri, variant), opts: [] };
+  const it = { slot, type, variant, rarity: RARITIES[ri], ilvl, enh: 0, base: baseStats(slot, type, ilvl, ri, variant), opts: rollOptions(R, ilvl, ri) };
   if (ri === 4 && slot === "weapon") Object.assign(it.base, MYTHIC_WEAPON_BONUS);
-  const keys = OPTION_KEYS.slice();
-  for (let i = 0; i < RARITY_OPTS[ri]; i++) {
-    const k = keys.splice(Math.floor(R() * keys.length), 1)[0];
-    const v = OPTIONS[k].roll(ilvl, ri, R);
-    it.opts.push({ k, v: ri === 4 ? +(v * MYTHIC_OPT_MUL).toFixed(3) : v });
-  }
+  if (ri === 5 && slot === "weapon") Object.assign(it.base, ABYSS_WEAPON_BONUS);
   if (ri === 4) {
     it.mythicV = MYTHIC_V;
     it.mythic = pick(R, MYTHIC_KEYS);
     it.title = pick(R, MYTHIC_TITLES);
+  } else if (ri === 5) {
+    it.abyssV = 1;
+    it.abyssEffects = ABYSS_KEYS.slice(0, 2);
   }
   it.name = itemName(it);
   it.dur = it.maxDur = maxDurability(it);
@@ -205,6 +232,7 @@ export function makeItem(spec) {
   else variant = Math.max(0, Math.min(3, Math.floor(Number(spec.variant) || 0)));
   const it = { slot, type, variant, rarity: RARITIES[ri], ilvl, enh: Math.max(0, Math.min(MAX_ENH, Math.floor(Number(spec.enh) || 0))), base: baseStats(slot, type, ilvl, ri, variant), opts: [] };
   if (ri === 4 && slot === "weapon") Object.assign(it.base, MYTHIC_WEAPON_BONUS);
+  if (ri === 5 && slot === "weapon") Object.assign(it.base, ABYSS_WEAPON_BONUS);
   // 추가 옵션: 같은 옵션 중복 없이, 등급별 개수까지, 값은 0 ~ 일반 최대치의 3배
   const seen = new Set();
   for (const o of Array.isArray(spec.opts) ? spec.opts : []) {
@@ -219,6 +247,11 @@ export function makeItem(spec) {
     it.mythicV = MYTHIC_V;
     it.mythic = MYTHIC_EFFECTS[spec.mythic] ? spec.mythic : MYTHIC_KEYS[0];
     it.title = MYTHIC_TITLES.includes(spec.title) ? spec.title : MYTHIC_TITLES[0];
+  } else if (ri === 5) {
+    const effects = Array.isArray(spec.abyssEffects) ? [...new Set(spec.abyssEffects.filter((k) => ABYSS_EFFECTS[k]))].slice(0, 2) : [];
+    for (const k of ABYSS_KEYS) if (effects.length < 2 && !effects.includes(k)) effects.push(k);
+    it.abyssV = 1;
+    it.abyssEffects = effects;
   }
   if (spec.ench && ENCHANTS[spec.ench]) it.ench = spec.ench;
   const mat = Number(spec.mat);
@@ -229,29 +262,74 @@ export function makeItem(spec) {
   return it;
 }
 
-// 제2 던전 전용 유물: 기존 장비 슬롯/전투 계산과 호환되면서 이름·색·보너스 조합이 고정된 희귀 보상.
+// 제2 던전 전용 심연 유물: 다섯 종류 모두 심연 등급, 고정 능력치와 고유 효과 2개를 가진다.
 const ABYSS_RELICS = [
-  { id: "rift-edge", name: "균열 절단자", color: "#ff647d", slot: "weapon", base: { dmg: 0.14, crit: 0.025 } },
-  { id: "null-aegis", name: "무효의 방벽", color: "#65d9e5", slot: "offhand", base: { def: 34, hp: 190, dr: 0.045 } },
-  { id: "eclipse-visor", name: "일식의 면갑", color: "#c18aff", slot: "helmet", base: { def: 24, hp: 165, critDmg: 0.09 } },
-  { id: "chrono-mantle", name: "무음의 망토", color: "#65d9e5", slot: "armor", base: { def: 48, hp: 260, move: 0.035, dr: 0.035 } },
-  { id: "star-heart", name: "심연의 인장", color: "#d0a0ff", slot: "trinket", base: { hp: 180, mp: 110, atkPct: 0.07, crit: 0.025 } },
+  { id: "rift-edge", name: "균열 절단자", color: "#ff647d", slot: "weapon", base: { dmg: 0.22, crit: 0.04 }, effects: ["rift_surge", "rift_hunt"] },
+  { id: "null-aegis", name: "무효의 방벽", color: "#65d9e5", slot: "offhand", base: { def: 55, hp: 300, dr: 0.07 }, effects: ["null_guard", "null_rebound"] },
+  { id: "eclipse-visor", name: "일식의 면갑", color: "#c18aff", slot: "helmet", base: { def: 36, hp: 220, critDmg: 0.13 }, effects: ["eclipse_focus", "eclipse_mark"] },
+  { id: "chrono-mantle", name: "무음의 망토", color: "#65d9e5", slot: "armor", base: { def: 68, hp: 360, move: 0.05, dr: 0.06 }, effects: ["chrono_step", "chrono_guard"] },
+  { id: "star-heart", name: "심연의 인장", color: "#d0a0ff", slot: "trinket", base: { hp: 240, mp: 160, atkPct: 0.10, crit: 0.04 }, effects: ["star_siphon", "star_bloom"] },
 ];
 export function rollAbyssRelic(R, { ilvl, cls = "adventurer" } = {}) {
   const gear = CLASS_GEAR[cls] ?? CLASS_GEAR.adventurer;
   const relic = pick(R, ABYSS_RELICS);
-  const ri = RARITIES.indexOf("전설");
+  const level = Math.max(1, Math.min(100, Math.floor(ilvl || 1)));
   const type = relic.slot === "weapon" ? pick(R, gear.w) : relic.slot === "offhand" ? pick(R, gear.o) : undefined;
-  const variant = relic.slot === "helmet" || relic.slot === "armor" || relic.slot === "trinket" ? Math.floor(R() * 4) : 0;
-  const it = makeItem({ slot: relic.slot, type, variant, rarity: "전설", ilvl: Math.max(1, Math.min(100, Math.floor(ilvl || 1))) });
+  const variant = ["helmet", "armor", "trinket"].includes(relic.slot) ? Math.floor(R() * 4) : 0;
+  const it = makeItem({ slot: relic.slot, type, variant, rarity: "심연", ilvl: level, abyssEffects: relic.effects });
   if (!it) return null;
+  it.opts = rollOptions(R, level, 5);
   it.relic = relic.id;
   it.relicName = relic.name;
   it.relicColor = relic.color;
   for (const [k, v] of Object.entries(relic.base)) it.base[k] = (it.base[k] ?? 0) + v;
-  it.opts = [{ k: relic.slot === "weapon" ? "dmg" : relic.slot === "offhand" ? "dr" : relic.slot === "trinket" ? "atkPct" : "hp", v: relic.slot === "weapon" ? 0.045 : relic.slot === "offhand" || relic.slot === "armor" ? 0.025 : relic.slot === "trinket" ? 0.04 : 70 }];
+  it.abyssEffects = relic.effects.slice();
+  it.abyssV = 1;
   it.name = relic.name;
+  it.dur = it.maxDur = maxDurability(it);
+  it.durV = DURABILITY_VERSION;
   return it;
+}
+
+/** 기존에 전설로 지급된 다섯 유물은 로그인 시 심연 등급으로 한 번만 승급한다. */
+export function ensureAbyss(it) {
+  if (!it || typeof it !== "object") return it;
+  const relic = ABYSS_RELICS.find((r) => r.id === it.relic);
+  if (relic) {
+    if (it.abyssV !== 1 || it.rarity !== "심연") {
+      const oldMax = Number.isFinite(it.maxDur) && it.maxDur > 0 ? it.maxDur : maxDurability({ ...it, rarity: "전설" });
+      const oldDur = Number.isFinite(it.dur) ? it.dur : oldMax;
+      const ratio = Math.max(0, Math.min(1, oldDur / oldMax));
+      it.rarity = "심연";
+      it.base = baseStats(it.slot, it.type, it.ilvl, 5, it.variant ?? 1);
+      if (it.slot === "weapon") Object.assign(it.base, ABYSS_WEAPON_BONUS);
+      for (const [k, v] of Object.entries(relic.base)) it.base[k] = (it.base[k] ?? 0) + v;
+      it.opts = rollOptions(Math.random, it.ilvl, 5, it.opts);
+      it.abyssV = 1;
+      it.maxDur = maxDurability(it);
+      it.dur = +(it.maxDur * ratio).toFixed(2);
+      it.durV = DURABILITY_VERSION;
+    }
+    it.relicName = relic.name;
+    it.relicColor = relic.color;
+    it.abyssEffects = relic.effects.slice();
+    it.name = relic.name;
+    return it;
+  }
+  if (it.rarity === "심연") {
+    const effects = Array.isArray(it.abyssEffects) ? [...new Set(it.abyssEffects.filter((k) => ABYSS_EFFECTS[k]))].slice(0, 2) : [];
+    for (const k of ABYSS_KEYS) if (effects.length < 2 && !effects.includes(k)) effects.push(k);
+    it.abyssEffects = effects;
+    it.abyssV = 1;
+  }
+  return it;
+}
+
+/** 보관고 심연 유물 5종은 각각 1%(총 5%), 나머지 95%는 일반~전설 장비. */
+export function rollAbyssVaultItem(R, opts = {}) {
+  if (R() < 0.05) return rollAbyssRelic(R, opts);
+  const rarityIndex = pickW(R, [62, 26, 9, 2.5]);
+  return rollItem(R, { ...opts, rarity: RARITIES[rarityIndex] });
 }
 
 // ── 장비 내구도 (모든 장비): 무기·보조장비(방패 제외)·장신구는 스킬을 쓸 때, 갑옷·투구·방패는 맞을 때 닳고,
@@ -263,11 +341,11 @@ export const isBroken = (it) => it?.dur != null && it.dur <= 0;
 export const DUR_DEATH = 0.1;
 export const BROKEN_MUL = 0.3;
 export const DURABILITY_VERSION = 3;
-/** 일반~전설은 기존 최대치의 3배, 신화는 4배 */
+/** 일반~전설 내구도는 기존 배율, 신화·심연은 높은 내구도를 가진다. */
 export function maxDurability(it) {
   const rarityIndex = Math.max(0, RARITIES.indexOf(it?.rarity));
   const oldMaximum = 100 + rarityIndex * 20;
-  return oldMaximum * (rarityIndex === 4 ? 6 : 4.5);
+  return oldMaximum * (rarityIndex >= 4 ? 6 : 4.5);
 }
 /** 신화 장비는 아이템 레벨이 캐릭터 레벨을 따라 같이 성장 (능력치·재료 이름 다시 계산). 바뀌었으면 true */
 export function syncMythic(ch) {
@@ -392,7 +470,7 @@ export function sellPrice(it) {
 const PCT_KEYS = new Set(["crit", "aspd", "move", "dr", "atkPct", "critDmg", "mpRegen", "dmg", "heal", "hpPct", "defPct"]);
 /** 장착 장비 전체 합산 (서버 판정·클라이언트 표시 공용) */
 export function gearTotals(equip) {
-  const t = { atk: 0, atkPct: 0, def: 0, hp: 0, mp: 0, crit: 0, critDmg: 0, aspd: 0, move: 0, dmg: 0, dr: 0, hpRegen: 0, mpRegen: 0, heal: 0, hpPct: 0, defPct: 0, mythic: [] };
+  const t = { atk: 0, atkPct: 0, def: 0, hp: 0, mp: 0, crit: 0, critDmg: 0, aspd: 0, move: 0, dmg: 0, dr: 0, hpRegen: 0, mpRegen: 0, heal: 0, hpPct: 0, defPct: 0, mythic: [], abyssEffects: [] };
   for (const it of Object.values(equip ?? {})) {
     if (!it) continue;
     // 부서진 장비(내구도 0)는 기본 능력치 30%만, 강화 보너스 없음
@@ -405,6 +483,7 @@ export function gearTotals(equip) {
     if (en && !broken) for (const [k, v] of Object.entries(en.mods)) t[k] += v;
     for (const o of it.opts) t[o.k] += o.v;
     if (it.mythic) t.mythic.push(it.mythic);
+    if (Array.isArray(it.abyssEffects)) for (const k of it.abyssEffects) if (ABYSS_EFFECTS[k]) t.abyssEffects.push(k);
   }
   t.atk = Math.round(t.atk); t.def = Math.round(t.def); t.hp = Math.round(t.hp); t.mp = Math.round(t.mp);
   return t;

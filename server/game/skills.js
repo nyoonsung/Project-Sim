@@ -707,6 +707,20 @@ export function onPlayerHit(room, u, t, dmg, crit, now, o) {
     }
   }
   if (o?.dot) return;
+  if (u.abyss?.has("rift_surge") && now >= (u.icd.get("a_rift_surge") ?? 0) && Math.random() < 0.12) {
+    u.icd.set("a_rift_surge", now + 1.2);
+    room.ev({ e: "fx", fx: "shadow/void-orb", x: t.x | 0, y: t.y | 0, s: 0.38 });
+    room.schedule(0.05, (t2) => dealDamage(room, u, t, { pow: 1.6, crit: "none", noProcs: true }, t2));
+  }
+  if (u.abyss?.has("eclipse_mark") && now >= (u.icd.get("a_eclipse_mark") ?? 0) && Math.random() < 0.20) {
+    u.icd.set("a_eclipse_mark", now + 3);
+    applyStatus(room, u, t, { type: "huntmark", dur: 4 }, now);
+  }
+  if (u.abyss?.has("star_siphon")) {
+    if (now - (u.abyssSiphonWin?.t ?? -9) >= 1) u.abyssSiphonWin = { t: now, n: 0 };
+    const v = Math.min(dmg * 0.07, u.maxHp * 0.10 - u.abyssSiphonWin.n);
+    if (v > 0) { u.abyssSiphonWin.n += v; heal(room, u, u, v, now, { noEvent: true }); }
+  }
   // 대장장이는 특정 기본 공격만이 아니라 모든 직접 공격으로 부품을 수급한다.
   gainPart(room, u, now);
   if (u.mythic?.has("thunder_echo") && crit && Math.random() < 0.25 && now >= (u.icd.get("m_thunder") ?? 0)) {

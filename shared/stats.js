@@ -73,6 +73,7 @@ export function deriveStats(ch) {
     device: 1 + g("device"),
     shield: 1 + g("shield"),
     mythic: gear.mythic,
+    abyssEffects: gear.abyssEffects,
     dmgType: info.dmgType,
     classDmg: CLASS_DMG[ch.cls] ?? 1,
   };

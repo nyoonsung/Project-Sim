@@ -8,7 +8,7 @@
 :root {
   --bg: #0c0b10; --panel: #17151f; --panel2: #201d2b; --line: #3a3550; --line2: #59527a; --text: #ece8f4; --dim: #9c96b0;
   --gold: #ffd35a; --hp: #e0424e; --mp: #3f8cff; --xp: #b48cff; --good: #5fd47a; --bad: #ff5a6e;
-  --common: #c9d1d9; --rare: #58a6ff; --epic: #d2a8ff; --legend: #ffb347; --mythic: #ff5a6e;
+  --common: #c9d1d9; --rare: #58a6ff; --epic: #d2a8ff; --legend: #ffb347; --mythic: #ff5a6e; --abyss: #70f4e8;
 }
 * { box-sizing: border-box; }
 html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); font-family: "Galmuri11", system-ui, sans-serif; font-size: 13px; overflow: hidden; user-select: none; }
@@ -60,7 +60,7 @@ kbd { font-family: "GalmuriMono11", "Galmuri11", monospace; font-size: 10px; pad
 
 #toasts { position: absolute; top: 90px; left: 50%; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; gap: 4px; }
 .toast { padding: 5px 12px; background: #000c; border: 1px solid var(--line2); animation: toast 4s forwards; text-shadow: 1px 1px 0 #000; }
-.toast.boss { color: #ffb070; border-color: #c06030; } .toast.legend { color: var(--legend); border-color: var(--legend); } .toast.mythic { color: var(--mythic); border-color: var(--mythic); box-shadow: 0 0 16px #ff5a6e88; }
+.toast.boss { color: #ffb070; border-color: #c06030; } .toast.legend { color: var(--legend); border-color: var(--legend); } .toast.mythic { color: var(--mythic); border-color: var(--mythic); box-shadow: 0 0 16px #ff5a6e88; } .toast.abyss { color: var(--abyss); border-color: var(--abyss); box-shadow: 0 0 18px #70f4e888; }
 .toast.rank { color: var(--epic); } .toast.death { color: var(--bad); } .toast.floor { font-size: 16px; color: var(--gold); }
 @keyframes toast { 0% { opacity: 0; transform: translateY(-6px); } 8% { opacity: 1; transform: none; } 85% { opacity: 1; } 100% { opacity: 0; } }
 #center-msg { position: absolute; top: 38%; left: 50%; transform: translate(-50%, -50%); font-size: 26px; color: var(--gold); text-shadow: 3px 3px 0 #000; white-space: nowrap; }
@@ -117,7 +117,7 @@ kbd { font-family: "GalmuriMono11", "Galmuri11", monospace; font-size: 10px; pad
 .win table { width: 100%; border-collapse: collapse; } .win td { padding: 2px 4px; } .win td:last-child { text-align: right; }
 .statrow { display: flex; align-items: center; gap: 6px; padding: 3px 0; border-bottom: 1px dashed #2a2638; }
 .statrow .sn { width: 84px; } .statrow .sv { width: 40px; text-align: right; color: var(--gold); } .statrow .sd { flex: 1; color: var(--dim); font-size: 11px; }
-.grade-일반 { color: var(--common); } .grade-희귀 { color: var(--rare); } .grade-영웅 { color: var(--epic); } .grade-전설 { color: var(--legend); } .grade-신화 { color: var(--mythic); }
+.grade-일반 { color: var(--common); } .grade-희귀 { color: var(--rare); } .grade-영웅 { color: var(--epic); } .grade-전설 { color: var(--legend); } .grade-신화 { color: var(--mythic); } .grade-심연 { color: var(--abyss); text-shadow: 0 0 8px #70f4e866; }
 .skill-list { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
 .sk { padding: 6px 8px; background: #0e0c14; border: 2px solid var(--line); cursor: pointer; }
 .sk:hover { border-color: var(--line2); } .sk.sel { border-color: var(--gold); } .sk.locked { opacity: 0.45; cursor: default; } .sk.equipped { box-shadow: inset 3px 0 0 var(--good); }
@@ -130,10 +130,10 @@ kbd { font-family: "GalmuriMono11", "Galmuri11", monospace; font-size: 10px; pad
 .cell .enh { position: absolute; right: 2px; top: 1px; font-size: 10px; color: var(--gold); text-shadow: 1px 1px 0 #000; z-index: 2; }
 .cell .lock { position: absolute; left: 2px; bottom: 0; font-size: 9px; z-index: 2; }
 .cell .lbl { position: absolute; bottom: 1px; width: 100%; font-size: 9px; color: var(--dim); }
-.cell.r-희귀 { border-color: var(--rare); } .cell.r-영웅 { border-color: var(--epic); } .cell.r-전설 { border-color: var(--legend); } .cell.r-신화 { border-color: var(--mythic); box-shadow: 0 0 8px #ff5a6e88; }
+.cell.r-희귀 { border-color: var(--rare); } .cell.r-영웅 { border-color: var(--epic); } .cell.r-전설 { border-color: var(--legend); } .cell.r-신화 { border-color: var(--mythic); box-shadow: 0 0 8px #ff5a6e88; } .cell.r-심연 { border-color: var(--abyss); box-shadow: 0 0 10px #70f4e899, inset 0 0 8px #70f4e822; }
 .cell.sel { outline: 2px solid var(--gold); }
 #tooltip { position: fixed; z-index: 100000; max-width: 300px; padding: 8px 10px; background: #0e0c14f4; border: 2px solid var(--line2); pointer-events: none; font-size: 12px; line-height: 1.5; }
-#tooltip .tt-name { font-weight: bold; font-size: 13px; } #tooltip .tt-sub { color: var(--dim); font-size: 11px; } #tooltip .tt-opt { color: #8fd0ff; } #tooltip .tt-myth { color: var(--mythic); } #tooltip .tt-cmp-up { color: var(--good); } #tooltip .tt-cmp-down { color: var(--bad); }
+#tooltip .tt-name { font-weight: bold; font-size: 13px; } #tooltip .tt-sub { color: var(--dim); font-size: 11px; } #tooltip .tt-opt { color: #8fd0ff; } #tooltip .tt-myth { color: var(--mythic); } #tooltip .tt-abyss { color: var(--abyss); } #tooltip .tt-cmp-up { color: var(--good); } #tooltip .tt-cmp-down { color: var(--bad); }
 .class-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 8px; }
 .cc { padding: 8px; background: #0e0c14; border: 2px solid var(--line); cursor: pointer; }
 .cc:hover { border-color: var(--gold); } .cc canvas { width: 72px; height: 96px; image-rendering: pixelated; float: right; }

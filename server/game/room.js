@@ -417,6 +417,11 @@ export class Room {
       if (p === killer || this.players.size === 1) ch.kills++;
       if (p.mythic?.has("swift_kill") && p === killer) p.buffs.set("swift_kill", { until: now + 3, mods: { move: 0.4, dmg: 0.1 } });
       if (p.mythic?.has("mana_font") && p === killer) p.mp = Math.min(p.maxMp, p.mp + p.maxMp * 0.1);
+      if (p.abyss?.has("rift_hunt") && p === killer) p.buffs.set("a_rift_hunt", { until: now + 4, mods: { move: 0.25, dmg: 0.12 } });
+      if (p.abyss?.has("star_bloom") && p === killer) {
+        heal(this, p, p, p.maxHp * 0.08, now);
+        p.mp = Math.min(p.maxMp, p.mp + p.maxMp * 0.08);
+      }
     }
     if (t.boss) this.onBossDead(t);
     else if (this.kind === "dungeon" && !this.exitOpen && this.map.kind === "normal" && (this.wave ? this.wave.spawned >= this.total : true) && this.aliveMonsters() === 0) {
@@ -513,7 +518,7 @@ export class Room {
     this.loot.set(l.id, l);
     const p = [...this.players.values()].find((q) => q.userId === userId);
     if (p) p.session.send({ t: "ev", list: [{ e: "loot", ...this.lootDesc(l) }] });
-    if (item.rarity === "신화" || item.rarity === "전설") this.ev({ e: "msg", text: `${p?.name ?? "?"}님에게 ${item.rarity} 아이템 [${item.name}]이(가) 떨어졌어요!`, kind: item.rarity === "신화" ? "mythic" : "legend" });
+    if (["심연", "신화", "전설"].includes(item.rarity)) this.ev({ e: "msg", text: `${p?.name ?? "?"}님에게 ${item.rarity} 아이템 [${item.name}]이(가) 떨어졌어요!`, kind: item.rarity === "심연" ? "abyss" : item.rarity === "신화" ? "mythic" : "legend" });
   }
   lootDesc(l) {
     const it = l.item;

@@ -3,7 +3,7 @@ import { deriveStats } from "../../shared/stats.js";
 import { CLASS_INFO, xpToNext, stageOf } from "../../shared/classes.js";
 import { SKILLS, unlockStage, adventurerBasic } from "../../shared/skills.js";
 import { MAX_LEVEL, STAT_POINTS_PER_LEVEL, PLAYER_RADIUS, ITEMS, TITLE_COLORS, TITLE_MAX } from "../../shared/constants.js";
-import { starterGear, ensureDur, upgradeMythic, syncMythic } from "../../shared/items.js";
+import { starterGear, ensureDur, upgradeMythic, syncMythic, ensureAbyss } from "../../shared/items.js";
 
 export const INV_SIZE = 40;
 
@@ -55,8 +55,8 @@ export function sanitizeChar(c, name) {
     const def = defaultLoadout(out);
     out.skills.forEach((id, i) => { if (!id && def[i] && !out.skills.includes(def[i])) out.skills[i] = def[i]; });
   } catch {}
-  for (const it of out.inv) { ensureDur(it); upgradeMythic(it); }
-  for (const it of Object.values(out.equip)) { ensureDur(it); upgradeMythic(it); }
+  for (const it of out.inv) { ensureAbyss(it); ensureDur(it); upgradeMythic(it); }
+  for (const it of Object.values(out.equip)) { ensureAbyss(it); ensureDur(it); upgradeMythic(it); }
   syncMythic(out);
   return out;
 }
@@ -124,6 +124,7 @@ export function refreshStats(u) {
   u.mythicBerserk = s.mythic.includes("berserk");
   u.mythicIron = s.mythic.includes("iron_will");
   u.mythic = new Set(s.mythic);
+  u.abyss = new Set(s.abyssEffects ?? []);
 }
 
 /** 경험치 획득 → 레벨업 (레벨업마다 스탯 3점) */
