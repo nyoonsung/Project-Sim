@@ -13,7 +13,7 @@ export const CLASS_DMG = {
   fist: 1.25,
   smith: 0.90,
 };
-const MOVE_MUL = { adventurer: 1, sword: 1, fist: 1.02, archer: 1.02, rogue: 1.12, mage: 0.97, priest: 0.98, smith: 0.92 };
+const MOVE_MUL = { adventurer: 1, sword: 1, fist: 1.02, archer: 1.02, rogue: 1.12, mage: 1.0, priest: 0.98, smith: 0.92 };
 
 /** 장착한 패시브 스킬의 상시 능력치 */
 export function passiveMods(equipped) {
