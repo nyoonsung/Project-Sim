@@ -229,12 +229,23 @@ try {
   b1.send({ t: "enhance", uid: 1 });
   await sleep(150);
   ok(!b1.msgs.some((m) => m.t === "enh"), "대장장이에게서 멀면 강화 불가");
-  await b1.walkTo(smithy.x, smithy.y + 30, 15000);
+  await b1.walkTo(smithy.x, smithy.y, 15000);
+  await sleep(150);
   let res = { success: 0, fail: 0, destroy: 0, reset: 0 };
-  for (let i = 0; i < 10; i++) { b1.send({ t: "enhance", uid: 1 }); await sleep(120); }
+  for (let i = 0; i < 10; i++) {
+    const before = b1.msgs.filter((m) => m.t === "enh").length;
+    b1.send({ t: "enhance", uid: 1 });
+    // 요청을 한꺼번에 쏘지 않고 서버 응답을 확인한 뒤 다음 강화를 시도한다.
+    const received = await b1.wait(() => b1.msgs.filter((m) => m.t === "enh").length > before, 2000);
+    if (!received) break;
+    const result = b1.msgs.filter((m) => m.t === "enh").at(-1)?.result;
+    if (result === "destroy") break; // 파괴되면 아이템이 사라져 다음 강화 요청은 불가능
+  }
   for (const m of b1.msgs) if (m.t === "enh") res[m.result]++;
-  // 파괴(1%)되면 그 뒤 요청은 없는 아이템이라 응답이 없음 — 정상
-  ok(res.destroy ? res.success + res.fail + res.destroy >= 1 && res.destroy === 1 : res.success + res.fail === 10, `강화 10회: 성공 ${res.success} / 실패 ${res.fail} / 파괴 ${res.destroy}`);
+  // 파괴·신화 초기화도 유효한 결과로 집계한다.
+  const attempts = res.success + res.fail + res.destroy + res.reset;
+  ok(res.destroy ? attempts >= 1 && res.destroy === 1 : attempts === 10,
+    `강화 10회: 성공 ${res.success} / 실패 ${res.fail} / 파괴 ${res.destroy} / 초기화 ${res.reset}`);
 
   // ── 메시지 폭주 → 연결 차단
   const b3 = await new Bot(c2).connect();
