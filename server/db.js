@@ -77,9 +77,9 @@ const SQL = {
   secByUser: "SELECT * FROM security_log WHERE user_id = ? ORDER BY id DESC LIMIT ?",
   itemLog: "INSERT INTO item_log (at, user_id, kind, detail) VALUES (?, ?, ?, ?)",
   itemLogByUser: "SELECT * FROM item_log WHERE user_id = ? ORDER BY id DESC LIMIT ?",
-  playerList: `SELECT u.id, u.username, u.email, u.role, u.created_at, u.last_login, u.last_ip, u.banned_until, u.ban_reason, u.muted_until, c.level, c.cls, c.best_floor
+  playerList: `SELECT u.id, u.username, u.email, u.role, u.created_at, u.last_login, u.last_ip, u.banned_until, u.ban_reason, u.muted_until, c.level, c.cls, c.best_floor, COALESCE(json_extract(c.data, '$.best2'), 0) AS best2
                FROM users u LEFT JOIN characters c ON c.user_id = u.id WHERE u.username LIKE ? ORDER BY u.id DESC LIMIT ? OFFSET ?`,
-  ranking: `SELECT u.username, c.level, c.cls, c.best_floor FROM characters c JOIN users u ON u.id = c.user_id
+  ranking: `SELECT u.username, c.level, c.cls, c.best_floor, COALESCE(json_extract(c.data, '$.best2'), 0) AS best2 FROM characters c JOIN users u ON u.id = c.user_id
             WHERE u.role = 'player' ORDER BY c.best_floor DESC, c.level DESC LIMIT 20`,
   trimSec: "DELETE FROM security_log WHERE at < ?",
 };
