@@ -6,27 +6,39 @@ import { dealDamage, applyStatus, isHardCC, moveMul, angDiff } from "./combat.js
 
 const TAU = Math.PI * 2;
 
-// 제2 던전 일반·정예 몬스터는 능력치가 낮아진 만큼 공격 모양과 연계 빈도를 보완한다.
-// 보스 패턴은 별도 로직이므로 이 튜닝의 영향을 받지 않는다.
+// 제2 던전의 일반·정예 몬스터는 낮아진 능력치에 맞춰 예고 시간을 늘리고 연계 빈도를 낮춘다.
 export const D2_MOB_PATTERN = Object.freeze({
-  attackRate: 0.9,
-  meleeWindup: 0.85,
-  stalkerTelegraph: 0.58,
-  stalkerDash: 205,
-  stalkerCooldown: 3.8,
-  guardRadius: 102,
-  guardTelegraph: 0.95,
-  chargerDistance: 190,
-  chargerWidth: 40,
-  chargerTelegraph: 0.68,
-  chargerCooldown: 3.6,
-  volleyShots: 2,
-  volleyGap: 0.16,
+  attackRate: 1.25,
+  meleeWindup: 1.25,
+  stalkerTelegraph: 0.92,
+  stalkerDash: 165,
+  stalkerCooldown: 5.0,
+  guardRadius: 92,
+  guardTelegraph: 1.2,
+  chargerDistance: 165,
+  chargerWidth: 34,
+  chargerTelegraph: 1.0,
+  chargerCooldown: 5.2,
+  volleyShots: 1,
+  volleyGap: 0.2,
   volleyPow: 0.72,
   casterFollowDelay: 0.5,
   casterFollowRadius: 34,
-  casterFollowTelegraph: 0.62,
-  casterFollowPow: 0.72,
+  casterFollowTelegraph: 1.0,
+  casterFollowPow: 0,
+});
+
+// 보스도 1/5 능력치에 맞춰 패턴을 덜 겹치게 하고 회피 시간을 늘린다.
+export const D2_BOSS_PATTERN = Object.freeze({
+  power: 0.75,
+  telegraph: 1.25,
+  telegraphMin: 1.0,
+  comboPhase2: 0.25,
+  comboPhase3: 0.32,
+  comboDelay: 1.05,
+  intervalPhase1: 4.0,
+  intervalPhase2: 3.2,
+  intervalPhase3: 2.6,
 });
 
 function pickTarget(room, m, now) {
@@ -235,7 +247,7 @@ export function tickMonster(room, m, now) {
       if (ready && los && dist <= def.range) {
         room.ev({ e: "anim", id: m.id, a: m.ai === "ranged" ? "shoot" : "cast" });
         if (m.ai === "ranged") {
-          m.windup = { at: now + (room.dungeon === 2 ? 0.28 : 0.35), interruptible: true, fire: () => {
+          m.windup = { at: now + (room.dungeon === 2 ? 0.45 : 0.35), interruptible: true, fire: () => {
             const fireShot = (spread, pow) => {
               const tt = room.units.get(t.id) ?? t;
               const a = Math.atan2(tt.y - m.y, tt.x - m.x) + spread;
@@ -255,13 +267,13 @@ export function tickMonster(room, m, now) {
         } else {
           const tx = t.x, ty = t.y, R = 46;
           const status = m.ai === "spore" ? { type: "slow", dur: 2.8, v: 0.42 } : def.aoe?.includes("ice") ? { type: "slow", dur: 2, v: 0.35 } : def.aoe?.includes("poison") || def.aoe?.includes("spore") ? { type: "poison", dur: 4, pow: 0.3 } : def.aoe?.includes("lightning") ? { type: "shock", dur: 3 } : null;
-          m.windup = { at: now + (room.dungeon === 2 ? 0.25 : 0.3), interruptible: true, fire: () => {
+          m.windup = { at: now + (room.dungeon === 2 ? 0.5 : 0.3), interruptible: true, fire: () => {
             const burst = (cx, cy, radius, telegraph, power) => room.addArea({ team: "m", shape: "c", x: cx, y: cy, r: radius, tel: telegraph, fire: (t1) => {
               room.ev({ e: "fx", fx: def.aoe, x: cx | 0, y: cy | 0, s: 0.55 });
               for (const p of room.players.values()) if (!p.dead && Math.hypot(p.x - cx, p.y - cy) <= radius + p.r) hitTarget(room, m, p, power, t1, { unblockable: true, status });
             } });
-            burst(tx, ty, R, room.dungeon === 2 ? 0.84 : 1.0, 1.3);
-            if (room.dungeon === 2) room.schedule(D2_MOB_PATTERN.casterFollowDelay, () => {
+            burst(tx, ty, R, room.dungeon === 2 ? 1.15 : 1.0, 1.3);
+            if (room.dungeon === 2 && D2_MOB_PATTERN.casterFollowPow > 0) room.schedule(D2_MOB_PATTERN.casterFollowDelay, () => {
               if (m.dead) return;
               const target = room.units.get(t.id) ?? t;
               burst(target.x, target.y, D2_MOB_PATTERN.casterFollowRadius, D2_MOB_PATTERN.casterFollowTelegraph, D2_MOB_PATTERN.casterFollowPow);
@@ -274,11 +286,11 @@ export function tickMonster(room, m, now) {
     case "bomber": {
       if (dist <= 46) {
         if (ready) {
-          const radius = room.dungeon === 2 ? 60 : 54, tel = room.dungeon === 2 ? 0.68 : 0.8;
+          const radius = room.dungeon === 2 ? 54 : 54, tel = room.dungeon === 2 ? 1.0 : 0.8;
           room.addArea({ team: "m", shape: "c", x: m.x, y: m.y, r: radius, tel, fire: () => {} });
           m.windup = { at: now + tel, interruptible: false, fire: (t0) => {
             room.ev({ e: "fx", fx: "explosions/small-explosion", x: m.x | 0, y: m.y | 0, s: 0.45 });
-            for (const p of room.players.values()) if (!p.dead && Math.hypot(p.x - m.x, p.y - m.y) <= radius + p.r) hitTarget(room, m, p, room.dungeon === 2 ? 1.9 : 1.8, t0, { unblockable: true });
+            for (const p of room.players.values()) if (!p.dead && Math.hypot(p.x - m.x, p.y - m.y) <= radius + p.r) hitTarget(room, m, p, room.dungeon === 2 ? 1.8 : 1.8, t0, { unblockable: true });
             room.kill(m, null, t0);
           } };
         }
@@ -298,27 +310,27 @@ export function tickBoss(room, b, now) {
   const dt = 0.05;
   if (isHardCC(b)) return;
   const def = b.def_;
-  const phase2Threshold = room.dungeon === 2 ? 0.66 : 0.5;
+  const phase2Threshold = 0.5;
   if (b.phase === 1 && b.hp < b.maxHp * phase2Threshold) {
     b.phase = 2;
-    b.speed *= 1.15;
+    b.speed *= room.dungeon === 2 ? 1.05 : 1.15;
     room.ev({ e: "msg", text: `${b.name}이(가) 힘을 끌어올렸어요! (2페이즈)`, kind: "boss" });
     room.ev({ e: "fx", fx: "status/rage", x: b.x | 0, y: b.y | 0, s: 1.5, at: b.id });
     b.patternAt = now + 1;
   }
   // 심연 보스의 3페이즈: 20% 이하에서 분노. 기존 텔레그래프는 유지해 회피 여지를 남긴다.
-  if (room.dungeon === 2 && b.phase === 2 && b.hp < b.maxHp * 0.3) {
+  if (room.dungeon === 2 && b.phase === 2 && b.hp < b.maxHp * 0.2) {
     b.phase = 3;
-    b.speed *= 1.18;
+    b.speed *= 1.08;
     room.ev({ e: "msg", text: `${b.name}이(가) 완전히 폭주합니다! (분노 상태)`, kind: "boss" });
     room.ev({ e: "fx", fx: "status/rage", x: b.x | 0, y: b.y | 0, s: 2.0, at: b.id });
     b.patternAt = now + 0.85;
   }
-  // 제2 던전 보스 격노: 2분 30초가 지나면 공격력 +50% (오래 버티기 방지)
-  if (room.dungeon === 2 && !b.enraged && now - (b.bornAt ??= now) > 150) {
+  // 장기전 방지용 분노는 4분 이후 공격력을 10%만 높인다.
+  if (room.dungeon === 2 && !b.enraged && now - (b.bornAt ??= now) > 240) {
     b.enraged = true;
-    b.atk *= 1.5;
-    room.ev({ e: "msg", text: `${b.name}의 분노가 한계에 달했어요! (공격력 +50%)`, kind: "boss" });
+    b.atk *= 1.1;
+    room.ev({ e: "msg", text: `${b.name}의 분노가 한계에 달했어요! (공격력 +10%)`, kind: "boss" });
   }
   const t = pickTarget(room, b, now) ?? bossTargets(room)[0];
   if (!t) return;
@@ -359,15 +371,15 @@ export function tickBoss(room, b, now) {
     const pickIndex = (b.patIdx++ * 7 + Math.floor(Math.random() * allPats.length)) % allPats.length;
     const chosen = allPats[pickIndex];
     const tune = (pat) => room.dungeon === 2
-      ? { ...pat, ...(pat.tel == null ? {} : { tel: Math.max(0.68, pat.tel * 0.8) }), pow: (pat.pow ?? 1) * 1.13 }
+      ? { ...pat, ...(pat.tel == null ? {} : { tel: Math.max(D2_BOSS_PATTERN.telegraphMin, pat.tel * D2_BOSS_PATTERN.telegraph) }), ...(pat.n == null ? {} : { n: Math.max(1, Math.ceil(pat.n * 0.75)) }), pow: (pat.pow ?? 1) * D2_BOSS_PATTERN.power }
       : pat;
     startPattern(room, b, tune(chosen), t, now);
     // 심연 보스는 2·3페이즈에서 서로 다른 공격을 겹쳐 압박한다.
     const comboPool = room.dungeon === 2 ? allPats.filter((x) => x !== chosen) : extra;
-    const comboChance = room.dungeon === 2 ? (b.phase === 3 ? 0.78 : 0.62) : 0.35;
+    const comboChance = room.dungeon === 2 ? (b.phase === 3 ? D2_BOSS_PATTERN.comboPhase3 : D2_BOSS_PATTERN.comboPhase2) : 0.35;
     if (b.phase >= 2 && comboPool.length && Math.random() < comboChance) {
       const p2 = tune(comboPool[Math.floor(Math.random() * comboPool.length)]);
-      room.schedule(room.dungeon === 2 ? 0.62 : 0.8, () => {
+      room.schedule(room.dungeon === 2 ? D2_BOSS_PATTERN.comboDelay : 0.8, () => {
         if (!b.dead) {
           const keep = b.pattern;
           startPattern(room, b, p2, pickTarget(room, b, room.now) ?? t, room.now);
@@ -376,8 +388,8 @@ export function tickBoss(room, b, now) {
       });
     }
     b.patternAt = now + (room.dungeon === 2
-      ? (b.phase === 3 ? 1.05 : b.phase === 2 ? 1.45 : 2.15)
-      : (b.phase === 2 ? 2.1 : 2.9)) + Math.random() * (room.dungeon === 2 ? 0.35 : 0.45);
+      ? (b.phase === 3 ? D2_BOSS_PATTERN.intervalPhase3 : b.phase === 2 ? D2_BOSS_PATTERN.intervalPhase2 : D2_BOSS_PATTERN.intervalPhase1)
+      : (b.phase === 2 ? 2.1 : 2.9)) + Math.random() * (room.dungeon === 2 ? 0.55 : 0.45);
     return;
   }
   // 평타 (가까우면)

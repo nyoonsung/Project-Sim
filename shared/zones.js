@@ -232,8 +232,7 @@ export const diffMul = (f) => ({ hp: 1 + 0.025 * (f - 1), dmg: 1 + 0.016 * (f - 
 export const LATE_EASE = (f) => (f >= 95 ? 0.75 : 1);
 // ── 제2 던전 난이도
 // 제2 던전 n층 = 실제 레벨 100 + n×5/3 (1층 102 → 30층 150).
-// 기존 제2 던전 수치(제1 던전 100층 대비 체력 ×2.5 · 공격력 ×1.8, 층별 성장)에
-// 별도 ×100을 곱한다. 이동 속도는 기존 ×1.1만 유지해 이동 판정이 망가지지 않도록 한다.
+// 현재 완화 후 이동 속도는 이전 제2 던전 기준으로 복구한다.
 export const D2_HARD = { hp: 2.5, dmg: 1.8, hpStep: 0.03, dmgStep: 0.018, speed: 1.1 };
 export const D2_EXTREME_MULTIPLIER = 100;
 export const D1_BOSS_HP_MULTIPLIER = 11;
@@ -241,8 +240,11 @@ export const D1_BOSS_HP_REDUCTION = 0.9;
 export const D1_BOSS_DAMAGE_MULTIPLIER = 10;
 export const D1_FINAL_BOSS_DAMAGE_MULTIPLIER = 1.2;
 export const D2_MONSTER_DAMAGE_MULTIPLIER = 0.5;
-// 제2 던전 일반·정예 몬스터의 HP·공격력·방어력은 현재 능력치에서 1/30로 조정. 보스·이동속도·경험치는 제외.
-export const D2_MONSTER_STAT_MULTIPLIER = 1 / 30;
+// 제2 던전 몬스터의 현재 HP·공격력·방어력을 직전 완화 수치의 4배로 상향(완화 전 밸런스의 약 80%).
+// 보스도 같은 비율로 상향하며 이동 속도는 완화 전 수준으로 복구한다. 경험치·보상은 유지.
+export const D2_MONSTER_STAT_MULTIPLIER = 4 / 150;
+export const D2_BOSS_STAT_MULTIPLIER = 0.8;
+export const D2_BOSS_SPEED_MULTIPLIER = 1;
 export const d2Level = (floor) => 100 + Math.round((floor * 5) / 3);
 /** 그 층의 실제 레벨 (제1 던전은 층 = 레벨) */
 export const effLevel = (floor, dungeon = 1) => (dungeon === 2 ? d2Level(floor) : floor);
@@ -312,8 +314,8 @@ export function bossStats(id, floor, party = 1, dungeon = 1) {
   const bossDamageMultiplier = dungeon === 1 ? D1_BOSS_DAMAGE_MULTIPLIER : 1;
   const finalBossDamageMultiplier = dungeon === 1 && floor === 100 && !def.mid ? D1_FINAL_BOSS_DAMAGE_MULTIPLIER : 1;
   return {
-    hp: Math.round(baseHp * hpMul * pScale * capBonus * (dungeon === 2 && floor >= DUNGEON2_MAX_FLOOR ? 1.5 : 1) * hpBoost(party, effLevel(floor, dungeon)) * bossHpMultiplier),
-    dmg: baseDmg * (def.mid ? 1.5 : 1.7) * bossDamageMultiplier * finalBossDamageMultiplier,
+    hp: Math.round(baseHp * hpMul * pScale * capBonus * (dungeon === 2 && floor >= DUNGEON2_MAX_FLOOR ? 1.5 : 1) * hpBoost(party, effLevel(floor, dungeon)) * bossHpMultiplier * (dungeon === 2 ? D2_BOSS_STAT_MULTIPLIER : 1)),
+    dmg: baseDmg * (def.mid ? 1.5 : 1.7) * bossDamageMultiplier * finalBossDamageMultiplier * (dungeon === 2 ? D2_BOSS_STAT_MULTIPLIER : 1),
     xp: (def.xp ?? 25) * 6 * s.xp,
     level: effLevel(floor, dungeon),
   };

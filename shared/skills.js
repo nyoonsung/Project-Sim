@@ -563,35 +563,41 @@ add("smith", [
 ]);
 
 // ─────────────────────────── 최종 단계 신화 스킬 (각 직업의 마지막 성장 단계에서 해금) ───────────────────────────
-add("sword", [{ id: "sw_final", name: "검성 일섬", grade: "신화", kind: "ultimate", cd: 45, cost: { ki: 60 }, aim: "dir", anim: "dash",
-  desc: "검의 정점에 오른 자의 일격. 눈앞 일직선 전체를 한 번에 베어 가른다(길이 340, 대상 무제한). 시전 후 6초간 주는 피해 +25%.", limit: "자세와 상관없이 쓸 수 있다. 짧은 예고(0.3초).",
+add("sword", [{ id: "sw_final", name: "검성 일섬", grade: "신화", kind: "ultimate", cd: 40, cost: { ki: 55 }, aim: "dir", anim: "dash",
+  desc: "전방을 꿰뚫는 초월의 발도. 긴 직선 범위의 적을 한꺼번에 베고, 8초간 공격력이 35% 상승한다.",
+  limit: "직선 범위와 대상 수에 강점이 있는 검사 최종기.",
   fx: { line: "melee/sword-slash", self: "status/rage" },
-  steps: [{ do: "line", length: 340, width: 64, pow: 9.0, telegraph: 0.3, groggy: 50 }, { do: "buff", target: "self", id: "sword_saint", dur: 6, mods: { dmg: 0.25 } }] }]);
-add("fist", [{ id: "fi_final", name: "권왕멸천", grade: "신화", kind: "ultimate", cd: 40, cost: { ki: 50 }, aim: "dir", anim: "dash", moveSkill: true,
-  desc: "하늘마저 부수는 권왕의 주먹. 돌진해 주변을 내려찍어 거대한 충격파를 일으키고 모두 기절시킨다. 8초간 주는 피해 +30%, 받는 피해 -20%.", limit: "보스는 기절 대신 큰 그로기.",
+  steps: [{ do: "line", length: 420, width: 82, pow: 11.5, telegraph: 0.25, groggy: 70 }, { do: "buff", target: "self", id: "sword_saint", dur: 8, mods: { dmg: 0.35 } }] }]);
+add("fist", [{ id: "fi_final", name: "권왕멸천", grade: "신화", kind: "ultimate", cd: 36, cost: { ki: 45 }, aim: "dir", anim: "dash", moveSkill: true,
+  desc: "적진 한가운데로 돌진해 대지를 내려찍는다. 넓은 충격파로 적을 제압하고, 10초간 공격력 35% 증가와 받는 피해 30% 감소를 얻는다.",
+  limit: "보스는 기절 대신 큰 그로기를 받는다.",
   fx: { self: "status/rage", area: "explosions/plasma-explosion", palette: ["#200800", "#802008", "#e05020", "#ffa040", "#ffe8a0", "#ffffff"] },
-  steps: [{ do: "buff", target: "self", id: "fist_king", dur: 8, mods: { dmg: 0.3, dr: 0.2 } }, { do: "dash", dist: 130, speed: 700 }, { do: "circle", radius: 120, pow: 5.5, max: 12, threat: 10, cc: { type: "stun", dur: 1.2 }, groggy: 50 }] }]);
-add("archer", [{ id: "ar_final", name: "천궁 강림", grade: "신화", kind: "ultimate", cd: 32, cost: { mp: 40 }, aim: "point", range: 340, anim: "shoot",
-  desc: "하늘의 활이 내려와 지정한 곳에 3초 동안 별빛 화살을 쏟아붓는다(12번). 동시에 10초간 공격 속도 +50%, 주는 피해 +30%.", limit: "대상 수 12명까지.",
+  steps: [{ do: "buff", target: "self", id: "fist_king", dur: 10, mods: { dmg: 0.35, dr: 0.3 } }, { do: "dash", dist: 150, speed: 760 }, { do: "circle", radius: 145, pow: 8.0, max: 16, threat: 12, cc: { type: "stun", dur: 1.4 }, groggy: 70 }] }]);
+add("archer", [{ id: "ar_final", name: "천궁 강림", grade: "신화", kind: "ultimate", cd: 30, cost: { mp: 38 }, aim: "point", range: 400, anim: "shoot",
+  desc: "지정한 지역에 별빛 화살을 14회 쏟아붓는다. 12초간 공격 속도 60%, 공격력 35%가 상승해 보스전과 다수전에 모두 강하다.",
+  limit: "넓은 범위에 지속 피해를 주며 최대 16명을 공격한다.",
   fx: { area: "arcane/star-fall", tick: "projectiles/arrow", self: "arcane/spell-charge" },
-  steps: [{ do: "buff", target: "self", id: "heaven_bow", dur: 10, mods: { aspd: 0.5, dmg: 0.3 } }, { do: "area", radius: 120, pow: 1.3, ticks: 12, interval: 0.25, telegraph: 0.4, max: 12 }] }]);
-add("rogue", [{ id: "ro_final", name: "섀도우 처형", grade: "신화", kind: "ultimate", cd: 40, cost: { mp: 30 }, aim: "dir", anim: "stab", moveSkill: true,
-  desc: "그림자가 되어 적의 뒤로 순간 이동한 뒤, 치명타 확률이 크게 오른 6연속 처형 베기를 가한다.", limit: "한 명만 노린다.",
+  steps: [{ do: "buff", target: "self", id: "heaven_bow", dur: 12, mods: { aspd: 0.6, dmg: 0.35 } }, { do: "area", radius: 150, pow: 1.65, ticks: 14, interval: 0.22, telegraph: 0.35, max: 16 }] }]);
+add("rogue", [{ id: "ro_final", name: "섀도우 처형", grade: "신화", kind: "ultimate", cd: 36, cost: { mp: 25 }, aim: "dir", anim: "stab", moveSkill: true,
+  desc: "표적의 뒤로 순간 이동해 8연속 급소 공격을 가한다. 처형 후 8초간 공격력과 공격 속도가 상승한다.",
+  limit: "단일 대상 처치와 보스의 약점 공략에 특화된다.",
   fx: { self: "arcane/blink-out", swing: "melee/dagger-flurry", hit: "impacts/crit-hit", palette: ["#100818", "#301848", "#6030a0", "#a070e0", "#e0d0ff", "#ffffff"] },
-  steps: [{ do: "custom", fn: "shadowstep", range: 230, pow: 3.0 }, { do: "melee", range: 48, arc: 90, pow: 1.4, hits: 6, gap: 0.08, max: 1, critBonus: 0.45 }] }]);
-add("mage", [{ id: "ma_final", name: "아포칼립스", grade: "신화", kind: "ultimate", cd: 50, cost: { mp: 60 }, aim: "point", range: 340, anim: "cast", cast: 0.8,
-  desc: "9서클의 금주. 하늘을 갈라 지정한 곳에 거대한 불기둥을 네 번 떨어뜨리고 모두 불태운다.", limit: "시전 0.8초, 대상 수 14명까지.",
+  steps: [{ do: "custom", fn: "shadowstep", range: 260, pow: 4.2 }, { do: "melee", range: 54, arc: 100, pow: 1.8, hits: 8, gap: 0.07, max: 1, critBonus: 0.65 }, { do: "buff", target: "self", id: "execution_flow", dur: 8, mods: { dmg: 0.25, aspd: 0.2 } }] }]);
+add("mage", [{ id: "ma_final", name: "아포칼립스", grade: "신화", kind: "ultimate", cd: 42, cost: { mp: 52 }, aim: "point", range: 400, anim: "cast", cast: 0.65,
+  desc: "하늘을 찢는 다섯 차례의 종말의 불기둥을 지정한 지역에 쏟아붓고, 불타는 적에게 추가 피해를 준다. 시전 후 8초간 공격력이 25% 상승한다.",
+  limit: "넓은 범위에 5회 타격하며 최대 16명을 공격한다.",
   fx: { area: "fire/meteor", pre: "arcane/magic-circle-cast" },
-  steps: [{ do: "area", radius: 135, pow: 3.4, ticks: 4, interval: 0.4, telegraph: 0.9, max: 14, status: { type: "burn", dur: 4, pow: 0.4 } }] }]);
-add("priest", [{ id: "pr_final", name: "신의 심판", grade: "신화", kind: "ultimate", cd: 50, cost: { holy: 50 }, aim: "point", range: 280, anim: "cast",
-  desc: "교황만이 부를 수 있는 심판의 빛. 주변 파티원의 HP를 40% 회복시키고, 지정한 곳에 성스러운 빛기둥을 세 번 내려 적을 벌한다(빛에 닿은 아군도 회복).", limit: "회복은 주변 240 안의 파티원.",
+  steps: [{ do: "area", radius: 150, pow: 4.3, ticks: 5, interval: 0.32, telegraph: 0.65, max: 16, status: { type: "burn", dur: 5, pow: 0.55 } }, { do: "buff", target: "self", id: "apocalypse_aftershock", dur: 8, mods: { dmg: 0.25 } }] }]);
+add("priest", [{ id: "pr_final", name: "신의 심판", grade: "신화", kind: "ultimate", cd: 42, cost: { holy: 42 }, aim: "point", range: 320, anim: "cast", cast: 0.4,
+  desc: "파티 전체를 크게 회복하고 성스러운 보호막을 씌운 뒤, 지정한 곳에 네 차례 심판의 빛을 내린다. 빛에 닿은 아군도 회복한다.",
+  limit: "파티 회복·보호와 광역 공격을 한 번에 수행하는 성직자 최종기.",
   fx: { area: "holy/holy-pillar", self: "holy/heal-aoe" },
-  steps: [{ do: "heal", target: "party", radius: 240, pctMax: 0.4 }, { do: "area", radius: 120, pow: 3.0, ticks: 3, interval: 0.35, telegraph: 0.5, max: 12, healAllies: 0.8 }] }]);
-add("smith", [{ id: "sm_final", name: "천공의 망치", grade: "신화", kind: "ultimate", cd: 45, cost: { parts: 3 }, aim: "point", range: 230, anim: "smash",
-  desc: "9성 장인의 걸작. 하늘에서 거대한 망치를 떨어뜨려 일대를 짓뭉개고 기절시킨다. 주변 파티원에게 큰 보호막.", limit: "부품 3개 소모.",
+  steps: [{ do: "heal", target: "party", radius: 260, pctMax: 0.55 }, { do: "shield", target: "party", radius: 250, pow: 3.2, dur: 8 }, { do: "area", radius: 135, pow: 3.8, ticks: 4, interval: 0.32, telegraph: 0.4, max: 14, healAllies: 1.0 }] }]);
+add("smith", [{ id: "sm_final", name: "천공의 망치", grade: "신화", kind: "ultimate", cd: 40, cost: { parts: 3 }, aim: "point", range: 280, anim: "smash",
+  desc: "하늘에서 거대한 망치를 떨어뜨려 적진을 붕괴시키고, 주변 파티원에게 강력한 보호막을 부여한다.",
+  limit: "부품 3개를 소모하는 대규모 파티 보호·제압 기술.",
   fx: { area: "melee/hammer-smash", self: "holy/divine-shield" },
-  steps: [{ do: "shield", target: "party", radius: 200, pow: 2.4, dur: 6 }, { do: "area", radius: 115, pow: 6.5, telegraph: 0.7, max: 12, cc: { type: "stun", dur: 1.5 }, groggy: 50 }] }]);
-
+  steps: [{ do: "shield", target: "party", radius: 260, pow: 4.0, dur: 9 }, { do: "area", radius: 150, pow: 8.2, telegraph: 0.55, max: 16, cc: { type: "stun", dur: 1.8 }, groggy: 70 }] }]);
 export const SKILLS = Object.fromEntries(S.map((s) => [s.id, s]));
 export const SKILL_LIST = S;
 

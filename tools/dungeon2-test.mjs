@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import {
   BOSSES, D1_BOSS_DAMAGE_MULTIPLIER, D1_BOSS_HP_MULTIPLIER, D1_BOSS_HP_REDUCTION,
-  D1_FINAL_BOSS_DAMAGE_MULTIPLIER, D2_EXTREME_MULTIPLIER, D2_MONSTER_DAMAGE_MULTIPLIER, D2_MONSTER_STAT_MULTIPLIER,
+  D1_FINAL_BOSS_DAMAGE_MULTIPLIER, D2_EXTREME_MULTIPLIER, D2_MONSTER_DAMAGE_MULTIPLIER, D2_MONSTER_STAT_MULTIPLIER, D2_BOSS_STAT_MULTIPLIER, D2_BOSS_SPEED_MULTIPLIER,
   DUNGEON2_MAX_FLOOR, DUNGEON2_ZONES, MONSTERS, ZONES,
   bossStats, floorKind, floorScale, monsterStats, zoneOf, effLevel,
 } from "../shared/zones.js";
@@ -11,7 +11,7 @@ import { Room } from "../server/game/room.js";
 import { rollAbyssRelic } from "../shared/items.js";
 import { makeFloor, mapPayload, makeTown, safeZone } from "../server/game/dungeon.js";
 import { levelGapXpMultiplier, unitXpMultiplier } from "../server/game/room.js";
-import { D2_MOB_PATTERN } from "../server/game/ai.js";
+import { D2_MOB_PATTERN, D2_BOSS_PATTERN } from "../server/game/ai.js";
 
 const ok = (condition, label) => {
   assert.ok(condition, label);
@@ -30,7 +30,7 @@ const ok = (condition, label) => {
   assert.equal(effLevel(1, 2), 102); assert.equal(effLevel(30, 2), 150); assert.equal(effLevel(45, 1), 45);
   for (const f of [1, 15, 30]) for (const id of zoneOf(f, 2).monsters) assert.equal(monsterStats(id, f, 1, 2).level, effLevel(f, 2));
   const top1 = monsterStats(zoneOf(100).monsters[0], 100, 1, 1);
-  assert.ok(monsterStats(zoneOf(1, 2).monsters[0], 1, 1, 2).hp > top1.hp * 4, "제2 던전 1층 몬스터는 1/30 조정 후에도 제1 던전 후반 몬스터보다 단단함");
+  assert.ok(monsterStats(zoneOf(1, 2).monsters[0], 1, 1, 2).hp > top1.hp * 0.7, "제2 던전 성장 구간은 유지하면서 몬스터 기본 능력치만 완화");
 }
 ok(true, "제2 던전 체력·공격력 기존 수치 대비 각각 정확히 100배 / 실제 레벨 102~150");
 
@@ -53,8 +53,8 @@ ok(true, "제2 던전 체력·공격력 기존 수치 대비 각각 정확히 10
   assert.ok(Math.abs(finalBoss.dmg - avgDmg * floorScale(100, 1).dmg * 1.7 * 10 * 1.2) < 1e-7);
   const d2Boss = bossStats("scarlet_regent", 10, 1, 2);
   const d2Scale = floorScale(10, 2);
-  assert.equal(d2Boss.hp, Math.round(avgHp * d2Scale.hp * 64 * 3.5));
-  assert.ok(Math.abs(d2Boss.dmg - avgDmg * d2Scale.dmg * 1.7) < 1e-7);
+  assert.equal(d2Boss.hp, Math.round(avgHp * d2Scale.hp * 64 * 3.5 * D2_BOSS_STAT_MULTIPLIER));
+  assert.ok(Math.abs(d2Boss.dmg - avgDmg * d2Scale.dmg * 1.7 * D2_BOSS_STAT_MULTIPLIER) < 1e-7);
 }
 ok(true, "제1 던전 전체 보스 HP -10% / 100층 최종 보스 공격력 +20% / 제2 던전 보스 유지");
 
@@ -119,10 +119,12 @@ for (const id of [DUNGEON2_ZONES[0].mid, DUNGEON2_ZONES[0].boss, DUNGEON2_ZONES[
 }
 ok(true, "제2 던전 몬스터·보스 능력치 산출");
 
-// 제2 던전 일반·정예 몬스터의 HP·공격력·방어력은 기존 실제 수치에서 1/30. 보스·이동속도·경험치는 유지.
+// 제2 던전 일반·정예 몬스터와 보스의 HP·공격력·방어력은 각각 현재 실제 수치의 1/5. 이동속도·경험치는 유지.
 {
   assert.equal(D2_MONSTER_DAMAGE_MULTIPLIER, 0.5);
-  assert.equal(D2_MONSTER_STAT_MULTIPLIER, 1 / 30);
+  assert.equal(D2_MONSTER_STAT_MULTIPLIER, 4 / 150);
+  assert.equal(D2_BOSS_STAT_MULTIPLIER, 0.8);
+  assert.equal(D2_BOSS_SPEED_MULTIPLIER, 1);
   const id = DUNGEON2_ZONES[0].monsters[0];
   const def = MONSTERS[id];
   const d2AvgHp = DUNGEON2_ZONES[0].monsters.reduce((sum, mid) => sum + MONSTERS[mid].hp, 0) / DUNGEON2_ZONES[0].monsters.length;
@@ -133,21 +135,27 @@ ok(true, "제2 던전 몬스터·보스 능력치 산출");
   const oldHp = def.hp * (d1AvgHp / d2AvgHp) * s.hp * 3.5;
   const oldDmg = def.dmg * (d1AvgDmg / d2AvgDmg) * s.dmg * D2_MONSTER_DAMAGE_MULTIPLIER;
   const st = monsterStats(id, 1, 1, 2);
-  assert.equal(st.hp, Math.round(oldHp / 30));
-  assert.ok(Math.abs(st.dmg / oldDmg - 1 / 30) < 1e-10);
+  assert.equal(st.hp, Math.round(oldHp * 4 / 150));
+  assert.ok(Math.abs(st.dmg / oldDmg - 4 / 150) < 1e-10);
   const d1Id = ZONES[0].monsters[0];
   const d1 = monsterStats(d1Id, 1, 1, 1);
   assert.ok(Math.abs(d1.dmg - MONSTERS[d1Id].dmg * floorScale(1, 1).dmg) < 1e-10);
   const room = new Room({ clock: 0 }, { id: "d2-def-scale", kind: "dungeon", floor: 1, dungeon: 2, map: makeFloor(1, 777, 1, 2) });
   const mob = room.spawnMonster(id, room.map.start[0] + 100, room.map.start[1]);
   const oldDef = 2 + room.lvl * 1.6;
-  assert.ok(Math.abs(mob.def / oldDef - 1 / 30) < 1e-10);
+  assert.ok(Math.abs(mob.def / oldDef - 4 / 150) < 1e-10);
   assert.equal(mob.speed, def.speed * floorScale(1, 2).speed);
   const d2Boss = bossStats(DUNGEON2_ZONES[0].boss, 10, 1, 2);
-  assert.ok(Math.abs(d2Boss.dmg - d1AvgDmg * floorScale(10, 2).dmg * 1.7) < 1e-7);
+  assert.ok(Math.abs(d2Boss.dmg - d1AvgDmg * floorScale(10, 2).dmg * 1.7 * 0.8) < 1e-7);
   assert.ok(d2Boss.hp > 0 && d2Boss.dmg > 0);
+  const bossRoom = new Room({ clock: 0 }, { id: "d2-boss-def-scale", kind: "dungeon", floor: 10, dungeon: 2, map: makeFloor(10, 778, 1, 2) });
+  const bossUnit = bossRoom.spawnBoss(DUNGEON2_ZONES[0].boss, bossRoom.map.bossAt[0], bossRoom.map.bossAt[1]);
+  assert.equal(bossUnit.hp, d2Boss.hp);
+  assert.equal(bossUnit.atk, d2Boss.dmg);
+  assert.ok(Math.abs(bossUnit.def / (6 + bossRoom.lvl * 2.2) - 0.8) < 1e-10);
+  assert.equal(bossUnit.speed, BOSSES[DUNGEON2_ZONES[0].boss].speed * D2_BOSS_SPEED_MULTIPLIER);
 }
-ok(true, "제2 던전 몬스터 HP·공격력·방어력은 1/30 / 이동속도·경험치·보스 유지");
+ok(true, "제2 던전 몬스터 HP·공격력·방어력은 직전 수치의 4배 / 보스 능력치 4배 / 이동속도 복구");
 
 // 드롭: 제2 던전 장비는 아이템 레벨 100, 소환된 몬스터는 아이템·결정 없음, 보관고 유물도 레벨 100
 {
@@ -211,14 +219,17 @@ ok(true, "빈 웨이브 좌표 대체 및 소환 예약 처리");
 }
 ok(true, "6마리 고립 몬스터 구조 처리");
 
-// 제2 던전 일반 몬스터 패턴은 짧은 예고, 추적 돌진, 2연사, 후속 장판으로 조금 더 공격적이다.
-// 보스 AI와 별도 상수이며 일반 던전에는 적용하지 않는다.
-assert.ok(D2_MOB_PATTERN.attackRate < 1);
-assert.ok(D2_MOB_PATTERN.meleeWindup < 1);
-assert.ok(D2_MOB_PATTERN.chargerTelegraph < 0.8);
-assert.equal(D2_MOB_PATTERN.volleyShots, 2);
-assert.ok(D2_MOB_PATTERN.casterFollowPow > 0);
-ok(true, "제2 던전 일반 몬스터 패턴 강화 값");
+// 제2 던전 일반 몬스터는 공격 간격·예고 시간을 늘리고 연사·후속 장판을 제거해 쉽게 조정.
+assert.ok(D2_MOB_PATTERN.attackRate > 1);
+assert.ok(D2_MOB_PATTERN.meleeWindup > 1);
+assert.ok(D2_MOB_PATTERN.chargerTelegraph >= 1);
+assert.equal(D2_MOB_PATTERN.volleyShots, 1);
+assert.equal(D2_MOB_PATTERN.casterFollowPow, 0);
+// 보스도 긴 예고, 낮은 연계 확률, 느린 패턴 간격을 사용한다.
+assert.ok(D2_BOSS_PATTERN.power < 1 && D2_BOSS_PATTERN.telegraph > 1);
+assert.ok(D2_BOSS_PATTERN.comboPhase2 < 0.3 && D2_BOSS_PATTERN.comboPhase3 < 0.4);
+assert.ok(D2_BOSS_PATTERN.intervalPhase1 > 3.5 && D2_BOSS_PATTERN.intervalPhase3 > 2.5);
+ok(true, "제2 던전 일반 몬스터·보스 패턴 완화 값");
 
 // 제2 던전 적 투사체·구형 공허 탄환에는 상한이 있어 객체가 끝없이 쌓이지 않는다.
 {
