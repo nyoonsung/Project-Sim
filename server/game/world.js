@@ -20,6 +20,7 @@ const filterChat = (s) => s.replace(/[\u0000-\u001f\u007f<>]/g, "").replace(/\s+
 const RESERVED_TITLES = [
   { key: "worldgod-gm-yunseong", user: "GM_윤성", text: "세계의 신", color: "#c8a0ff" },
   { key: "firstrival-yuminthomas", user: "yuminthomas", text: "최초의 대적자", color: "#ff5a6e" },
+  { key: "shinryu-shingung-gyukatchu", user: "gyukatchu", text: "신룡神弓", color: "#4ef59b" },
 ];
 function grantReserved(c, username, userId) {
   for (const g of RESERVED_TITLES) {
