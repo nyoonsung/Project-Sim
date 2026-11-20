@@ -538,7 +538,7 @@ export class World {
     if ((c.riftCrystals ?? 0) < 5) return fail(`균열 결정이 부족해요. 5개가 필요해요. (보유: ${c.riftCrystals ?? 0}개)`);
     if ((c.inv?.length ?? 0) >= INV_SIZE) return fail("가방이 가득 찼어요! 아이템을 정리한 뒤 다시 시도해 주세요.");
     // 심연 유물 5종은 각각 1%, 나머지 95%는 일반~전설 장비로 생성한다.
-    const it = rollAbyssVaultItem(secureRandom, { ilvl: Math.max(100, c.level), cls: c.cls });
+    const it = rollAbyssVaultItem(secureRandom, { ilvl: Math.max(100, Number(c.level) || 100), cls: c.cls });
     if (!it || !this.pickup(s.unit, it)) return fail("보상을 가방에 넣지 못했어요. 가방 공간을 확인해 주세요.");
     c.abyssKeys--;
     c.riftCrystals -= 5;
