@@ -507,19 +507,25 @@ export class World {
       this.sendChar(p.session);
     }
   }
+  vaultReply(s, ok, text, item = null) {
+    s.send?.({ t: "vaultResult", ok, text, item: item ? { name: item.name, rarity: item.rarity, relic: item.relic ?? null } : null });
+  }
   openAbyssVault(s) {
-    // 보관고 창은 관문지기 창에서도 열 수 있으므로, 서버에서는 NPC 거리 대신 마을 방 여부만 확인한다.
-    // 클라이언트 상호작용 거리·위치 동기화 문제로 재료를 가진 유저의 요청이 거절되지 않게 한다.
-    if (s.unit.room !== this.town) return s.notice("심연 보관고는 마을에서만 이용할 수 있어요.");
+    const fail = (text) => { this.vaultReply(s, false, text); };
+    // 보관고 창은 관문지기 창에서도 열 수 있으므로 마을 안이면 이용할 수 있다.
+    if (s.unit.room !== this.town) return fail("심연 보관고는 마을에서만 이용할 수 있어요.");
     const c = s.char;
-    if ((c.abyssKeys ?? 0) < 1) return s.notice("심연의 열쇠가 필요해요. 심연의 감시자를 처치해 얻을 수 있어요.");
-    if ((c.riftCrystals ?? 0) < 5) return s.notice(`균열 결정이 부족해요. 5개가 필요해요. (보유: ${c.riftCrystals ?? 0}개)`);
-    // 예전엔 아이템 레벨 30으로 나와서 레벨 100 이상에게 쓸모가 없었음 → 최고 레벨(100)
+    if ((c.abyssKeys ?? 0) < 1) return fail("심연의 열쇠가 필요해요. 심연의 감시자를 처치해 얻을 수 있어요.");
+    if ((c.riftCrystals ?? 0) < 5) return fail(`균열 결정이 부족해요. 5개가 필요해요. (보유: ${c.riftCrystals ?? 0}개)`);
+    if ((c.inv?.length ?? 0) >= INV_SIZE) return fail("가방이 가득 찼어요! 아이템을 정리한 뒤 다시 시도해 주세요.");
+    // 제2 던전 전용 전설 유물은 최고 아이템 레벨(100)로 생성한다.
     const it = rollAbyssRelic(secureRandom, { ilvl: 100, cls: c.cls });
-    if (!this.pickup(s.unit, it)) return;
-    c.abyssKeys--; c.riftCrystals -= 5;
-    this.save(s); this.sendChar(s);
-    s.notice(`심연 보관고가 열렸어요! [${it.name}]을(를) 획득했어요.`);
+    if (!this.pickup(s.unit, it)) return fail("유물을 가방에 넣지 못했어요. 가방 공간을 확인해 주세요.");
+    c.abyssKeys--;
+    c.riftCrystals -= 5;
+    this.save(s);
+    this.sendChar(s);
+    this.vaultReply(s, true, `심연 보관고가 열렸어요! [${it.name}]을(를) 획득했어요.`, it);
   }
   partyFailed(room) {
     for (const p of [...room.players.values()]) this.toTown(p.session, "패배했어요. 마을에서 정비하고 다시 도전해요.");
