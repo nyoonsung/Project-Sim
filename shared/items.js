@@ -183,6 +183,7 @@ export function rollItem(R, { ilvl, cls = "adventurer", tier = "normal", rarity 
   }
   it.name = itemName(it);
   it.dur = it.maxDur = maxDurability(it);
+  it.durV = DURABILITY_VERSION;
   return it;
 }
 
@@ -224,6 +225,7 @@ export function makeItem(spec) {
   if (Number.isInteger(mat) && mat >= 0 && mat < MATERIALS.length) it.mat = mat; // 재료 이름 고정 (신화가 레벨 따라 커져도 유지)
   it.name = itemName(it);
   it.dur = it.maxDur = maxDurability(it);
+  it.durV = DURABILITY_VERSION;
   return it;
 }
 
@@ -260,7 +262,13 @@ export const DUR_HIT = { armor: 0.1, helmet: 0.08, offhand: 0.1 };     // 맞을
 export const isBroken = (it) => it?.dur != null && it.dur <= 0;
 export const DUR_DEATH = 0.1;
 export const BROKEN_MUL = 0.3;
-export function maxDurability(it) { return 100 + RARITIES.indexOf(it.rarity) * 20; }
+export const DURABILITY_VERSION = 2;
+/** 일반~전설은 기존 최대치의 3배, 신화는 4배 */
+export function maxDurability(it) {
+  const rarityIndex = Math.max(0, RARITIES.indexOf(it?.rarity));
+  const oldMaximum = 100 + rarityIndex * 20;
+  return oldMaximum * (rarityIndex === 4 ? 4 : 3);
+}
 /** 신화 장비는 아이템 레벨이 캐릭터 레벨을 따라 같이 성장 (능력치·재료 이름 다시 계산). 바뀌었으면 true */
 export function syncMythic(ch) {
   let changed = false;
@@ -287,10 +295,20 @@ export function upgradeMythic(it) {
   } catch {}
   return it;
 }
-/** 내구도 상태가 없던 옛 장비도 꽉 찬 상태로 맞춤 */
+/** 내구도 상태가 없던 옛 장비도 꽉 찬 상태로 맞춤. 구버전 장비는 남은 비율을 보존해 새 최대치로 환산. */
 export function ensureDur(it) {
   if (!it || !SLOTS.includes(it.slot)) return it;
-  if (!Number.isFinite(it.maxDur) || it.maxDur <= 0) it.maxDur = maxDurability(it);
+  const targetMax = maxDurability(it);
+  const oldMax = Number.isFinite(it.maxDur) && it.maxDur > 0 ? it.maxDur : targetMax;
+  const oldDur = Number.isFinite(it.dur) ? it.dur : oldMax;
+  if (it.durV !== DURABILITY_VERSION) {
+    const ratio = Math.max(0, Math.min(1, oldDur / oldMax));
+    it.maxDur = targetMax;
+    it.dur = +(targetMax * ratio).toFixed(2);
+    it.durV = DURABILITY_VERSION;
+    return it;
+  }
+  if (!Number.isFinite(it.maxDur) || it.maxDur <= 0) it.maxDur = targetMax;
   if (!Number.isFinite(it.dur)) it.dur = it.maxDur;
   it.dur = Math.max(0, Math.min(it.maxDur, it.dur));
   return it;
@@ -304,8 +322,9 @@ export function repairCost(it) {
 
 /** 모험가 시작 장비 */
 export function starterGear() {
-  const club = { slot: "weapon", type: "club", rarity: "일반", ilvl: 1, enh: 0, base: { atk: 5 }, opts: [], name: "나무 몽둥이", dur: 100, maxDur: 100 };
-  const shield = { slot: "offhand", type: "shield", rarity: "일반", ilvl: 1, enh: 0, base: { def: 3, hp: 12 }, opts: [], name: "나무 방패", dur: 100, maxDur: 100 };
+  const club = { slot: "weapon", type: "club", rarity: "일반", ilvl: 1, enh: 0, base: { atk: 5 }, opts: [], name: "나무 몽둥이" };
+  const shield = { slot: "offhand", type: "shield", rarity: "일반", ilvl: 1, enh: 0, base: { def: 3, hp: 12 }, opts: [], name: "나무 방패" };
+  ensureDur(club); ensureDur(shield);
   return { weapon: club, offhand: shield };
 }
 
