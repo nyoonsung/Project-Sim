@@ -241,8 +241,10 @@ export const D1_BOSS_HP_REDUCTION = 0.9;
 export const D1_BOSS_DAMAGE_MULTIPLIER = 10;
 export const D1_FINAL_BOSS_DAMAGE_MULTIPLIER = 1.2;
 export const D2_MONSTER_DAMAGE_MULTIPLIER = 0.5;
-// 제2 던전 일반·정예 몬스터의 HP·공격력·방어력은 현재 능력치에서 1/30로 조정. 보스·이동속도·경험치는 제외.
-export const D2_MONSTER_STAT_MULTIPLIER = 1 / 30;
+// 제2 던전 일반·정예 몬스터의 HP·공격력·방어력은 기존 조정치의 1/5(기존 기본 능력치 대비 1/150).
+// 보스도 별도 배율로 HP·공격력·방어력을 현재의 1/5로 낮춘다. 이동속도·경험치·보상은 유지.
+export const D2_MONSTER_STAT_MULTIPLIER = 1 / 150;
+export const D2_BOSS_STAT_MULTIPLIER = 0.2;
 export const d2Level = (floor) => 100 + Math.round((floor * 5) / 3);
 /** 그 층의 실제 레벨 (제1 던전은 층 = 레벨) */
 export const effLevel = (floor, dungeon = 1) => (dungeon === 2 ? d2Level(floor) : floor);
@@ -312,8 +314,8 @@ export function bossStats(id, floor, party = 1, dungeon = 1) {
   const bossDamageMultiplier = dungeon === 1 ? D1_BOSS_DAMAGE_MULTIPLIER : 1;
   const finalBossDamageMultiplier = dungeon === 1 && floor === 100 && !def.mid ? D1_FINAL_BOSS_DAMAGE_MULTIPLIER : 1;
   return {
-    hp: Math.round(baseHp * hpMul * pScale * capBonus * (dungeon === 2 && floor >= DUNGEON2_MAX_FLOOR ? 1.5 : 1) * hpBoost(party, effLevel(floor, dungeon)) * bossHpMultiplier),
-    dmg: baseDmg * (def.mid ? 1.5 : 1.7) * bossDamageMultiplier * finalBossDamageMultiplier,
+    hp: Math.round(baseHp * hpMul * pScale * capBonus * (dungeon === 2 && floor >= DUNGEON2_MAX_FLOOR ? 1.5 : 1) * hpBoost(party, effLevel(floor, dungeon)) * bossHpMultiplier * (dungeon === 2 ? D2_BOSS_STAT_MULTIPLIER : 1)),
+    dmg: baseDmg * (def.mid ? 1.5 : 1.7) * bossDamageMultiplier * finalBossDamageMultiplier * (dungeon === 2 ? D2_BOSS_STAT_MULTIPLIER : 1),
     xp: (def.xp ?? 25) * 6 * s.xp,
     level: effLevel(floor, dungeon),
   };
