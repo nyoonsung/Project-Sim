@@ -510,14 +510,41 @@ export function openGate2() {
   }, { w: 390 });
 }
 
+let abyssVaultPending = false;
+let abyssVaultRequest = 0;
+
+export function onAbyssVaultResult(result) {
+  abyssVaultPending = false;
+  abyssVaultRequest++;
+  if (result.text) G.ui?.toast?.(result.text, result.ok ? "legend" : "info");
+  refreshWin("abyss-vault");
+  refreshWin("gate2");
+}
+
 export function openAbyssVault() {
   openWin("abyss-vault", "심연 보관고", () => {
     const keys = G.char.abyssKeys ?? 0, crystals = G.char.riftCrystals ?? 0;
     return [
       h("div", { class: "note", text: "심연의 열쇠 1개와 균열 결정 5개를 바치면 제2 던전 전용 전설 유물을 하나 얻어요." }),
       h("div", { class: "note", text: `보유량 — 심연의 열쇠: ${keys}개 / 균열 결정: ${crystals}개` }),
-      h("div", { class: "note", text: "재료 보유량은 서버에서 최종 확인해요. 표시가 늦게 갱신돼도 버튼을 눌러 확인할 수 있어요." }),
-      h("button", { class: "btn primary", onclick: () => send({ t: "vault" }) }, "열쇠와 결정으로 보관고 열기"),
+      h("div", { class: "note", text: "보관고는 서버가 재료를 확인한 뒤 유물을 지급해요. 응답이 없으면 요청 실패 안내가 표시돼요." }),
+      h("button", {
+        class: "btn primary",
+        disabled: abyssVaultPending,
+        onclick: () => {
+          if (abyssVaultPending) return;
+          abyssVaultPending = true;
+          const request = ++abyssVaultRequest;
+          refreshWin("abyss-vault");
+          send({ t: "vault" });
+          setTimeout(() => {
+            if (!abyssVaultPending || request !== abyssVaultRequest) return;
+            abyssVaultPending = false;
+            refreshWin("abyss-vault");
+            G.ui?.toast?.("심연 보관고에서 서버 응답이 없어요. 게임 서버에 최신 버전이 배포됐는지 확인해 주세요.", "info");
+          }, 6000);
+        }
+      }, abyssVaultPending ? "보관고 확인 중..." : "열쇠와 결정으로 보관고 열기"),
     ];
   }, { w: 360 });
 }
