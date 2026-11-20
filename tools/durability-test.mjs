@@ -3,7 +3,7 @@ import {
   DURABILITY_VERSION, RARITIES, ensureDur, maxDurability, makeItem, rollItem, starterGear,
 } from "../shared/items.js";
 
-const expected = [300, 360, 420, 480, 720];
+const expected = [450, 540, 630, 720, 1080];
 for (let i = 0; i < RARITIES.length; i++) {
   const item = { slot: "weapon", rarity: RARITIES[i] };
   assert.equal(maxDurability(item), expected[i], `${RARITIES[i]} max durability`);
@@ -22,17 +22,28 @@ for (let i = 0; i < RARITIES.length; i++) {
   assert.equal(item.dur, expected[i] * 0.4);
 }
 
+
+// V2 items (the immediately previous 3x/4x durability) retain their remaining percentage.
+const previousV2 = [300, 360, 420, 480, 720];
+for (let i = 0; i < RARITIES.length; i++) {
+  const item = { slot: "armor", rarity: RARITIES[i], dur: previousV2[i] * 0.4, maxDur: previousV2[i], durV: 2 };
+  ensureDur(item);
+  assert.equal(item.maxDur, expected[i]);
+  assert.equal(item.dur, expected[i] * 0.4);
+  assert.equal(item.durV, DURABILITY_VERSION);
+}
+
 // A broken legacy item remains broken after the migration.
 const broken = { slot: "armor", rarity: "신화", dur: 0, maxDur: 180 };
 ensureDur(broken);
-assert.equal(broken.maxDur, 720);
+assert.equal(broken.maxDur, 1080);
 assert.equal(broken.dur, 0);
 
 // Newly created, admin-created, and starter equipment all use the new values.
 const rolled = rollItem(() => 0.99, { ilvl: 100, cls: "sword", rarity: "신화" });
 const made = makeItem({ slot: "weapon", type: "sword", rarity: "신화", ilvl: 100 });
-assert.equal(rolled.maxDur, 720);
-assert.equal(made.maxDur, 720);
+assert.equal(rolled.maxDur, 1080);
+assert.equal(made.maxDur, 1080);
 for (const item of Object.values(starterGear())) assert.equal(item.maxDur, 300);
 
 console.log("DURABILITY TESTS: ALL PASS");
