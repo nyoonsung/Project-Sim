@@ -20,11 +20,11 @@ const filterChat = (s) => s.replace(/[\u0000-\u001f\u007f<>]/g, "").replace(/\s+
 const RESERVED_TITLES = [
   { key: "worldgod-gm-yunseong", user: "GM_윤성", text: "세계의 신", color: "#c8a0ff" },
   { key: "firstrival-yuminthomas", user: "yuminthomas", text: "최초의 대적자", color: "#ff5a6e" },
-  { key: "shinryu-shingung-gyukatchu", user: "gyukatchu", text: "신궁神弓", color: "#4ef59b" },
+  { key: "shinryu-shingung-gyukatchu", user: "규카츠", text: "신궁神弓", color: "#4ef59b" },
 ];
 function grantReserved(c, username, userId) {
   // 이전 배포에서 오독한 칭호 이름을 보관함에서 교정한다. ID를 유지해 장착 상태도 보존한다.
-  if (String(username).toLowerCase() === "gyukatchu" && Array.isArray(c.titles)) {
+  if (Array.isArray(c.titles)) {
     const oldTitle = c.titles.find((t) => t.text === "신룡神弓");
     if (oldTitle) {
       const correctTitle = c.titles.find((t) => t.text === "신궁神弓");
@@ -35,12 +35,15 @@ function grantReserved(c, username, userId) {
     }
   }
   for (const g of RESERVED_TITLES) {
-    if (g.user.toLowerCase() !== String(username).toLowerCase()) continue;
-    // 처음 받은 계정 번호에 영구히 묶음: 나중에 누가 같은 닉네임을 차지해도(이름 변경·계정 삭제 후 등) 칭호를 못 받음
+    // 닉네임이 바뀌어도 기존 계정 ID가 확인되면 같은 계정에 계속 지급한다.
     let owner = null;
     try { owner = Q.metaGet.get("reserved:" + g.key)?.v ?? null; } catch {}
+    const nameMatches = g.user.toLowerCase() === String(username).toLowerCase();
+    const ownerMatches = owner != null && String(owner) === String(userId);
+    if (!nameMatches && !ownerMatches) continue;
+    // 처음 받은 계정 번호에 영구히 묶음: 다른 사용자가 같은 닉네임을 차지해도 칭호를 못 받음
     if (owner && String(owner) !== String(userId)) continue;
-    if (!owner && userId != null) { try { Q.metaSet.run("reserved:" + g.key, String(userId)); } catch {} }
+    if (!owner && nameMatches && userId != null) { try { Q.metaSet.run("reserved:" + g.key, String(userId)); } catch {} }
     if ((c.granted ??= []).includes(g.key)) continue;
     c.titles ??= [];
     if (!c.titles.some((t) => t.text === g.text)) {
