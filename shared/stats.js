@@ -4,8 +4,15 @@ import { BASE_MOVE_SPEED, CRIT } from "./constants.js";
 import { gearTotals } from "./items.js";
 import { SKILLS } from "./skills.js";
 
-// 직업 피해 배율 (궁수 2.5배 상향)
-export const CLASS_DMG = { archer: 1.8, smith: 0.7 }; // 대장장이 최종 피해량 30% 감소 (탱커 역할 강화)
+// 직업 피해 배율: 궁수의 단일 화력을 소폭 낮추고, 저평가된 직업의 전투 기여도를 보정한다.
+export const CLASS_DMG = {
+  archer: 1.62, // 기존 대비 피해량 약 10% 감소
+  rogue: 1.15,
+  mage: 1.20,
+  priest: 1.25,
+  fist: 1.25,
+  smith: 0.90,
+};
 const MOVE_MUL = { adventurer: 1, sword: 1, fist: 1.02, archer: 1.02, rogue: 1.12, mage: 0.97, priest: 0.98, smith: 0.92 };
 
 /** 장착한 패시브 스킬의 상시 능력치 */

@@ -3,6 +3,8 @@ import { Room } from "../server/game/room.js";
 import { makeFloor } from "../server/game/dungeon.js";
 import { makePlayerUnit, newCharacter, refreshStats } from "../server/game/player.js";
 import { SKILL_LIST, SKILLS, skillReach } from "../shared/skills.js";
+import { CLASS_INFO } from "../shared/classes.js";
+import { CLASS_DMG } from "../shared/stats.js";
 import { TICK_DT } from "../shared/constants.js";
 import { moveCircle } from "../shared/move.js";
 
@@ -26,6 +28,19 @@ assert.equal(SKILLS.ma_resonance.steps[0].copyMul, 0.55);
 assert.equal(SKILLS.ro_hunt.steps[0].fn, "huntmark");
 assert.ok(SKILLS.sm_golem.steps[0].dur >= 16);
 
+// 직업 밸런스 패치 수치와 궁수 광역 스킬 등록을 고정 검증한다.
+assert.equal(CLASS_DMG.archer, 1.62);
+assert.equal(CLASS_INFO.archer.hpMul, 0.96);
+assert.equal(CLASS_DMG.rogue, 1.15);
+assert.equal(CLASS_DMG.mage, 1.20);
+assert.equal(CLASS_DMG.priest, 1.25);
+assert.equal(CLASS_DMG.fist, 1.25);
+assert.equal(CLASS_DMG.smith, 0.90);
+assert.equal(SKILLS.ar_volley.cls, "archer");
+assert.equal(SKILLS.ar_bombard.cls, "archer");
+assert.equal(SKILLS.ar_volley.steps[0].count, 9);
+assert.equal(SKILLS.ar_bombard.steps[0].ticks, 4);
+
 // 신화 스킬은 7개 직업 모두 전용 역할과 충분한 효과를 갖춰야 한다.
 const mythic = SKILL_LIST.filter((s) => s.grade === "신화");
 assert.equal(mythic.length, 7, "7개 직업에 신화 궁극기가 하나씩 있어야 한다.");
@@ -48,6 +63,8 @@ const expectedRanges = [
   ["sw_final", 420],
   ["fi_final", 295],
   ["ar_final", 550],
+  ["ar_volley", 300],
+  ["ar_bombard", 406],
   ["ma_final", 550],
   ["pr_final", 455],
   ["sm_final", 430],

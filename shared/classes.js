@@ -60,7 +60,7 @@ export const CLASS_INFO = {
     name: "궁수", role: "원거리 딜러", position: "원거리 딜러",
     desc: "활 연사, 약점 저격, 속박. 거리 유지와 지속 화력.",
     stats: ["agi2", "prec", "vit3", "crit"],
-    hpMul: 0.92, defMul: 0.9, mpBase: 90, dmgType: "phys", resource: null,
+    hpMul: 0.96, defMul: 0.9, mpBase: 90, dmgType: "phys", resource: null,
     ranks: tiers3(["아처 러너", "아처 유저", "아처 익스퍼트", "아처 마스터"]),
     look: { armor: ["#c3d98a", "#93ad5c", "#667d3c", "#435427"], core: ["#7a5a32", "#5a4024", "#3a2814"], mark: "#e8f080", weapon: "bow", head: "hood", headColor: "#4f6b2c" },
   },
