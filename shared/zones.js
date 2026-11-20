@@ -237,7 +237,10 @@ export const LATE_EASE = (f) => (f >= 95 ? 0.75 : 1);
 export const D2_HARD = { hp: 2.5, dmg: 1.8, hpStep: 0.03, dmgStep: 0.018, speed: 1.1 };
 export const D2_EXTREME_MULTIPLIER = 100;
 export const D1_BOSS_HP_MULTIPLIER = 11;
+export const D1_BOSS_HP_REDUCTION = 0.9;
 export const D1_BOSS_DAMAGE_MULTIPLIER = 10;
+export const D1_FINAL_BOSS_DAMAGE_MULTIPLIER = 1.2;
+export const D2_MONSTER_DAMAGE_MULTIPLIER = 0.5;
 export const d2Level = (floor) => 100 + Math.round((floor * 5) / 3);
 /** 그 층의 실제 레벨 (제1 던전은 층 = 레벨) */
 export const effLevel = (floor, dungeon = 1) => (dungeon === 2 ? d2Level(floor) : floor);
@@ -289,7 +292,7 @@ export function monsterStats(id, floor, party = 1, dungeon = 1) {
   const L = effLevel(floor, dungeon), fx = dungeon === 2 ? D2_FIX : { hp: 1, dmg: 1 };
   return {
     hp: Math.round((def.hp / norm[zi].hp) * fx.hp * s.hp * pScale * hpBoost(party, L)),
-    dmg: (def.dmg / norm[zi].dmg) * fx.dmg * s.dmg,
+    dmg: (def.dmg / norm[zi].dmg) * fx.dmg * s.dmg * (dungeon === 2 ? D2_MONSTER_DAMAGE_MULTIPLIER : 1),
     xp: def.xp * 6 * s.xp,
     level: L,
   };
@@ -303,11 +306,12 @@ export function bossStats(id, floor, party = 1, dungeon = 1) {
   const pScale = 1 + 0.7 * (party - 1);
   const hpMul = def.mid ? 36 : 64;
   const capBonus = dungeon === 1 && floor >= 100 ? 1.5 : 1;
-  const bossHpMultiplier = dungeon === 1 ? D1_BOSS_HP_MULTIPLIER : 1;
+  const bossHpMultiplier = dungeon === 1 ? D1_BOSS_HP_MULTIPLIER * D1_BOSS_HP_REDUCTION : 1;
   const bossDamageMultiplier = dungeon === 1 ? D1_BOSS_DAMAGE_MULTIPLIER : 1;
+  const finalBossDamageMultiplier = dungeon === 1 && floor === 100 && !def.mid ? D1_FINAL_BOSS_DAMAGE_MULTIPLIER : 1;
   return {
     hp: Math.round(baseHp * hpMul * pScale * capBonus * (dungeon === 2 && floor >= DUNGEON2_MAX_FLOOR ? 1.5 : 1) * hpBoost(party, effLevel(floor, dungeon)) * bossHpMultiplier),
-    dmg: baseDmg * (def.mid ? 1.5 : 1.7) * bossDamageMultiplier,
+    dmg: baseDmg * (def.mid ? 1.5 : 1.7) * bossDamageMultiplier * finalBossDamageMultiplier,
     xp: (def.xp ?? 25) * 6 * s.xp,
     level: effLevel(floor, dungeon),
   };
