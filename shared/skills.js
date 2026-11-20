@@ -338,7 +338,7 @@ add("rogue", [
     desc: "최대 8m(256px) 활주 후 짧은 피해 감소를 얻고 첫 공격을 강화한다.", limit: "받는 피해 감소 15%·2초, 이동 중 무적 없음.",
     fx: { self: "status/haste" }, steps: [{ do: "dash", dist: 280, speed: 760 }, { do: "buff", target: "self", id: "afterimage", dur: 2.5, mods: { dr: 0.25 }, nextHit: { pow: 0.9 } }] },
   { id: "ro_track", name: "약점 추적", grade: "영웅", kind: "passive",
-    desc: "급소 표식 대상 공격 시 피해가 최대 3중첩 증가한다(중첩당 8%).", limit: "표식 종료 시 해제, 대상별 발동 간격 2초.",
+    desc: "급소 표식 대상 공격 시 피해가 최대 3중첩 증가한다(중첩당 12%).", limit: "표식 종료 시 해제, 대상별 발동 간격 2초.",
     passive: { trigger: { on: "hit_marked", icd: 2, stack: { id: "track", max: 3, per: 0.12 } } } },
   {
   id: "ro_finale", name: "종막: 무음 처형", grade: "전설", kind: "ultimate", cd: 23, cost: { gap: 1 }, aim: "dir", anim: "stab", cast: 0.4, fragile: true,
@@ -371,7 +371,7 @@ add("mage", [
     desc: "전방 경로를 불태워 피해와 약한 화상을 부여.", limit: "같은 시전의 직접 피해 횟수 제한.",
     fx: { line: "fire/fire-ring", tick: "status/burning" }, steps: [{ do: "line", length: 250, width: 38, pow: 1.9, telegraph: 0.12, status: { type: "burn", dur: 4, pow: 0.28 } }] },
   { id: "ma_blink", name: "차원 도약", grade: "희귀", kind: "active", cd: 10, cost: { mp: 10 }, aim: "dir", anim: "cast", moveSkill: true,
-    desc: "지정 방향으로 최대 5m(160px) 순간 이동해 위치를 바꾼다.", limit: "무적·피해 감소·상태이상 해제 없음.",
+    desc: "지정 방향으로 최대 5.6m(180px) 순간 이동한 뒤 1.5초간 받는 피해가 25% 감소한다.", limit: "긴 무적은 없으며, 짧은 피해 감소로 위험한 공격을 버틴다.",
     fx: { self: "arcane/blink-out", end: "arcane/blink-in" }, steps: [{ do: "blink", dist: 180 }, { do: "buff", target: "self", id: "blink_ward", dur: 1.5, mods: { dr: 0.25 } }] },
   { id: "ma_echo", name: "잔향 룬", grade: "희귀", kind: "passive",
     desc: "서로 다른 주문을 이어 쓰면 잔향을 얻고 다음 광역 주문을 강화(중첩당 15%).", limit: "최대 2중첩·12초 유지, 같은 주문 반복은 불인정, 발동 내부 쿨타임 5초.",
@@ -585,13 +585,13 @@ add("archer", [{ id: "ar_final", name: "천궁 강림", grade: "신화", kind: "
   fx: { area: "arcane/star-fall", tick: "projectiles/arrow", self: "arcane/spell-charge" },
   steps: [{ do: "buff", target: "self", id: "heaven_bow", dur: 12, mods: { aspd: 0.6, dmg: 0.35 } }, { do: "area", radius: 150, pow: 1.65, ticks: 14, interval: 0.22, telegraph: 0.35, max: 16 }] }]);
 add("rogue", [{ id: "ro_final", name: "섀도우 처형", grade: "신화", kind: "ultimate", cd: 30, cost: { mp: 22 }, aim: "dir", anim: "stab", moveSkill: true,
-  desc: "표적의 뒤로 순간 이동해 8연속 급소 공격을 가한다. 처형 후 8초간 공격력과 공격 속도가 상승한다.",
+  desc: "표적의 뒤로 순간 이동해 10연속 급소 공격을 가한다. 처형 후 10초간 공격력과 공격 속도가 상승한다.",
   limit: "단일 대상 처치와 보스의 약점 공략에 특화된다.",
   fx: { self: "arcane/blink-out", swing: "melee/dagger-flurry", hit: "impacts/crit-hit", palette: ["#100818", "#301848", "#6030a0", "#a070e0", "#e0d0ff", "#ffffff"] },
   steps: [{ do: "custom", fn: "shadowstep", range: 280, pow: 5.0 }, { do: "melee", range: 54, arc: 100, pow: 2.3, hits: 10, gap: 0.065, max: 1, critBonus: 0.75 }, { do: "buff", target: "self", id: "execution_flow", dur: 10, mods: { dmg: 0.35, aspd: 0.3 } }] }]);
 add("mage", [{ id: "ma_final", name: "아포칼립스", grade: "신화", kind: "ultimate", cd: 34, cost: { mp: 45 }, aim: "point", range: 420, anim: "cast", cast: 0.5,
-  desc: "하늘을 찢는 다섯 차례의 종말의 불기둥을 지정한 지역에 쏟아붓고, 불타는 적에게 추가 피해를 준다. 시전 후 8초간 공격력이 25% 상승한다.",
-  limit: "넓은 범위에 5회 타격하며 최대 16명을 공격한다.",
+  desc: "하늘을 찢는 여섯 차례의 종말의 불기둥을 지정한 지역에 쏟아붓고, 불타는 적에게 추가 피해를 준다. 시전 후 10초간 공격력이 35% 상승한다.",
+  limit: "넓은 범위에 6회 타격하며 최대 16명을 공격한다.",
   fx: { area: "fire/meteor", pre: "arcane/magic-circle-cast" },
   steps: [{ do: "area", radius: 165, pow: 5.2, ticks: 6, interval: 0.3, telegraph: 0.45, max: 16, status: { type: "burn", dur: 5, pow: 0.55 } }, { do: "buff", target: "self", id: "apocalypse_aftershock", dur: 10, mods: { dmg: 0.35 } }] }]);
 add("priest", [{ id: "pr_final", name: "신의 심판", grade: "신화", kind: "ultimate", cd: 42, cost: { holy: 42 }, aim: "point", range: 320, anim: "cast", cast: 0.4,
