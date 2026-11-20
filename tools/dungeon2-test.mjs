@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import {
   BOSSES, D2_HARD, D1_BOSS_DAMAGE_MULTIPLIER, D1_BOSS_HP_MULTIPLIER, D1_BOSS_HP_REDUCTION,
-  D1_FINAL_BOSS_DAMAGE_MULTIPLIER, D2_EXTREME_MULTIPLIER, D2_MONSTER_DAMAGE_MULTIPLIER, D2_MONSTER_STAT_MULTIPLIER, D2_BOSS_STAT_MULTIPLIER, D2_BOSS_SPEED_MULTIPLIER,
+  D1_FINAL_BOSS_DAMAGE_MULTIPLIER, D2_EXTREME_MULTIPLIER, D2_MONSTER_DAMAGE_MULTIPLIER, D2_MONSTER_STAT_MULTIPLIER, D2_BOSS_STAT_MULTIPLIER, D2_BOSS_HP_REDUCTION, D2_BOSS_SPEED_MULTIPLIER,
   DUNGEON2_MAX_FLOOR, DUNGEON2_ZONES, MONSTERS, ZONES,
   bossStats, floorKind, floorScale, monsterStats, zoneOf, effLevel,
 } from "../shared/zones.js";
@@ -54,10 +54,17 @@ ok(true, "제2 던전 체력·공격력 기존 수치 대비 각각 정확히 10
   assert.ok(Math.abs(finalBoss.dmg - avgDmg * floorScale(100, 1).dmg * 1.7 * 10 * 1.2) < 1e-7);
   const d2Boss = bossStats("scarlet_regent", 10, 1, 2);
   const d2Scale = floorScale(10, 2);
-  assert.equal(d2Boss.hp, Math.round(avgHp * d2Scale.hp * 64 * 3.5 * D2_BOSS_STAT_MULTIPLIER));
+  assert.equal(D2_BOSS_HP_REDUCTION, 0.5);
+  assert.equal(d2Boss.hp, Math.round(avgHp * d2Scale.hp * 64 * 3.5 * D2_BOSS_STAT_MULTIPLIER * D2_BOSS_HP_REDUCTION));
   assert.ok(Math.abs(d2Boss.dmg - avgDmg * d2Scale.dmg * 1.7 * D2_BOSS_STAT_MULTIPLIER) < 1e-7);
+  const d2Mid = bossStats(DUNGEON2_ZONES[0].mid, 5, 1, 2);
+  const d2MidScale = floorScale(5, 2);
+  assert.equal(d2Mid.hp, Math.round(avgHp * d2MidScale.hp * 36 * 3.5 * D2_BOSS_STAT_MULTIPLIER * D2_BOSS_HP_REDUCTION));
+  const d2Final = bossStats(DUNGEON2_ZONES[2].boss, 30, 1, 2);
+  const d2FinalScale = floorScale(30, 2);
+  assert.equal(d2Final.hp, Math.round(avgHp * d2FinalScale.hp * 64 * 3.5 * 1.5 * D2_BOSS_STAT_MULTIPLIER * D2_BOSS_HP_REDUCTION));
 }
-ok(true, "제1 던전 전체 보스 HP -10% / 100층 최종 보스 공격력 +20% / 제2 던전 보스 유지");
+ok(true, "제1 던전 보스 기존 밸런스 유지 / 제2 던전 모든 보스 HP 50% 추가 감소");
 
 // 구역마다 몬스터 구성이 서로 다름 (예전엔 1구역과 3구역이 똑같았음)
 assert.notDeepEqual([...DUNGEON2_ZONES[0].monsters].sort(), [...DUNGEON2_ZONES[2].monsters].sort());
