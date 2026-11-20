@@ -243,6 +243,8 @@ export function makeItem(spec) {
     seen.add(o.k);
     it.opts.push({ k: o.k, v: +Math.max(0, Math.min(max, v)).toFixed(3) });
   }
+  // 심연 등급은 일반 옵션도 정확히 5개를 갖도록 부족분을 보충한다.
+  if (ri === 5) it.opts = rollOptions(Math.random, ilvl, ri, it.opts);
   if (ri === 4) {
     it.mythicV = MYTHIC_V;
     it.mythic = MYTHIC_EFFECTS[spec.mythic] ? spec.mythic : MYTHIC_KEYS[0];
@@ -276,9 +278,8 @@ export function rollAbyssRelic(R, { ilvl, cls = "adventurer" } = {}) {
   const level = Math.max(1, Math.min(100, Math.floor(ilvl || 1)));
   const type = relic.slot === "weapon" ? pick(R, gear.w) : relic.slot === "offhand" ? pick(R, gear.o) : undefined;
   const variant = ["helmet", "armor", "trinket"].includes(relic.slot) ? Math.floor(R() * 4) : 0;
-  const it = makeItem({ slot: relic.slot, type, variant, rarity: "심연", ilvl: level, abyssEffects: relic.effects });
+  const it = makeItem({ slot: relic.slot, type, variant, rarity: "심연", ilvl: level, abyssEffects: relic.effects, opts: rollOptions(R, level, 5) });
   if (!it) return null;
-  it.opts = rollOptions(R, level, 5);
   it.relic = relic.id;
   it.relicName = relic.name;
   it.relicColor = relic.color;
