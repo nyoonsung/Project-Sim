@@ -357,6 +357,14 @@ const EXTRA_PATTERNS = [
   { from: 70, p: { type: "lanes", n: 5, width: 56, len: 460, tel: 1.1, pow: 1.0, fx: "lightning/zap-hit" } },
 ];
 function startPattern(room, b, p, t, now) {
+  // 제2 던전 보스는 탄막·조준 사격·나선 탄막을 겹쳐 발사하지 않는다.
+  // 기존 탄이 화면에 남아 있는 동안 같은 보스가 새 투사체 패턴을 연속 예약하지 않도록 잠근다.
+  if (room.dungeon === 2 && ["barrage", "aimed", "spiral"].includes(p.type)) {
+    const lockedUntil = b.projectilePatternUntil ?? 0;
+    if (now < lockedUntil) return;
+    const hold = p.type === "spiral" ? (p.dur ?? 2.5) + 4 : p.type === "barrage" ? 5.5 : 3.5;
+    b.projectilePatternUntil = now + hold;
+  }
   const def = b.def_;
   const ply = bossTargets(room);
   const pw = p.pow ?? 1;
