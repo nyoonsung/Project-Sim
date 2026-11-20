@@ -1,7 +1,7 @@
 // 방(마을·던전 한 층·안전 구역) 시뮬레이션: 서버가 모든 판정을 한다
 import { TILE, TICK_DT, PLAYER_RADIUS } from "../../shared/constants.js";
 import { applyInput, moveCircle, circleHitsWall, blocksShot, lineOfSight, tileAt } from "../../shared/move.js";
-import { MONSTERS, BOSSES, monsterStats, bossStats, floorScale, zoneOf, effLevel } from "../../shared/zones.js";
+import { MONSTERS, BOSSES, monsterStats, bossStats, floorScale, zoneOf, effLevel, D2_MONSTER_STAT_MULTIPLIER } from "../../shared/zones.js";
 import { rollItem, rollAbyssRelic } from "../../shared/items.js";
 import { wearOnDeath } from "./wear.js";
 const KI_BASE = 30; // 내력 기본치
@@ -105,7 +105,7 @@ export class Room {
     const st = monsterStats(mid, Math.max(1, this.floor), this.partySize, this.dungeon);
     const m = {
       id: newUnitId(), team: "m", type: "m", mid, name: (elite ? "정예 " : "") + def.name, x, y, r: 11 * (def.look.scale ?? 1) * (elite ? 1.2 : 1),
-      hp: Math.round(st.hp * (elite ? 3 : 1)), maxHp: Math.round(st.hp * (elite ? 3 : 1)), atk: st.dmg * (elite ? 1.5 : 1), def: (def.ai === "guard" ? 12 + this.lvl * 1.2 : 2 + this.lvl * 1.6) * (elite ? 1.5 : 1),
+      hp: Math.round(st.hp * (elite ? 3 : 1)), maxHp: Math.round(st.hp * (elite ? 3 : 1)), atk: st.dmg * (elite ? 1.5 : 1), def: (def.ai === "guard" ? 12 + this.lvl * 1.2 : 2 + this.lvl * 1.6) * (elite ? 1.5 : 1) * (this.dungeon === 2 ? D2_MONSTER_STAT_MULTIPLIER : 1),
       level: st.level, xp: st.xp * (elite ? 3 : 1), speed: def.speed * (elite ? 1.08 : 1) * floorScale(this.floor, this.dungeon).speed, elite, ai: def.ai, def_: def,
       status: new Map(), buffs: new Map(), threat: new Map(), facing: Math.PI / 2, aggro: !!opts.aggro, home: [x, y],
       atkReady: 0, windup: null, dead: false, fly: !!def.fly, summoned: !!opts.summoned,
