@@ -24,15 +24,31 @@ for (const sk of legendary) {
   assert.ok(sk.steps?.length, `${sk.id}: 서버에서 실행할 단계가 있어야 한다.`);
 }
 assert.equal(SKILLS.sm_fortress.steps.filter((st) => st.do === "buff").length, 1);
-assert.equal(SKILLS.ma_resonance.steps[0].copyMul, 0.55);
+assert.equal(SKILLS.ma_resonance.steps[0].copyMul, 0.7);
+assert.ok(SKILLS.ro_cut.steps[0].pow >= 0.9);
+assert.ok(SKILLS.ro_shadowstep.steps[0].pow >= 2.1);
+assert.ok(SKILLS.ro_track.passive.trigger.stack.per >= 0.12);
+assert.ok(SKILLS.ro_final.steps.find((st) => st.do === "melee").hits >= 10);
+assert.ok(SKILLS.ma_arcane.steps[0].pow >= 1.15);
+assert.ok(SKILLS.ma_chain.steps[0].pow >= 2.4);
+assert.ok(SKILLS.ma_blizzard.steps[0].ticks >= 8);
+assert.ok(SKILLS.ma_final.steps.find((st) => st.do === "area").ticks >= 6);
+assert.ok(SKILLS.ma_blink.steps.some((st) => st.do === "buff" && st.mods?.dr >= 0.25));
 assert.equal(SKILLS.ro_hunt.steps[0].fn, "huntmark");
 assert.ok(SKILLS.sm_golem.steps[0].dur >= 16);
 
 // 직업 밸런스 패치 수치와 궁수 광역 스킬 등록을 고정 검증한다.
 assert.equal(CLASS_DMG.archer, 1.62);
 assert.equal(CLASS_INFO.archer.hpMul, 0.96);
-assert.equal(CLASS_DMG.rogue, 1.15);
-assert.equal(CLASS_DMG.mage, 1.20);
+assert.equal(CLASS_DMG.rogue, 1.50);
+assert.equal(CLASS_DMG.mage, 1.55);
+assert.equal(CLASS_INFO.rogue.hpMul, 1.0);
+assert.equal(CLASS_INFO.rogue.defMul, 0.95);
+assert.equal(CLASS_INFO.rogue.evadeBase, 0.06);
+assert.equal(CLASS_INFO.mage.hpMul, 1.12);
+assert.equal(CLASS_INFO.mage.defMul, 1.0);
+assert.equal(CLASS_INFO.mage.castMul, 1.12);
+assert.equal(CLASS_INFO.mage.mpRegenMul, 1.25);
 assert.equal(CLASS_DMG.priest, 1.25);
 assert.equal(CLASS_DMG.fist, 1.25);
 assert.equal(CLASS_DMG.smith, 0.90);
