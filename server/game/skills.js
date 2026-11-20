@@ -597,7 +597,7 @@ const CUSTOM = {
     if (t.status.has("huntmark")) return msg(u, "이미 표식이 있는 적이에요. (지속시간 갱신 불가)");
     t.status.set("huntmark", { until: now + st.dur, src: u.id, v: 0 });
     room.ev({ e: "st", id: t.id, s: "huntmark", d: st.dur });
-    u.buffs.set("night_hunt", { until: now + st.dur, mods: { dmg: 0.22, crit: 0.12 } });
+    u.buffs.set("night_hunt", { until: now + st.dur, mods: { dmg: 0.32, crit: 0.18 } });
     room.ev({ e: "buff", id: u.id, b: "night_hunt", d: st.dur });
     room.ev({ e: "fx", fx: "shadow/hex-sigil", x: t.x | 0, y: t.y | 0, s: 0.6, pal: ctx.sk.fx?.palette ?? null });
   },
