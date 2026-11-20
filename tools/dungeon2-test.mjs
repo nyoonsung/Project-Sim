@@ -11,6 +11,7 @@ import { Room } from "../server/game/room.js";
 import { rollAbyssRelic } from "../shared/items.js";
 import { makeFloor, mapPayload, makeTown, safeZone } from "../server/game/dungeon.js";
 import { levelGapXpMultiplier, unitXpMultiplier } from "../server/game/room.js";
+import { World } from "../server/game/world.js";
 import { D2_MOB_PATTERN, D2_BOSS_PATTERN } from "../server/game/ai.js";
 
 const ok = (condition, label) => {
@@ -174,6 +175,43 @@ ok(true, "제2 던전 몬스터·보스 능력치 1/5 완화와 이동속도 조
   assert.equal(relic.ilvl, 100);
 }
 ok(true, "제2 던전 드롭 레벨 100 · 소환물 드롭 없음 · 유물 레벨 100");
+
+
+// 심연 보관고: NPC 접근, 서버 재료 판정, 유물 수령 성공 시에만 재료 소모.
+// 클라이언트 표시값이 늦게 갱신돼도 서버 요청은 정상 처리할 수 있어야 한다.
+{
+  const town = makeTown();
+  const vault = town.objects.find((o) => o.kind === "npc" && o.id === "vault");
+  assert.ok(vault, "town must contain the Abyss Vault NPC");
+  const world = Object.create(World.prototype);
+  const received = [];
+  const notices = [];
+  world.pickup = (_unit, item) => { received.push(item); return true; };
+  world.save = () => {};
+  world.sendChar = () => {};
+  const session = {
+    char: { cls: "sword", abyssKeys: 1, riftCrystals: 5 },
+    notice: (message) => notices.push(message),
+  };
+  session.unit = { room: { map: town }, x: vault.x, y: vault.y };
+  assert.equal(world.nearNpc(session, "vault", 90), true, "vault should be interactable at the NPC");
+  world.openAbyssVault(session);
+  assert.equal(received.length, 1, "one relic should be awarded");
+  assert.equal(session.char.abyssKeys, 0, "one abyss key should be consumed");
+  assert.equal(session.char.riftCrystals, 0, "five rift crystals should be consumed");
+  assert.ok(notices.some((x) => x.includes("심연 보관고가 열렸어요")), "successful opening should notify the player");
+
+  const failed = {
+    char: { cls: "sword", abyssKeys: 1, riftCrystals: 5 },
+    notice: (message) => notices.push(message),
+  };
+  failed.unit = { room: { map: town }, x: vault.x, y: vault.y };
+  world.pickup = () => false; // 가방이 가득 찬 상황
+  world.openAbyssVault(failed);
+  assert.equal(failed.char.abyssKeys, 1, "failed pickup must not consume the key");
+  assert.equal(failed.char.riftCrystals, 5, "failed pickup must not consume crystals");
+}
+ok(true, "심연 보관고 상호작용·재료 소모·가방 부족 시 재료 보존");
 
 // 직업 피해 배율: 대장장이는 탱커 역할을 유지하면서 피해 기여도가 상향되고, 궁수는 단일 화력이 약 10% 낮아졌다.
 assert.equal(CLASS_DMG.smith, 0.9);
