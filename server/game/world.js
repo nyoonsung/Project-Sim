@@ -508,8 +508,9 @@ export class World {
     }
   }
   openAbyssVault(s) {
-    // 보관고는 제2 던전 관문지기 창에서도 열 수 있음 (둘이 붙어 있음)
-    if (!this.nearNpc(s, "vault", 160) && !this.nearNpc(s, "gate2", 160)) return s.notice("마을 오른쪽 심연 보관고(또는 관문지기) 앞에서만 사용할 수 있어요.");
+    // 보관고 창은 관문지기 창에서도 열 수 있으므로, 서버에서는 NPC 거리 대신 마을 방 여부만 확인한다.
+    // 클라이언트 상호작용 거리·위치 동기화 문제로 재료를 가진 유저의 요청이 거절되지 않게 한다.
+    if (s.unit.room !== this.town) return s.notice("심연 보관고는 마을에서만 이용할 수 있어요.");
     const c = s.char;
     if ((c.abyssKeys ?? 0) < 1) return s.notice("심연의 열쇠가 필요해요. 심연의 감시자를 처치해 얻을 수 있어요.");
     if ((c.riftCrystals ?? 0) < 5) return s.notice(`균열 결정이 부족해요. 5개가 필요해요. (보유: ${c.riftCrystals ?? 0}개)`);
