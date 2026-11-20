@@ -11,6 +11,7 @@ export const RARITY_WEIGHTS = {
 export const RARITY_MUL = [1, 1.12, 1.26, 1.42, 3.7, 4.35]; // 심연은 신화보다 기본 능력치 약 18% 높음
 export const MYTHIC_OPT_MUL = 2;                              // 신화 추가 옵션 값 2배
 const MYTHIC_V = 3;                                           // 신화 성능 버전 (옛 신화를 한 번만 올려 주기용)
+const ABYSS_V = 2;                                             // 심연 능력치 레벨 동기화 버전
 export const RARITY_OPTS = [0, 1, 2, 3, 4, 5];              // 추가 옵션 수
 
 export const SLOTS = ["weapon", "offhand", "helmet", "armor", "trinket"];
@@ -205,7 +206,7 @@ export function rollItem(R, { ilvl, cls = "adventurer", tier = "normal", rarity 
     it.mythic = pick(R, MYTHIC_KEYS);
     it.title = pick(R, MYTHIC_TITLES);
   } else if (ri === 5) {
-    it.abyssV = 1;
+    it.abyssV = ABYSS_V;
     it.abyssEffects = ABYSS_KEYS.slice(0, 2);
   }
   it.name = itemName(it);
@@ -225,7 +226,8 @@ export function makeItem(spec) {
   const slot = SLOTS.includes(spec.slot) ? spec.slot : null;
   if (!slot) return null;
   const ri = Math.max(0, RARITIES.indexOf(spec.rarity));
-  const ilvl = Math.max(1, Math.min(100, Math.floor(Number(spec.ilvl) || 1)));
+  const ilvlCap = spec.rarity === "심연" ? 150 : 100;
+  const ilvl = Math.max(1, Math.min(ilvlCap, Math.floor(Number(spec.ilvl) || 1)));
   let type = null, variant = 0;
   if (slot === "weapon") { type = WEAPON_TYPES[spec.type] ? spec.type : "sword"; }
   else if (slot === "offhand") { type = OFFHAND_TYPES[spec.type] ? spec.type : "shield"; }
@@ -252,7 +254,7 @@ export function makeItem(spec) {
   } else if (ri === 5) {
     const effects = Array.isArray(spec.abyssEffects) ? [...new Set(spec.abyssEffects.filter((k) => ABYSS_EFFECTS[k]))].slice(0, 2) : [];
     for (const k of ABYSS_KEYS) if (effects.length < 2 && !effects.includes(k)) effects.push(k);
-    it.abyssV = 1;
+    it.abyssV = ABYSS_V;
     it.abyssEffects = effects;
   }
   if (spec.ench && ENCHANTS[spec.ench]) it.ench = spec.ench;
@@ -275,7 +277,7 @@ const ABYSS_RELICS = [
 export function rollAbyssRelic(R, { ilvl, cls = "adventurer" } = {}) {
   const gear = CLASS_GEAR[cls] ?? CLASS_GEAR.adventurer;
   const relic = pick(R, ABYSS_RELICS);
-  const level = Math.max(1, Math.min(100, Math.floor(ilvl || 1)));
+  const level = Math.max(1, Math.min(150, Math.floor(ilvl || 1)));
   const type = relic.slot === "weapon" ? pick(R, gear.w) : relic.slot === "offhand" ? pick(R, gear.o) : undefined;
   const variant = ["helmet", "armor", "trinket"].includes(relic.slot) ? Math.floor(R() * 4) : 0;
   const it = makeItem({ slot: relic.slot, type, variant, rarity: "심연", ilvl: level, abyssEffects: relic.effects, opts: rollOptions(R, level, 5) });
@@ -285,7 +287,7 @@ export function rollAbyssRelic(R, { ilvl, cls = "adventurer" } = {}) {
   it.relicColor = relic.color;
   for (const [k, v] of Object.entries(relic.base)) it.base[k] = (it.base[k] ?? 0) + v;
   it.abyssEffects = relic.effects.slice();
-  it.abyssV = 1;
+  it.abyssV = ABYSS_V;
   it.name = relic.name;
   it.dur = it.maxDur = maxDurability(it);
   it.durV = DURABILITY_VERSION;
@@ -297,7 +299,7 @@ export function ensureAbyss(it) {
   if (!it || typeof it !== "object") return it;
   const relic = ABYSS_RELICS.find((r) => r.id === it.relic);
   if (relic) {
-    if (it.abyssV !== 1 || it.rarity !== "심연") {
+    if ((it.abyssV ?? 0) < ABYSS_V || it.rarity !== "심연") {
       const oldMax = Number.isFinite(it.maxDur) && it.maxDur > 0 ? it.maxDur : maxDurability({ ...it, rarity: "전설" });
       const oldDur = Number.isFinite(it.dur) ? it.dur : oldMax;
       const ratio = Math.max(0, Math.min(1, oldDur / oldMax));
@@ -306,7 +308,7 @@ export function ensureAbyss(it) {
       if (it.slot === "weapon") Object.assign(it.base, ABYSS_WEAPON_BONUS);
       for (const [k, v] of Object.entries(relic.base)) it.base[k] = (it.base[k] ?? 0) + v;
       it.opts = rollOptions(Math.random, it.ilvl, 5, it.opts);
-      it.abyssV = 1;
+      it.abyssV = ABYSS_V;
       it.maxDur = maxDurability(it);
       it.dur = +(it.maxDur * ratio).toFixed(2);
       it.durV = DURABILITY_VERSION;
@@ -318,19 +320,44 @@ export function ensureAbyss(it) {
     return it;
   }
   if (it.rarity === "심연") {
+    if ((it.abyssV ?? 0) < ABYSS_V) {
+      it.base = baseStats(it.slot, it.type, it.ilvl, 5, it.variant ?? 1);
+      if (it.slot === "weapon") Object.assign(it.base, ABYSS_WEAPON_BONUS);
+      it.opts = rollOptions(Math.random, it.ilvl, 5, it.opts);
+      it.abyssV = ABYSS_V;
+    }
     const effects = Array.isArray(it.abyssEffects) ? [...new Set(it.abyssEffects.filter((k) => ABYSS_EFFECTS[k]))].slice(0, 2) : [];
     for (const k of ABYSS_KEYS) if (effects.length < 2 && !effects.includes(k)) effects.push(k);
     it.abyssEffects = effects;
-    it.abyssV = 1;
   }
   return it;
+}
+
+/** 심연 장비도 신화처럼 캐릭터 레벨을 따라 성장한다. 기존 유물 고정 보너스는 재계산 때 다시 더한다. */
+export function syncAbyss(ch) {
+  let changed = false;
+  const targetLevel = Math.max(1, Math.floor(Number(ch?.level) || 1));
+  for (const it of [...Object.values(ch?.equip ?? {}), ...(ch?.inv ?? [])]) {
+    if (!it || it.rarity !== "심연") continue;
+    if ((it.ilvl ?? 1) >= targetLevel) continue;
+    it.ilvl = Math.min(150, targetLevel);
+    it.base = baseStats(it.slot, it.type, it.ilvl, 5, it.variant ?? 1);
+    if (it.slot === "weapon") Object.assign(it.base, ABYSS_WEAPON_BONUS);
+    const relic = ABYSS_RELICS.find((r) => r.id === it.relic);
+    if (relic) for (const [k, v] of Object.entries(relic.base)) it.base[k] = (it.base[k] ?? 0) + v;
+    it.abyssV = ABYSS_V;
+    it.name = itemName(it);
+    changed = true;
+  }
+  return changed;
 }
 
 /** 보관고 심연 유물 5종은 각각 1%(총 5%), 나머지 95%는 일반~전설 장비. */
 export function rollAbyssVaultItem(R, opts = {}) {
   if (R() < 0.05) return rollAbyssRelic(R, opts);
   const rarityIndex = pickW(R, [62, 26, 9, 2.5]);
-  return rollItem(R, { ...opts, rarity: RARITIES[rarityIndex] });
+  // 일반~전설 보상은 기존 레벨 100 기준을 유지한다. 심연 유물만 캐릭터 레벨까지 성장한다.
+  return rollItem(R, { ...opts, ilvl: Math.min(100, opts.ilvl ?? 100), rarity: RARITIES[rarityIndex] });
 }
 
 // ── 장비 내구도 (모든 장비): 무기·보조장비(방패 제외)·장신구는 스킬을 쓸 때, 갑옷·투구·방패는 맞을 때 닳고,

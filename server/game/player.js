@@ -3,7 +3,7 @@ import { deriveStats } from "../../shared/stats.js";
 import { CLASS_INFO, xpToNext, stageOf } from "../../shared/classes.js";
 import { SKILLS, unlockStage, adventurerBasic } from "../../shared/skills.js";
 import { MAX_LEVEL, STAT_POINTS_PER_LEVEL, PLAYER_RADIUS, ITEMS, TITLE_COLORS, TITLE_MAX } from "../../shared/constants.js";
-import { starterGear, ensureDur, upgradeMythic, syncMythic, ensureAbyss } from "../../shared/items.js";
+import { starterGear, ensureDur, upgradeMythic, syncMythic, ensureAbyss, syncAbyss } from "../../shared/items.js";
 
 export const INV_SIZE = 40;
 
@@ -58,6 +58,7 @@ export function sanitizeChar(c, name) {
   for (const it of out.inv) { ensureAbyss(it); ensureDur(it); upgradeMythic(it); }
   for (const it of Object.values(out.equip)) { ensureAbyss(it); ensureDur(it); upgradeMythic(it); }
   syncMythic(out);
+  syncAbyss(out);
   return out;
 }
 
@@ -146,8 +147,9 @@ export function gainXp(room, u, amount) {
   }
   if (leveled) {
     const myth = syncMythic(ch); // 신화 장비도 같이 성장
+    const abyss = syncAbyss(ch); // 심연 장비도 같은 레벨로 성장
     refreshStats(u);
-    if (myth) room.world?.sendChar?.(u.session);
+    if (myth || abyss) room.world?.sendChar?.(u.session);
     u.hp = u.maxHp;
     u.mp = u.maxMp;
     room.ev({ e: "lvl", id: u.id, l: ch.level });

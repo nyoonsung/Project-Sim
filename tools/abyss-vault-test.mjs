@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import {
   ABYSS_EFFECTS, RARITIES, RARITY_MUL, RARITY_OPTS,
   rollAbyssRelic, rollAbyssVaultItem, ensureAbyss,
-  gearTotals, maxDurability,
+  gearTotals, maxDurability, baseStats, makeItem, syncAbyss,
 } from "../shared/items.js";
 
 const rng = (seed = 0x5eed1234) => () => {
@@ -17,6 +17,26 @@ assert.equal(RARITIES[5], "심연");
 assert.ok(RARITY_MUL[5] > RARITY_MUL[4], "Abyss base stat multiplier must exceed Mythic");
 assert.equal(RARITY_OPTS[5], 5, "Abyss gear must have five random options");
 assert.ok(maxDurability({ rarity: "심연" }) > maxDurability({ rarity: "신화" }));
+
+// Same slot/type/variant and same item level: every scaled raw stat must be higher on Abyss.
+const comparable = [
+  ["weapon", "sword", 0],
+  ["offhand", "shield", 0],
+  ["helmet", null, 2],
+  ["armor", null, 2],
+  ["trinket", null, 1],
+];
+for (const [slot, type, variant] of comparable) {
+  const mythicBase = baseStats(slot, type, 150, 4, variant);
+  const abyssBase = baseStats(slot, type, 150, 5, variant);
+  const scaledKeys = Object.keys(mythicBase).filter((key) => abyssBase[key] > mythicBase[key]);
+  assert.ok(scaledKeys.length > 0, `${slot} must have higher Abyss raw stats at equal item level`);
+  for (const key of scaledKeys) assert.ok(abyssBase[key] > mythicBase[key]);
+}
+const cappedMythic = makeItem({ slot: "weapon", type: "sword", rarity: "신화", ilvl: 150 });
+const highAbyss = makeItem({ slot: "weapon", type: "sword", rarity: "심연", ilvl: 150 });
+assert.equal(cappedMythic.ilvl, 100, "ordinary/Mythic item creation retains the existing level cap");
+assert.equal(highAbyss.ilvl, 150, "Abyss item creation supports the character level cap");
 
 const random = rng();
 const names = new Map();
@@ -50,6 +70,12 @@ assert.equal(sample.rarity, "심연");
 assert.equal(sample.opts.length, 5);
 assert.equal(sample.abyssEffects.length, 2);
 assert.equal(new Set(sample.abyssEffects).size, 2);
+const oldLevelItem = makeItem({ slot: "weapon", type: "sword", rarity: "심연", ilvl: 100 });
+const oldBaseAtk = oldLevelItem.base.atk;
+assert.equal(syncAbyss({ level: 150, equip: { weapon: oldLevelItem }, inv: [] }), true);
+assert.equal(oldLevelItem.ilvl, 150, "existing Abyss gear must grow to the character level");
+assert.ok(oldLevelItem.base.atk > oldBaseAtk, "syncing Abyss level must raise its raw attack stat");
+assert.equal(syncAbyss({ level: 150, equip: { weapon: oldLevelItem }, inv: [] }), false, "Abyss sync must be idempotent");
 const equippedTotals = gearTotals({ [sample.slot]: sample });
 assert.equal(equippedTotals.abyssEffects.length, 2);
 
