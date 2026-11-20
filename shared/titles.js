@@ -1,5 +1,5 @@
 // 칭호 디자인: 칭호 이름(글자)에 그림을 묶어 둠 → 그 칭호를 누구에게 주든 항상 이 그림으로 표시
-//   w: 게임 화면(640px 기준)에서 닉네임 위에 그릴 폭
+//   w: 게임 화면(640px 기준)에서 닉네임 위에 그릴 폭. 쇼아라의 블라드는 제공 원본 비율(256:144)을 유지.
 export const TITLE_DESIGNS = {
   "세계의 신": { src: "/assets/titles/world_god.png", w: 70, ratio: 300 / 104 },
   "최초의 대적자": { src: "/assets/titles/first_rival.png", w: 64, ratio: 300 / 91 },
