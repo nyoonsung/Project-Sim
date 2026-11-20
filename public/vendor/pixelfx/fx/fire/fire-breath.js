@@ -10,7 +10,7 @@ export const meta = {
   size: [160, 116],
   origin: [12, 72],
   duration: 1.5,
-  loop: false,
+  loop: true,
   fps: 30,
   bg: "dark",
   options: {

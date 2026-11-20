@@ -790,9 +790,10 @@ function startPattern(room, b, p, t, now) {
       break;
     }
     case "beam": {
-      const a0 = Math.atan2(t.y - b.y, t.x - b.x);
+      const originY = b.y - 16; // bbeam 및 화면 예고와 실제 광선의 시작점을 통일
+      const a0 = Math.atan2(t.y - originY, t.x - b.x);
       const dir = Math.random() < 0.5 ? 1 : -1, rot = (70 * Math.PI) / 180 * dir, len = 420;
-      room.addArea({ team: "m", shape: "r", x: b.x, y: b.y, ang: a0, l: len, w: p.width, tel: 0.9, fire: () => {} });
+      room.addArea({ team: "m", shape: "r", x: b.x, y: originY, ang: a0, l: len, w: p.width, tel: 0.9, fire: () => {} });
       room.ev({ e: "bbeam", id: b.id, a: Math.round(a0 * 1000), rot: Math.round(rot * 1000), d: p.dur, w: p.width, l: len, fx: p.fx, at: 0.9 });
       const t0 = now + 0.9;
       for (let k = 0; k < p.dur / 0.2; k++) {
@@ -800,7 +801,7 @@ function startPattern(room, b, p, t, now) {
           if (b.dead || isHardCC(b)) return;
           const a = a0 + rot * (tn - t0);
           hitIn((q) => {
-            const dx = q.x - b.x, dy = q.y - b.y;
+            const dx = q.x - b.x, dy = q.y - originY;
             const along = dx * Math.cos(a) + dy * Math.sin(a), across = Math.abs(-dx * Math.sin(a) + dy * Math.cos(a));
             return along > SH && along < len - SH && across < p.width / 2 - SH;
           }, pw, tn, { unblockable: true });

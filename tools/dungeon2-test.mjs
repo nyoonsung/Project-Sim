@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import {
-  BOSSES, D2_HARD, D1_BOSS_DAMAGE_MULTIPLIER, D1_BOSS_HP_MULTIPLIER, D1_BOSS_HP_REDUCTION,
+  BOSSES, D1_BOSS_DAMAGE_MULTIPLIER, D1_BOSS_HP_MULTIPLIER, D1_BOSS_HP_REDUCTION,
   D1_FINAL_BOSS_DAMAGE_MULTIPLIER, D2_EXTREME_MULTIPLIER, D2_MONSTER_DAMAGE_MULTIPLIER, D2_MONSTER_STAT_MULTIPLIER, D2_BOSS_STAT_MULTIPLIER, D2_BOSS_SPEED_MULTIPLIER,
   DUNGEON2_MAX_FLOOR, DUNGEON2_ZONES, MONSTERS, ZONES,
   bossStats, floorKind, floorScale, monsterStats, zoneOf, effLevel,
@@ -26,7 +26,7 @@ const ok = (condition, label) => {
   assert.ok(Math.abs(d1.hp / top.hp - 2.5 * 100) < 1e-7);
   assert.ok(Math.abs(d1.dmg / top.dmg - 1.8 * 100) < 1e-7);
   assert.ok(d30.hp > d1.hp * 1.8 && d30.dmg > d1.dmg * 1.4);
-  assert.ok(d1.speed < top.speed);
+  assert.ok(d1.speed > top.speed);
   assert.equal(effLevel(1, 2), 102); assert.equal(effLevel(30, 2), 150); assert.equal(effLevel(45, 1), 45);
   for (const f of [1, 15, 30]) for (const id of zoneOf(f, 2).monsters) assert.equal(monsterStats(id, f, 1, 2).level, effLevel(f, 2));
   const top1 = monsterStats(zoneOf(100).monsters[0], 100, 1, 1);
@@ -122,9 +122,9 @@ ok(true, "제2 던전 몬스터·보스 능력치 산출");
 // 제2 던전 일반·정예 몬스터와 보스의 HP·공격력·방어력은 각각 현재 실제 수치의 1/5. 이동속도·경험치는 유지.
 {
   assert.equal(D2_MONSTER_DAMAGE_MULTIPLIER, 0.5);
-  assert.equal(D2_MONSTER_STAT_MULTIPLIER, 1 / 150);
-  assert.equal(D2_BOSS_STAT_MULTIPLIER, 0.2);
-  assert.equal(D2_BOSS_SPEED_MULTIPLIER, 0.8);
+  assert.equal(D2_MONSTER_STAT_MULTIPLIER, 4 / 150);
+  assert.equal(D2_BOSS_STAT_MULTIPLIER, 0.8);
+  assert.equal(D2_BOSS_SPEED_MULTIPLIER, 1);
   const id = DUNGEON2_ZONES[0].monsters[0];
   const def = MONSTERS[id];
   const d2AvgHp = DUNGEON2_ZONES[0].monsters.reduce((sum, mid) => sum + MONSTERS[mid].hp, 0) / DUNGEON2_ZONES[0].monsters.length;
@@ -135,28 +135,27 @@ ok(true, "제2 던전 몬스터·보스 능력치 산출");
   const oldHp = def.hp * (d1AvgHp / d2AvgHp) * s.hp * 3.5;
   const oldDmg = def.dmg * (d1AvgDmg / d2AvgDmg) * s.dmg * D2_MONSTER_DAMAGE_MULTIPLIER;
   const st = monsterStats(id, 1, 1, 2);
-  assert.equal(st.hp, Math.round(oldHp / 150));
-  assert.ok(Math.abs(st.dmg / oldDmg - 1 / 150) < 1e-10);
+  assert.equal(st.hp, Math.round(oldHp * 4 / 150));
+  assert.ok(Math.abs(st.dmg / oldDmg - 4 / 150) < 1e-10);
   const d1Id = ZONES[0].monsters[0];
   const d1 = monsterStats(d1Id, 1, 1, 1);
   assert.ok(Math.abs(d1.dmg - MONSTERS[d1Id].dmg * floorScale(1, 1).dmg) < 1e-10);
   const room = new Room({ clock: 0 }, { id: "d2-def-scale", kind: "dungeon", floor: 1, dungeon: 2, map: makeFloor(1, 777, 1, 2) });
   const mob = room.spawnMonster(id, room.map.start[0] + 100, room.map.start[1]);
   const oldDef = 2 + room.lvl * 1.6;
-  assert.ok(Math.abs(mob.def / oldDef - 1 / 150) < 1e-10);
+  assert.ok(Math.abs(mob.def / oldDef - 4 / 150) < 1e-10);
   assert.equal(mob.speed, def.speed * floorScale(1, 2).speed);
   const d2Boss = bossStats(DUNGEON2_ZONES[0].boss, 10, 1, 2);
-  assert.ok(Math.abs(d2Boss.dmg - d1AvgDmg * floorScale(10, 2).dmg * 1.7 * 0.2) < 1e-7);
+  assert.ok(Math.abs(d2Boss.dmg - d1AvgDmg * floorScale(10, 2).dmg * 1.7 * 0.8) < 1e-7);
   assert.ok(d2Boss.hp > 0 && d2Boss.dmg > 0);
   const bossRoom = new Room({ clock: 0 }, { id: "d2-boss-def-scale", kind: "dungeon", floor: 10, dungeon: 2, map: makeFloor(10, 778, 1, 2) });
   const bossUnit = bossRoom.spawnBoss(DUNGEON2_ZONES[0].boss, bossRoom.map.bossAt[0], bossRoom.map.bossAt[1]);
   assert.equal(bossUnit.hp, d2Boss.hp);
   assert.equal(bossUnit.atk, d2Boss.dmg);
-  assert.ok(Math.abs(bossUnit.def / (6 + bossRoom.lvl * 2.2) - 0.2) < 1e-10);
+  assert.ok(Math.abs(bossUnit.def / (6 + bossRoom.lvl * 2.2) - 0.8) < 1e-10);
   assert.equal(bossUnit.speed, BOSSES[DUNGEON2_ZONES[0].boss].speed * D2_BOSS_SPEED_MULTIPLIER);
 }
-assert.equal(D2_HARD.speed, 0.88);
-ok(true, "제2 던전 몬스터·보스 능력치 1/5 완화와 이동속도 조정 복구");
+ok(true, "제2 던전 몬스터 HP·공격력·방어력은 직전 수치의 4배 / 보스 능력치 4배 / 이동속도 복구");
 
 // 드롭: 제2 던전 장비는 아이템 레벨 100, 소환된 몬스터는 아이템·결정 없음, 보관고 유물도 레벨 100
 {
