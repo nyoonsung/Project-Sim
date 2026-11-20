@@ -462,7 +462,7 @@ function autoTick() {
       }
       if (best) at = { x: best.x, y: best.y - 16, tx: sk.aim === "ally" ? best.id : undefined };
     } else if (sk.aim === "self") {
-      const t = nearestEnemy(170);
+      const t = nearestEnemy(reachOf(sk));
       if (t) at = { x: t.rx, y: t.ry };
     } else {
       const t = nearestEnemy(reachOf(sk));
