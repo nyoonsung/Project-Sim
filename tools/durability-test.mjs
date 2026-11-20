@@ -44,6 +44,6 @@ const rolled = rollItem(() => 0.99, { ilvl: 100, cls: "sword", rarity: "신화" 
 const made = makeItem({ slot: "weapon", type: "sword", rarity: "신화", ilvl: 100 });
 assert.equal(rolled.maxDur, 1080);
 assert.equal(made.maxDur, 1080);
-for (const item of Object.values(starterGear())) assert.equal(item.maxDur, 300);
+for (const item of Object.values(starterGear())) assert.equal(item.maxDur, expected[0]);
 
 console.log("DURABILITY TESTS: ALL PASS");
