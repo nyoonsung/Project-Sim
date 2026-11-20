@@ -845,7 +845,7 @@ export class World {
     } else result = "fail"; // 실패: 단계 유지
     itemLog(s.userId, "enhance", { name: it.name, rarity: it.rarity, from: result === "success" ? it.enh - 1 : it.enh, result, cost });
     if (result === "success" && it.enh >= 20) this.broadcastSys(`${s.name}님이 [${it.name}] +${it.enh} 강화에 성공했어요!`, "legend");
-    s.send({ t: "enh", result, uid, enh: it.enh, name: it.name, cost });
+    s.send({ t: "enh", result, uid, enh: it.enh, name: it.name, rarity: it.rarity, cost });
     this.sendChar(s);
     this.save(s);
   }
