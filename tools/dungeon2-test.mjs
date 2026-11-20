@@ -125,7 +125,7 @@ ok(true, "제2 던전 몬스터·보스 능력치 산출");
   const def = MONSTERS[id];
   const d2Avg = DUNGEON2_ZONES[0].monsters.reduce((sum, mid) => sum + MONSTERS[mid].dmg, 0) / DUNGEON2_ZONES[0].monsters.length;
   const d1Avg = ZONES[0].monsters.reduce((sum, mid) => sum + MONSTERS[mid].dmg, 0) / ZONES[0].monsters.length;
-  const oldDamage = (def.dmg / d2Avg) * (d1Avg / d2Avg) * floorScale(1, 2).dmg;
+  const oldDamage = def.dmg * (d1Avg / d2Avg) * floorScale(1, 2).dmg;
   const st = monsterStats(id, 1, 1, 2);
   assert.ok(Math.abs(st.dmg / oldDamage - 0.5) < 1e-10);
   const d1Id = ZONES[0].monsters[0];
