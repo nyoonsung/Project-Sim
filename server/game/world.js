@@ -21,6 +21,7 @@ const RESERVED_TITLES = [
   { key: "worldgod-gm-yunseong", user: "GM_윤성", text: "세계의 신", color: "#c8a0ff" },
   { key: "firstrival-yuminthomas", user: "yuminthomas", text: "최초의 대적자", color: "#ff5a6e" },
   { key: "shinryu-shingung-gyukatchu", user: "규카츠", text: "신궁神弓", color: "#4ef59b" },
+  { key: "hephaestus-dandan", user: "dandan", text: "헤파이스토스", color: "#ff8738" },
 ];
 function grantReserved(c, username, userId) {
   // 이전 배포에서 오독한 칭호 이름을 보관함에서 교정한다. ID를 유지해 장착 상태도 보존한다.
