@@ -11,13 +11,42 @@ import { h, openWin, refreshWin, closeWin, isOpen, tipOn } from "./dom.js";
 import { itemIcon } from "./icons.js";
 import { CLASS_INFO, STATS, stageOf, stageLevel, xpToNext } from "/shared/classes.js";
 import { SKILLS, skillsOf, unlockStage } from "/shared/skills.js";
-import { deriveStats } from "/shared/stats.js";
+import { deriveStats, defReduction } from "/shared/stats.js";
 import { SKILL_SLOTS, SLOT_KEYS, ITEMS, GRADE_COLOR } from "/shared/constants.js";
 import { RARITY_COLOR, SLOT_NAME, OPTIONS, MYTHIC_EFFECTS, WEAPON_TYPES, OFFHAND_TYPES, VARIANT_TRAITS, RARITIES, RARITY_WEIGHTS, RARITY_MUL, MATERIALS, ARMOR_NAMES, repairCost, ENH_PCT, ENCHANTS, enchantOdds, enchantCost, enhanceOdds, enhanceCost, enhMul, sellPrice, canEquip, MAX_ENH } from "/shared/items.js";
 import { sprite, playerLook } from "../render/sprites.js";
 
 const fmtPct = (v) => (v * 100).toFixed(1) + "%";
 const RES_NAME = { mp: "MP", ki: "내력", holy: "성광", parts: "부품", gap: "틈" };
+
+// 직업별 유지력의 특징. 수치 비교와 달리 스킬 운용에 따라 체감이 달라지는 부분.
+const CLASS_SURVIVAL = {
+  adventurer: { grade: "보통", detail: "직업 전용 방어 기술이 없는 전직 전 기본형" },
+  sword: { grade: "높음", detail: "준수한 체력·방어력과 타이밍형 정면 막기" },
+  fist: { grade: "매우 높음", detail: "높은 체력·방어력, 반격과 짧은 피해 감소 기술" },
+  archer: { grade: "회피형·중상", detail: "기본 내구는 낮지만 7초간 회피율 60% 버프를 사용 가능" },
+  rogue: { grade: "기동형·중간", detail: "기본 내구는 낮은 편이며 이동기와 짧은 피해 감소로 생존" },
+  mage: { grade: "중하", detail: "기본 체력·방어력이 낮고 순간이동에는 무적·피해 감소가 없음" },
+  priest: { grade: "지원형·높음", detail: "개인 기본 내구는 중간이지만 직접 치유와 보호막으로 파티 유지력 우수" },
+  smith: { grade: "최상", detail: "가장 높은 기본 체력·방어력에 전방 방어와 보호막까지 보유" },
+};
+
+// 동레벨 적의 일반 직접 공격을 가정한 기본 실효 HP.
+// 직업 미리보기에서는 장비·추가 스탯·장착 패시브를 제외한다.
+function previewClassDurability(cls, level) {
+  const s = deriveStats({ cls, level, stats: {}, equip: {}, skills: [] });
+  const reduction = defReduction(s.def, level);
+  return { stats: s, effectiveHp: Math.round(s.maxHp / Math.max(0.01, 1 - reduction)) };
+}
+
+// 현재 캐릭터는 장비·패시브로 얻은 받는 피해 감소와 기본 회피도 반영한다.
+// 액티브 버프·치유·보호막은 전투 중 지속시간이 달라 숫자에 포함하지 않는다.
+function currentEffectiveHp(s, level) {
+  const expectedDamage = (1 - defReduction(s.def, level))
+    * (1 - Math.min(0.6, s.dr))
+    * (1 - Math.min(0.6, s.evade));
+  return Math.round(s.maxHp / Math.max(0.01, expectedDamage));
+}
 
 function iconEl(it) {
   const c = document.createElement("canvas");
@@ -111,6 +140,7 @@ export function openChar() {
     if (!c) return [];
     const info = CLASS_INFO[c.cls];
     const st = deriveStats(c);
+    const sustain = CLASS_SURVIVAL[c.cls] ?? CLASS_SURVIVAL.adventurer;
     const stage = stageOf(c.cls, c.level);
     const rank = info.ranks[stage];
     const rows = info.stats.map((k) => {
@@ -131,11 +161,14 @@ export function openChar() {
       h("h4", { text: "최종 수치" }),
       h("table", {}, ...[
         ["최대 HP", st.maxHp.toLocaleString()], ["최대 MP", st.maxMp], ["공격력", Math.round(st.atk).toLocaleString()], ["방어력", st.def],
+        ["방어 감소율 (동레벨 적)", fmtPct(defReduction(st.def, c.level))], ["기본 회피 확률", fmtPct(st.evade)], ["HP 재생", `${st.hpRegen.toFixed(1)}/초`],
+        ["실효 HP (직접 피격 평균)", currentEffectiveHp(st, c.level).toLocaleString()], ["유지력 평가", `${sustain.grade} · ${sustain.detail}`],
         ["물리/주문 배율", `${fmtPct(st.phys)} / ${fmtPct(st.mag)}`], ["주는 피해", "+" + fmtPct(st.dmg)], ["받는 피해 감소", fmtPct(st.dr)],
         ["치명타 확률 (상한 50%)", fmtPct(st.crit)], ["치명타 피해 (상한 200%)", fmtPct(st.critDmg)], ["공격 속도", fmtPct(st.aspd)], ["이동 속도", Math.round(st.move)],
         ["성장 단계 보너스", "+" + fmtPct(st.stageBonus - 1)],
         ...(st.classDmg && st.classDmg !== 1 ? [["직업 피해 배율", "×" + st.classDmg]] : []),
       ].map(([a, b]) => h("tr", {}, h("td", { text: a }), h("td", { text: b })))),
+      h("div", { class: "note", text: "실효 HP는 동레벨의 일반 직접 공격 기준 예상치예요. 액티브 회피·방어 버프, 회복·보호막과 지속 피해는 제외돼요." }),
       h("div", { class: "note", text: `최고 층 ${c.best} · 체크포인트 ${c.checkpoint}층 · 처치 ${c.kills} · 쓰러짐 ${c.deaths}${c.cleared ? " · 🏆 던전 정복" : ""}` }),
     ];
   }, { w: 420 });
@@ -397,14 +430,20 @@ export function openClass() {
   openWin("class", "전직소", () => {
     const c = G.char;
     if (c.cls !== "adventurer") return [h("div", { text: `이미 ${CLASS_INFO[c.cls].name}(으)로 전직했어요. 직업은 고정되고 전직 기능은 잠겨 있어요.` })];
+    const previewLevel = Math.max(10, c.level);
     const cards = Object.entries(CLASS_INFO).filter(([k]) => k !== "adventurer").map(([k, info]) => {
       const cv = document.createElement("canvas");
       const { look, key } = playerLook(k, null, null);
       const s = sprite({ ...look, weapon: info.look.weapon }, key + ":card", "idle", 0, 0.6, 1);
+      const durability = previewClassDurability(k, previewLevel);
+      const sustain = CLASS_SURVIVAL[k];
       cv.width = 36; cv.height = 48;
       cv.getContext("2d").drawImage(s.canvas, 18 - s.ox, 46 - s.oy);
       return h("div", { class: "cc", onclick: () => { if (confirmClass(info.name)) send({ t: "class", cls: k }); } },
         cv, h("b", { text: info.name }), h("div", { class: "role", text: info.role }), h("p", { text: info.desc }),
+        h("p", { class: "desc", text: `기본 비교 · Lv.${previewLevel} · 추가 스탯·장비·패시브 제외` }),
+        h("p", { class: "role", text: `HP ${durability.stats.maxHp.toLocaleString()} · 방어 ${durability.stats.def} · 실효 HP ${durability.effectiveHp.toLocaleString()}` }),
+        h("p", { class: "note", text: `유지력: ${sustain.grade} — ${sustain.detail}` }),
         h("p", { text: "전용 능력치: " + info.stats.map((s) => STATS[s].name).join(", ") }), h("p", { text: `성장 ${info.ranks.length}단계: ${info.ranks[0]} → ${info.ranks[info.ranks.length - 1]}` }));
     });
     return [
