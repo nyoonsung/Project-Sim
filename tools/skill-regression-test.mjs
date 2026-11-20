@@ -11,6 +11,7 @@ for (const sk of SKILL_LIST.filter((s) => s.kind === "ultimate")) {
 }
 const expectedRanges = [
   ["sw_flash", 194],
+  ["sw_eo_vortex", 96],
   ["sw_final", 340],
   ["fi_final", 250],
   ["ar_final", 460],
