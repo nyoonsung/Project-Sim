@@ -44,13 +44,14 @@ function grantReserved(c, username, userId) {
     // 처음 받은 계정 번호에 영구히 묶음: 다른 사용자가 같은 닉네임을 차지해도 칭호를 못 받음
     if (owner && String(owner) !== String(userId)) continue;
     if (!owner && nameMatches && userId != null) { try { Q.metaSet.run("reserved:" + g.key, String(userId)); } catch {} }
-    if ((c.granted ??= []).includes(g.key)) continue;
     c.titles ??= [];
+    // 지급 기록만 남고 실제 칭호가 빠진 경우에도 보관함을 복구한다.
     if (!c.titles.some((t) => t.text === g.text)) {
       c.titleSeq = Math.max(c.titleSeq ?? 0, ...c.titles.map((t) => t.id)) + 1;
       c.titles.push({ id: c.titleSeq, text: g.text, color: g.color, at: Date.now() });
     }
-    c.granted.push(g.key);
+    c.granted ??= [];
+    if (!c.granted.includes(g.key)) c.granted.push(g.key);
   }
 }
 const ITEM_OPS = new Set(["equip", "unequip", "sell", "sellMany", "repair", "enchant", "enhance", "buy", "lock", "class", "stat", "resetStats", "skills", "title", "rename"]);
@@ -117,6 +118,8 @@ export class World {
       const un = old.unit, room = un.room;
       un.ghost = false; un.inputs.length = 0;
       old.sent = null; old.sentRoom = null; old.sentAck = null; old.meKey = null;
+      grantReserved(old.char, u.username, u.id);
+      this.save(old);
       old.send({ t: "hello", name: u.username, char: this.publicChar(old), announce: this.announcement, serverTime: Date.now() });
       const at = [un.x, un.y];
       room.removePlayer(un); room.addPlayer(un, at); un.x = at[0]; un.y = at[1];
