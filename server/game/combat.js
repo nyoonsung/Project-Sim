@@ -38,7 +38,9 @@ export function applyStatus(room, src, t, st, now) {
   const until = now + st.dur;
   // 지속 피해는 중첩 불가(갱신만), 다른 상태도 더 긴 쪽 유지
   if (cur && cur.until > until && !DOT_TYPES.has(type)) return false;
-  t.status.set(type, { until, v: st.v ?? 0, pow: st.pow ?? 0, src: src?.id ?? 0, srcAtk: src?.stats?.atk ?? src?.atk ?? 0, next: now + 1 });
+  const sourceAtk = src?.stats?.atk ?? src?.atk ?? 0;
+  const sourceClassDamage = src?.team === "p" ? (src.stats?.classDmg ?? 1) : 1;
+  t.status.set(type, { until, v: st.v ?? 0, pow: st.pow ?? 0, src: src?.id ?? 0, srcAtk: sourceAtk * sourceClassDamage, next: now + 1 });
   room.ev({ e: "st", id: t.id, s: type, d: st.dur });
   return true;
 }
