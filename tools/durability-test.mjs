@@ -1,0 +1,38 @@
+import assert from "node:assert/strict";
+import {
+  DURABILITY_VERSION, RARITIES, ensureDur, maxDurability, makeItem, rollItem, starterGear,
+} from "../shared/items.js";
+
+const expected = [300, 360, 420, 480, 720];
+for (let i = 0; i < RARITIES.length; i++) {
+  const item = { slot: "weapon", rarity: RARITIES[i] };
+  assert.equal(maxDurability(item), expected[i], `${RARITIES[i]} max durability`);
+}
+
+// Legacy equipment gets upgraded once while retaining its remaining durability percentage.
+for (let i = 0; i < RARITIES.length; i++) {
+  const oldMax = 100 + i * 20;
+  const item = { slot: "weapon", rarity: RARITIES[i], dur: oldMax * 0.4, maxDur: oldMax };
+  ensureDur(item);
+  assert.equal(item.maxDur, expected[i]);
+  assert.equal(item.dur, expected[i] * 0.4);
+  assert.equal(item.durV, DURABILITY_VERSION);
+  ensureDur(item);
+  assert.equal(item.maxDur, expected[i], "migration must not multiply durability twice");
+  assert.equal(item.dur, expected[i] * 0.4);
+}
+
+// A broken legacy item remains broken after the migration.
+const broken = { slot: "armor", rarity: "신화", dur: 0, maxDur: 180 };
+ensureDur(broken);
+assert.equal(broken.maxDur, 720);
+assert.equal(broken.dur, 0);
+
+// Newly created, admin-created, and starter equipment all use the new values.
+const rolled = rollItem(() => 0.99, { ilvl: 100, cls: "sword", rarity: "신화" });
+const made = makeItem({ slot: "weapon", type: "sword", rarity: "신화", ilvl: 100 });
+assert.equal(rolled.maxDur, 720);
+assert.equal(made.maxDur, 720);
+for (const item of Object.values(starterGear())) assert.equal(item.maxDur, 300);
+
+console.log("DURABILITY TESTS: ALL PASS");
