@@ -59,8 +59,12 @@ export class Room {
     this.tickN = 0;
     this.flow = new Map();
     this.flowBuffers = new Map();
+    this.flowMeta = new Map();
     this.flowAt = 0;
     this.mobGrid = null;
+    this.projectileGrid = null;
+    this.projectileCandidates = [];
+    this.tickUnitBuffer = [];
     this.total = 0;
     this.killed = 0;
     this.exitOpen = kind !== "dungeon";
@@ -192,7 +196,7 @@ export class Room {
   }
   removePlayer(u) {
     this.removeDevicesOf(u);
-    this.flow.delete(u.id); this.flowBuffers.delete(u.id);
+    this.flow.delete(u.id); this.flowBuffers.delete(u.id); this.flowMeta.delete(u.id);
     this.units.delete(u.id);
     this.players.delete(u.id);
     this.flow.delete(u.id);
@@ -577,7 +581,11 @@ export class Room {
     for (const u of this.players.values()) this.tickPlayer(u, now);
     this.rebuildMobGrid();
     // 틱 도중 소환·삭제되는 유닛이 있어도 현재 틱의 순회 목록을 고정한다.
-    for (const u of [...this.units.values()]) {
+    // 틱 도중 소환·삭제되는 유닛이 있어도 현재 틱의 순회 목록을 고정하되 배열은 재사용한다.
+    const snapshot = this.tickUnitBuffer;
+    snapshot.length = 0;
+    for (const u of this.units.values()) snapshot.push(u);
+    for (const u of snapshot) {
       if (u.type === "p" || u.dead) continue;
       tickStatuses(this, u, now);
       if (u.dead) continue;
@@ -586,6 +594,8 @@ export class Room {
       else if (u.type === "d") this.tickDevice(u, now);
       else if (u.dummy) this.tickDummy(u, now);
     }
+    // 투사체 충돌은 이동·AI가 끝난 최신 좌표로 만든 공간 그리드에서 후보만 검사한다.
+    this.rebuildProjectileGrid();
     this.tickProjectiles(now);
     this.tickAreas(now);
     this.tickZones(now);
@@ -785,8 +795,10 @@ export class Room {
         p.y += (p.vy * TICK_DT) / steps;
         p.travelled += (speed * TICK_DT) / steps;
         if (p.travelled >= p.range || blocksShot(this.map, p.x, p.y)) { end = true; break; }
+        // 이동 중인 투사체 주변 셀만 검사한다. 최대 보스 반지름과 투사체 반경보다 넉넉한 범위.
+        const candidates = this.nearbyUnits(p.x, p.y, p.r + 40);
         // 방벽(철벽 전개)이 적 투사체를 막음
-        if (p.team === "m") for (const d of this.units.values()) {
+        if (p.team === "m") for (const d of candidates) {
           if (d.type === "d" && d.kind === "wall" && Math.hypot(d.x - p.x, d.y - p.y) < 30) {
             d.hp -= 1;
             this.ev({ e: "fx", fx: "impacts/shield-block", x: p.x | 0, y: p.y | 0, s: 0.6 });
@@ -796,7 +808,7 @@ export class Room {
           }
         }
         if (end) break;
-        for (const t of this.units.values()) {
+        for (const t of candidates) {
           if (t.dead || t.team === p.team || p.hit.has(t.id) || (t.type === "d" && !t.targetable)) continue;
           if (Math.hypot(t.x - p.x, t.y - p.y) > (p.team === "m" && t.type === "p" ? t.r * 0.6 : t.r) + p.r) continue; // 적 탄은 플레이어 몸 가운데에 맞아야 함
           p.hit.add(t.id);
@@ -894,16 +906,45 @@ export class Room {
     }
     return out;
   }
-  // ── 흐름장(길찾기): 플레이어까지 타일 거리
+  // 투사체용 공간 그리드: 플레이어·몬스터·보스·장치를 모두 넣어 전수 충돌검사를 피한다.
+  rebuildProjectileGrid() {
+    const cell = 96, cols = Math.ceil((this.map.w * TILE) / cell), buckets = new Map();
+    for (const u of this.units.values()) {
+      if (u.dead) continue;
+      const cx = Math.floor(u.x / cell), cy = Math.floor(u.y / cell);
+      const key = cy * cols + cx;
+      let a = buckets.get(key); if (!a) buckets.set(key, (a = []));
+      a.push(u);
+    }
+    this.projectileGrid = { cell, cols, buckets };
+  }
+  nearbyUnits(x, y, radius) {
+    const g = this.projectileGrid;
+    const out = this.projectileCandidates;
+    out.length = 0;
+    if (!g) { for (const u of this.units.values()) out.push(u); return out; }
+    const { cell, cols, buckets } = g;
+    const x0 = Math.floor((x - radius) / cell), x1 = Math.floor((x + radius) / cell);
+    const y0 = Math.floor((y - radius) / cell), y1 = Math.floor((y + radius) / cell);
+    for (let cy = y0; cy <= y1; cy++) for (let cx = x0; cx <= x1; cx++) {
+      const a = buckets.get(cy * cols + cx);
+      if (a) for (const u of a) out.push(u);
+    }
+    return out;
+  }
+  // ── 흐름장(길찾기): 플레이어 타일이 바뀐 경우에만 다시 계산
   updateFlow() {
-    const { w, h } = this.map, size = w * h;
+    const { w, h } = this.map, size = w * h, doorsOpen = !!this.map.doorsOpen;
     for (const p of this.players.values()) {
-      if (p.dead) { this.flow.delete(p.id); continue; }
+      if (p.dead) { this.flow.delete(p.id); this.flowMeta.delete(p.id); continue; }
+      const sx = Math.floor(p.x / TILE), sy = Math.floor(p.y / TILE);
+      if (sx < 0 || sy < 0 || sx >= w || sy >= h) { this.flow.delete(p.id); this.flowMeta.delete(p.id); continue; }
+      const meta = this.flowMeta.get(p.id);
+      if (meta && meta.x === sx && meta.y === sy && meta.doorsOpen === doorsOpen && this.flow.has(p.id)) continue;
       let buf = this.flowBuffers.get(p.id);
       if (!buf || buf.dist.length !== size) { buf = { dist: new Int16Array(size), q: new Int32Array(size) }; this.flowBuffers.set(p.id, buf); }
       const dist = buf.dist, q = buf.q;
       dist.fill(-1);
-      const sx = Math.floor(p.x / TILE), sy = Math.floor(p.y / TILE);
       let qh = 0, qt = 0;
       if (sx < 0 || sy < 0 || sx >= w || sy >= h) continue;
       dist[sy * w + sx] = 0;
@@ -923,6 +964,7 @@ export class Room {
         }
       }
       this.flow.set(p.id, dist);
+      this.flowMeta.set(p.id, { x: sx, y: sy, doorsOpen });
     }
   }
   /** 대상 플레이어 쪽으로 가는 방향 (흐름장) */
