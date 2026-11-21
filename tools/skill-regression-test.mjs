@@ -47,7 +47,7 @@ assert.equal(CLASS_DMG.sword, 1.20);
 assert.equal(CLASS_DMG.archer, 1.62);
 assert.equal(CLASS_INFO.archer.hpMul, 0.96);
 assert.equal(CLASS_DMG.rogue, 1.62);
-assert.equal(CLASS_DMG.mage, 1.008, "마법사 피해 배율은 기존의 60%");
+assert.equal(CLASS_DMG.mage, 0.6048, "마법사 피해 배율은 직전 수치의 60%");
 assert.equal(CLASS_DMG.priest, 1.50);
 assert.equal(CLASS_INFO.rogue.hpMul, 1.08);
 assert.equal(CLASS_INFO.rogue.defMul, 1.0);
