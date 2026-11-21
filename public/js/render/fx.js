@@ -66,14 +66,14 @@ function* bakeSteps(id, palette, fps) {
   baked.set(key, b);
   return b;
 }
-/** 바로 필요할 때: 한 번에 끝까지 구움 */
+/** 화면 그리기 중에는 절대 동기 굽기를 하지 않는다. 캐시가 없으면 한가한 시간에 비동기로 굽는다. */
 export function baked_(id, palette = null, fps = 15) {
   const key = id + "|" + (palette ? palette.join(",") : "");
   if (baked.has(key)) return baked.get(key);
-  const g = bakeSteps(id, palette, fps);
-  let r;
-  do r = g.next(); while (!r.done);
-  return r.value;
+  if (bakedReady.has(key)) return bakedReady.get(key);
+  if (mods.has(id)) scheduleBake(id, palette, key, true);
+  else loadFx(id).then((mod) => { if (mod) scheduleBake(id, palette, key, true); });
+  return null;
 }
 export function bakedFrame(b, t) {
   if (!b) return null;
@@ -212,34 +212,47 @@ export class FxLayer {
   update(dt, ents) {
     if (this.every > 1) { this.acc += dt; if (this.n % this.every) return; dt = this.acc; this.acc = 0; }
     const now = performance.now() / 1000;
-    const step = (arr) => arr.filter((e) => {
-      if (e.follow != null) {
-        const u = ents.get(e.follow);
-        if (u) { if (e.s === 1) { e.inst.options.x = u.rx; e.inst.options.y = u.ry + e.dy; } else { e.wx = u.rx; e.wy = u.ry + e.dy; } }
+    const step = (arr) => {
+      let write = 0;
+      for (let i = 0; i < arr.length; i++) {
+        const e = arr[i];
+        if (e.follow != null) {
+          const u = ents.get(e.follow);
+          if (u) { if (e.s === 1) { e.inst.options.x = u.rx; e.inst.options.y = u.ry + e.dy; } else { e.wx = u.rx; e.wy = u.ry + e.dy; } }
+        }
+        e.inst.update(dt);
+        if (e.until && now > e.until) e.inst.stop();
+        if (!e.inst.done()) arr[write++] = e;
       }
-      e.inst.update(dt);
-      if (e.until && now > e.until) e.inst.stop();
-      return !e.inst.done();
-    });
-    this.list = step(this.list);
-    this.scaled = step(this.scaled);
-    // 굽기가 끝난 실시간 이펙트는 구운 이미지 재생으로 갈아탐 (매 프레임 픽셀 계산 → 그림 한 장)
-    const swap = (arr) => arr.filter((e) => {
-      const b = e.bkey && bakedReady.get(e.bkey);
-      if (!b) return true;
-      const x = e.s === 1 ? e.inst.options.x : e.wx, y = e.s === 1 ? e.inst.options.y : e.wy;
-      const nb = { b, t0: e.t0, x, y, s: e.s, flip: e.flip, angle: e.angle, follow: e.follow, dy: e.dy, until: e.until };
-      this.bk.push(nb); e.swapped = nb; // 장판이 일찍 끝나면 구운 쪽도 같이 끝내려고
-      return false;
-    });
-    if (this.list.length) this.list = swap(this.list);
-    if (this.scaled.length) this.scaled = swap(this.scaled);
-    this.bk = this.bk.filter((e) => {
+      arr.length = write;
+    };
+    step(this.list);
+    step(this.scaled);
+    // 굽기가 끝난 실시간 이펙트는 구운 이미지 재생으로 갈아탐. 배열도 제자리에서 압축해 프레임별 가비지 생성을 줄임.
+    const swap = (arr) => {
+      let write = 0;
+      for (let i = 0; i < arr.length; i++) {
+        const e = arr[i], b = e.bkey && bakedReady.get(e.bkey);
+        if (b) {
+          const x = e.s === 1 ? e.inst.options.x : e.wx, y = e.s === 1 ? e.inst.options.y : e.wy;
+          const nb = { b, t0: e.t0, x, y, s: e.s, flip: e.flip, angle: e.angle, follow: e.follow, dy: e.dy, until: e.until };
+          this.bk.push(nb); e.swapped = nb;
+        } else arr[write++] = e;
+      }
+      arr.length = write;
+    };
+    if (this.list.length) swap(this.list);
+    if (this.scaled.length) swap(this.scaled);
+    let write = 0;
+    for (let i = 0; i < this.bk.length; i++) {
+      const e = this.bk[i];
       if (e.follow != null) { const u = ents.get(e.follow); if (u) { e.x = u.rx; e.y = u.ry + e.dy; } }
       const age = now - e.t0;
-      if (e.until && now > e.until) return false;
-      return e.b.loop ? true : age < e.b.frames.length / e.b.fps;
-    });
+      if (e.until && now > e.until) continue;
+      if (!e.b.loop && age >= e.b.frames.length / e.b.fps) continue;
+      this.bk[write++] = e;
+    }
+    this.bk.length = write;
   }
   render(ctx, camX, camY) {
     if (this.every > 1 && this.n++ % this.every && this.list.length && !this.scaled.length && !this.bk.length) { ctx.drawImage(this.canvas, 0, 0); return; }
