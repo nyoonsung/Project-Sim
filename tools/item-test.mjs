@@ -55,7 +55,7 @@ World.prototype.repair.call(fake("smithy"), s2);
 ok(wpn.dur === wpn.maxDur && s2.char.gold === 5, `수선 완료 — "${notes.at(-1)}"`);
 ok((s2.unit.atk ?? s2.unit.stats?.atk) >= atkB2, "수선 후 공격력 회복");
 
-// 7) 모든 장비 내구도, 강화 1단계당 부위별 +1%, 궁수 1.8배
+// 7) 모든 장비 내구도, 강화 1단계당 부위별 +1%, 궁수·검사 피해 배율
 for (const slot of ["weapon", "offhand", "helmet", "armor", "trinket"]) {
   let it; for (let i = 0; i < 80 && it?.slot !== slot; i++) it = rollItem(Math.random, { ilvl: 10, rarity: "영웅" });
   ok(it.dur === it.maxDur && it.maxDur === 140, `${slot} 새 장비 내구도 ${it.dur}/${it.maxDur}`);
@@ -65,7 +65,7 @@ for (const slot of ["weapon", "offhand", "helmet", "armor", "trinket"]) {
 }
 const { deriveStats } = await import("../shared/stats.js");
 const arch = deriveStats({ ...newCharacter("궁"), cls: "archer", level: 10 }), swd = deriveStats({ ...newCharacter("검"), cls: "sword", level: 10 });
-ok(arch.classDmg === 1.8 && swd.classDmg === 1, "궁수 피해 배율 ×1.8");
+ok(arch.classDmg === 0.95 && swd.classDmg === 1.2, "궁수 피해 배율 ×0.95 / 검사 ×1.2");
 const hpA = deriveStats({ ...newCharacter("h"), equip: { helmet: { slot: "helmet", variant: 1, rarity: "일반", ilvl: 1, enh: 0, base: { def: 2, hp: 10 }, opts: [] } } }).maxHp;
 const hpB = deriveStats({ ...newCharacter("h"), equip: { helmet: { slot: "helmet", variant: 1, rarity: "일반", ilvl: 1, enh: 20, base: { def: 2, hp: 10 }, opts: [] } } }).maxHp;
 ok(hpB / hpA > 1.19, `투구 +20강 최대 HP ${hpA} → ${hpB}`);
