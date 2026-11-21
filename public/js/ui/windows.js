@@ -288,7 +288,7 @@ export function openInv(pos = {}) {
     const actions = sel ? h("div", { class: "flexrow" },
       h("b", { style: { color: RARITY_COLOR[sel.rarity] }, text: sel.name + (sel.enh ? ` +${sel.enh}` : "") }),
       c.inv.includes(sel) ? h("button", { class: "btn small", disabled: !canEquip(sel, c.cls), onclick: () => send({ t: "equip", uid: sel.uid }) }, "장착") : h("button", { class: "btn small", onclick: () => send({ t: "unequip", slot: sel.slot }) }, "해제"),
-      c.inv.includes(sel) ? h("button", { class: "btn small", disabled: sel.locked, onclick: () => send({ t: "sell", uid: sel.uid }) }, `판매 ${sellPrice(sel)}G`) : null,
+      c.inv.includes(sel) ? h("button", { class: "btn primary small", disabled: sel.locked, onclick: () => send({ t: "sell", uid: sel.uid }) }, `판매 ${sellPrice(sel)}G`) : null,
       h("button", { class: "btn small", disabled: !nearSmith, onclick: () => { G.enhSel = sel.uid; openSmithy(); } }, "강화"),
       h("button", { class: "btn small", onclick: () => send({ t: "lock", uid: sel.uid }) }, sel.locked ? "잠금 해제" : "잠금")) : h("div", { class: "note", text: "아이템을 누르면 선택돼요. 두 번 누르면 장착/해제, 오른쪽 클릭하면 어디서든 판매해요." });
     return [h("div", { class: "flexrow" }, h("span", { text: `💰 ${c.gold.toLocaleString()} G` }), h("span", { class: "note", text: `가방 ${c.inv.length}/${INVENTORY_SLOTS}` }),
