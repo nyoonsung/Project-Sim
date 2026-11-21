@@ -54,7 +54,7 @@ ok(true, "제2 던전 체력·공격력 기존 수치 대비 각각 정확히 10
   assert.equal(midBoss.hp, Math.round(avgHp * floorScale(5, 1).hp * 36 * soloHpBoost(5) * 11 * 0.9));
   const finalBoss = bossStats(zoneOf(100).boss, 100, 1, 1);
   assert.equal(finalBoss.hp, Math.round(avgHp * floorScale(100, 1).hp * 64 * soloHpBoost(100) * 1.5 * 11 * 0.9));
-  assert.ok(Math.abs(finalBoss.dmg - avgDmg * floorScale(100, 1).dmg * 1.7 * 10 * 1.2) < 1e-7);
+  assert.ok(Math.abs(finalBoss.dmg - avgDmg * floorScale(100, 1).dmg * 1.7 * 10 * 1.2 * 5) < 1e-7);
   const d1LateBoss = bossStats(zoneOf(20).boss, 20, 1, 1);
   assert.ok(Math.abs(d1LateBoss.dmg - avgDmg * floorScale(20, 1).dmg * 1.7 * 10 * 5) < 1e-7);
   const d1LateMid = bossStats(zoneOf(25).mid, 25, 1, 1);
