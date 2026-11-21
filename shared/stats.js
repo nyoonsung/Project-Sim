@@ -11,8 +11,8 @@ export const CLASS_DMG = {
   rogue: 1.30, // 1.62에서 약 20% 하향
   mage: 0.72576,
   priest: 1.35,
-  fist: 2.00, // 1.65에서 약 21% 상향
-  smith: 1.60, // 1.25에서 약 28% 상향
+  fist: 2.20, // 기존 2.00에서 10% 추가 상향
+  smith: 1.80, // 기존 1.60에서 12.5% 추가 상향
 };
 const MOVE_MUL = { adventurer: 1, sword: 1, fist: 1.02, archer: 1.02, rogue: 1.12, mage: 1.0, priest: 0.98, smith: 0.92 };
 
