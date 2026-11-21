@@ -266,12 +266,12 @@ ok(true, "제2 던전 드롭 레벨 100 · 소환물 드롭 없음 · 심연 유
   assert.ok(packets.some((p) => p.t === "vaultResult" && !p.ok && p.text.includes("마을")), "out-of-town requests must return a visible failure result");
 }
 
-// 직업 피해 배율: 대장장이와 권투사의 피해 기여도는 상향되고, 성직자 피해는 10% 낮아졌다.
-assert.equal(CLASS_DMG.smith, 1.25);
-assert.equal(CLASS_DMG.fist, 1.65);
-assert.equal(CLASS_DMG.priest, 1.35);
-assert.equal(CLASS_DMG.archer, 1.62);
-ok(true, "대장장이 피해 기여도 상향 · 궁수 단일 피해량 10% 감소");
+// 직업 피해 배율은 새 클래스 밸런스 기준을 사용한다.
+assert.equal(CLASS_DMG.smith, 0.5);
+assert.equal(CLASS_DMG.fist, 0.6);
+assert.equal(CLASS_DMG.priest, 0.7);
+assert.equal(CLASS_DMG.archer, 1.0);
+ok(true, "직업별 피해량 배율 적용");
 
 // 성직자 신규 광역기 4종이 실제 서버 판정용 area 단계·큰 반경·강한 계수를 가진다.
 for (const id of ["pr_halo", "pr_sanctum", "pr_radiance", "pr_apocalypse"]) {
