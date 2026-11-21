@@ -325,7 +325,12 @@ export function ensureAbyss(it) {
     }
     it.relicName = relic.name;
     it.relicColor = relic.color;
-    it.abyssEffects = relic.effects.slice();
+    // 리롤된 효과는 유지하고, 누락·잘못된 효과만 유물의 기본 효과로 채운다.
+    const effects = Array.isArray(it.abyssEffects)
+      ? [...new Set(it.abyssEffects.filter((key) => ABYSS_EFFECTS[key]))].slice(0, 2)
+      : [];
+    for (const key of relic.effects) if (effects.length < 2 && !effects.includes(key)) effects.push(key);
+    it.abyssEffects = effects;
     it.name = relic.name;
     return it;
   }
