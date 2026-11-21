@@ -54,6 +54,7 @@ export function onMessage(m) {
       break;
     }
     case "chat": G.ui.chat(m); break;
+    case "notice": G.ui.toast(m.text ?? "요청을 처리하지 못했어요.", "info"); break;
     case "party": G.party = m.members; G.ui.onParty(); break;
     case "invite": G.ui.invite(m.from); break;
     case "tradeReq": G.ui.tradeReq(m.from); break;

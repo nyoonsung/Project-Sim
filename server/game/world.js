@@ -57,7 +57,16 @@ function grantReserved(c, username, userId) {
   }
 }
 const ITEM_OPS = new Set(["equip", "unequip", "sell", "sellMany", "repair", "enchant", "specialReroll", "mythicReroll", "enhance", "buy", "lock", "class", "stat", "resetStats", "skills", "title", "rename"]);
-const uidToken = (value) => (typeof value === "string" || typeof value === "number") && String(value).length ? String(value) : null;
+const uidToken = (value) => {
+  if (typeof value === "string" && !/^\d{1,10}$/.test(value)) return null;
+  if (typeof value !== "string" && typeof value !== "number") return null;
+  const n = Number(value);
+  return Number.isSafeInteger(n) && n >= 1 && n <= 2 ** 31 ? String(n) : null;
+};
+const findItemByUid = (items, uid) => {
+  const key = uidToken(uid);
+  return key == null ? undefined : items.find((it) => it && uidToken(it.uid) === key);
+};
 
 export class World {
   constructor() {
@@ -334,7 +343,12 @@ export class World {
       case "title": this.equipTitle(s, m.id); break;
       case "who": this.who(s); break;
       case "enhance": this.enhance(s, m.uid); break;
-      case "lock": { const it = s.char.inv.find((i) => i.uid === m.uid) ?? Object.values(s.char.equip).find((i) => i?.uid === m.uid); if (it) { it.locked = !it.locked; this.sendChar(s); } break; }
+      case "lock": {
+        const it = findItemByUid([...s.char.inv, ...Object.values(s.char.equip)], m.uid);
+        if (it) { it.locked = !it.locked; this.sendChar(s); }
+        else s.notice("잠금을 변경할 아이템을 찾지 못했어요. 가방을 다시 열어 주세요.");
+        break;
+      }
       case "ping": s.send({ t: "pong", c: m.c, s: Date.now() }); break;
       case "dummy": break;
     }
@@ -726,8 +740,9 @@ export class World {
   }
   equip(s, uid) {
     const c = s.char;
-    const i = c.inv.findIndex((x) => x.uid === uid);
-    if (i < 0) return;
+    const key = uidToken(uid);
+    const i = key == null ? -1 : c.inv.findIndex((x) => uidToken(x.uid) === key);
+    if (i < 0) return s.notice("장착할 아이템을 찾지 못했어요. 가방을 다시 열어 주세요.");
     const it = c.inv[i];
     if (!canEquip(it, c.cls)) return s.notice("지금 직업으로는 장착할 수 없는 장비예요.");
     if (s.unit.room && !s.unit.room.map.safe && s.unit.lastHurt && s.unit.room.now - s.unit.lastHurt < 5) return s.notice("전투 중에는 장비를 바꿀 수 없어요.");
@@ -814,9 +829,10 @@ export class World {
   enchant(s, uid) {
     const c = s.char;
     if (!this.nearNpc(s, "enchanter")) return s.notice("마법부여사 근처에서 인챈트할 수 있어요.");
-    let where = "inv", it = c.inv.find((x) => x.uid === uid);
-    if (!it) { it = Object.values(c.equip).find((x) => x?.uid === uid); where = "equip"; }
-    if (!it) return;
+    const key = uidToken(uid);
+    let where = "inv", it = key == null ? null : findItemByUid(c.inv, key);
+    if (!it && key != null) { it = findItemByUid(Object.values(c.equip), key); where = "equip"; }
+    if (!it) return s.notice("인챈트할 장비를 찾지 못했어요. 가방을 다시 열어 주세요.");
     const cost = enchantCost(it);
     if (c.gold < cost) return s.notice(`골드가 부족해요. (${cost.toLocaleString()}G 필요)`);
     c.gold -= cost;
@@ -824,7 +840,7 @@ export class World {
     it.ench = rollEnchant(secureRandom());
     if (where === "equip") refreshStats(s.unit);
     itemLog(s.userId, "enchant", { name: it.name, rarity: it.rarity, from: before, to: it.ench, cost });
-    s.send({ t: "ench", uid, ench: it.ench, before });
+    s.send({ t: "ench", uid: it.uid, ench: it.ench, before });
     if (it.ench === "mend") this.broadcastSys(`✨ ${s.name}님이 [${it.name}]에 0.1% 확률의 '수선' 인챈트를 붙였어요!`, "legend");
     s.unit.room?.ev({ e: "fx", fx: "arcane/mana-burst", x: s.unit.x | 0, y: (s.unit.y - 10) | 0 });
     this.sendChar(s);
@@ -834,9 +850,10 @@ export class World {
   rerollSpecial(s, uid, index = 0) {
     const c = s.char;
     if (!this.nearNpc(s, "enchanter")) return s.notice("마법부여사 근처에서 특수 효과를 리롤할 수 있어요.");
-    let where = "inv", it = c.inv.find((x) => x.uid === uid);
-    if (!it) { it = Object.values(c.equip).find((x) => x?.uid === uid); where = "equip"; }
-    if (!it) return;
+    const key = uidToken(uid);
+    let where = "inv", it = key == null ? null : findItemByUid(c.inv, key);
+    if (!it && key != null) { it = findItemByUid(Object.values(c.equip), key); where = "equip"; }
+    if (!it) return s.notice("효과를 변경할 장비를 찾지 못했어요. 가방을 다시 열어 주세요.");
     let before, next, effectName;
     if (it.rarity === "신화" && MYTHIC_EFFECTS[it.mythic] && index === 0) {
       before = it.mythic;
@@ -858,7 +875,7 @@ export class World {
     else it.abyssEffects[index] = next;
     if (where === "equip") refreshStats(s.unit);
     itemLog(s.userId, "special_reroll", { name: it.name, rarity: it.rarity, index, from: before, to: next, cost });
-    s.send({ t: "specialReroll", uid, rarity: it.rarity, index, effect: next, effectName, before, cost, name: it.name });
+    s.send({ t: "specialReroll", uid: it.uid, rarity: it.rarity, index, effect: next, effectName, before, cost, name: it.name });
     s.unit.room?.ev({ e: "fx", fx: "arcane/mana-burst", x: s.unit.x | 0, y: (s.unit.y - 10) | 0 });
     this.sendChar(s);
     this.save(s);
@@ -867,7 +884,9 @@ export class World {
   repair(s, uid) {
     const c = s.char;
     if (!this.nearNpc(s, "smithy")) return s.notice("대장장이 브론 근처에서 수선할 수 있어요.");
-    const list = [...Object.values(c.equip), ...c.inv].filter((it) => it && (uid == null || it.uid === uid)).map(ensureDur).filter((it) => it.dur < it.maxDur);
+    const key = uid == null ? null : uidToken(uid);
+    if (uid != null && key == null) return s.notice("수선할 장비를 찾지 못했어요. 가방을 다시 열어 주세요.");
+    const list = [...Object.values(c.equip), ...c.inv].filter((it) => it && (key == null || uidToken(it.uid) === key)).map(ensureDur).filter((it) => it.dur < it.maxDur);
     if (!list.length) return s.notice("수선할 장비가 없어요. (내구도가 모두 가득)");
     const cost = list.reduce((a, it) => a + repairCost(it), 0);
     if (c.gold < cost) return s.notice(`골드가 부족해요. (수선비 ${cost.toLocaleString()}G)`);
@@ -882,10 +901,11 @@ export class World {
   enhance(s, uid) {
     const c = s.char;
     if (!this.nearNpc(s, "smithy")) return s.notice("대장장이 브론 근처에서 강화할 수 있어요.");
+    const key = uidToken(uid);
     let where = "inv";
-    let it = c.inv.find((x) => x.uid === uid);
-    if (!it) { it = Object.values(c.equip).find((x) => x?.uid === uid); where = "equip"; }
-    if (!it) return;
+    let it = key == null ? null : findItemByUid(c.inv, key);
+    if (!it && key != null) { it = findItemByUid(Object.values(c.equip), key); where = "equip"; }
+    if (!it) return s.notice("강화할 장비를 찾지 못했어요. 가방을 다시 열어 주세요.");
     if (it.enh >= MAX_ENH) return s.notice("이미 최대 강화(+99)예요.");
     const cost = enhanceCost(it);
     if (c.gold < cost) return s.notice(`골드가 부족해요. (${cost}G 필요)`);
@@ -911,7 +931,7 @@ export class World {
     } else result = "fail"; // 실패: 단계 유지
     itemLog(s.userId, "enhance", { name: it.name, rarity: it.rarity, from: result === "success" ? it.enh - 1 : it.enh, result, cost });
     if (result === "success" && it.enh >= 20) this.broadcastSys(`${s.name}님이 [${it.name}] +${it.enh} 강화에 성공했어요!`, "legend");
-    s.send({ t: "enh", result, uid, enh: it.enh, name: it.name, rarity: it.rarity, cost });
+    s.send({ t: "enh", result, uid: it.uid, enh: it.enh, name: it.name, rarity: it.rarity, cost });
     this.sendChar(s);
     this.save(s);
   }

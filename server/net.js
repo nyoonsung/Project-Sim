@@ -11,6 +11,13 @@ const isNum = (v, lo, hi) => typeof v === "number" && Number.isFinite(v) && v >=
 const isInt = (v, lo, hi) => Number.isInteger(v) && v >= lo && v <= hi;
 const isStr = (v, max) => typeof v === "string" && v.length <= max;
 const isId = (v) => typeof v === "string" && /^[a-z0-9_]{1,24}$/.test(v);
+const uidToken = (value) => {
+  if (typeof value === "string" && !/^\d{1,10}$/.test(value)) return null;
+  if (typeof value !== "string" && typeof value !== "number") return null;
+  const n = Number(value);
+  return Number.isSafeInteger(n) && n >= 1 && n <= 2 ** 31 ? String(n) : null;
+};
+const isUid = (value) => uidToken(value) !== null;
 
 // 메시지 종류별 검증기
 const SCHEMA = {
@@ -32,22 +39,29 @@ const SCHEMA = {
   class: (m) => isId(m.cls),
   rename: (m) => isStr(m.name, 24),
   buy: (m) => isId(m.item) && isInt(m.n, 1, 20),
-  equip: (m) => isInt(m.uid, 1, 2 ** 31),
+  equip: (m) => isUid(m.uid),
   unequip: (m) => ["weapon", "offhand", "helmet", "armor", "trinket"].includes(m.slot),
-  sell: (m) => isInt(m.uid, 1, 2 ** 31),
-  enhance: (m) => isInt(m.uid, 1, 2 ** 31),
-  trade: (m) => ["request", "accept", "decline", "set", "ready", "confirm", "reject", "cancel"].includes(m.op) && (m.name === undefined || isStr(m.name, 12)) && (m.gold === undefined || isInt(m.gold, 0, 1e9)) && (m.uids === undefined || (Array.isArray(m.uids) && m.uids.length <= 12 && m.uids.every((u) => isInt(u, 1, 2 ** 31)))) && (m.ver === undefined || isInt(m.ver, 0, 1e9)),
-  sellMany: (m) => Array.isArray(m.uids) && m.uids.length >= 1 && m.uids.length <= 60 && m.uids.every((u) => isInt(u, 1, 2 ** 31)),
-  repair: (m) => m.uid === undefined || isInt(m.uid, 1, 2 ** 31),
-  enchant: (m) => isInt(m.uid, 1, 2 ** 31),
-  mythicReroll: (m) => isInt(m.uid, 1, 2 ** 31),
-  specialReroll: (m) => isInt(m.uid, 1, 2 ** 31) && isInt(m.index, 0, 1),
+  sell: (m) => isUid(m.uid),
+  enhance: (m) => isUid(m.uid),
+  trade: (m) => ["request", "accept", "decline", "set", "ready", "confirm", "reject", "cancel"].includes(m.op) && (m.name === undefined || isStr(m.name, 12)) && (m.gold === undefined || isInt(m.gold, 0, 1e9)) && (m.uids === undefined || (Array.isArray(m.uids) && m.uids.length <= 12 && m.uids.every(isUid))) && (m.ver === undefined || isInt(m.ver, 0, 1e9)),
+  sellMany: (m) => Array.isArray(m.uids) && m.uids.length >= 1 && m.uids.length <= 60 && m.uids.every(isUid),
+  repair: (m) => m.uid === undefined || isUid(m.uid),
+  enchant: (m) => isUid(m.uid),
+  mythicReroll: (m) => isUid(m.uid),
+  specialReroll: (m) => isUid(m.uid) && isInt(m.index, 0, 1),
   title: (m) => m.id === null || isInt(m.id, 1, 1e6),
   who: () => true,
-  lock: (m) => isInt(m.uid, 1, 2 ** 31),
+  lock: (m) => isUid(m.uid),
   ping: (m) => isNum(m.c, 0, 1e15),
   dummy: (m) => ["reset"].includes(m.op),
 };
+
+export const CLIENT_MESSAGE_TYPES = Object.freeze(Object.keys(SCHEMA));
+export function validateClientMessage(m) {
+  if (!m || typeof m !== "object" || Array.isArray(m) || typeof m.t !== "string") return false;
+  const check = SCHEMA[m.t];
+  return typeof check === "function" && check(m);
+}
 
 export function attachSocket(sock, user, ip) {
   const w = initWorld();
@@ -86,8 +100,13 @@ export function attachSocket(sock, user, ip) {
     let m;
     try { m = JSON.parse(text); } catch { return strike("ws_bad_json"); }
     if (!m || typeof m !== "object" || Array.isArray(m) || typeof m.t !== "string") return strike("ws_bad_msg");
-    const check = SCHEMA[m.t];
-    if (!check || !check(m)) return strike("ws_bad_schema", { t: String(m.t).slice(0, 16) });
+    if (!validateClientMessage(m)) {
+      strike("ws_bad_schema", { t: String(m.t).slice(0, 16) });
+      if (typeof SCHEMA[m.t] === "function") {
+        conn.send({ t: "notice", text: "요청 형식이 맞지 않아 처리하지 못했어요. 화면을 새로고침한 뒤 다시 시도해 주세요." });
+      }
+      return;
+    }
     try { w.onMessage(conn, m); } catch (e) { console.error("message error", e); }
   });
   sock.onClose(() => w.onClose(conn));

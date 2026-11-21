@@ -57,20 +57,20 @@ try {
   ok(A.trade && B.trade && A.trade.with === "상인나", "거래창 열림");
 
   // 잠긴 아이템은 못 올림
-  A.send({ t: "lock", uid: ao.uid }); await sleep(150);
-  A.send({ t: "trade", op: "set", uids: [ao.uid] }); await sleep(150);
-  ok(A.trade.mine.items.length === 0, "잠긴 아이템 거부");
-  A.send({ t: "lock", uid: ao.uid }); await sleep(150);
+  A.send({ t: "lock", uid: String(ao.uid) }); await sleep(150);
+  A.send({ t: "trade", op: "set", uids: [String(ao.uid)] }); await sleep(150);
+  ok(A.trade.mine.items.length === 0, "문자열 UID 잠금 아이템 거부");
+  A.send({ t: "lock", uid: String(ao.uid) }); await sleep(150);
 
   // 올리기
-  A.send({ t: "trade", op: "set", uids: [aw.uid], gold: 1000 }); await sleep(150);
-  B.send({ t: "trade", op: "set", uids: [bw.uid], gold: 500 }); await sleep(150);
+  A.send({ t: "trade", op: "set", uids: [String(aw.uid)], gold: 1000 }); await sleep(150);
+  B.send({ t: "trade", op: "set", uids: [String(bw.uid)], gold: 500 }); await sleep(150);
   ok(B.trade.theirs.items[0]?.uid === aw.uid && B.trade.theirs.gold === 1000, "상대 제안이 보임");
   // 가진 것보다 많은 골드 거부
   A.send({ t: "trade", op: "set", gold: 999999 }); await sleep(150);
   ok(A.trade.mine.gold === 1000, "골드 초과 거부");
   // 올린 아이템 팔기 막기
-  A.send({ t: "sell", uid: aw.uid }); await sleep(150);
+  A.send({ t: "sell", uid: String(aw.uid) }); await sleep(150);
   ok(A.char.inv.some((i) => i.uid === aw.uid), "거래에 올린 아이템 판매 막힘");
   // 한 명이 '거래하기' → 상대에게 요청(수락 창). 그 사이 조건이 바뀌면 요청이 풀림
   A.send({ t: "trade", op: "confirm", ver: A.trade.ver }); await sleep(150);
@@ -108,8 +108,12 @@ try {
   B.send({ t: "trade", op: "accept", name: "상인가" }); await sleep(200);
   const it = A.char.inv[0];
   A.send({ t: "trade", op: "set", uids: [it.uid] }); await sleep(150);
-  A.send({ t: "equip", uid: it.uid }); await sleep(150);
-  ok(A.char.inv.some((i) => i.uid === it.uid), "거래에 올린 아이템 장착 막힘");
+  A.send({ t: "equip", uid: String(it.uid) }); await sleep(150);
+  ok(A.char.inv.some((i) => i.uid === it.uid), "문자열 UID 거래 등록 아이템 장착 막힘");
+  const spare = A.char.inv.find((i) => i.uid !== it.uid);
+  const goldBeforeStringSale = A.char.gold;
+  A.send({ t: "sell", uid: String(spare.uid) }); await sleep(200);
+  ok(!A.char.inv.some((i) => i.uid === spare.uid) && A.char.gold > goldBeforeStringSale, "실제 웹소켓 문자열 UID 아이템 판매");
   // 연결 끊기면 취소
   A.ws.close(); await sleep(400);
   ok(B.trade === null, "상대가 나가면 거래 취소");

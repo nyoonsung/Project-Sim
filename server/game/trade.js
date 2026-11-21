@@ -11,6 +11,16 @@ const MAX_ITEMS = 12, REQ_TTL = 60_000;
 const byName = (world, name) => [...world.sessions.values()].find((x) => x.name.toLowerCase() === String(name ?? "").toLowerCase());
 const inTown = (world, s) => s.unit.room === world.town && !s.linkdead;
 const snap = (it) => JSON.stringify(it);
+const uidToken = (value) => {
+  if (typeof value === "string" && !/^\d{1,10}$/.test(value)) return null;
+  if (typeof value !== "string" && typeof value !== "number") return null;
+  const n = Number(value);
+  return Number.isSafeInteger(n) && n >= 1 && n <= 2 ** 31 ? String(n) : null;
+};
+const findItemByUid = (items, uid) => {
+  const key = uidToken(uid);
+  return key == null ? undefined : items.find((it) => it && uidToken(it.uid) === key);
+};
 
 function side(T, s) { return T.sides.get(s.userId); }
 function other(T, s) { return T.a === s ? T.b : T.a; }
@@ -18,7 +28,7 @@ function unready(T) { for (const v of T.sides.values()) { v.ready = false; v.ok 
 
 function view(T, s) {
   const me = side(T, s), o = other(T, s), them = side(T, o);
-  const items = (sess, sd) => sd.uids.map((u) => sess.char.inv.find((i) => i.uid === u)).filter(Boolean);
+  const items = (sess, sd) => sd.uids.map((u) => findItemByUid(sess.char.inv, u)).filter(Boolean);
   return { ver: T.ver, with: o.name, mine: { items: items(s, me), gold: me.gold, ready: me.ready, ok: me.ok }, theirs: { items: items(o, them), gold: them.gold, ready: them.ready, ok: them.ok } };
 }
 function push(T) { for (const s of [T.a, T.b]) s.send({ t: "trade", st: view(T, s) }); }
@@ -63,14 +73,17 @@ export function tradeOp(world, s, m) {
   if (!inTown(world, s) || !inTown(world, o)) return endTrade(s, "한 명이 마을을 떠나서 거래가 취소됐어요.");
   switch (m.op) {
     case "set": {
-      const uids = [...new Set(m.uids ?? me.uids)];
-      if (uids.length > MAX_ITEMS) return s.notice(`한 번에 ${MAX_ITEMS}개까지 올릴 수 있어요.`);
-      const items = uids.map((u) => s.char.inv.find((i) => i.uid === u));
+      const requested = m.uids ?? me.uids;
+      if (!Array.isArray(requested)) return s.notice("거래할 아이템을 다시 선택해 주세요.");
+      if (requested.length > MAX_ITEMS) return s.notice(`한 번에 ${MAX_ITEMS}개까지 올릴 수 있어요.`);
+      const tokens = requested.map(uidToken);
+      if (tokens.some((key) => key == null)) return s.notice("거래할 아이템 번호가 올바르지 않아요.");
+      const items = [...new Set(tokens)].map((key) => findItemByUid(s.char.inv, key));
       if (items.some((i) => !i)) return s.notice("가방에 있는 아이템만 올릴 수 있어요. (장착 중인 건 먼저 해제)");
       if (items.some((i) => i.locked)) return s.notice("잠긴 아이템은 거래할 수 없어요. 잠금을 풀어 주세요.");
       const gold = m.gold ?? me.gold;
       if (gold > s.char.gold) return s.notice("가진 골드보다 많이 올릴 수 없어요.");
-      me.uids = uids; me.snaps = items.map(snap); me.gold = gold;
+      me.uids = items.map((it) => it.uid); me.snaps = items.map(snap); me.gold = gold;
       T.ver++;
       unready(T);
       return push(T);
@@ -102,7 +115,7 @@ function execute(world, T) {
   const A = T.a, B = T.b, sa = side(T, A), sb = side(T, B);
   // 확정 순간 재검사
   const check = (s, sd) => {
-    const items = sd.uids.map((u) => s.char.inv.find((i) => i.uid === u));
+    const items = sd.uids.map((u) => findItemByUid(s.char.inv, u));
     if (items.some((i) => !i)) return `${s.name}님이 올린 아이템이 가방에 없어요.`;
     if (items.some((i, k) => i.locked || snap(i) !== sd.snaps[k])) return `${s.name}님이 올린 아이템이 바뀌었어요.`;
     if (sd.gold > s.char.gold) return `${s.name}님의 골드가 부족해요.`;
@@ -118,7 +131,12 @@ function execute(world, T) {
     }
   }
   // 교환 (한 번에)
-  const take = (s, sd) => { const out = sd.uids.map((u) => s.char.inv.find((i) => i.uid === u)); s.char.inv = s.char.inv.filter((i) => !sd.uids.includes(i.uid)); return out; };
+  const take = (s, sd) => {
+    const keys = new Set(sd.uids.map(uidToken));
+    const out = sd.uids.map((u) => findItemByUid(s.char.inv, u));
+    s.char.inv = s.char.inv.filter((i) => !keys.has(uidToken(i.uid)));
+    return out;
+  };
   const give = (s, items) => { for (const it of items) s.char.inv.push({ ...it, uid: s.char.nextUid++, locked: false }); };
   const fromA = take(A, sa), fromB = take(B, sb);
   give(A, fromB); give(B, fromA);
@@ -132,7 +150,7 @@ function execute(world, T) {
 
 /** 이 아이템이 지금 거래에 올라가 있나 (팔기·강화 등 막기용) */
 export function inOffer(s, uid) {
-  if (!s.trade || (typeof uid !== "string" && typeof uid !== "number")) return false;
-  const key = String(uid);
-  return side(s.trade, s).uids.some((value) => String(value) === key);
+  if (!s.trade) return false;
+  const key = uidToken(uid);
+  return key != null && side(s.trade, s).uids.some((value) => uidToken(value) === key);
 }

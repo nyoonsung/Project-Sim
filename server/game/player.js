@@ -43,6 +43,26 @@ export function sanitizeChar(c, name) {
   // 모험가 기본 공격은 든 무기에 맞춤 (활 → 활쏘기, 지팡이 → 마력탄)
   if (out.cls === "adventurer" && Array.isArray(out.skills)) out.skills[0] = adventurerBasic(out.equip?.weapon?.type);
   out.equip = { ...d.equip, ...(out.equip ?? {}) };
+  // 구형 저장 데이터의 문자열·중복 UID를 정리해 화면과 서버가 같은 번호를 사용하게 한다.
+  const usedUids = new Set();
+  let nextUid = Number.isSafeInteger(out.nextUid) && out.nextUid >= 1 && out.nextUid <= 2 ** 31 ? out.nextUid : d.nextUid;
+  for (const it of [...Object.values(out.equip), ...out.inv]) {
+    if (!it || typeof it !== "object") continue;
+    const raw = it.uid;
+    const n = typeof raw === "number" ? raw : (typeof raw === "string" && /^\d{1,10}$/.test(raw) ? Number(raw) : NaN);
+    if (Number.isSafeInteger(n) && n >= 1 && n <= 2 ** 31 && !usedUids.has(n)) {
+      it.uid = n;
+      usedUids.add(n);
+      if (n >= nextUid) nextUid = n === 2 ** 31 ? 1 : n + 1;
+    } else {
+      let candidate = nextUid;
+      while (usedUids.has(candidate)) candidate = candidate >= 2 ** 31 ? 1 : candidate + 1;
+      it.uid = candidate;
+      usedUids.add(candidate);
+      nextUid = candidate >= 2 ** 31 ? 1 : candidate + 1;
+    }
+  }
+  out.nextUid = nextUid;
   // 무기 내구도 (예전 무기엔 없던 값 → 가득으로)
   // 칭호: 관리자가 준 것만 (보관함 titles, 장착 title)
   out.titles = (Array.isArray(out.titles) ? out.titles : []).filter((t) => t && Number.isInteger(t.id) && typeof t.text === "string" && t.text.length >= 1 && t.text.length <= TITLE_MAX)
