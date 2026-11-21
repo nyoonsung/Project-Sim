@@ -17,12 +17,13 @@ const CRIT_POINTS = 180;
 const DAMAGE_POINTS = 447 - CRIT_POINTS;
 
 
-// 직업 내구도·전용 보너스: 검사 방어, 도적 체력·회피, 마법사 체력·방어·마나·시전 속도.
+// 직업 내구도·전용 보너스: 검사 방어, 도적 체력·방어·회피, 마법사 체력·방어·마나·시전, 성직자 전투 내구도.
 {
   const expected = {
     sword: { hpMul: 1.32, defMul: 1.35, hpAtLv10: 449, defAtLv10: 36 },
-    rogue: { hpMul: 1.0, defMul: 0.95, hpAtLv10: 340, defAtLv10: 26 },
-    mage: { hpMul: 1.12, defMul: 1.0, hpAtLv10: 381, defAtLv10: 27 },
+    rogue: { hpMul: 1.08, defMul: 1.0, hpAtLv10: 367, defAtLv10: 27 },
+    mage: { hpMul: 1.18, defMul: 1.05, hpAtLv10: 401, defAtLv10: 28 },
+    priest: { hpMul: 1.24, defMul: 1.10, hpAtLv10: 422, defAtLv10: 30 },
   };
   for (const [cls, exp] of Object.entries(expected)) {
     assert.equal(CLASS_INFO[cls].hpMul, exp.hpMul, `${cls}: base HP multiplier`);
@@ -30,11 +31,11 @@ const DAMAGE_POINTS = 447 - CRIT_POINTS;
     const s = deriveStats({ cls, level: 10, stats: {}, equip: {}, skills: [] });
     assert.equal(s.maxHp, exp.hpAtLv10, `${cls}: level 10 base HP`);
     assert.equal(s.def, exp.defAtLv10, `${cls}: level 10 base defense`);
-    if (cls === "rogue") assert.equal(s.evade, 0.06, "rogue: baseline evasion");
+    if (cls === "rogue") assert.equal(s.evade, 0.08, "rogue: baseline evasion");
     if (cls === "mage") {
-      assert.equal(s.cast, 1.12, "mage: baseline cast speed");
-      assert.equal(s.mpRegen, 2.5, "mage: level 10 mana regeneration");
-      assert.equal(s.maxMp, 210, "mage: level 10 maximum MP");
+      assert.equal(s.cast, 1.18, "mage: baseline cast speed");
+      assert.equal(s.mpRegen, 2.8, "mage: level 10 mana regeneration");
+      assert.equal(s.maxMp, 220, "mage: level 10 maximum MP");
     }
   }
 }
