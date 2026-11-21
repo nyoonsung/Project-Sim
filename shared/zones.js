@@ -239,6 +239,7 @@ export const D1_BOSS_HP_MULTIPLIER = 11;
 export const D1_BOSS_HP_REDUCTION = 0.9;
 export const D1_BOSS_DAMAGE_MULTIPLIER = 10;
 export const D1_FINAL_BOSS_DAMAGE_MULTIPLIER = 1.2;
+export const BOSS_DAMAGE_INCREASE_MULTIPLIER = 5; // 제1 던전 20층 이상 및 제2 던전 모든 보스 피해량
 export const D2_MONSTER_DAMAGE_MULTIPLIER = 0.5;
 // 제2 던전 일반·정예 몬스터는 완화된 HP·공격력·방어력을 사용한다.
 // 보스도 HP·공격력·방어력을 1/5로 낮추고 이동 속도를 80%로 조정한다. 경험치·보상은 유지.
@@ -314,9 +315,12 @@ export function bossStats(id, floor, party = 1, dungeon = 1) {
   const bossHpMultiplier = dungeon === 1 ? D1_BOSS_HP_MULTIPLIER * D1_BOSS_HP_REDUCTION : 1;
   const bossDamageMultiplier = dungeon === 1 ? D1_BOSS_DAMAGE_MULTIPLIER : 1;
   const finalBossDamageMultiplier = dungeon === 1 && floor === 100 && !def.mid ? D1_FINAL_BOSS_DAMAGE_MULTIPLIER : 1;
+  const selectedBossDamageMultiplier = dungeon === 2 || (dungeon === 1 && floor >= 20)
+    ? BOSS_DAMAGE_INCREASE_MULTIPLIER
+    : 1;
   return {
     hp: Math.round(baseHp * hpMul * pScale * capBonus * (dungeon === 2 && floor >= DUNGEON2_MAX_FLOOR ? 1.5 : 1) * hpBoost(party, effLevel(floor, dungeon)) * bossHpMultiplier * (dungeon === 2 ? D2_BOSS_STAT_MULTIPLIER * D2_BOSS_HP_REDUCTION : 1)),
-    dmg: baseDmg * (def.mid ? 1.5 : 1.7) * bossDamageMultiplier * finalBossDamageMultiplier * (dungeon === 2 ? D2_BOSS_STAT_MULTIPLIER : 1),
+    dmg: baseDmg * (def.mid ? 1.5 : 1.7) * bossDamageMultiplier * finalBossDamageMultiplier * (dungeon === 2 ? D2_BOSS_STAT_MULTIPLIER : 1) * selectedBossDamageMultiplier,
     xp: (def.xp ?? 25) * 6 * s.xp,
     level: effLevel(floor, dungeon),
   };
