@@ -77,11 +77,11 @@ export function dealDamage(room, src, t, o, now) {
   let frontDr = 0;
   if (t.team === "p" && t.frontGuard && now <= t.frontGuard.until && !o.dot && src) {
     const ang = Math.atan2(src.y - t.y, src.x - t.x);
-    if (angDiff(ang, t.frontGuard.dir) <= (t.frontGuard.arc * Math.PI) / 360) { frontDr = t.frontGuard.dr * (t.stats?.classSustain ?? 1); room.onFrontGuard?.(t, now); }
+    if (angDiff(ang, t.frontGuard.dir) <= (t.frontGuard.arc * Math.PI) / 360) { frontDr = t.frontGuard.dr; room.onFrontGuard?.(t, now); }
   }
   // 회피
   if (!o.dot && t.team === "p") {
-    const ev = (t.stats?.evade ?? 0) + buffSum(t, "evade") * (t.stats?.classSustain ?? 1);
+    const ev = (t.stats?.evade ?? 0) + buffSum(t, "evade");
     if (ev > 0 && Math.random() < Math.min(0.6, ev)) {
       room.ev({ e: "miss", id: t.id });
       return { dmg: 0, miss: true };
@@ -130,7 +130,7 @@ export function dealDamage(room, src, t, o, now) {
   }
   // 받는 피해 감소
   if (t.team === "p") {
-    let dr = (t.stats?.dr ?? 0) + buffSum(t, "dr") * (t.stats?.classSustain ?? 1);
+    let dr = (t.stats?.dr ?? 0) + buffSum(t, "dr");
     if (t.mythicIron && t.hp / t.maxHp <= 0.4) dr += 0.3;
     if (t.abyss?.has("chrono_guard") && now >= (t.icd.get("a_chrono_guard") ?? 0)) {
       dr += 0.18;

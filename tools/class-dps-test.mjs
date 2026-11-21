@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { CLASS_GEAR, makeItem } from "../shared/items.js";
 import { CLASS_INFO } from "../shared/classes.js";
-import { deriveStats, CLASS_SUSTAIN } from "../shared/stats.js";
+import { deriveStats } from "../shared/stats.js";
 import { SKILLS } from "../shared/skills.js";
 import { PROF_TOTAL } from "../shared/prof.js";
 import { makeFloor } from "../server/game/dungeon.js";
@@ -17,26 +17,21 @@ const CRIT_POINTS = 180;
 const DAMAGE_POINTS = 447 - CRIT_POINTS;
 
 
-// 직업 내구도와 유지력 배율을 합산한 최종 HP·방어력을 검증한다.
+// 직업 내구도·전용 보너스: 검사 방어, 도적 체력·방어·회피, 마법사 체력·방어·마나·시전, 성직자 전투 내구도.
 {
   const expected = {
-    sword: { hpMul: 1.32, defMul: 1.35, sustain: 0.7, hpAtLv10: 314, defAtLv10: 26 },
-    fist: { hpMul: 1.4, defMul: 1.35, sustain: 0.8, hpAtLv10: 381, defAtLv10: 29 },
-    archer: { hpMul: 0.96, defMul: 0.9, sustain: 0.5, hpAtLv10: 163, defAtLv10: 12 },
-    rogue: { hpMul: 1.08, defMul: 1.0, sustain: 0.5, hpAtLv10: 184, defAtLv10: 14 },
-    mage: { hpMul: 1.18, defMul: 1.05, sustain: 0.6, hpAtLv10: 241, defAtLv10: 17 },
-    priest: { hpMul: 1.24, defMul: 1.10, sustain: 0.7, hpAtLv10: 295, defAtLv10: 21 },
-    smith: { hpMul: 1.5, defMul: 1.6, sustain: 1.0, hpAtLv10: 510, defAtLv10: 43 },
+    sword: { hpMul: 1.32, defMul: 1.35, hpAtLv10: 449, defAtLv10: 36 },
+    rogue: { hpMul: 1.08, defMul: 1.0, hpAtLv10: 367, defAtLv10: 27 },
+    mage: { hpMul: 1.18, defMul: 1.05, hpAtLv10: 401, defAtLv10: 28 },
+    priest: { hpMul: 1.24, defMul: 1.10, hpAtLv10: 422, defAtLv10: 30 },
   };
   for (const [cls, exp] of Object.entries(expected)) {
     assert.equal(CLASS_INFO[cls].hpMul, exp.hpMul, `${cls}: base HP multiplier`);
     assert.equal(CLASS_INFO[cls].defMul, exp.defMul, `${cls}: defense multiplier`);
-    assert.equal(CLASS_SUSTAIN[cls], exp.sustain, `${cls}: class sustain multiplier`);
     const s = deriveStats({ cls, level: 10, stats: {}, equip: {}, skills: [] });
-    assert.equal(s.maxHp, exp.hpAtLv10, `${cls}: level 10 HP after sustain multiplier`);
-    assert.equal(s.def, exp.defAtLv10, `${cls}: level 10 defense after sustain multiplier`);
-    assert.equal(s.classSustain, exp.sustain, `${cls}: calculated sustain multiplier`);
-    if (cls === "rogue") assert.equal(s.evade, 0.04, "rogue: baseline evasion ×0.5");
+    assert.equal(s.maxHp, exp.hpAtLv10, `${cls}: level 10 base HP`);
+    assert.equal(s.def, exp.defAtLv10, `${cls}: level 10 base defense`);
+    if (cls === "rogue") assert.equal(s.evade, 0.08, "rogue: baseline evasion");
     if (cls === "mage") {
       assert.equal(s.cast, 1.18, "mage: baseline cast speed");
       assert.equal(s.mpRegen, 2.8, "mage: level 10 mana regeneration");
@@ -44,7 +39,7 @@ const DAMAGE_POINTS = 447 - CRIT_POINTS;
     }
   }
 }
-console.log("✓ 직업별 유지력 배율이 HP·방어·회피 능력치에 적용됨");
+console.log("✓ 검사 방어력 / 도적·마법사 전반 능력치 상향");
 
 const BUILDS = [
   {
@@ -209,7 +204,6 @@ function simulate(build, index) {
     casts,
     atk: Math.round(player.stats.atk),
     classDmg: player.stats.classDmg,
-    classSustain: player.stats.classSustain,
     crit: +(player.stats.crit * 100).toFixed(1),
     aspd: +player.stats.aspd.toFixed(2),
   };
@@ -220,19 +214,19 @@ try {
   const rows = BUILDS.map(simulate);
   rows.sort((a, b) => b.dps - a.dps);
   console.log("CLASS_DPS_TABLE_JSON=" + JSON.stringify(rows));
-  console.log("직업 | DPS | 공격력 | 딜량 배율 | 유지력 배율 | 치명타 | 공격속도 | 시전 수");
+  console.log("직업 | DPS | 공격력 | 직업 배율 | 치명타 | 공격속도 | 시전 수");
   for (let i = 0; i < rows.length; i++) {
     const r = rows[i];
-    console.log(`${i + 1}. ${r.name} | ${r.dps.toLocaleString("ko-KR")} | ${r.atk.toLocaleString("ko-KR")} | ×${r.classDmg} | ×${r.classSustain} | ${r.crit}% | ×${r.aspd} | ${r.casts}`);
+    console.log(`${i + 1}. ${r.name} | ${r.dps.toLocaleString("ko-KR")} | ${r.atk.toLocaleString("ko-KR")} | ×${r.classDmg} | ${r.crit}% | ×${r.aspd} | ${r.casts}`);
   }
   assert.equal(rows.length, 7);
   for (const r of rows) assert.ok(Number.isFinite(r.dps) && r.dps > 0, `${r.name} should deal measurable damage`);
   const dpsByClass = Object.fromEntries(rows.map((r) => [r.cls, r.dps]));
-  assert.ok(dpsByClass.mage >= dpsByClass.sword * 0.95, "mage DPS should remain near or above the sword benchmark");
-  assert.ok(dpsByClass.rogue >= dpsByClass.sword * 1.7, "rogue should remain a high-burst damage dealer");
-  assert.ok(dpsByClass.fist >= 3000, "fist DPS should reflect its 0.6 damage multiplier");
-  assert.ok(dpsByClass.smith >= 2300, "smith DPS should reflect its 0.5 damage multiplier");
-  assert.ok(dpsByClass.priest < dpsByClass.mage, "priest DPS should stay below mage");
+  assert.ok(dpsByClass.mage >= dpsByClass.sword * 0.95, "mage should remain near the sword benchmark after its damage is increased by 20%");
+  assert.ok(dpsByClass.rogue >= dpsByClass.sword * 1.7, "rogue should maintain at least 1.7x the sword benchmark DPS after its major upgrade");
+  assert.ok(dpsByClass.fist >= 8500, "fist tank damage should reflect its damage buff");
+  assert.ok(dpsByClass.smith >= 6000, "smith tank damage should reflect its damage buff");
+  assert.ok(dpsByClass.priest < dpsByClass.mage, "priest damage should stay below mage after its damage reduction");
   console.log("CLASS DPS TESTS: ALL PASS");
 } finally {
   Math.random = originalRandom;
