@@ -296,7 +296,7 @@ export class World {
     if (!s || s.conn !== conn) return;
     const u = s.unit, room = u.room;
     // 거래에 올린 아이템은 팔기·강화·인챈트·장착 금지 (확정 직전 바꿔치기 방지)
-    if (s.trade && ((m.uid != null && ["sell", "enhance", "enchant", "equip", "lock"].includes(m.t) && inOffer(s, m.uid)) || (m.t === "sellMany" && m.uids.some((u) => inOffer(s, u))))) return s.notice("거래에 올린 아이템이에요. 거래창에서 먼저 내려 주세요.");
+    if (s.trade && ((m.uid != null && ["sell", "enhance", "enchant", "specialReroll", "mythicReroll", "equip", "lock"].includes(m.t) && inOffer(s, m.uid)) || (m.t === "sellMany" && m.uids.some((u) => inOffer(s, u))))) return s.notice("거래에 올린 아이템이에요. 거래창에서 먼저 내려 주세요.");
     switch (m.t) {
       case "trade": tradeOp(this, s, m); break;
       case "in":
