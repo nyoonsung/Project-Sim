@@ -12,7 +12,7 @@ import { rollAbyssRelic } from "../shared/items.js";
 import { makeFloor, mapPayload, makeTown, safeZone } from "../server/game/dungeon.js";
 import { levelGapXpMultiplier, unitXpMultiplier } from "../server/game/room.js";
 import { World } from "../server/game/world.js";
-import { D2_MOB_PATTERN, D2_BOSS_PATTERN } from "../server/game/ai.js";
+import { D2_MOB_PATTERN, D2_BOSS_PATTERN, D2_BOSS_SIGNATURES } from "../server/game/ai.js";
 import { TILE } from "../shared/constants.js";
 import { circleHitsWall } from "../shared/move.js";
 
@@ -327,11 +327,25 @@ assert.ok(D2_MOB_PATTERN.meleeWindup > 1);
 assert.ok(D2_MOB_PATTERN.chargerTelegraph >= 1);
 assert.equal(D2_MOB_PATTERN.volleyShots, 1);
 assert.equal(D2_MOB_PATTERN.casterFollowPow, 0);
-// 보스도 긴 예고, 낮은 연계 확률, 느린 패턴 간격을 사용한다.
-assert.ok(D2_BOSS_PATTERN.power < 1 && D2_BOSS_PATTERN.telegraph > 1);
-assert.ok(D2_BOSS_PATTERN.comboPhase2 < 0.3 && D2_BOSS_PATTERN.comboPhase3 < 0.4);
-assert.ok(D2_BOSS_PATTERN.intervalPhase1 > 3.5 && D2_BOSS_PATTERN.intervalPhase3 > 2.5);
-ok(true, "제2 던전 일반 몬스터·보스 패턴 완화 값");
+// 제2 던전 보스는 빠른 패턴 교대와 높은 연계 확률을 사용하되, 최소 예고 시간을 보장한다.
+assert.ok(D2_BOSS_PATTERN.power > 0.9 && D2_BOSS_PATTERN.telegraph < 1);
+assert.ok(D2_BOSS_PATTERN.telegraphMin >= 0.75 && D2_BOSS_PATTERN.countScale >= 0.85);
+assert.ok(D2_BOSS_PATTERN.comboPhase2 >= 0.5 && D2_BOSS_PATTERN.comboPhase3 >= 0.75);
+assert.ok(D2_BOSS_PATTERN.comboDelay < 0.8);
+assert.ok(D2_BOSS_PATTERN.intervalPhase1 < 3.5 && D2_BOSS_PATTERN.intervalPhase3 < 2);
+const signatureIds = ["rift_harbinger", "scarlet_regent", "null_archivist", "paradox_engine", "eclipse_warden", "abyss_watcher"];
+for (const id of signatureIds) {
+  const phases = D2_BOSS_SIGNATURES[id];
+  assert.ok(phases?.phase2?.length && phases?.phase3?.length, `${id} must have phase 2 and phase 3 signature patterns`);
+  for (const p of [...phases.phase2, ...phases.phase3]) assert.ok(["grid", "nova", "multicharge", "safespot", "chase"].includes(p.type), `unsupported signature pattern ${p.type}`);
+}
+assert.equal(D2_BOSS_SIGNATURES.rift_harbinger.phase2[0].type, "grid");
+assert.equal(D2_BOSS_SIGNATURES.scarlet_regent.phase3[0].type, "safespot");
+assert.equal(D2_BOSS_SIGNATURES.null_archivist.phase3[0].type, "chase");
+assert.equal(D2_BOSS_SIGNATURES.paradox_engine.phase2[0].type, "multicharge");
+assert.equal(D2_BOSS_SIGNATURES.eclipse_warden.phase2[0].type, "nova");
+assert.equal(D2_BOSS_SIGNATURES.abyss_watcher.phase3[0].type, "safespot");
+ok(true, "제2 던전 보스별 전용 2·3페이즈 패턴 / 공격 연계 강화 값");
 
 // 제2 던전 적 투사체·구형 공허 탄환에는 상한이 있어 객체가 끝없이 쌓이지 않는다.
 {

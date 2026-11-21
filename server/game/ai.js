@@ -57,15 +57,45 @@ export const D2_MOB_PATTERN = Object.freeze({
 
 // 보스도 1/5 능력치에 맞춰 패턴을 덜 겹치게 하고 회피 시간을 늘린다.
 export const D2_BOSS_PATTERN = Object.freeze({
-  power: 0.75,
-  telegraph: 1.25,
-  telegraphMin: 1.0,
-  comboPhase2: 0.25,
-  comboPhase3: 0.32,
-  comboDelay: 1.05,
-  intervalPhase1: 4.0,
-  intervalPhase2: 3.2,
-  intervalPhase3: 2.6,
+  // 공격력·연계 빈도는 높이되, 모든 패턴에 최소 예고 시간을 남긴다.
+  power: 0.92,
+  telegraph: 0.92,
+  telegraphMin: 0.78,
+  countScale: 0.9,
+  comboPhase2: 0.55,
+  comboPhase3: 0.78,
+  comboDelay: 0.72,
+  intervalPhase1: 3.4,
+  intervalPhase2: 2.55,
+  intervalPhase3: 1.85,
+});
+
+// 제2 던전 각 보스의 2·3페이즈 전용 패턴. 같은 난이도라도 보스마다 공략법이 달라진다.
+export const D2_BOSS_SIGNATURES = Object.freeze({
+  rift_harbinger: {
+    phase2: [{ type: "grid", n: 5, tel: 0.84, pow: 1.35, fx: "lightning/lightning-strike" }],
+    phase3: [{ type: "multicharge", n: 4, dist: 330, width: 56, tel: 0.62, pow: 1.5 }],
+  },
+  scarlet_regent: {
+    phase2: [{ type: "nova", step: 82, n: 4, tel: 0.78, pow: 1.4, fx: "shadow/dark-explosion" }],
+    phase3: [{ type: "safespot", safe: 48, tel: 1.35, pow: 1.9, fx: "shadow/dark-explosion" }],
+  },
+  null_archivist: {
+    phase2: [{ type: "grid", n: 7, tel: 0.8, pow: 1.4, fx: "lightning/lightning-strike" }],
+    phase3: [{ type: "chase", n: 5, gap: 0.34, radius: 44, tel: 0.68, pow: 1.25, fx: "impacts/ground-slam" }],
+  },
+  paradox_engine: {
+    phase2: [{ type: "multicharge", n: 4, dist: 340, width: 56, tel: 0.6, pow: 1.5 }],
+    phase3: [{ type: "safespot", safe: 48, tel: 1.3, pow: 1.95, fx: "scifi/emp-blast" }],
+  },
+  eclipse_warden: {
+    phase2: [{ type: "nova", step: 78, n: 4, tel: 0.76, pow: 1.45, fx: "shadow/dark-explosion" }],
+    phase3: [{ type: "grid", n: 7, tel: 0.76, pow: 1.45, fx: "shadow/shadow-flames" }],
+  },
+  abyss_watcher: {
+    phase2: [{ type: "multicharge", n: 5, dist: 360, width: 58, tel: 0.58, pow: 1.55 }],
+    phase3: [{ type: "safespot", safe: 46, tel: 1.25, pow: 2.0, fx: "shadow/dark-explosion" }],
+  },
 });
 
 function pickTarget(room, m, now) {
@@ -340,7 +370,7 @@ export function tickBoss(room, b, now) {
   const phase2Threshold = 0.5;
   if (b.phase === 1 && b.hp < b.maxHp * phase2Threshold) {
     b.phase = 2;
-    b.speed *= room.dungeon === 2 ? 1.05 : 1.15;
+    b.speed *= room.dungeon === 2 ? 1.08 : 1.15;
     room.ev({ e: "msg", text: `${b.name}이(가) 힘을 끌어올렸어요! (2페이즈)`, kind: "boss" });
     room.ev({ e: "fx", fx: "status/rage", x: b.x | 0, y: b.y | 0, s: 1.5, at: b.id });
     b.patternAt = now + 1;
@@ -348,16 +378,16 @@ export function tickBoss(room, b, now) {
   // 심연 보스의 3페이즈: 20% 이하에서 분노. 기존 텔레그래프는 유지해 회피 여지를 남긴다.
   if (room.dungeon === 2 && b.phase === 2 && b.hp < b.maxHp * 0.2) {
     b.phase = 3;
-    b.speed *= 1.08;
+    b.speed *= 1.12;
     room.ev({ e: "msg", text: `${b.name}이(가) 완전히 폭주합니다! (분노 상태)`, kind: "boss" });
     room.ev({ e: "fx", fx: "status/rage", x: b.x | 0, y: b.y | 0, s: 2.0, at: b.id });
     b.patternAt = now + 0.85;
   }
-  // 장기전 방지용 분노는 4분 이후 공격력을 10%만 높인다.
+  // 장기전 방지용 분노: 4분이 지나면 공격력이 15% 상승한다.
   if (room.dungeon === 2 && !b.enraged && now - (b.bornAt ??= now) > 240) {
     b.enraged = true;
-    b.atk *= 1.1;
-    room.ev({ e: "msg", text: `${b.name}의 분노가 한계에 달했어요! (공격력 +10%)`, kind: "boss" });
+    b.atk *= 1.15;
+    room.ev({ e: "msg", text: `${b.name}의 분노가 한계에 달했어요! (공격력 +15%)`, kind: "boss" });
   }
   const t = pickTarget(room, b, now) ?? bossTargets(room)[0];
   if (!t) return;
@@ -393,12 +423,18 @@ export function tickBoss(room, b, now) {
         { type: "safespot", safe: 52, tel: 1.55, pow: 2.2, fx: "shadow/dark-explosion" },
       ] : []),
     ] : [];
-    const allPats = [...native, ...extra, ...abyssExtra];
+    const signature = room.dungeon === 2 && b.phase >= 2
+      ? (D2_BOSS_SIGNATURES[b.bid]?.[b.phase === 3 ? "phase3" : "phase2"] ?? [])
+      : [];
+    const allPats = [...native, ...extra, ...abyssExtra, ...signature];
     if (!allPats.length) return;
     const pickIndex = (b.patIdx++ * 7 + Math.floor(Math.random() * allPats.length)) % allPats.length;
-    const chosen = allPats[pickIndex];
+    let chosen = allPats[pickIndex];
+    // 같은 종류의 패턴이 연속으로 뽑히는 것을 방지해 매번 다른 회피 동선을 요구한다.
+    if (allPats.length > 1 && chosen.type === b.lastPatternType) chosen = allPats[(pickIndex + 1) % allPats.length];
+    b.lastPatternType = chosen.type;
     const tune = (pat) => room.dungeon === 2
-      ? { ...pat, ...(pat.tel == null ? {} : { tel: Math.max(D2_BOSS_PATTERN.telegraphMin, pat.tel * D2_BOSS_PATTERN.telegraph) }), ...(pat.n == null ? {} : { n: Math.max(1, Math.ceil(pat.n * 0.75)) }), pow: (pat.pow ?? 1) * D2_BOSS_PATTERN.power }
+      ? { ...pat, ...(pat.tel == null ? {} : { tel: Math.max(D2_BOSS_PATTERN.telegraphMin, pat.tel * D2_BOSS_PATTERN.telegraph) }), ...(pat.n == null ? {} : { n: Math.max(1, Math.ceil(pat.n * D2_BOSS_PATTERN.countScale)) }), pow: (pat.pow ?? 1) * D2_BOSS_PATTERN.power }
       : pat;
     startPattern(room, b, tune(chosen), t, now);
     // 심연 보스는 2·3페이즈에서 서로 다른 공격을 겹쳐 압박한다.
