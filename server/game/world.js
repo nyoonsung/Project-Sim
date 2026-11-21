@@ -57,6 +57,7 @@ function grantReserved(c, username, userId) {
   }
 }
 const ITEM_OPS = new Set(["equip", "unequip", "sell", "sellMany", "repair", "enchant", "specialReroll", "mythicReroll", "enhance", "buy", "lock", "class", "stat", "resetStats", "skills", "title", "rename"]);
+const uidToken = (value) => (typeof value === "string" || typeof value === "number") && String(value).length ? String(value) : null;
 
 export class World {
   constructor() {
@@ -295,8 +296,11 @@ export class World {
     const s = this.sessions.get(conn.user.id);
     if (!s || s.conn !== conn) return;
     const u = s.unit, room = u.room;
+    // 잘못된 판매 요청은 조용히 무시하지 않고 안내한다.
+    if (m.t === "sell" && uidToken(m.uid) == null) return s.notice("판매할 아이템을 찾지 못했어요. 가방을 다시 열어 주세요.");
+    if (m.t === "sellMany" && !Array.isArray(m.uids)) return s.notice("판매할 아이템을 다시 선택해 주세요.");
     // 거래에 올린 아이템은 팔기·강화·인챈트·장착 금지 (확정 직전 바꿔치기 방지)
-    if (s.trade && ((m.uid != null && ["sell", "enhance", "enchant", "specialReroll", "mythicReroll", "equip", "lock"].includes(m.t) && inOffer(s, m.uid)) || (m.t === "sellMany" && m.uids.some((u) => inOffer(s, u))))) return s.notice("거래에 올린 아이템이에요. 거래창에서 먼저 내려 주세요.");
+    if (s.trade && ((m.uid != null && ["sell", "enhance", "enchant", "specialReroll", "mythicReroll", "equip", "lock"].includes(m.t) && inOffer(s, m.uid)) || (m.t === "sellMany" && m.uids.some((uid) => inOffer(s, uid))))) return s.notice("거래에 올린 아이템이에요. 거래창에서 먼저 내려 주세요.");
     switch (m.t) {
       case "trade": tradeOp(this, s, m); break;
       case "in":
@@ -749,31 +753,37 @@ export class World {
   }
   sell(s, uid) {
     const c = s.char;
-    const i = c.inv.findIndex((x) => x.uid === uid);
-    if (i < 0) return;
-    if (c.inv[i].locked) return s.notice("잠긴 아이템은 팔 수 없어요.");
-    const it = c.inv.splice(i, 1)[0];
+    const key = uidToken(uid);
+    const i = key == null ? -1 : c.inv.findIndex((x) => uidToken(x.uid) === key);
+    if (i < 0) return s.notice("판매할 아이템을 찾지 못했어요. 가방을 다시 열어 주세요.");
+    const it = c.inv[i];
+    if (it.locked) return s.notice("잠긴 아이템은 팔 수 없어요.");
     const g = sellPrice(it);
-    c.gold += g;
-    if (["전설", "신화", "심연"].includes(it.rarity) || it.enh >= 10) itemLog(s.userId, "sell", { name: it.name, rarity: it.rarity, enh: it.enh, gold: g });
+    c.inv.splice(i, 1);
+    c.gold = (Number.isFinite(c.gold) ? c.gold : 0) + g;
+    const enh = Number.isFinite(it.enh) ? it.enh : 0;
+    if (["전설", "신화", "심연"].includes(it.rarity) || enh >= 10) itemLog(s.userId, "sell", { name: it.name, rarity: it.rarity, enh, gold: g });
     this.sendChar(s);
-    s.notice(`${it.name}을(를) ${g}G에 팔았어요.`);
+    s.notice(`${it.name ?? "아이템"}을(를) ${g.toLocaleString()}G에 팔았어요.`);
   }
-  /** 일괄 판매: 잠긴 아이템은 건너뜀 */
+  /** 일괄 판매: 잠긴 아이템과 이미 사라진 UID는 건너뜀 */
   sellMany(s, uids) {
     const c = s.char;
-    const want = new Set(uids);
+    if (!Array.isArray(uids)) return s.notice("판매할 아이템을 다시 선택해 주세요.");
+    const want = new Set(uids.map(uidToken).filter((uid) => uid != null));
+    if (!want.size) return s.notice("팔 아이템을 골라 주세요.");
     let n = 0, gold = 0, skipped = 0;
     c.inv = c.inv.filter((it) => {
-      if (!want.has(it.uid)) return true;
+      if (!want.has(uidToken(it.uid))) return true;
       if (it.locked) { skipped++; return true; }
       const g = sellPrice(it);
       gold += g; n++;
-      if (["전설", "신화", "심연"].includes(it.rarity) || it.enh >= 10) itemLog(s.userId, "sell", { name: it.name, rarity: it.rarity, enh: it.enh, gold: g });
+      const enh = Number.isFinite(it.enh) ? it.enh : 0;
+      if (["전설", "신화", "심연"].includes(it.rarity) || enh >= 10) itemLog(s.userId, "sell", { name: it.name, rarity: it.rarity, enh, gold: g });
       return false;
     });
-    if (!n) return s.notice(skipped ? "잠긴 아이템은 팔 수 없어요." : "팔 아이템을 골라 주세요.");
-    c.gold += gold;
+    if (!n) return s.notice(skipped ? "잠긴 아이템은 팔 수 없어요." : "판매할 아이템을 찾지 못했어요. 가방을 다시 열어 주세요.");
+    c.gold = (Number.isFinite(c.gold) ? c.gold : 0) + gold;
     this.sendChar(s);
     s.notice(`${n}개를 ${gold.toLocaleString()}G에 팔았어요.${skipped ? ` (잠긴 ${skipped}개 제외)` : ""}`);
   }
