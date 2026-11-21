@@ -43,12 +43,12 @@ assert.equal(SKILLS.ro_hunt.steps[0].fn, "huntmark");
 assert.ok(SKILLS.sm_golem.steps[0].dur >= 16);
 
 // 직업 밸런스 패치 수치와 궁수 광역 스킬 등록을 고정 검증한다.
-assert.equal(CLASS_DMG.sword, 1.20);
+assert.equal(CLASS_DMG.sword, 1.80, "검사 피해 배율 1.5배 상향");
 assert.equal(CLASS_DMG.archer, 0.95, "궁수 피해량 추가 하향");
 assert.equal(CLASS_INFO.archer.hpMul, 0.96);
 assert.equal(CLASS_DMG.rogue, 1.30, "도적 피해량 약 20% 하향");
-assert.equal(CLASS_DMG.mage, 0.72576, "마법사 피해 배율은 직전 수치의 1.2배");
-assert.equal(CLASS_DMG.priest, 1.35, "성직자 피해량 10% 하향");
+assert.equal(CLASS_DMG.mage, 1.08864, "마법사 피해 배율 1.5배 상향");
+assert.equal(CLASS_DMG.priest, 2.025, "성직자 피해 배율 1.5배 상향");
 assert.equal(CLASS_INFO.rogue.hpMul, 1.08);
 assert.equal(CLASS_INFO.rogue.defMul, 1.0);
 assert.equal(CLASS_INFO.rogue.evadeBase, 0.08);
@@ -60,8 +60,8 @@ assert.equal(CLASS_INFO.priest.hpMul, 1.24);
 assert.equal(CLASS_INFO.priest.defMul, 1.10);
 assert.ok(SKILLS.pr_bolt.steps[0].pow >= 0.95);
 assert.ok(SKILLS.pr_halo.steps[0].pow >= 3.25);
-assert.equal(CLASS_DMG.fist, 4.00, "권투사 피해량 대폭 상향");
-assert.equal(CLASS_DMG.smith, 3.50, "대장장이 피해량 대폭 상향");
+assert.equal(CLASS_DMG.fist, 6.00, "권투사 피해 배율 1.5배 상향");
+assert.equal(CLASS_DMG.smith, 5.25, "대장장이 피해 배율 1.5배 상향");
 assert.equal(SKILLS.ar_volley.cls, "archer");
 assert.equal(SKILLS.ar_bombard.cls, "archer");
 assert.equal(SKILLS.ar_volley.steps[0].count, 9);

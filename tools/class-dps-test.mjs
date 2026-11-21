@@ -226,8 +226,8 @@ try {
   assert.ok(dpsByClass.rogue >= dpsByClass.sword * 1.7, "rogue should maintain at least 1.7x the sword benchmark DPS after its major upgrade");
   assert.ok(dpsByClass.archer < 90000, "archer DPS should reflect its further damage reduction");
   assert.ok(dpsByClass.rogue < 90000, "rogue DPS should reflect its damage reduction");
-  assert.ok(dpsByClass.fist >= 21000, "fist DPS should reflect its major damage increase");
-  assert.ok(dpsByClass.smith >= 17500, "smith DPS should reflect its major damage increase");
+  assert.ok(dpsByClass.fist >= 32000, "fist DPS should reflect its major damage increase");
+  assert.ok(dpsByClass.smith >= 27000, "smith DPS should reflect its major damage increase");
   assert.ok(dpsByClass.priest < dpsByClass.mage, "priest damage should stay below mage after its damage reduction");
   console.log("CLASS DPS TESTS: ALL PASS");
 } finally {
