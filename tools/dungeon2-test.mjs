@@ -267,8 +267,8 @@ ok(true, "제2 던전 드롭 레벨 100 · 소환물 드롭 없음 · 심연 유
 }
 
 // 직업 피해 배율: 대장장이와 권투사의 피해 기여도는 상향되고, 성직자 피해는 10% 낮아졌다.
-assert.equal(CLASS_DMG.smith, 2.50);
-assert.equal(CLASS_DMG.fist, 3.00);
+assert.equal(CLASS_DMG.smith, 3.50);
+assert.equal(CLASS_DMG.fist, 4.00);
 assert.equal(CLASS_DMG.priest, 1.35);
 assert.equal(CLASS_DMG.archer, 0.95);
 assert.equal(CLASS_DMG.rogue, 1.30);

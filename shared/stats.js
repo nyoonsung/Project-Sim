@@ -11,8 +11,8 @@ export const CLASS_DMG = {
   rogue: 1.30, // 1.62에서 약 20% 하향
   mage: 0.72576,
   priest: 1.35,
-  fist: 3.00, // 권투사 화력 대폭 상향
-  smith: 2.50, // 대장장이 화력 대폭 상향
+  fist: 4.00, // 권투사 화력 추가 상향
+  smith: 3.50, // 대장장이 화력 추가 상향
 };
 const MOVE_MUL = { adventurer: 1, sword: 1, fist: 1.02, archer: 1.02, rogue: 1.12, mage: 1.0, priest: 0.98, smith: 0.92 };
 
