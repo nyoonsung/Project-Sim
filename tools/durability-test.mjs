@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import {
   DURABILITY_VERSION, RARITIES, ensureDur, maxDurability, makeItem, rollItem, starterGear,
+  MYTHIC_EFFECTS, rollMythicEffect, mythicRerollCost,
 } from "../shared/items.js";
 
 const expected = [450, 540, 630, 720, 1080, 1200];
@@ -54,4 +55,18 @@ assert.equal(rolledAbyss.opts.length, 5);
 assert.equal(madeAbyss.opts.length, 5);
 for (const item of Object.values(starterGear())) assert.equal(item.maxDur, expected[0]);
 
-console.log("DURABILITY TESTS: ALL PASS");
+// Mythic weapon effect rerolls must choose a different valid effect.
+const mythicKeys = Object.keys(MYTHIC_EFFECTS);
+for (const current of mythicKeys) {
+  for (const randomValue of [0, 0.2, 0.4, 0.6, 0.8, 0.999]) {
+    const next = rollMythicEffect(() => randomValue, current);
+    assert.ok(MYTHIC_EFFECTS[next], "reroll must return a valid mythic effect");
+    assert.notEqual(next, current, "reroll must not keep the current effect");
+  }
+}
+assert.equal(mythicRerollCost({ ilvl: 1 }), 10_000);
+assert.equal(mythicRerollCost({ ilvl: 100 }), 50_000);
+assert.ok(mythicRerollCost({ ilvl: 50 }) >= 10_000 && mythicRerollCost({ ilvl: 50 }) <= 50_000);
+assert.equal(mythicRerollCost({ ilvl: 999 }), 50_000, "reroll cost clamps to the level 100 maximum");
+
+console.log("DURABILITY & MYTHIC REROLL TESTS: ALL PASS");

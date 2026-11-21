@@ -122,6 +122,11 @@ const pickW = (R, weights) => {
   return weights.length - 1;
 };
 const pick = (R, arr) => arr[Math.floor(R() * arr.length)];
+/** 현재 효과를 제외한 신화 고유 효과 중 하나를 선택한다. */
+export function rollMythicEffect(R, current) {
+  const candidates = MYTHIC_KEYS.filter((key) => key !== current);
+  return pick(R, candidates.length ? candidates : MYTHIC_KEYS);
+}
 
 // 방어구 종류별 특징 (이름만 다르고 똑같던 문제 해결). [방어 배율, HP 배율, MP 배율, 덤 능력치]
 //  갑옷: 가죽(가볍고 빠름) · 사슬(균형+피해 감소) · 판금(단단하지만 무거움) · 전투복(치명타)
@@ -479,6 +484,11 @@ export function rollEnchant(r) {
 }
 export function enchantCost(it) {
   return Math.round((150 + it.ilvl * 20) * (1 + RARITIES.indexOf(it.rarity) * 0.45)); // 인하: 예전의 약 40~50%
+}
+/** 신화 무기 고유 효과 리롤 비용: 아이템 레벨 1~100에 따라 1만~5만 골드 */
+export function mythicRerollCost(it) {
+  const level = Math.max(1, Math.min(100, Math.floor(Number(it?.ilvl) || 1)));
+  return Math.round((10_000 + ((level - 1) / 99) * 40_000) / 1_000) * 1_000;
 }
 /** 강화 단계마다 부위별로 능력치 하나가 +1%씩 (부서지면 없음) */
 export const ENH_PCT = {

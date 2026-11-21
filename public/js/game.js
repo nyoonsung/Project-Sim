@@ -62,6 +62,7 @@ export function onMessage(m) {
     case "kick": G.ui.kicked(m.why); break;
     case "enh": G.ui.onEnhance(m); break;
     case "ench": G.ui.onEnchant?.(m); break;
+    case "mythicReroll": G.ui.onMythicReroll?.(m); break;
     case "who": G.who = m; G.ui.onWho?.(); break;
     case "renamed": G.name = m.name; G.ui.toast(`닉네임을 ${m.name}(으)로 바꿨어요. 다음 로그인부터 새 닉네임으로 로그인하세요.`, "rank"); break;
     case "renameFail": G.ui.toast(m.text, "info"); break;
