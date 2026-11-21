@@ -17,7 +17,7 @@ Workers Builds가 의존성을 설치하고, Build command가 `cf-dist`를 생�
 
 ## 이후 배포
 
-연결이 끝나면 `main` 브랜치에 변경사항이 푸시될 때 Cloudflare Workers Builds가 자동으로 빌드하고 배포합니다. 배포 기록과 로그는 Cloudflare 대시보드의 해당 Worker → **Deployments / Build history**에서 확인할 수 있습니다.
+연결이 끝나면 `main` 브랜치에 새 커밋이 푸시될 때마다 Cloudflare Workers Builds가 자동으로 빌드하고 배포합니다. 게임 코드뿐 아니라 저장소 문서·설정 변경도 push 이벤트를 발생시킵니다. 배포 기록과 로그는 Cloudflare 대시보드의 해당 Worker → **Deployments / Build history**에서 확인할 수 있습니다.
 
 ## 주의
 
