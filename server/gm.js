@@ -68,8 +68,10 @@ export async function handleGm(req, res, path, { readJson, send, isAdmin, ip, ur
     case "edit": {
       const ch = {};
       if (b.level !== undefined) { if (!int(b.level, 1, MAX_LEVEL)) return send(res, 400, { error: "레벨 범위가 잘못됐어요." }); ch.level = b.level; }
-      if (b.gold !== undefined) { if (!int(b.gold, 0, 1e9)) return send(res, 400, { error: "골드 범위가 잘못됐어요." }); ch.gold = b.gold; }
-      if (b.unspent !== undefined) { if (!int(b.unspent, 0, 1000)) return send(res, 400, { error: "스탯 포인트 범위가 잘못됐어요." }); ch.unspent = b.unspent; }
+      // 골드·미사용 스탯 포인트에는 별도 게임 밸런스 상한을 두지 않는다.
+      // 게임 전반이 Number 정수 연산을 사용하므로 정밀도를 보장하는 안전 정수만 허용한다.
+      if (b.gold !== undefined) { if (!Number.isSafeInteger(b.gold) || b.gold < 0) return send(res, 400, { error: "골드는 0 이상의 정확한 정수로 입력해 주세요." }); ch.gold = b.gold; }
+      if (b.unspent !== undefined) { if (!Number.isSafeInteger(b.unspent) || b.unspent < 0) return send(res, 400, { error: "스탯 포인트는 0 이상의 정확한 정수로 입력해 주세요." }); ch.unspent = b.unspent; }
       if (b.checkpoint !== undefined) { if (!int(b.checkpoint, 1, 91) || (b.checkpoint - 1) % 10) return send(res, 400, { error: "체크포인트는 1, 11, 21 … 91 이에요." }); ch.checkpoint = b.checkpoint; }
       if (b.best !== undefined) { if (!int(b.best, 0, 100)) return send(res, 400, { error: "최고 층 범위가 잘못됐어요." }); ch.best = b.best; }
       if (b.cls !== undefined) { if (!CLASS_INFO[b.cls]) return send(res, 400, { error: "없는 직업이에요." }); ch.cls = b.cls; }

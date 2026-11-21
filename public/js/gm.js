@@ -84,8 +84,8 @@ async function openPlayer(id) {
   const act = (path, body, after) => async () => { try { const r = await api(`/api/gm/player/${id}/${path}`, body()); flash(msg, true, r.tempPassword ? `임시 비밀번호: ${r.tempPassword}  (플레이어에게 알려 주세요)` : "완료했어요." + (r.item ? ` (${r.item.name})` : "")); if (r.tempPassword) return; after?.(); setTimeout(() => openPlayer(id), 400); } catch (e) { flash(msg, false, e.message); } };
   const field = (lbl, el) => [h("span", { text: lbl }), el];
   const lv = h("input", { type: "number", min: 1, max: 150, value: c?.level ?? 1 });
-  const gold = h("input", { type: "number", min: 0, value: c?.gold ?? 0 });
-  const pts = h("input", { type: "number", min: 0, value: c?.unspent ?? 0 });
+  const gold = h("input", { type: "number", min: 0, step: 1, value: c?.gold ?? 0 });
+  const pts = h("input", { type: "number", min: 0, step: 1, value: c?.unspent ?? 0 });
   const cp = h("select", {}, ...[1, 11, 21, 31, 41, 51, 61, 71, 81, 91].map((f) => h("option", { value: f, selected: c?.checkpoint === f }, `${f}층`)));
   const cls = h("select", {}, ...Object.entries(CLASS_INFO).map(([k, v]) => h("option", { value: k, selected: c?.cls === k }, v.name)));
   const cons = Object.fromEntries(Object.keys(ITEMS).map((k) => [k, h("input", { type: "number", min: 0, max: ITEMS[k].max, value: c?.cons?.[k] ?? 0 })]));
@@ -119,7 +119,7 @@ async function openPlayer(id) {
         h("div", { class: "box" }, h("h3", { text: "캐릭터 수정" }),
           h("div", { class: "form" }, ...field("레벨", lv), ...field("골드", gold), ...field("스탯 포인트", pts), ...field("체크포인트", cp), ...field("직업", cls),
             ...Object.entries(cons).flatMap(([k, el]) => field(ITEMS[k].name, el))),
-          h("div", { class: "note", text: "직업을 바꾸면 투자한 스탯이 미사용 포인트로 돌아가요." }),
+          h("div", { class: "note", text: "골드와 미사용 스탯 포인트는 별도 지급 상한이 없어요. 0 이상의 정수로 입력해 주세요. (직업을 바꾸면 투자한 스탯은 미사용 포인트로 돌아가요.)" }),
           h("button", { class: "btn small primary", onclick: act("edit", () => ({ level: +lv.value, gold: +gold.value, unspent: +pts.value, checkpoint: +cp.value, cls: cls.value, cons: Object.fromEntries(Object.entries(cons).map(([k, el]) => [k, +el.value])) })) }, "저장")),
         exactGiveBox(c, act),
         h("details", { class: "box" }, h("summary", { text: "무작위 아이템 지급" }), h("div", { class: "form" }, ...field("등급", rar), ...field("아이템 레벨", ilvl), ...field("부위", slot)),
