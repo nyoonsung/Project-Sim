@@ -10,6 +10,7 @@ export const MAX_LEVEL = 150;
 export const MAX_FLOOR = 100;
 export const MAX_PARTY = 4;
 export const SKILL_SLOTS = 8;         // 전체 장착 칸 (종류 구분 없음)
+export const INVENTORY_SLOTS = 100;   // 가방 보관 칸
 export const STAT_POINTS_PER_LEVEL = 3;
 
 // 타일 종류

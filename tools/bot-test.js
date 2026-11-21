@@ -207,6 +207,14 @@ try {
   ok(await b1.wait(() => b1.char?.level === 12 && b1.char?.gold === 2000000000 && b1.char?.unspent === 2000000), "상한 초과 골드·스탯이 접속 중 캐릭터에 즉시 반영");
   r = await api(`/api/gm/player/${target.id}/give`, { rarity: "신화", ilvl: 10 }, gmc);
   ok(r.status === 200 && r.j.item.mythic, `관리자 신화 아이템 지급 (${r.j.item?.name})`);
+  // 기존 40칸을 넘겨 100칸 인벤토리의 실제 보관 경로를 검증한다.
+  for (let i = 0; i < 45; i++) {
+    r = await api(`/api/gm/player/${target.id}/give`, { rarity: "일반", ilvl: 10 }, gmc);
+    ok(r.status === 200, `확장 인벤토리 아이템 지급 ${i + 1}/45`);
+  }
+  r = await api(`/api/gm/player/${target.id}`, null, gmc);
+  ok(r.status === 200 && r.j.char.inv.length > 40 && r.j.char.inv.length <= 100,
+    `인벤토리 40칸 초과 보관 가능 (${r.j.char.inv.length}/100)`);
   r = await api(`/api/gm/player/${target.id}/edit`, { level: 99999 }, gmc);
   ok(r.status === 400, "관리자 레벨 범위 검증은 유지");
   r = await api(`/api/gm/player/${target.id}/edit`, { gold: 1.5 }, gmc);

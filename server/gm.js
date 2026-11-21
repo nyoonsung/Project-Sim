@@ -1,6 +1,6 @@
 // 관리 API: 관리자 키로 로그인한 서버 주인만 쓸 수 있고, 모든 변경은 감사 기록에 남긴다
 import { Q, secLog } from "./db.js";
-import { defaultLoadout } from "./game/player.js";
+import { defaultLoadout, INV_SIZE } from "./game/player.js";
 import { world } from "./net.js";
 import { rollItem, makeItem, RARITIES, SLOTS, canEquip } from "../shared/items.js";
 import { CLASS_INFO } from "../shared/classes.js";
@@ -95,7 +95,7 @@ export async function handleGm(req, res, path, { readJson, send, isAdmin, ip, ur
       const ilvl = int(b.ilvl, 1, 100) ? b.ilvl : 1;
       let made = null;
       const ok = world.gmApplyChar(id, (c) => {
-        if (c.inv.length >= 40) return;
+        if (c.inv.length >= INV_SIZE) return;
         let it;
         for (let k = 0; k < 30; k++) { it = rollItem(secureRandom, { ilvl, cls: c.cls, rarity }); if (!b.slot || it.slot === b.slot) break; }
         it.uid = c.nextUid++;
@@ -114,7 +114,7 @@ export async function handleGm(req, res, path, { readJson, send, isAdmin, ip, ur
       if (!SLOTS.includes(clean.slot) || !RARITIES.includes(clean.rarity)) return send(res, 400, { error: "부위·등급을 골라 주세요." });
       let made = null;
       const ok = world.gmApplyChar(id, (c) => {
-        if (c.inv.length >= 40) return;
+        if (c.inv.length >= INV_SIZE) return;
         const it = makeItem(clean);
         if (!it) return;
         it.uid = c.nextUid++;

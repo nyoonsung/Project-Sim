@@ -2,10 +2,10 @@
 import { deriveStats } from "../../shared/stats.js";
 import { CLASS_INFO, xpToNext, stageOf } from "../../shared/classes.js";
 import { SKILLS, unlockStage, adventurerBasic } from "../../shared/skills.js";
-import { MAX_LEVEL, STAT_POINTS_PER_LEVEL, PLAYER_RADIUS, ITEMS, TITLE_COLORS, TITLE_MAX } from "../../shared/constants.js";
+import { MAX_LEVEL, STAT_POINTS_PER_LEVEL, PLAYER_RADIUS, ITEMS, TITLE_COLORS, TITLE_MAX, INVENTORY_SLOTS } from "../../shared/constants.js";
 import { starterGear, ensureDur, upgradeMythic, syncMythic, ensureAbyss, syncAbyss } from "../../shared/items.js";
 
-export const INV_SIZE = 40;
+export const INV_SIZE = INVENTORY_SLOTS;
 
 export function newCharacter(name) {
   const g = starterGear();

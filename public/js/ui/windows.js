@@ -12,7 +12,7 @@ import { itemIcon } from "./icons.js";
 import { CLASS_INFO, STATS, stageOf, stageLevel, xpToNext } from "/shared/classes.js";
 import { SKILLS, skillsOf, unlockStage } from "/shared/skills.js";
 import { deriveStats, defReduction } from "/shared/stats.js";
-import { SKILL_SLOTS, SLOT_KEYS, ITEMS, GRADE_COLOR } from "/shared/constants.js";
+import { SKILL_SLOTS, SLOT_KEYS, ITEMS, GRADE_COLOR, INVENTORY_SLOTS } from "/shared/constants.js";
 import { RARITY_COLOR, SLOT_NAME, OPTIONS, MYTHIC_EFFECTS, ABYSS_EFFECTS, WEAPON_TYPES, OFFHAND_TYPES, VARIANT_TRAITS, RARITIES, RARITY_WEIGHTS, RARITY_MUL, MATERIALS, ARMOR_NAMES, repairCost, ENH_PCT, ENCHANTS, enchantOdds, enchantCost, enhanceOdds, enhanceCost, enhMul, sellPrice, canEquip, MAX_ENH } from "/shared/items.js";
 import { sprite, playerLook } from "../render/sprites.js";
 
@@ -266,7 +266,7 @@ export function openInv(pos = {}) {
       if (it) tipOn(el, () => itemTip(it));
       return el;
     }));
-    const grid = h("div", { class: "inv-grid" }, ...Array.from({ length: 40 }, (_, i) => {
+    const grid = h("div", { class: "inv-grid" }, ...Array.from({ length: INVENTORY_SLOTS }, (_, i) => {
       const it = c.inv[i];
       const el = h("div", { class: "cell" + (it ? " r-" + it.rarity : "") + (it && selItem === it.uid && !multi ? " sel" : "") + (it && picked.has(it.uid) ? " picked" : ""),
         onclick: () => { if (!it) return; if (multi) { if (it.locked) return G.ui.toast?.("잠긴 아이템은 팔 수 없어요."); picked.has(it.uid) ? picked.delete(it.uid) : picked.add(it.uid); refreshWin("inv"); } else { selItem = it.uid; refreshWin("inv"); } } },
@@ -291,7 +291,7 @@ export function openInv(pos = {}) {
       c.inv.includes(sel) ? h("button", { class: "btn small", disabled: sel.locked, onclick: () => send({ t: "sell", uid: sel.uid }) }, `판매 ${sellPrice(sel)}G`) : null,
       h("button", { class: "btn small", disabled: !nearSmith, onclick: () => { G.enhSel = sel.uid; openSmithy(); } }, "강화"),
       h("button", { class: "btn small", onclick: () => send({ t: "lock", uid: sel.uid }) }, sel.locked ? "잠금 해제" : "잠금")) : h("div", { class: "note", text: "아이템을 누르면 선택돼요. 두 번 누르면 장착/해제, 오른쪽 클릭하면 어디서든 판매해요." });
-    return [h("div", { class: "flexrow" }, h("span", { text: `💰 ${c.gold.toLocaleString()} G` }), h("span", { class: "note", text: `가방 ${c.inv.length}/40` }),
+    return [h("div", { class: "flexrow" }, h("span", { text: `💰 ${c.gold.toLocaleString()} G` }), h("span", { class: "note", text: `가방 ${c.inv.length}/${INVENTORY_SLOTS}` }),
         multi ? null : h("button", { class: "btn small", onclick: () => { G.sellMode = true; refreshWin("inv"); } }, "여러 개 팔기")),
       h("h4", { text: "장착 중" }), eq, multi ? sellBar : actions, h("h4", { text: multi ? "가방 — 팔 아이템을 누르세요" : "가방" }), grid];
   }, { w: 420, ...pos });

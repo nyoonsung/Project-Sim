@@ -5,7 +5,7 @@ import { itemTip } from "./ui/windows.js";
 import { itemIcon } from "./ui/icons.js";
 import { CLASS_INFO } from "/shared/classes.js";
 import { MATERIALS, RARITIES, SLOT_NAME, SLOTS, WEAPON_TYPES, OFFHAND_TYPES, ARMOR_NAMES, VARIANT_TRAITS, RARITY_OPTS, OPTIONS, MYTHIC_EFFECTS, MYTHIC_TITLE_LIST, ENCHANTS, MAX_ENH, makeItem, optionMax } from "/shared/items.js";
-import { ITEMS, TITLE_COLORS } from "/shared/constants.js";
+import { ITEMS, TITLE_COLORS, INVENTORY_SLOTS } from "/shared/constants.js";
 
 const main = $("#gm-main");
 const fmtT = (ms) => (ms ? new Date(ms).toLocaleString("ko-KR") : "-");
@@ -145,7 +145,7 @@ async function openPlayer(id) {
           h("div", { class: "note", text: "스탯: " + JSON.stringify(c.stats) + ` · 남은 ${c.unspent}` }),
           h("div", { class: "note", text: "스킬: " + c.skills.filter(Boolean).join(", ") }),
           h("h4", { text: "장착" }), h("div", { class: "items" }, ...Object.values(c.equip).filter(Boolean).map((it) => itemCell(it, "장착"))),
-          h("h4", { text: `가방 ${c.inv.length}/40` }), h("div", { class: "items" }, ...c.inv.map((it) => itemCell(it, "가방")))) : h("div", { class: "box", text: "캐릭터 없음" }),
+          h("h4", { text: `가방 ${c.inv.length}/${INVENTORY_SLOTS}` }), h("div", { class: "items" }, ...c.inv.map((it) => itemCell(it, "가방")))) : h("div", { class: "box", text: "캐릭터 없음" }),
         h("div", { class: "box" }, h("h3", { text: "계정" }), h("div", { class: "mono", text: `가입 ${fmtT(u.created_at)} · 최근 접속 ${fmtT(u.last_login)} · IP ${u.last_ip ?? "-"}` })),
         h("div", { class: "box" }, h("h3", { text: "아이템·강화 기록" }), h("table", { class: "tbl" }, ...d.items.map((x) => h("tr", {}, h("td", { text: fmtT(x.at) }), h("td", { text: x.kind }), h("td", { class: "mono", text: x.detail }))))),
         h("div", { class: "box" }, h("h3", { text: "보안 기록" }), h("table", { class: "tbl" }, ...d.security.map((x) => h("tr", {}, h("td", { text: fmtT(x.at) }), h("td", { text: x.kind }), h("td", { class: "mono", text: x.detail ?? "" }))))),
