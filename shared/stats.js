@@ -4,26 +4,15 @@ import { BASE_MOVE_SPEED, CRIT } from "./constants.js";
 import { gearTotals } from "./items.js";
 import { SKILLS } from "./skills.js";
 
-// 직업별 피해량 배율 (1.0 = 기준 피해량)
+// 직업 피해 배율: 궁수의 단일 화력을 소폭 낮추고, 저평가된 직업의 전투 기여도를 보정한다.
 export const CLASS_DMG = {
-  sword: 0.7,
-  archer: 1.0,
-  rogue: 0.9,
-  mage: 0.8,
-  priest: 0.7,
-  fist: 0.6,
-  smith: 0.5,
-};
-
-// 직업별 유지력 배율 (최대 HP·방어·회피·저항·피해 감소·재생·회복·보호막에 적용)
-export const CLASS_SUSTAIN = {
-  sword: 0.7,
-  archer: 0.5,
-  rogue: 0.5,
-  mage: 0.6,
-  priest: 0.7,
-  fist: 0.8,
-  smith: 1.0,
+  sword: 1.20,
+  archer: 1.62, // 기존 대비 피해량 약 10% 감소
+  rogue: 1.62,
+  mage: 0.72576, // 현재 배율에서 1.2배 상향
+  priest: 1.35, // 기존 대비 피해량 10% 감소
+  fist: 1.65, // 탱커 공격 기여도 32% 상향
+  smith: 1.25, // 탱커 공격 기여도 약 39% 상향
 };
 const MOVE_MUL = { adventurer: 1, sword: 1, fist: 1.02, archer: 1.02, rogue: 1.12, mage: 1.0, priest: 0.98, smith: 0.92 };
 
@@ -52,9 +41,8 @@ export function deriveStats(ch) {
   const sb = stageBonus(ch.cls, stage);
   const g = (k) => sum[k] ?? 0;
   const p = (k) => pm[k] ?? 0;
-  const sustain = CLASS_SUSTAIN[ch.cls] ?? 1;
-  const maxHp = Math.round(((((120 + 22 * L) * info.hpMul + g("hp")) * (1 + (sb - 1) * 0.5) + gear.hp) * (1 + p("hpPct") + gear.hpPct)) * sustain);
-  const def = Math.round(((((5 + 2.2 * L) * info.defMul + g("def")) * (1 + (sb - 1) * 0.5) + gear.def) * (1 + p("defPct") + gear.defPct)) * sustain);
+  const maxHp = Math.round((((120 + 22 * L) * info.hpMul + g("hp")) * (1 + (sb - 1) * 0.5) + gear.hp) * (1 + p("hpPct") + gear.hpPct));
+  const def = Math.round((((5 + 2.2 * L) * info.defMul + g("def")) * (1 + (sb - 1) * 0.5) + gear.def) * (1 + p("defPct") + gear.defPct));
   return {
     stage,
     stageBonus: sb,
@@ -65,7 +53,7 @@ export function deriveStats(ch) {
     phys: 1 + g("phys"),
     mag: 1 + g("mag"),
     dmg: gear.dmg + p("dmg"),
-    dr: Math.min(0.4, gear.dr * sustain),
+    dr: Math.min(0.4, gear.dr),
     aspd: Math.min(1.6, 1 + g("aspd") + gear.aspd + p("aspd")),
     cast: Math.min(1.5, (info.castMul ?? 1) + g("cast")),
     steady: Math.min(0.6, g("steady")),
@@ -73,22 +61,21 @@ export function deriveStats(ch) {
     critDmg: Math.min(CRIT.DAMAGE_CAP, CRIT.BASE_DAMAGE + gear.critDmg),
     move: BASE_MOVE_SPEED * (MOVE_MUL[ch.cls] ?? 1) * (1 + Math.min(0.4, g("move") + gear.move)),
     mpRegen: (1.2 + 0.08 * L) * (info.mpRegenMul ?? 1) * (1 + g("mpRegen") + gear.mpRegen),
-    hpRegen: gear.hpRegen * sustain,
-    res: Math.min(0.5, g("res")) * sustain,
-    heal: (1 + g("heal") + gear.heal) * sustain,
+    hpRegen: gear.hpRegen,
+    res: Math.min(0.5, g("res")),
+    heal: 1 + g("heal") + gear.heal,
     threat: 1 + g("threat"),
     counter: 1 + g("counter"),
     kiGain: 1 + g("kiGain"),
     weak: g("weak"),
     vital: g("vital"),
-    evade: Math.min(0.3, (info.evadeBase ?? 0) + g("evade")) * sustain,
+    evade: Math.min(0.3, (info.evadeBase ?? 0) + g("evade")),
     device: 1 + g("device"),
-    shield: (1 + g("shield")) * sustain,
+    shield: 1 + g("shield"),
     mythic: gear.mythic,
     abyssEffects: gear.abyssEffects,
     dmgType: info.dmgType,
     classDmg: CLASS_DMG[ch.cls] ?? 1,
-    classSustain: sustain,
   };
 }
 
