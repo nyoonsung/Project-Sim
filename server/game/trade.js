@@ -131,4 +131,8 @@ function execute(world, T) {
 }
 
 /** 이 아이템이 지금 거래에 올라가 있나 (팔기·강화 등 막기용) */
-export function inOffer(s, uid) { return !!s.trade && side(s.trade, s).uids.includes(uid); }
+export function inOffer(s, uid) {
+  if (!s.trade || (typeof uid !== "string" && typeof uid !== "number")) return false;
+  const key = String(uid);
+  return side(s.trade, s).uids.some((value) => String(value) === key);
+}
