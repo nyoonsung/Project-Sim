@@ -4,15 +4,15 @@ import { BASE_MOVE_SPEED, CRIT } from "./constants.js";
 import { gearTotals } from "./items.js";
 import { SKILLS } from "./skills.js";
 
-// 직업 피해 배율: 궁수의 단일 화력을 소폭 낮추고, 저평가된 직업의 전투 기여도를 보정한다.
+// 직업 피해 배율: 궁수·도적 화력은 낮추고, 권투사·대장장이의 공격 기여도를 높인다.
 export const CLASS_DMG = {
   sword: 1.20,
-  archer: 1.62, // 기존 대비 피해량 약 10% 감소
-  rogue: 1.62,
-  mage: 0.72576, // 현재 배율에서 1.2배 상향
-  priest: 1.35, // 기존 대비 피해량 10% 감소
-  fist: 1.65, // 탱커 공격 기여도 32% 상향
-  smith: 1.25, // 탱커 공격 기여도 약 39% 상향
+  archer: 1.30, // 1.62에서 약 20% 하향
+  rogue: 1.30, // 1.62에서 약 20% 하향
+  mage: 0.72576,
+  priest: 1.35,
+  fist: 2.00, // 1.65에서 약 21% 상향
+  smith: 1.60, // 1.25에서 약 28% 상향
 };
 const MOVE_MUL = { adventurer: 1, sword: 1, fist: 1.02, archer: 1.02, rogue: 1.12, mage: 1.0, priest: 0.98, smith: 0.92 };
 

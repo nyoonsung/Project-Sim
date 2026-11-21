@@ -267,11 +267,12 @@ ok(true, "제2 던전 드롭 레벨 100 · 소환물 드롭 없음 · 심연 유
 }
 
 // 직업 피해 배율: 대장장이와 권투사의 피해 기여도는 상향되고, 성직자 피해는 10% 낮아졌다.
-assert.equal(CLASS_DMG.smith, 1.25);
-assert.equal(CLASS_DMG.fist, 1.65);
+assert.equal(CLASS_DMG.smith, 1.60);
+assert.equal(CLASS_DMG.fist, 2.00);
 assert.equal(CLASS_DMG.priest, 1.35);
-assert.equal(CLASS_DMG.archer, 1.62);
-ok(true, "대장장이 피해 기여도 상향 · 궁수 단일 피해량 10% 감소");
+assert.equal(CLASS_DMG.archer, 1.30);
+assert.equal(CLASS_DMG.rogue, 1.30);
+ok(true, "궁수·도적 피해 하향 · 권투사·대장장이 피해 상향");
 
 // 성직자 신규 광역기 4종이 실제 서버 판정용 area 단계·큰 반경·강한 계수를 가진다.
 for (const id of ["pr_halo", "pr_sanctum", "pr_radiance", "pr_apocalypse"]) {
