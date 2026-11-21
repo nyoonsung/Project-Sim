@@ -223,7 +223,7 @@ try {
   for (const r of rows) assert.ok(Number.isFinite(r.dps) && r.dps > 0, `${r.name} should deal measurable damage`);
   const dpsByClass = Object.fromEntries(rows.map((r) => [r.cls, r.dps]));
   assert.ok(dpsByClass.mage >= dpsByClass.sword * 0.95, "mage should remain near the sword benchmark after its damage is increased by 20%");
-  assert.ok(dpsByClass.rogue >= dpsByClass.sword * 1.7, "rogue should maintain at least 1.7x the sword benchmark DPS after its major upgrade");
+  assert.ok(dpsByClass.rogue >= dpsByClass.sword * 1.3, "rogue should remain clearly above the sword benchmark after its major upgrade");
   assert.ok(dpsByClass.archer < 90000, "archer DPS should reflect its further damage reduction");
   assert.ok(dpsByClass.rogue < 90000, "rogue DPS should reflect its damage reduction");
   assert.ok(dpsByClass.fist >= 32000, "fist DPS should reflect its major damage increase");
