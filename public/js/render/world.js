@@ -179,6 +179,10 @@ export class Renderer {
     this.white = new WeakMap();
     this.last = now();
     this.fps = 60;
+    // 매 프레임 정렬용 객체와 배열을 재사용해 객체 생성·GC로 인한 순간 끊김을 줄인다.
+    this.drawList = [];
+    this.drawPool = [];
+    this.drawPlayers = [];
   }
 
   onMap() {
@@ -275,6 +279,13 @@ export class Renderer {
     G.shake = Math.max(0, G.shake - dt * 18);
     const cx = Math.round(G.cam.x + sx + (G.camKick?.x ?? 0)), cy = Math.round(G.cam.y + sy + (G.camKick?.y ?? 0));
     if (me) G.map.reveal(me.rx, me.ry);
+    // 군중 수를 렌더 초반에 계산해 같은 프레임부터 이펙트 제한에 반영한다.
+    {
+      let n = 0;
+      for (const e of G.ents.values()) if (e.k === "p" && e.id !== G.you && Math.abs(e.rx - cx - VW / 2) < VW && Math.abs(e.ry - cy - VH / 2) < VH) n++;
+      G.crowdN = n;
+      G.crowdK = globalThis.__crowdK = n <= 6 ? 1 : n <= 15 ? 0.5 : n <= 30 ? 0.3 : 0.15;
+    }
 
     beginGlows();
     if (G.kind === "town") tickFolk(dt);
@@ -329,13 +340,7 @@ export class Renderer {
       ctx.globalAlpha = 1;
     }
     this.drawTelsOver(ctx, cx, cy, t);
-    G.titleMarks = [];
-    {
-      let n = 0;
-      for (const e of G.ents.values()) if (e.k === "p" && e.id !== G.you && Math.abs(e.rx - cx - VW / 2) < VW && Math.abs(e.ry - cy - VH / 2) < VH) n++;
-      G.crowdN = n;
-      G.crowdK = globalThis.__crowdK = n <= 6 ? 1 : n <= 15 ? 0.5 : n <= 30 ? 0.3 : 0.15;
-    }
+    if (G.titleMarks) G.titleMarks.length = 0; else G.titleMarks = [];
     this.drawOverhead(ctx, cx, cy, t);
     if (G.hurtFlash > 0) {
       // 맞았을 때 붉은 테두리: 한 번 만든 그림을 세기만 바꿔 찍음
@@ -388,9 +393,12 @@ export class Renderer {
     }
     // 자동 획득: 아이템이 내 쪽으로 포물선을 그리며 날아옴
     if (G.lootFly?.length) {
-      const tn = performance.now() / 1000;
-      G.lootFly = G.lootFly.filter((f) => tn - f.t0 < 0.5);
-      for (const f of G.lootFly) {
+      const tn = performance.now() / 1000, fly = G.lootFly;
+      let write = 0;
+      for (let i = 0; i < fly.length; i++) {
+        const f = fly[i];
+        if (tn - f.t0 >= 0.5) continue;
+        fly[write++] = f;
         const k = (tn - f.t0) / 0.5, e = k * k;
         const to = G.ents.get(f.to);
         const tx = to ? to.rx : f.x, ty = to ? to.ry - 14 : f.y;
@@ -400,6 +408,7 @@ export class Renderer {
         if (icon) ctx.drawImage(icon, Math.round(x - 8), Math.round(y - 8), 16, 16);
         ctx.globalAlpha = 1;
       }
+      fly.length = write;
     }
   }
 
@@ -530,12 +539,19 @@ export class Renderer {
 
   // y 정렬해서 그릴 것들
   drawSorted(ctx, cx, cy, t) {
-    const list = [];
+    const list = this.drawList, pool = this.drawPool, players = this.drawPlayers;
+    list.length = 0; players.length = 0;
     const inView = (x, y, m = 80) => x - cx > -m && y - cy > -m && x - cx < VW + m && y - cy < VH + m * 1.5;
-    const players = [...G.ents.values()].filter((e) => e.k === "p" && !e.dead);
-    for (const o of G.objects) if (inView(o.x, o.y, 160)) list.push({ y: objectDepthY(o, players), o });
-    for (const e of G.ents.values()) if (inView(e.rx, e.ry)) list.push({ y: e.ry, e });
-    if (G.kind === "town") for (const f of folkList()) if (inView(f.x, f.y)) list.push({ y: f.y, f });
+    for (const e of G.ents.values()) if (e.k === "p" && !e.dead) players.push(e);
+    let count = 0;
+    const add = (y, o = null, e = null, f = null) => {
+      const it = pool[count] ?? (pool[count] = {});
+      it.y = y; it.o = o; it.e = e; it.f = f;
+      list.push(it); count++;
+    };
+    for (const o of G.objects) if (inView(o.x, o.y, 160)) add(objectDepthY(o, players), o);
+    for (const e of G.ents.values()) if (inView(e.rx, e.ry)) add(e.ry, null, e);
+    if (G.kind === "town") for (const f of folkList()) if (inView(f.x, f.y)) add(f.y, null, null, f);
     list.sort((a, b) => a.y - b.y);
     for (const it of list) {
       if (it.o) this.drawObject(ctx, it.o, cx, cy, t);
