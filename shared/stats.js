@@ -9,7 +9,7 @@ export const CLASS_DMG = {
   sword: 1.20,
   archer: 1.62, // 기존 대비 피해량 약 10% 감소
   rogue: 1.62,
-  mage: 0.6048, // 직전 배율 1.008에서 추가로 60% 적용
+  mage: 0.72576, // 현재 배율에서 1.2배 상향
   priest: 1.50,
   fist: 1.25,
   smith: 0.90,
