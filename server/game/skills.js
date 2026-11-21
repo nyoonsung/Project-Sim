@@ -275,7 +275,7 @@ function strike(room, u, t, st, ctx, now, extra = {}) {
   if (st.gapOnFlank || u.cls === "rogue") {
     const marked = t.status.has("vitalmark") || t.status.get("huntmark")?.src === u.id;
     if (flank || marked && extra.melee) {
-      const icd = t.status.get("huntmark")?.src === u.id ? 1.0 : 2.2;
+      const icd = t.status.get("huntmark")?.src === u.id ? 0.8 : 1.65;
       if (now >= (u.icd.get("gap") ?? 0) && (st.gapOnFlank || marked)) { u.icd.set("gap", now + icd); u.gap = Math.min(3, u.gap + 1); u.session.meDirty = true; room.ev({ e: "gap", id: u.id, n: u.gap }); }
     }
   }
@@ -614,7 +614,7 @@ const CUSTOM = {
     if (t.status.has("huntmark")) return msg(u, "이미 표식이 있는 적이에요. (지속시간 갱신 불가)");
     t.status.set("huntmark", { until: now + st.dur, src: u.id, v: 0 });
     room.ev({ e: "st", id: t.id, s: "huntmark", d: st.dur });
-    u.buffs.set("night_hunt", { until: now + st.dur, mods: { dmg: 0.32, crit: 0.18 } });
+    u.buffs.set("night_hunt", { until: now + st.dur, mods: { dmg: 0.4, crit: 0.22 } });
     room.ev({ e: "buff", id: u.id, b: "night_hunt", d: st.dur });
     room.ev({ e: "fx", fx: "shadow/hex-sigil", x: t.x | 0, y: t.y | 0, s: 0.6, pal: ctx.sk.fx?.palette ?? null, life: st.dur, src: u.id });
   },

@@ -8,9 +8,9 @@ import { SKILLS } from "./skills.js";
 export const CLASS_DMG = {
   sword: 1.20,
   archer: 1.62, // 기존 대비 피해량 약 10% 감소
-  rogue: 1.50,
-  mage: 1.55,
-  priest: 1.25,
+  rogue: 1.62,
+  mage: 1.68,
+  priest: 1.50,
   fist: 1.25,
   smith: 0.90,
 };
