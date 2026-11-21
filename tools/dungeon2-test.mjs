@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import {
-  BOSSES, D2_HARD, D1_BOSS_DAMAGE_MULTIPLIER, D1_BOSS_HP_MULTIPLIER, D1_BOSS_HP_REDUCTION,
+  BOSSES, BOSS_DAMAGE_INCREASE_MULTIPLIER, D2_HARD, D1_BOSS_DAMAGE_MULTIPLIER, D1_BOSS_HP_MULTIPLIER, D1_BOSS_HP_REDUCTION,
   D1_FINAL_BOSS_DAMAGE_MULTIPLIER, D2_EXTREME_MULTIPLIER, D2_MONSTER_DAMAGE_MULTIPLIER, D2_MONSTER_STAT_MULTIPLIER, D2_BOSS_STAT_MULTIPLIER, D2_BOSS_HP_REDUCTION, D2_BOSS_SPEED_MULTIPLIER,
   DUNGEON2_MAX_FLOOR, DUNGEON2_ZONES, MONSTERS, ZONES,
   bossStats, floorKind, floorScale, monsterStats, zoneOf, effLevel,
@@ -37,12 +37,13 @@ const ok = (condition, label) => {
 }
 ok(true, "제2 던전 체력·공격력 기존 수치 대비 각각 정확히 100배 / 실제 레벨 102~150");
 
-// 제1 던전 전체 보스 HP는 기존 대비 10% 감소. 100층 최종 보스만 공격력 추가 20%.
+// 제1 던전은 20층 이상 보스 피해량 ×5, 제2 던전은 모든 보스 피해량 ×5. HP 배율은 기존 규칙 유지.
 {
   assert.equal(D1_BOSS_HP_MULTIPLIER, 11);
   assert.equal(D1_BOSS_HP_REDUCTION, 0.9);
   assert.equal(D1_BOSS_DAMAGE_MULTIPLIER, 10);
   assert.equal(D1_FINAL_BOSS_DAMAGE_MULTIPLIER, 1.2);
+  assert.equal(BOSS_DAMAGE_INCREASE_MULTIPLIER, 5);
   const avgHp = ZONES[0].monsters.reduce((sum, id) => sum + MONSTERS[id].hp, 0) / ZONES[0].monsters.length;
   const avgDmg = ZONES[0].monsters.reduce((sum, id) => sum + MONSTERS[id].dmg, 0) / ZONES[0].monsters.length;
   const soloHpBoost = (floor) => 1 + 2.5 * Math.min(1, Math.max(0, (floor - 1) / 9));
@@ -54,19 +55,25 @@ ok(true, "제2 던전 체력·공격력 기존 수치 대비 각각 정확히 10
   const finalBoss = bossStats(zoneOf(100).boss, 100, 1, 1);
   assert.equal(finalBoss.hp, Math.round(avgHp * floorScale(100, 1).hp * 64 * soloHpBoost(100) * 1.5 * 11 * 0.9));
   assert.ok(Math.abs(finalBoss.dmg - avgDmg * floorScale(100, 1).dmg * 1.7 * 10 * 1.2) < 1e-7);
+  const d1LateBoss = bossStats(zoneOf(20).boss, 20, 1, 1);
+  assert.ok(Math.abs(d1LateBoss.dmg - avgDmg * floorScale(20, 1).dmg * 1.7 * 10 * 5) < 1e-7);
+  const d1LateMid = bossStats(zoneOf(25).mid, 25, 1, 1);
+  assert.ok(Math.abs(d1LateMid.dmg - avgDmg * floorScale(25, 1).dmg * 1.5 * 10 * 5) < 1e-7);
   const d2Boss = bossStats("scarlet_regent", 10, 1, 2);
   const d2Scale = floorScale(10, 2);
   assert.equal(D2_BOSS_HP_REDUCTION, 0.5);
   assert.equal(d2Boss.hp, Math.round(avgHp * d2Scale.hp * 64 * 3.5 * D2_BOSS_STAT_MULTIPLIER * D2_BOSS_HP_REDUCTION));
-  assert.ok(Math.abs(d2Boss.dmg - avgDmg * d2Scale.dmg * 1.7 * D2_BOSS_STAT_MULTIPLIER) < 1e-7);
+  assert.ok(Math.abs(d2Boss.dmg - avgDmg * d2Scale.dmg * 1.7 * D2_BOSS_STAT_MULTIPLIER * 5) < 1e-7);
   const d2Mid = bossStats(DUNGEON2_ZONES[0].mid, 5, 1, 2);
   const d2MidScale = floorScale(5, 2);
   assert.equal(d2Mid.hp, Math.round(avgHp * d2MidScale.hp * 36 * 3.5 * D2_BOSS_STAT_MULTIPLIER * D2_BOSS_HP_REDUCTION));
+  assert.ok(Math.abs(d2Mid.dmg - avgDmg * d2MidScale.dmg * 1.5 * D2_BOSS_STAT_MULTIPLIER * 5) < 1e-7);
   const d2Final = bossStats(DUNGEON2_ZONES[2].boss, 30, 1, 2);
   const d2FinalScale = floorScale(30, 2);
   assert.equal(d2Final.hp, Math.round(avgHp * d2FinalScale.hp * 64 * 3.5 * 1.5 * D2_BOSS_STAT_MULTIPLIER * D2_BOSS_HP_REDUCTION));
+  assert.ok(Math.abs(d2Final.dmg - avgDmg * d2FinalScale.dmg * 1.7 * D2_BOSS_STAT_MULTIPLIER * 5) < 1e-7);
 }
-ok(true, "제1 던전 보스 기존 밸런스 유지 / 제2 던전 모든 보스 HP 50% 추가 감소");
+ok(true, "제1 던전 20층 이상 및 제2 던전 모든 보스 피해량 5배 증가 / 보스 HP 기존 규칙 유지");
 
 // 구역마다 몬스터 구성이 서로 다름 (예전엔 1구역과 3구역이 똑같았음)
 assert.notDeepEqual([...DUNGEON2_ZONES[0].monsters].sort(), [...DUNGEON2_ZONES[2].monsters].sort());
@@ -156,7 +163,7 @@ ok(true, "제2 던전 몬스터·보스 능력치 산출");
   assert.ok(Math.abs(mob.def / oldDef - 1 / 150) < 1e-10);
   assert.equal(mob.speed, def.speed * floorScale(1, 2).speed);
   const d2Boss = bossStats(DUNGEON2_ZONES[0].boss, 10, 1, 2);
-  assert.ok(Math.abs(d2Boss.dmg - d1AvgDmg * floorScale(10, 2).dmg * 1.7 * 0.2) < 1e-7);
+  assert.ok(Math.abs(d2Boss.dmg - d1AvgDmg * floorScale(10, 2).dmg * 1.7 * 0.2 * 5) < 1e-7);
   assert.ok(d2Boss.hp > 0 && d2Boss.dmg > 0);
   const bossRoom = new Room({ clock: 0 }, { id: "d2-boss-def-scale", kind: "dungeon", floor: 10, dungeon: 2, map: makeFloor(10, 778, 1, 2) });
   const bossUnit = bossRoom.spawnBoss(DUNGEON2_ZONES[0].boss, bossRoom.map.bossAt[0], bossRoom.map.bossAt[1]);
