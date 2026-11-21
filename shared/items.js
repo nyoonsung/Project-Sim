@@ -514,8 +514,11 @@ export const ENH_PCT = {
 export const ENH_PCT_PER = 0.01;
 /** 판매 가격 */
 export function sellPrice(it) {
-  const ri = RARITIES.indexOf(it.rarity);
-  return Math.round((4 + it.ilvl * 2) * Math.pow(2.2, ri) * (1 + it.enh * 0.1));
+  // 오래된 저장 데이터에는 ilvl/enh가 없을 수 있다. NaN 판매가가 골드를 망가뜨리지 않게 기본값으로 보정.
+  const ri = Math.max(0, RARITIES.indexOf(it?.rarity));
+  const ilvl = Number.isFinite(it?.ilvl) ? Math.max(1, it.ilvl) : 1;
+  const enh = Number.isFinite(it?.enh) ? Math.max(0, it.enh) : 0;
+  return Math.max(1, Math.round((4 + ilvl * 2) * Math.pow(2.2, ri) * (1 + enh * 0.1)));
 }
 
 const PCT_KEYS = new Set(["crit", "aspd", "move", "dr", "atkPct", "critDmg", "mpRegen", "dmg", "heal", "hpPct", "defPct"]);
