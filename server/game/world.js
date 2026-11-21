@@ -3,7 +3,7 @@ import { Q, secLog, itemLog } from "../db.js";
 import { TICK_RATE, ITEMS, MAX_PARTY, SKILL_SLOTS } from "../../shared/constants.js";
 import { CLASS_INFO, STATS } from "../../shared/classes.js";
 import { SKILLS, adventurerBasic } from "../../shared/skills.js";
-import { canEquip, enhanceOdds, enhanceCost, sellPrice, MAX_ENH, SLOTS, CLASS_GEAR, baseStats, itemName, ensureDur, repairCost, syncMythic, syncAbyss, enchantCost, rollEnchant, rollAbyssVaultItem, MYTHIC_EFFECTS, mythicRerollCost, rollMythicEffect } from "../../shared/items.js";
+import { canEquip, enhanceOdds, enhanceCost, sellPrice, MAX_ENH, SLOTS, CLASS_GEAR, baseStats, itemName, ensureDur, repairCost, syncMythic, syncAbyss, enchantCost, rollEnchant, rollAbyssVaultItem, MYTHIC_EFFECTS, ABYSS_EFFECTS, specialRerollCost, rollMythicEffect, rollAbyssEffect } from "../../shared/items.js";
 import { floorKind, DUNGEON2_MAX_FLOOR } from "../../shared/zones.js";
 import { Room } from "./room.js";
 import { makeFloor, makeTown, safeZone } from "./dungeon.js";
@@ -56,7 +56,7 @@ function grantReserved(c, username, userId) {
     if (!c.granted.includes(g.key)) c.granted.push(g.key);
   }
 }
-const ITEM_OPS = new Set(["equip", "unequip", "sell", "sellMany", "repair", "enchant", "mythicReroll", "enhance", "buy", "lock", "class", "stat", "resetStats", "skills", "title", "rename"]);
+const ITEM_OPS = new Set(["equip", "unequip", "sell", "sellMany", "repair", "enchant", "specialReroll", "mythicReroll", "enhance", "buy", "lock", "class", "stat", "resetStats", "skills", "title", "rename"]);
 
 export class World {
   constructor() {
@@ -325,7 +325,8 @@ export class World {
       case "sellMany": this.sellMany(s, m.uids); break;
       case "repair": this.repair(s, m.uid); break;
       case "enchant": this.enchant(s, m.uid); break;
-      case "mythicReroll": this.rerollMythic(s, m.uid); break;
+      case "specialReroll": this.rerollSpecial(s, m.uid, m.index); break;
+      case "mythicReroll": this.rerollSpecial(s, m.uid, 0); break;
       case "title": this.equipTitle(s, m.id); break;
       case "who": this.who(s); break;
       case "enhance": this.enhance(s, m.uid); break;
@@ -819,26 +820,35 @@ export class World {
     this.sendChar(s);
     this.save(s);
   }
-  /** 신화 무기 고유 효과 리롤 (마법부여사): 현재 효과와 다른 효과로 교체 */
-  rerollMythic(s, uid) {
+  /** 신화·심연 장비의 고유 효과 리롤 (마법부여사) */
+  rerollSpecial(s, uid, index = 0) {
     const c = s.char;
-    if (!this.nearNpc(s, "enchanter")) return s.notice("마법부여사 근처에서 신화 효과를 리롤할 수 있어요.");
+    if (!this.nearNpc(s, "enchanter")) return s.notice("마법부여사 근처에서 특수 효과를 리롤할 수 있어요.");
     let where = "inv", it = c.inv.find((x) => x.uid === uid);
     if (!it) { it = Object.values(c.equip).find((x) => x?.uid === uid); where = "equip"; }
     if (!it) return;
-    if (it.slot !== "weapon" || it.rarity !== "신화" || !MYTHIC_EFFECTS[it.mythic]) {
-      return s.notice("신화 등급 무기만 고유 효과를 리롤할 수 있어요.");
+    let before, next, effectName;
+    if (it.rarity === "신화" && MYTHIC_EFFECTS[it.mythic] && index === 0) {
+      before = it.mythic;
+      next = rollMythicEffect(secureRandom, before);
+      effectName = MYTHIC_EFFECTS[next]?.name;
+    } else if (it.rarity === "심연" && Array.isArray(it.abyssEffects) && it.abyssEffects.length === 2
+      && Number.isInteger(index) && index >= 0 && index < 2 && ABYSS_EFFECTS[it.abyssEffects[index]]) {
+      before = it.abyssEffects[index];
+      next = rollAbyssEffect(secureRandom, before, it.abyssEffects[1 - index]);
+      effectName = ABYSS_EFFECTS[next]?.name;
+    } else {
+      return s.notice("신화 또는 심연 등급 장비의 고유 효과만 리롤할 수 있어요.");
     }
-    const cost = mythicRerollCost(it);
+    if (!next || next === before) return s.notice("새 특수 효과를 뽑지 못했어요. 다시 시도해 주세요.");
+    const cost = specialRerollCost(it);
     if (c.gold < cost) return s.notice(`골드가 부족해요. (${cost.toLocaleString()}G 필요)`);
-    const before = it.mythic;
-    const next = rollMythicEffect(secureRandom, before);
-    if (!next || next === before) return s.notice("새 신화 효과를 뽑지 못했어요. 다시 시도해 주세요.");
     c.gold -= cost;
-    it.mythic = next;
+    if (it.rarity === "신화") it.mythic = next;
+    else it.abyssEffects[index] = next;
     if (where === "equip") refreshStats(s.unit);
-    itemLog(s.userId, "mythic_reroll", { name: it.name, rarity: it.rarity, from: before, to: next, cost });
-    s.send({ t: "mythicReroll", uid, effect: next, effectName: MYTHIC_EFFECTS[next].name, before, cost, name: it.name });
+    itemLog(s.userId, "special_reroll", { name: it.name, rarity: it.rarity, index, from: before, to: next, cost });
+    s.send({ t: "specialReroll", uid, rarity: it.rarity, index, effect: next, effectName, before, cost, name: it.name });
     s.unit.room?.ev({ e: "fx", fx: "arcane/mana-burst", x: s.unit.x | 0, y: (s.unit.y - 10) | 0 });
     this.sendChar(s);
     this.save(s);

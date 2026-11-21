@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import {
   DURABILITY_VERSION, RARITIES, ensureDur, maxDurability, makeItem, rollItem, starterGear,
-  MYTHIC_EFFECTS, rollMythicEffect, mythicRerollCost,
+  MYTHIC_EFFECTS, ABYSS_EFFECTS, rollMythicEffect, rollAbyssEffect, specialRerollCost,
 } from "../shared/items.js";
 
 const expected = [450, 540, 630, 720, 1080, 1200];
@@ -55,18 +55,31 @@ assert.equal(rolledAbyss.opts.length, 5);
 assert.equal(madeAbyss.opts.length, 5);
 for (const item of Object.values(starterGear())) assert.equal(item.maxDur, expected[0]);
 
-// Mythic weapon effect rerolls must choose a different valid effect.
+// Every mythic item and each of an abyss item's two effects can be rerolled independently.
 const mythicKeys = Object.keys(MYTHIC_EFFECTS);
 for (const current of mythicKeys) {
   for (const randomValue of [0, 0.2, 0.4, 0.6, 0.8, 0.999]) {
     const next = rollMythicEffect(() => randomValue, current);
-    assert.ok(MYTHIC_EFFECTS[next], "reroll must return a valid mythic effect");
-    assert.notEqual(next, current, "reroll must not keep the current effect");
+    assert.ok(MYTHIC_EFFECTS[next], "mythic reroll must return a valid effect");
+    assert.notEqual(next, current, "mythic reroll must not keep the current effect");
   }
 }
-assert.equal(mythicRerollCost({ ilvl: 1 }), 10_000);
-assert.equal(mythicRerollCost({ ilvl: 100 }), 50_000);
-assert.ok(mythicRerollCost({ ilvl: 50 }) >= 10_000 && mythicRerollCost({ ilvl: 50 }) <= 50_000);
-assert.equal(mythicRerollCost({ ilvl: 999 }), 50_000, "reroll cost clamps to the level 100 maximum");
+const abyssKeys = Object.keys(ABYSS_EFFECTS);
+for (const current of abyssKeys) {
+  for (const other of abyssKeys.filter((key) => key !== current)) {
+    for (const randomValue of [0, 0.3, 0.6, 0.999]) {
+      const next = rollAbyssEffect(() => randomValue, current, other);
+      assert.ok(ABYSS_EFFECTS[next], "abyss reroll must return a valid effect");
+      assert.notEqual(next, current, "abyss reroll must not keep the selected effect");
+      assert.notEqual(next, other, "abyss reroll must not duplicate the other effect");
+    }
+  }
+}
+assert.equal(specialRerollCost({ rarity: "신화", ilvl: 1 }), 10_000);
+assert.equal(specialRerollCost({ rarity: "신화", ilvl: 100 }), 50_000);
+assert.equal(specialRerollCost({ rarity: "심연", ilvl: 1 }), 10_000);
+assert.equal(specialRerollCost({ rarity: "심연", ilvl: 150 }), 50_000);
+assert.ok(specialRerollCost({ rarity: "심연", ilvl: 75 }) >= 10_000 && specialRerollCost({ rarity: "심연", ilvl: 75 }) <= 50_000);
+assert.equal(specialRerollCost({ rarity: "심연", ilvl: 999 }), 50_000, "abyss reroll cost clamps to the level 150 maximum");
 
-console.log("DURABILITY & MYTHIC REROLL TESTS: ALL PASS");
+console.log("DURABILITY & SPECIAL EFFECT REROLL TESTS: ALL PASS");

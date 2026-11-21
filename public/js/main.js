@@ -166,7 +166,7 @@ const ui = {
   onWho() { if (isOpen("who")) refreshWin("who"); },
   onVaultResult(m) { WIN.onAbyssVaultResult(m); },
   onEnchant(m) { WIN.onEnchant(m); const { ENCHANTS } = WIN; HUD.toast(`인챈트: ✦ ${ENCHANTS[m.ench].name} (${ENCHANTS[m.ench].desc})`, m.ench === "mend" ? "mythic" : "rank"); },
-  onMythicReroll(m) { WIN.onMythicReroll(m); HUD.toast(`신화 효과 변경: ${m.effectName}`, "mythic"); },
+  onSpecialReroll(m) { WIN.onSpecialReroll(m); HUD.toast(`특수 효과 변경: ${m.effectName}`, m.rarity === "심연" ? "abyss" : "mythic"); },
   onEnhance(m) { WIN.onEnhance(m); HUD.toast(m.result === "success" ? `강화 성공! ${m.name} +${m.enh}` : m.result === "fail" ? `강화 실패 (${m.name} +${m.enh} 유지)` : m.result === "reset" ? `강화 폭발! 상위 등급이라 ${m.name}은(는) 유지되고 +0이 됐어요` : `${m.name}이(가) 파괴됐어요…`, m.rarity === "심연" && m.result === "success" ? "abyss" : m.result === "success" ? "rank" : m.result === "destroy" || m.result === "reset" ? "death" : "info"); },
   toast: HUD.toast,
   center: HUD.center,

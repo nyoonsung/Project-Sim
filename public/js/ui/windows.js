@@ -13,7 +13,7 @@ import { CLASS_INFO, STATS, stageOf, stageLevel, xpToNext } from "/shared/classe
 import { SKILLS, skillsOf, unlockStage } from "/shared/skills.js";
 import { deriveStats, defReduction } from "/shared/stats.js";
 import { SKILL_SLOTS, SLOT_KEYS, ITEMS, GRADE_COLOR, INVENTORY_SLOTS } from "/shared/constants.js";
-import { RARITY_COLOR, SLOT_NAME, OPTIONS, MYTHIC_EFFECTS, ABYSS_EFFECTS, WEAPON_TYPES, OFFHAND_TYPES, VARIANT_TRAITS, RARITIES, RARITY_WEIGHTS, RARITY_MUL, MATERIALS, ARMOR_NAMES, repairCost, ENH_PCT, ENCHANTS, enchantOdds, enchantCost, mythicRerollCost, enhanceOdds, enhanceCost, enhMul, sellPrice, canEquip, MAX_ENH } from "/shared/items.js";
+import { RARITY_COLOR, SLOT_NAME, OPTIONS, MYTHIC_EFFECTS, ABYSS_EFFECTS, WEAPON_TYPES, OFFHAND_TYPES, VARIANT_TRAITS, RARITIES, RARITY_WEIGHTS, RARITY_MUL, MATERIALS, ARMOR_NAMES, repairCost, ENH_PCT, ENCHANTS, enchantOdds, enchantCost, specialRerollCost, enhanceOdds, enhanceCost, enhMul, sellPrice, canEquip, MAX_ENH } from "/shared/items.js";
 import { sprite, playerLook } from "../render/sprites.js";
 
 const fmtPct = (v) => (v * 100).toFixed(1) + "%";
@@ -389,16 +389,16 @@ export function openSmithy(pos = {}) {
     return [repairBox, h("h4", { text: "강화" }), box, h("h4", { text: "장비 선택" }), pick];
   }, { w: 420, ...pos });
 }
-// ── 마법부여사 (인챈트 + 신화 무기 고유 효과 리롤)
+// ── 마법부여사 (인챈트 + 신화·심연 고유 효과 리롤)
 let lastEnch = null;
-let lastMythicReroll = null;
+let lastSpecialReroll = null;
 export function openEnchant(pos = {}) {
   openWin("enchant", "마법부여사 엘라 — 인챈트", () => {
     const c = G.char;
     const all = [...Object.values(c.equip).filter(Boolean), ...c.inv];
     const sel = all.find((x) => x.uid === G.enchSel) ?? null;
     const pick = h("div", { class: "inv-grid" }, ...all.map((it) => {
-      const el = h("div", { class: "cell r-" + it.rarity + (sel === it ? " sel" : ""), onclick: () => { G.enchSel = it.uid; lastEnch = null; lastMythicReroll = null; refreshWin("enchant"); } },
+      const el = h("div", { class: "cell r-" + it.rarity + (sel === it ? " sel" : ""), onclick: () => { G.enchSel = it.uid; lastEnch = null; lastSpecialReroll = null; refreshWin("enchant"); } },
         iconEl(it), it.enh ? h("span", { class: "enh", text: "+" + it.enh }) : null, it.ench ? h("span", { class: "ench-dot" + (it.ench === "mend" ? " mend" : ""), text: "✦" }) : null);
       tipOn(el, () => itemTip(it));
       return el;
@@ -407,10 +407,15 @@ export function openEnchant(pos = {}) {
     let box = h("div", { class: "note", text: "인챈트할 장비를 고르세요. 장비 하나에 인챈트 하나, 다시 하면 새로 뽑아서 바뀌어요." });
     if (sel) {
       const cost = enchantCost(sel), cur = sel.ench && ENCHANTS[sel.ench];
-      const canRerollMythic = sel.slot === "weapon" && sel.rarity === "신화" && !!MYTHIC_EFFECTS[sel.mythic];
-      const rerollCost = canRerollMythic ? mythicRerollCost(sel) : 0;
-      const mythic = canRerollMythic ? MYTHIC_EFFECTS[sel.mythic] : null;
-      const resultEffect = lastMythicReroll?.uid === sel.uid ? MYTHIC_EFFECTS[lastMythicReroll.effect] : null;
+      const isMythic = sel.rarity === "신화" && !!MYTHIC_EFFECTS[sel.mythic];
+      const isAbyss = sel.rarity === "심연" && Array.isArray(sel.abyssEffects) && sel.abyssEffects.length === 2
+        && sel.abyssEffects.every((key) => !!ABYSS_EFFECTS[key]);
+      const canRerollSpecial = isMythic || isAbyss;
+      const rerollCost = canRerollSpecial ? specialRerollCost(sel) : 0;
+      const lastResult = lastSpecialReroll?.uid === sel.uid ? lastSpecialReroll : null;
+      const specialEffects = isMythic
+        ? [{ index: 0, effect: sel.mythic, data: MYTHIC_EFFECTS[sel.mythic] }]
+        : isAbyss ? sel.abyssEffects.map((effect, index) => ({ index, effect, data: ABYSS_EFFECTS[effect] })) : [];
       box = h("div", { class: "enh-box" },
         h("div", { style: { color: RARITY_COLOR[sel.rarity] }, text: `${sel.name}${sel.enh ? " +" + sel.enh : ""}` }),
         h("div", { class: cur ? "tt-ench" + (sel.ench === "mend" ? " mend" : "") : "note", text: cur ? `지금: ✦ ${cur.name} — ${cur.desc}` : "지금: 인챈트 없음" }),
@@ -421,11 +426,14 @@ export function openEnchant(pos = {}) {
           if (sel.ench === "mend" && !G.mendConfirm) { G.mendConfirm = true; G.ui.toast?.("수선 인챈트가 사라질 수 있어요. 정말 하려면 한 번 더 누르세요."); setTimeout(() => (G.mendConfirm = false), 4000); return; }
           G.mendConfirm = false; send({ t: "enchant", uid: sel.uid });
         } }, cur ? "다시 인챈트" : "인챈트하기"),
-        canRerollMythic ? h("div", { class: "tt-myth", text: `◆ 현재 신화 효과: ${mythic.name} — ${mythic.desc}` }) : null,
-        canRerollMythic ? h("div", { class: "note", text: "리롤하면 현재 효과가 다른 신화 효과 1종으로 교체됩니다. 이전 효과로 되돌릴 수 없어요." }) : null,
-        resultEffect ? h("div", { class: "enh-result success", text: `새 신화 효과: ${resultEffect.name} — ${resultEffect.desc}` }) : null,
-        canRerollMythic ? h("div", { class: "note", text: `신화 효과 리롤 비용 ${rerollCost.toLocaleString()}G (보유 ${c.gold.toLocaleString()}G)` }) : null,
-        canRerollMythic ? h("button", { class: "btn", disabled: c.gold < rerollCost, onclick: () => send({ t: "mythicReroll", uid: sel.uid }) }, "신화 효과 리롤") : null);
+        canRerollSpecial ? h("div", { class: "tt-myth", text: isMythic ? "◆ 신화 고유 효과" : "◆ 심연 고유 효과" }) : null,
+        ...specialEffects.map(({ index, effect, data }) => h("div", { class: "note" },
+          h("div", { text: `${isAbyss ? `효과 ${index + 1} · ` : ""}${data.name}: ${data.desc}` }),
+          lastResult?.index === index ? h("div", { class: "enh-result success", text: `새 효과: ${data.name}` }) : null,
+          h("div", { class: "flexrow" },
+            h("span", { class: "note", text: `리롤 비용 ${rerollCost.toLocaleString()}G` }),
+            h("button", { class: "btn", disabled: c.gold < rerollCost, onclick: () => send({ t: "specialReroll", uid: sel.uid, index }) }, isAbyss ? `효과 ${index + 1} 리롤` : "신화 효과 리롤")))),
+        canRerollSpecial ? h("div", { class: "note", text: "선택한 효과만 다른 효과로 바뀌며, 나머지 효과와 장비 능력치는 유지됩니다. 되돌릴 수 없어요." }) : null);
     }
     return [box, odds, h("h4", { text: "장비 선택" }), pick];
   }, { w: 440, ...pos });
@@ -434,8 +442,8 @@ export function onEnchant(m) {
   lastEnch = m;
   if (isOpen("enchant")) refreshWin("enchant");
 }
-export function onMythicReroll(m) {
-  lastMythicReroll = m;
+export function onSpecialReroll(m) {
+  lastSpecialReroll = m;
   if (isOpen("enchant")) refreshWin("enchant");
 }
 export function onEnhance(m) {

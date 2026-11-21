@@ -41,6 +41,7 @@ const SCHEMA = {
   repair: (m) => m.uid === undefined || isInt(m.uid, 1, 2 ** 31),
   enchant: (m) => isInt(m.uid, 1, 2 ** 31),
   mythicReroll: (m) => isInt(m.uid, 1, 2 ** 31),
+  specialReroll: (m) => isInt(m.uid, 1, 2 ** 31) && isInt(m.index, 0, 1),
   title: (m) => m.id === null || isInt(m.id, 1, 1e6),
   who: () => true,
   lock: (m) => isInt(m.uid, 1, 2 ** 31),
