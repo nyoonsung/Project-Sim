@@ -10,9 +10,9 @@ export const CLASS_DMG = {
   archer: 1.62, // 기존 대비 피해량 약 10% 감소
   rogue: 1.62,
   mage: 0.72576, // 현재 배율에서 1.2배 상향
-  priest: 1.50,
-  fist: 1.25,
-  smith: 0.90,
+  priest: 1.35, // 기존 대비 피해량 10% 감소
+  fist: 1.65, // 탱커 공격 기여도 32% 상향
+  smith: 1.25, // 탱커 공격 기여도 약 39% 상향
 };
 const MOVE_MUL = { adventurer: 1, sword: 1, fist: 1.02, archer: 1.02, rogue: 1.12, mage: 1.0, priest: 0.98, smith: 0.92 };
 

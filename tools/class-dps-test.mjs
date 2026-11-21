@@ -224,6 +224,9 @@ try {
   const dpsByClass = Object.fromEntries(rows.map((r) => [r.cls, r.dps]));
   assert.ok(dpsByClass.mage >= dpsByClass.sword * 0.95, "mage should remain near the sword benchmark after its damage is increased by 20%");
   assert.ok(dpsByClass.rogue >= dpsByClass.sword * 1.7, "rogue should maintain at least 1.7x the sword benchmark DPS after its major upgrade");
+  assert.ok(dpsByClass.fist >= 8500, "fist tank damage should reflect its damage buff");
+  assert.ok(dpsByClass.smith >= 6000, "smith tank damage should reflect its damage buff");
+  assert.ok(dpsByClass.priest < dpsByClass.mage, "priest damage should stay below mage after its damage reduction");
   console.log("CLASS DPS TESTS: ALL PASS");
 } finally {
   Math.random = originalRandom;
