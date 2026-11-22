@@ -12,8 +12,8 @@ import { addTrauma } from "../feel.js";
 
 const now = () => performance.now() / 1000;
 const GT = { 일반: 0, 희귀: 1, 영웅: 2, 전설: 3, 신화: 3 };
-const FX = { rings: [], runes: [], pillars: [], streaks: [], motes: [], stars: [], sweeps: [], specials: [] };
-export const SFX_LIMITS = { motes: 420, rings: 100, runes: 56, pillars: 36, streaks: 140, stars: 64, sweeps: 80, specials: 28 };
+const FX = { rings: [], runes: [], pillars: [], streaks: [], motes: [], stars: [], sweeps: [], specials: [], impacts: [] };
+export const SFX_LIMITS = { motes: 420, rings: 100, runes: 56, pillars: 36, streaks: 140, stars: 64, sweeps: 80, specials: 28, impacts: 96 };
 function pushFx(kind, effect) {
   const list = FX[kind], limit = SFX_LIMITS[kind] ?? 64;
   if (list.length >= limit) return false;
@@ -241,12 +241,19 @@ export function castFx(e, ent) {
 export function hitFx(ent, e) {
   const sk = e.sk && SKILLS[e.sk];
   if (!sk || !ent) return;
-  if (FX.motes.length > SFX_LIMITS.motes * 0.8) return; // 입자가 많으면 적중 불꽃은 생략
   const tier = Math.max(fxTier(sk), sk.kind === "basic" ? 0 : 1);
   if (tier < 1 && !e.c && e.b !== G.you) return; // 남의 기본 공격 적중은 생략
+  if (e.b !== G.you && othersScale() < 0.18) return;
   const el = elemColors(sk);
   const col = el?.[0] ?? skillColor(sk), hi = el?.[1] ?? lighten(col, 0.6);
-  burst(ent.rx, ent.ry - 14, 4 + tier * 3 + (e.c ? 6 : 0), [col, hi, "#ffffff"], 150 + tier * 20, { life: 0.35 });
+  // 적중 프레임은 시전 이펙트와 별개로 재생: 칼날/충격/원소별로 다른 파편·충격파가 터진다.
+  pushFx("impacts", {
+    x: ent.rx, y: ent.ry - 12, mode: visualMode(sk), col, hi, tier,
+    crit: !!e.c, seed: (ent.id * 31 + (e.b ?? 0) * 17 + Math.round(now() * 60)) >>> 0,
+    t0: now(), life: 0.38 + Math.min(0.2, tier * 0.045),
+  });
+  if (FX.motes.length > SFX_LIMITS.motes * 0.8) { addGlow(ent.rx, ent.ry - 12, 44 + tier * 9, col, 0.28); return; }
+  burst(ent.rx, ent.ry - 14, 5 + tier * 4 + (e.c ? 8 : 0), [col, hi, "#ffffff"], 170 + tier * 28, { life: 0.4, spread: 2.4 });
   if (tier >= 3 || e.c) ring(ent.rx, ent.ry - 2, 4, 22 + tier * 4, e.c ? "#ffe08a" : col, 0.28, 2, 0.5);
   if (e.c && tier >= 3) pushFx("stars", { x: ent.rx, y: ent.ry - 16, col: "#ffe08a", hi: "#ffffff", t0: now(), life: 0.3, n: 8, small: true });
   addGlow(ent.rx, ent.ry - 12, 36 + tier * 10, col, 0.25 + (e.c ? 0.2 : 0));
@@ -271,7 +278,7 @@ export function tickSkillFx(dt) {
   }
   FX.motes.length = Math.min(write, SFX_LIMITS.motes);
   const t = now();
-  for (const key of ["rings", "runes", "pillars", "streaks", "stars", "sweeps", "specials"]) {
+  for (const key of ["rings", "runes", "pillars", "streaks", "stars", "sweeps", "specials", "impacts"]) {
     const list = FX[key], limit = SFX_LIMITS[key] ?? 64;
     let kept = 0;
     for (let i = 0; i < list.length; i++) {
@@ -289,7 +296,7 @@ export function tickSkillFx(dt) {
 
 export function drawSkillFx(ctx, cx, cy) {
   const t = now();
-  if (!FX.rings.length && !FX.motes.length && !FX.runes.length && !FX.pillars.length && !FX.streaks.length && !FX.stars.length && !FX.sweeps.length && !FX.specials.length) return;
+  if (!FX.rings.length && !FX.motes.length && !FX.runes.length && !FX.pillars.length && !FX.streaks.length && !FX.stars.length && !FX.sweeps.length && !FX.specials.length && !FX.impacts.length) return;
   ctx.save();
   ctx.globalCompositeOperation = "lighter";
   // 근접 휘두름 궤적 (초승달 모양, 시전자를 따라감)
@@ -320,6 +327,30 @@ export function drawSkillFx(ctx, cx, cy) {
     const a = s.a, sc = 0.72 + s.tier * 0.16;
     ctx.save();
     ctx.globalAlpha = fade;
+    // 신화 궁극기: 작은 장식 대신 바깥 고리·회전 룬·별 파편이 차례로 펼쳐진다.
+    if (s.tier >= 4) {
+      const pulse = 0.72 + Math.sin(k * Math.PI * 5) * 0.18;
+      for (let q = 0; q < 3; q++) {
+        const rr = (22 + q * 15 + k * (18 + q * 7)) * pulse;
+        ctx.globalAlpha = fade * (0.78 - q * 0.16);
+        ctx.strokeStyle = q === 1 ? s.hi : s.col; ctx.lineWidth = q === 0 ? 2.5 : 1.25;
+        ctx.beginPath();
+        for (let i = 0; i <= 16; i++) {
+          const ang = (i / 16) * Math.PI * 2 + (q % 2 ? -k : k) * (q + 1);
+          const px = Math.round((x + Math.cos(ang) * rr) / 2) * 2;
+          const py = Math.round((y + Math.sin(ang) * rr * 0.55) / 2) * 2;
+          i ? ctx.lineTo(px, py) : ctx.moveTo(px, py);
+        }
+        ctx.stroke();
+      }
+      for (let i = 0; i < 10; i++) {
+        const ang = (i / 10) * Math.PI * 2 - k * 2.8, rr = 34 + k * 40;
+        const px = x + Math.cos(ang) * rr, py = y + Math.sin(ang) * rr * 0.55;
+        ctx.globalAlpha = fade * (0.55 + 0.35 * Math.sin(k * 12 + i));
+        ctx.fillStyle = i % 3 ? s.hi : "#ffffff";
+        ctx.fillRect(Math.round(px / 2) * 2, Math.round(py / 2) * 2, i % 3 ? 3 : 5, i % 3 ? 3 : 5);
+      }
+    }
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
     if (s.mode === "blade" || s.mode === "shadow" || s.mode === "wind" || s.mode === "moon") {
@@ -449,6 +480,139 @@ export function drawSkillFx(ctx, cx, cy) {
       ctx.strokeStyle = s.col; ctx.lineWidth = 2; ctx.beginPath(); ctx.ellipse(x, y, r, r * 0.48, k * 1.4, 0, Math.PI * 2); ctx.stroke();
       ctx.strokeStyle = s.hi; ctx.lineWidth = 1; ctx.beginPath(); ctx.ellipse(x, y, r * 0.6, r * 0.28, -k * 1.8, 0, Math.PI * 2); ctx.stroke();
       for (let i = 0; i < 6; i++) { const q = k * 4 + i * Math.PI / 3; ctx.fillStyle = i % 2 ? s.col : s.hi; ctx.fillRect(x + Math.cos(q) * r, y + Math.sin(q) * r * 0.48, 3, 3); }
+    }
+    ctx.restore();
+  }
+  // 적중 전용 애니메이션: 0~0.08초 섬광, 0.08~0.25초 충격파, 마지막 파편 낙하.
+  for (const h of FX.impacts) {
+    const k = Math.max(0, Math.min(1, (t - h.t0) / h.life));
+    const x = h.x - cx, y = h.y - cy;
+    const ease = 1 - Math.pow(1 - k, 3);
+    const flash = Math.max(0, 1 - k / 0.16);
+    const radius = 5 + ease * (22 + h.tier * 5);
+    const seed = h.seed >>> 0;
+    const rand = (i) => {
+      let n = (seed + Math.imul(i + 1, 0x9e3779b1)) >>> 0;
+      n ^= n >>> 16; n = Math.imul(n, 0x7feb352d); n ^= n >>> 15;
+      return (n >>> 0) / 4294967295;
+    };
+    const polyline = (pts, color, width = 1) => {
+      ctx.strokeStyle = color; ctx.lineWidth = width; ctx.beginPath();
+      pts.forEach(([px, py], i) => i ? ctx.lineTo(px, py) : ctx.moveTo(px, py)); ctx.stroke();
+    };
+    ctx.save();
+    ctx.globalAlpha = 1 - k * 0.82;
+
+    // 첫 프레임은 흰색 핵심 섬광, 바로 뒤에 짧고 굵은 컬러 플래시.
+    if (flash > 0) {
+      const r = 3 + flash * (h.crit ? 12 : 8);
+      ctx.globalAlpha = flash * 0.95;
+      ctx.fillStyle = h.crit ? "#fff3ad" : "#ffffff";
+      ctx.fillRect(Math.round(x - r / 2), Math.round(y - 2), Math.ceil(r), 4);
+      ctx.fillRect(Math.round(x - 2), Math.round(y - r / 2), 4, Math.ceil(r));
+      ctx.fillStyle = h.hi;
+      ctx.fillRect(Math.round(x - r), Math.round(y - 1), Math.ceil(r * 2), 2);
+      ctx.fillRect(Math.round(x - 1), Math.round(y - r), 2, Math.ceil(r * 2));
+    }
+
+    // 모서리가 살아 있는 12각 픽셀 충격 링.
+    const ringPoly = (r, color, width, phase = 0) => {
+      ctx.globalAlpha = (1 - k) * 0.92;
+      ctx.strokeStyle = color; ctx.lineWidth = width; ctx.beginPath();
+      for (let i = 0; i <= 12; i++) {
+        const a = (i / 12) * Math.PI * 2 + phase;
+        const jitter = 1 + (i % 2) * 0.1;
+        const px = Math.round((x + Math.cos(a) * r * jitter) / 2) * 2;
+        const py = Math.round((y + Math.sin(a) * r * 0.52 * jitter) / 2) * 2;
+        i ? ctx.lineTo(px, py) : ctx.moveTo(px, py);
+      }
+      ctx.stroke();
+    };
+    ringPoly(radius, h.col, h.crit ? 3 : 2, h.seed % 4);
+    if (k > 0.08) ringPoly(Math.max(2, radius * 0.68), h.hi, 1.2, -(h.seed % 3));
+    if (h.crit) ringPoly(radius * 1.22, "#fff0a0", 1.5, 0.15);
+
+    const mode = h.mode;
+    if (mode === "blade" || mode === "shadow" || mode === "moon") {
+      // X자 참격 잔상: 안쪽 흰 칼날 + 바깥 색 잔광.
+      const len = 14 + h.tier * 7 + ease * 10;
+      const rot = (seed % 628) / 100 + k * 0.55;
+      for (let j = 0; j < (mode === "shadow" ? 3 : 2); j++) {
+        const a = rot + j * Math.PI / (mode === "moon" ? 1.65 : 2);
+        const dx = Math.cos(a) * len, dy = Math.sin(a) * len * 0.55;
+        polyline([[x - dx, y - dy], [x - dx * 0.45 - 2, y - dy * 0.45 - 2], [x + dx, y + dy]], j === 0 ? h.hi : h.col, j === 0 ? 3 : 1.5);
+      }
+    } else if (mode === "impact" || mode === "meteor" || mode === "dragon" || mode === "flame") {
+      // 강타: 갈라지는 바닥 균열과 튀어 오르는 네모 파편.
+      for (let i = 0; i < 8; i++) {
+        const a = i * Math.PI / 4 + (seed % 40) / 100;
+        const r1 = 3 + ease * 7, r2 = radius * (0.9 + rand(i) * 0.5);
+        const mx = Math.cos(a + 0.16) * r1, my = Math.sin(a + 0.16) * r1 * 0.5;
+        const ex = Math.cos(a) * r2, ey = Math.sin(a) * r2 * 0.5;
+        polyline([[x + mx, y + my], [x + ex * 0.42, y + ey * 0.42 + 2], [x + ex, y + ey]], i % 2 ? h.col : h.hi, i % 2 ? 2 : 1);
+        const sx = x + Math.cos(a) * (r2 + 4) * (0.4 + k);
+        const sy = y + Math.sin(a) * (r2 + 4) * 0.5 - (1 - k) * (8 + rand(i + 20) * 10);
+        ctx.globalAlpha = (1 - k) * 0.9; ctx.fillStyle = i % 3 ? h.col : h.hi;
+        const size = 2 + (i % 3); ctx.fillRect(Math.round(sx), Math.round(sy), size, size);
+      }
+      if (mode === "dragon" || mode === "flame") {
+        for (let i = 0; i < 5; i++) {
+          const a = -1.1 + i * 0.55 + k * 0.4;
+          const rr = radius * (0.35 + rand(i + 40) * 0.65);
+          const px = x + Math.cos(a) * rr, py = y + Math.sin(a) * rr * 0.6;
+          ctx.globalAlpha = (1 - k) * 0.95; ctx.fillStyle = i % 2 ? h.hi : "#fff0b0";
+          ctx.fillRect(Math.round(px), Math.round(py), 3 + (i % 2), 4 + (i % 2));
+        }
+      }
+    } else if (mode === "lightning" || mode === "rays") {
+      // 별 모양 전격 적중: 짧은 지그재그 가지가 중심에 모인다.
+      for (let i = 0; i < 8; i++) {
+        const a = i * Math.PI / 4 + k * 0.3, len = radius * (0.75 + rand(i) * 0.65);
+        const bx = Math.cos(a) * len, by = Math.sin(a) * len * 0.55;
+        polyline([[x, y], [x + bx * 0.34 + 2, y + by * 0.34 - 2], [x + bx * 0.62 - 2, y + by * 0.62 + 2], [x + bx, y + by]], i % 2 ? h.col : h.hi, i % 2 ? 1.5 : 2.5);
+      }
+    } else if (mode === "ice") {
+      // 얼음 결정은 중심에서 바깥쪽으로 자라난 뒤 조각나며 사라진다.
+      for (let i = 0; i < 7; i++) {
+        const a = i * Math.PI * 2 / 7 + k * 0.2, len = radius * (0.45 + rand(i) * 0.45);
+        const px = x + Math.cos(a) * len, py = y + Math.sin(a) * len * 0.55;
+        ctx.fillStyle = h.col; ctx.globalAlpha = (1 - k) * 0.9;
+        ctx.beginPath(); ctx.moveTo(px, py - 6); ctx.lineTo(px + 3, py); ctx.lineTo(px, py + 6); ctx.lineTo(px - 3, py); ctx.closePath(); ctx.fill();
+        polyline([[px, py - 5], [px, py + 5]], "#ffffff", 1);
+      }
+    } else if (mode === "holy" || mode === "guard") {
+      // 빛의 십자 섬광과 8방향 광선.
+      ctx.globalAlpha = (1 - k) * 0.9; ctx.fillStyle = h.hi;
+      ctx.fillRect(x - 2, y - radius, 4, radius * 2);
+      ctx.fillRect(x - radius, y - 2, radius * 2, 4);
+      for (let i = 0; i < 8; i++) {
+        const a = i * Math.PI / 4, rr = radius * 1.25;
+        polyline([[x + Math.cos(a) * 5, y + Math.sin(a) * 3], [x + Math.cos(a) * rr, y + Math.sin(a) * rr * 0.55]], h.col, 1.5);
+      }
+    } else if (mode === "forge") {
+      // 금속 파편과 톱니 모양의 링.
+      for (let i = 0; i < 10; i++) {
+        const a = i * Math.PI / 5 + k * 0.2, rr = radius * (0.65 + rand(i) * 0.45);
+        const px = x + Math.cos(a) * rr, py = y + Math.sin(a) * rr * 0.55;
+        ctx.fillStyle = i % 2 ? h.col : h.hi; ctx.globalAlpha = (1 - k) * 0.95;
+        ctx.fillRect(Math.round(px), Math.round(py), 3 + (i % 3), 2 + (i % 2));
+      }
+    } else if (mode === "smoke" || mode === "poison" || mode === "vortex") {
+      // 연막·독·중력은 밝은 폭발 대신 어두운 조각이 중심으로 휘감긴다.
+      for (let i = 0; i < 10; i++) {
+        const a = i * Math.PI / 5 - k * 2.8, rr = radius * (1 - k * 0.55) * (0.45 + rand(i) * 0.6);
+        const px = x + Math.cos(a) * rr, py = y + Math.sin(a) * rr * 0.55;
+        ctx.fillStyle = mode === "smoke" ? "#8d8ba6" : h.col;
+        ctx.globalAlpha = (1 - k) * 0.65; ctx.fillRect(Math.round(px), Math.round(py), 3, 3);
+      }
+    } else {
+      // 비전·파동: 4개의 마름모 파편이 비껴 회전한다.
+      for (let i = 0; i < 4; i++) {
+        const a = i * Math.PI / 2 + k * 1.7, rr = radius * 0.8;
+        const px = x + Math.cos(a) * rr, py = y + Math.sin(a) * rr * 0.55;
+        ctx.fillStyle = h.hi; ctx.globalAlpha = (1 - k) * 0.9;
+        ctx.fillRect(Math.round(px), Math.round(py), 3, 3);
+      }
     }
     ctx.restore();
   }
