@@ -188,6 +188,7 @@ function resize() {
   // 실제로 보이는 높이 (주소창·키보드 제외) — 휴대폰에서 위쪽이 잘리는 문제 방지
   const vv = globalThis.visualViewport;
   const W = vv?.width ?? innerWidth, H = vv?.height ?? innerHeight;
+  document.documentElement.style.setProperty("--vw", W + "px");
   document.documentElement.style.setProperty("--vh", H + "px");
   const portrait = G.touch && H > W;
   document.body.classList.toggle("portrait", portrait);
