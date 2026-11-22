@@ -8,7 +8,8 @@ import WebSocket from "ws";
 
 // TARGET=http://localhost:3000 처럼 주면 이미 떠 있는 서버를 시험 (ADMIN_KEY 환경 변수도 같이)
 const TARGET = process.env.TARGET;
-const PORT = TARGET ? Number(new URL(TARGET).port) : 3400 + Math.floor(Math.random() * 500);
+// Node fetch rejects several reserved low ports; keep test servers in the dynamic/private range.
+const PORT = TARGET ? Number(new URL(TARGET).port) : 20_000 + Math.floor(Math.random() * 20_000);
 const BASE = TARGET ?? `http://localhost:${PORT}`;
 const dir = mkdtempSync(join(tmpdir(), "psim-"));
 const srv = TARGET ? { kill() {}, stdout: { on() {} }, stderr: { on() {} } } : spawn(process.execPath, ["--disable-warning=ExperimentalWarning", "server/main.js"], {
