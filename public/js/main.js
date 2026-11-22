@@ -190,7 +190,7 @@ function resize() {
   const W = vv?.width ?? innerWidth, H = vv?.height ?? innerHeight;
   document.documentElement.style.setProperty("--vw", W + "px");
   document.documentElement.style.setProperty("--vh", H + "px");
-  const portrait = G.touch && H > W;
+  const portrait = G.touch && (H > W || (globalThis.matchMedia?.("(orientation: portrait)").matches ?? false));
   document.body.classList.toggle("portrait", portrait);
   if (scrollY || scrollX) scrollTo(0, 0); // 입력창 때문에 페이지가 밀려 올라간 채로 남지 않게
   if (portrait) {
