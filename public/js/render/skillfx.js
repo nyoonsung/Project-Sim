@@ -466,6 +466,46 @@ export function drawSkillFx(ctx, cx, cy) {
       ctx.strokeStyle = s.hi; ctx.lineWidth = 1.3; ctx.beginPath(); ctx.arc(x, y, r * 0.64, -rot, -rot + Math.PI * 1.65); ctx.stroke();
       for (let i = 0; i < 8; i++) { const q = rot + i * Math.PI / 4; ctx.strokeStyle = i % 2 ? s.col : s.hi; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.moveTo(x + Math.cos(q) * (r - 3), y + Math.sin(q) * (r - 3)); ctx.lineTo(x + Math.cos(q) * (r + 4), y + Math.sin(q) * (r + 4)); ctx.stroke(); }
       ctx.fillStyle = s.hi; ctx.fillRect(x - 3, y - 3, 6, 6);
+    } else if (s.mode === "vortex") {
+      // 중력 우물: 바깥 파편이 중심으로 빨려 들어가며 소용돌이 궤도를 그린다.
+      const radius = 42 - k * 26;
+      for (let arm = 0; arm < 3; arm++) {
+        ctx.strokeStyle = arm === 1 ? s.hi : s.col; ctx.lineWidth = arm === 1 ? 2.2 : 1.4;
+        ctx.beginPath();
+        for (let i = 0; i <= 18; i++) {
+          const q = i / 18, ang = q * Math.PI * 2.4 + k * 4 + arm * Math.PI * 2 / 3;
+          const rr = radius * (1 - q * 0.88);
+          const px = Math.round((x + Math.cos(ang) * rr) / 2) * 2;
+          const py = Math.round((y + Math.sin(ang) * rr * 0.52) / 2) * 2;
+          i ? ctx.lineTo(px, py) : ctx.moveTo(px, py);
+        }
+        ctx.stroke();
+      }
+      ctx.fillStyle = "#080611"; ctx.beginPath(); ctx.arc(x, y, 7 + k * 4, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = s.hi; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(x, y, 9 + k * 5, 0, Math.PI * 2); ctx.stroke();
+      for (let i = 0; i < 8; i++) {
+        const a = i * Math.PI / 4 - k * 5, rr = radius * (0.72 + (i % 3) * 0.08);
+        ctx.fillStyle = i % 2 ? s.col : s.hi;
+        ctx.fillRect(Math.round(x + Math.cos(a) * rr), Math.round(y + Math.sin(a) * rr * 0.52), 3, 3);
+      }
+    } else if (s.mode === "vines") {
+      // 뿌리 덫: 중심에서 뻗는 휘감는 뿌리와 잎 조각.
+      for (let arm = 0; arm < 6; arm++) {
+        const a = arm * Math.PI / 3 + k * 0.18;
+        ctx.strokeStyle = arm % 2 ? s.col : s.hi; ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        for (let i = 0; i <= 8; i++) {
+          const q = i / 8, rr = 8 + q * (24 + s.tier * 5);
+          const bend = Math.sin(q * Math.PI * 2 + arm) * 4;
+          const px = x + Math.cos(a) * rr - Math.sin(a) * bend;
+          const py = y + Math.sin(a) * rr * 0.55 + Math.cos(a) * bend * 0.55;
+          i ? ctx.lineTo(Math.round(px), Math.round(py)) : ctx.moveTo(Math.round(px), Math.round(py));
+        }
+        ctx.stroke();
+        const leafX = x + Math.cos(a) * 23, leafY = y + Math.sin(a) * 13;
+        ctx.fillStyle = s.hi; ctx.fillRect(Math.round(leafX), Math.round(leafY), 4, 2);
+      }
+      ctx.strokeStyle = s.hi; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(x, y, 13 + k * 18, 0, Math.PI * 2); ctx.stroke();
     } else if (s.mode === "smoke" || s.mode === "poison") {
       for (let i = 0; i < 8; i++) {
         const q = i * Math.PI / 4 + k * 1.2, rr = 10 + (i % 3) * 7 + k * 10;
