@@ -85,7 +85,7 @@ function visualMode(sk) {
   if (/sw_gale|fi_sidestep|질풍|횡이동|바람|wind/.test(source)) return "wind";
   if (sk.cls === "sword") return "blade";
   if (sk.cls === "fist") return "impact";
-  if (sk.cls === "archer") return "arrows";
+  if (sk.cls === "archer") return "rays";
   if (sk.cls === "rogue") return "shadow";
   if (sk.cls === "mage") return "arcane";
   if (sk.cls === "priest") return "holy";
@@ -353,16 +353,17 @@ export function drawSkillFx(ctx, cx, cy) {
           ctx.fillStyle = s.hi; ctx.fillRect(sx - 2, sy + k * 74, 3, 3);
         }
       }
-    } else if (s.mode === "rain" || s.mode === "arrows") {
-      const count = s.mode === "rain" ? 9 : 3 + s.tier;
+    } else if (s.mode === "rain" || s.mode === "rays") {
+      const count = s.mode === "rain" ? 11 : 4 + s.tier;
       for (let i = 0; i < count; i++) {
-        const col = (i % 3) - 1, row = Math.floor(i / 3);
-        const xx = s.mode === "rain" ? x + col * (13 + s.tier * 2) + Math.sin(k * 9 + i) * 3 : ox + Math.cos(a) * (18 + i * 7);
-        const yy = s.mode === "rain" ? y - 82 + ((k * 1.35 + row * 0.16 + (i % 3) * 0.07) % 1) * 92 : oy + Math.sin(a) * (18 + i * 7);
+        const col = (i % 5) - 2, row = Math.floor(i / 5);
+        const xx = s.mode === "rain" ? x + col * (10 + s.tier) + Math.sin(k * 9 + i) * 3 : ox + Math.cos(a) * (16 + i * 6);
+        const yy = s.mode === "rain" ? y - 82 + ((k * 1.35 + row * 0.16 + (i % 5) * 0.07) % 1) * 92 : oy + Math.sin(a) * (16 + i * 6);
         const angle = s.mode === "rain" ? 1.32 : a;
         ctx.save(); ctx.translate(xx, yy); ctx.rotate(angle);
-        ctx.strokeStyle = s.col; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.moveTo(-3, -11); ctx.lineTo(3, 5); ctx.stroke();
-        ctx.fillStyle = s.hi; ctx.beginPath(); ctx.moveTo(3, 5); ctx.lineTo(-2, 2); ctx.lineTo(5, -2); ctx.closePath(); ctx.fill();
+        ctx.strokeStyle = s.col; ctx.lineWidth = 4; ctx.beginPath(); ctx.moveTo(-2, -10); ctx.lineTo(2, 5); ctx.stroke();
+        ctx.strokeStyle = s.hi; ctx.lineWidth = 1.3; ctx.beginPath(); ctx.moveTo(-1, -7); ctx.lineTo(1, 3); ctx.stroke();
+        ctx.fillStyle = "#ffffff"; ctx.fillRect(0, 4, 2, 2);
         ctx.restore();
       }
       if (s.mode === "rain") {
