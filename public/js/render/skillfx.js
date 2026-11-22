@@ -12,8 +12,8 @@ import { addTrauma } from "../feel.js";
 
 const now = () => performance.now() / 1000;
 const GT = { 일반: 0, 희귀: 1, 영웅: 2, 전설: 3, 신화: 3 };
-const FX = { rings: [], runes: [], pillars: [], streaks: [], motes: [], stars: [], sweeps: [] };
-export const SFX_LIMITS = { motes: 420, rings: 100, runes: 56, pillars: 36, streaks: 140, stars: 64, sweeps: 80 };
+const FX = { rings: [], runes: [], pillars: [], streaks: [], motes: [], stars: [], sweeps: [], specials: [] };
+export const SFX_LIMITS = { motes: 420, rings: 100, runes: 56, pillars: 36, streaks: 140, stars: 64, sweeps: 80, specials: 28 };
 function pushFx(kind, effect) {
   const list = FX[kind], limit = SFX_LIMITS[kind] ?? 64;
   if (list.length >= limit) return false;
@@ -70,6 +70,35 @@ function elemOf(sk) { for (const [re, cols] of ELEM) if (re.test(sk.name)) retur
 const elemCache = new Map();
 const elemColors = (sk) => { if (!elemCache.has(sk.id)) elemCache.set(sk.id, elemOf(sk)); return elemCache.get(sk.id); };
 
+// 스킬별 고유 연출 계열: 같은 등급이라도 타격·원소·직업에 따라 움직임과 형태가 달라진다.
+function visualMode(sk) {
+  const id = sk.id ?? "", name = sk.name ?? "";
+  const source = id + " " + name + " " + JSON.stringify(sk.fx ?? {});
+  if (/ar_(rain|bombard)|애로우 레인|화살 폭격/.test(source)) return "rain";
+  if (/ma_chain|sw_thunder|연쇄 번개|뇌령|번개|lightning/.test(source)) return "lightning";
+  if (/ma_blizzard|눈보라|서리|빙결|ice/.test(source)) return "ice";
+  if (/firedragon|reddragon|화룡|적룡/.test(source)) return "dragon";
+  if (/ma_meteor|meteorkick|유성|meteor/.test(source)) return "meteor";
+  if (/ma_gravity|중력 우물|black.?hole/.test(source)) return "vortex";
+  if (/ro_smoke|연막/.test(source)) return "smoke";
+  if (/ro_poison|독날|맹독|poison/.test(source)) return "poison";
+  if (/sw_gale|fi_sidestep|질풍|횡이동|바람|wind/.test(source)) return "wind";
+  if (sk.cls === "sword") return "blade";
+  if (sk.cls === "fist") return "impact";
+  if (sk.cls === "archer") return "arrows";
+  if (sk.cls === "rogue") return "shadow";
+  if (sk.cls === "mage") return "arcane";
+  if (sk.cls === "priest") return "holy";
+  if (sk.cls === "smith") return "forge";
+  const steps = (sk.steps ?? []).map((step) => step.do);
+  if (steps.includes("heal")) return "holy";
+  if (steps.includes("shield") || steps.includes("parry")) return "guard";
+  if (steps.includes("device")) return "forge";
+  if (steps.includes("dash") || steps.includes("blink")) return "wind";
+  if (steps.includes("melee")) return "blade";
+  return "arcane";
+}
+
 const runeGlyphs = new Map();
 function runeGlyph(sigil, color) {
   const key = `${sigil ?? "star"}|${color}`;
@@ -122,6 +151,15 @@ export function castFx(e, ent) {
   const tx = areaAt ? x + (dx / d) * Math.min(d, range) : x, ty = areaAt ? y + (dy / d) * Math.min(d, range) : y;
   const aim = Math.atan2(dy, dx);
   const mine = e.id === G.you;
+  // 매 스킬마다 전용 실루엣 연출을 하나 더한다. 상위 등급은 크기·잔광·지속 시간이 함께 상승.
+  if (sk.kind !== "basic") {
+    const mode = visualMode(sk);
+    const life = mode === "lightning" ? 0.34 : mode === "rain" ? 1.0 : mode === "dragon" ? 0.9 : 0.72;
+    pushFx("specials", {
+      mode, x: tx, y: ty, sx: x, sy: y, ex: x + Math.cos(aim) * Math.min(d, range), ey: y + Math.sin(aim) * Math.min(d, range),
+      a: aim, col, hi, tier, n: 5 + tier * 2, t0: now(), life: life + tier * 0.08,
+    });
+  }
   // 기본 공격: 앞쪽 섬광 + 작은 불꽃 (숙련도가 오르면 더 크게)
   if (sk.kind === "basic") {
     burst(x + Math.cos(aim) * 16, y - 12 + Math.sin(aim) * 10, 4 + pt * 3, pt >= 2 ? ["#fff6c0", "#ffd35a", hi] : [hi, "#ffffff", col], 120, { dir: aim, spread: 0.9, life: 0.25 });
@@ -223,7 +261,7 @@ export function tickSkillFx(dt) {
   }
   FX.motes.length = Math.min(write, SFX_LIMITS.motes);
   const t = now();
-  for (const key of ["rings", "runes", "pillars", "streaks", "stars", "sweeps"]) {
+  for (const key of ["rings", "runes", "pillars", "streaks", "stars", "sweeps", "specials"]) {
     const list = FX[key], limit = SFX_LIMITS[key] ?? 64;
     let kept = 0;
     for (let i = 0; i < list.length; i++) {
@@ -241,7 +279,7 @@ export function tickSkillFx(dt) {
 
 export function drawSkillFx(ctx, cx, cy) {
   const t = now();
-  if (!FX.rings.length && !FX.motes.length && !FX.runes.length && !FX.pillars.length && !FX.streaks.length && !FX.stars.length && !FX.sweeps.length) return;
+  if (!FX.rings.length && !FX.motes.length && !FX.runes.length && !FX.pillars.length && !FX.streaks.length && !FX.stars.length && !FX.sweeps.length && !FX.specials.length) return;
   ctx.save();
   ctx.globalCompositeOperation = "lighter";
   // 근접 휘두름 궤적 (초승달 모양, 시전자를 따라감)
@@ -263,6 +301,129 @@ export function drawSkillFx(ctx, cx, cy) {
     ctx.closePath(); ctx.fill();
     ctx.globalAlpha = (1 - k) * 0.9; ctx.strokeStyle = "#ffffff"; ctx.lineWidth = 1;
     ctx.beginPath(); if (w.arc > 50) ctx.arc(x, y, w.r, a0, a1); else { ctx.moveTo(x, y); ctx.lineTo(x + Math.cos(w.a) * w.r, y + Math.sin(w.a) * w.r); } ctx.stroke();
+  }
+  // 직업·스킬 계열별 시그니처 연출
+  for (const s of FX.specials) {
+    const k = Math.max(0, Math.min(1, (t - s.t0) / s.life));
+    const fade = Math.sin(Math.PI * k) * (1 - k * 0.25);
+    const x = s.x - cx, y = s.y - cy, ox = s.sx - cx, oy = s.sy - cy;
+    const a = s.a, sc = 0.72 + s.tier * 0.16;
+    ctx.save();
+    ctx.globalAlpha = fade;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    if (s.mode === "blade" || s.mode === "shadow" || s.mode === "wind") {
+      const rot = a - 0.95 + k * 0.9, radius = (34 + s.tier * 9) * (0.65 + k * 0.4);
+      const count = s.mode === "shadow" ? 3 : s.mode === "wind" ? 2 : 1;
+      for (let j = 0; j < count; j++) {
+        const rr = radius - j * 7, start = rot - 0.5 + j * 0.12, end = rot + 0.55 + j * 0.12;
+        ctx.globalAlpha = fade * (j === 0 ? 0.95 : 0.48);
+        ctx.strokeStyle = j === 0 ? s.col : s.hi; ctx.lineWidth = (s.mode === "wind" ? 3 : 6 - j) * (1 - k * 0.35);
+        ctx.beginPath(); ctx.arc(x, y, rr, start, end); ctx.stroke();
+        ctx.strokeStyle = "#ffffff"; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.arc(x, y, rr, start + 0.08, end - 0.08); ctx.stroke();
+      }
+      if (s.mode === "wind") {
+        ctx.strokeStyle = s.hi; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.ellipse(x, y, radius * 0.9, radius * 0.42, a, -0.8 + k, 1.9 + k); ctx.stroke();
+      }
+    } else if (s.mode === "impact" || s.mode === "meteor" || s.mode === "dragon") {
+      const r = (18 + s.tier * 9) * (0.55 + k * 0.9);
+      ctx.strokeStyle = s.col; ctx.lineWidth = 5 * (1 - k * 0.7);
+      ctx.beginPath(); ctx.ellipse(x, y, r * 1.25, r * 0.58, 0, 0, Math.PI * 2); ctx.stroke();
+      ctx.strokeStyle = s.hi; ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.ellipse(x, y, r, r * 0.45, 0, 0, Math.PI * 2); ctx.stroke();
+      for (let i = 0; i < 8; i++) {
+        const q = (i / 8) * Math.PI * 2 + a;
+        const inner = r * 0.3, outer = r * (0.7 + (i % 2) * 0.4);
+        ctx.strokeStyle = i % 2 ? s.col : s.hi; ctx.lineWidth = i % 2 ? 2.5 : 1.3;
+        ctx.beginPath(); ctx.moveTo(x + Math.cos(q) * inner, y + Math.sin(q) * inner * 0.55);
+        ctx.lineTo(x + Math.cos(q) * outer, y + Math.sin(q) * outer * 0.55); ctx.stroke();
+      }
+      if (s.mode === "dragon") {
+        ctx.strokeStyle = s.hi; ctx.lineWidth = 7 * (1 - k * 0.65);
+        ctx.beginPath(); ctx.moveTo(ox, oy - 8); ctx.bezierCurveTo(ox + Math.cos(a - 1) * 42, oy - 38, x + Math.cos(a + 1) * 36, y - 20, x, y); ctx.stroke();
+        ctx.strokeStyle = "#ffffff"; ctx.lineWidth = 1.5; ctx.stroke();
+      }
+      if (s.mode === "meteor") {
+        for (let i = 0; i < 4; i++) {
+          const sx = x - 34 + i * 22, sy = y - 72 + i * 4;
+          ctx.strokeStyle = s.col; ctx.lineWidth = 4 - k * 2;
+          ctx.beginPath(); ctx.moveTo(sx, sy + k * 74); ctx.lineTo(sx - 8, sy + 17 + k * 74); ctx.stroke();
+          ctx.fillStyle = s.hi; ctx.fillRect(sx - 2, sy + k * 74, 3, 3);
+        }
+      }
+    } else if (s.mode === "rain" || s.mode === "arrows") {
+      const count = s.mode === "rain" ? 9 : 3 + s.tier;
+      for (let i = 0; i < count; i++) {
+        const col = (i % 3) - 1, row = Math.floor(i / 3);
+        const xx = s.mode === "rain" ? x + col * (13 + s.tier * 2) + Math.sin(k * 9 + i) * 3 : ox + Math.cos(a) * (18 + i * 7);
+        const yy = s.mode === "rain" ? y - 82 + ((k * 1.35 + row * 0.16 + (i % 3) * 0.07) % 1) * 92 : oy + Math.sin(a) * (18 + i * 7);
+        const angle = s.mode === "rain" ? 1.32 : a;
+        ctx.save(); ctx.translate(xx, yy); ctx.rotate(angle);
+        ctx.strokeStyle = s.col; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.moveTo(-3, -11); ctx.lineTo(3, 5); ctx.stroke();
+        ctx.fillStyle = s.hi; ctx.beginPath(); ctx.moveTo(3, 5); ctx.lineTo(-2, 2); ctx.lineTo(5, -2); ctx.closePath(); ctx.fill();
+        ctx.restore();
+      }
+      if (s.mode === "rain") {
+        ctx.strokeStyle = s.hi; ctx.lineWidth = 1; ctx.globalAlpha = fade * 0.65;
+        ctx.beginPath(); ctx.ellipse(x, y + 5, 36 + s.tier * 8, 12 + s.tier * 2, 0, 0, Math.PI * 2); ctx.stroke();
+      } else {
+        ctx.strokeStyle = s.hi; ctx.lineWidth = 2 + s.tier;
+        ctx.beginPath(); ctx.moveTo(ox, oy); ctx.lineTo(s.ex - cx, s.ey - cy); ctx.stroke();
+      }
+    } else if (s.mode === "lightning") {
+      const ex = s.ex - cx, ey = s.ey - cy, dx = ex - ox, dy = ey - oy;
+      const len = Math.hypot(dx, dy) || 1, px = -dy / len, py = dx / len;
+      for (let branch = 0; branch < 3; branch++) {
+        ctx.beginPath(); ctx.moveTo(ox, oy);
+        const steps = 7, phase = branch * 1.7 + k * 5;
+        for (let i = 1; i < steps; i++) {
+          const q = i / steps, off = Math.sin(i * 8.7 + phase) * (10 + s.tier * 2) * (1 - q * 0.25);
+          ctx.lineTo(ox + dx * q + px * off, oy + dy * q + py * off);
+        }
+        ctx.lineTo(ex, ey);
+        ctx.strokeStyle = branch === 0 ? s.hi : s.col; ctx.lineWidth = branch === 0 ? 2.5 : 1.3; ctx.stroke();
+      }
+      ctx.fillStyle = "#ffffff"; ctx.fillRect(ex - 2, ey - 2, 4, 4);
+    } else if (s.mode === "ice") {
+      for (let i = 0; i < 10; i++) {
+        const q = (i / 10) * Math.PI * 2 + k * 4, rr = 12 + (i % 3) * 7 + s.tier * 2;
+        const px = x + Math.cos(q) * rr, py = y + Math.sin(q) * rr * 0.65;
+        ctx.save(); ctx.translate(px, py); ctx.rotate(q + Math.PI / 4);
+        ctx.fillStyle = s.col; ctx.fillRect(-2, -7, 4, 14); ctx.fillStyle = s.hi; ctx.fillRect(-1, -6, 1, 10);
+        ctx.restore();
+      }
+      ctx.strokeStyle = s.hi; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(x, y, 18 + k * 28, 0, Math.PI * 2); ctx.stroke();
+    } else if (s.mode === "holy" || s.mode === "guard") {
+      const r = 12 + k * (34 + s.tier * 7);
+      ctx.strokeStyle = s.col; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.ellipse(x, y, r, r * 0.42, 0, 0, Math.PI * 2); ctx.stroke();
+      ctx.strokeStyle = s.hi; ctx.lineWidth = 1.2; ctx.beginPath(); ctx.arc(x, y, r * 0.68, 0, Math.PI * 2); ctx.stroke();
+      ctx.globalAlpha = fade * 0.9; ctx.fillStyle = s.hi;
+      ctx.fillRect(x - 2, y - 19, 4, 38); ctx.fillRect(x - 14, y - 2, 28, 4);
+      for (let i = 0; i < 8; i++) { const q = i * Math.PI / 4; ctx.beginPath(); ctx.moveTo(x + Math.cos(q) * 9, y + Math.sin(q) * 9); ctx.lineTo(x + Math.cos(q) * (r + 12), y + Math.sin(q) * (r + 12)); ctx.stroke(); }
+    } else if (s.mode === "forge") {
+      const r = 16 + k * 16, rot = k * Math.PI * 1.8;
+      ctx.strokeStyle = s.col; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(x, y, r, rot, rot + Math.PI * 1.65); ctx.stroke();
+      ctx.strokeStyle = s.hi; ctx.lineWidth = 1.3; ctx.beginPath(); ctx.arc(x, y, r * 0.64, -rot, -rot + Math.PI * 1.65); ctx.stroke();
+      for (let i = 0; i < 8; i++) { const q = rot + i * Math.PI / 4; ctx.strokeStyle = i % 2 ? s.col : s.hi; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.moveTo(x + Math.cos(q) * (r - 3), y + Math.sin(q) * (r - 3)); ctx.lineTo(x + Math.cos(q) * (r + 4), y + Math.sin(q) * (r + 4)); ctx.stroke(); }
+      ctx.fillStyle = s.hi; ctx.fillRect(x - 3, y - 3, 6, 6);
+    } else if (s.mode === "smoke" || s.mode === "poison") {
+      for (let i = 0; i < 8; i++) {
+        const q = i * Math.PI / 4 + k * 1.2, rr = 10 + (i % 3) * 7 + k * 10;
+        const px = x + Math.cos(q) * rr, py = y + Math.sin(q) * rr * 0.66;
+        ctx.globalAlpha = fade * (s.mode === "smoke" ? 0.28 : 0.55);
+        ctx.fillStyle = s.mode === "smoke" ? "#8d8ba6" : s.col;
+        ctx.beginPath(); ctx.arc(px, py, s.mode === "smoke" ? 7 : 3 + (i % 3), 0, Math.PI * 2); ctx.fill();
+        if (s.mode === "poison") { ctx.fillStyle = s.hi; ctx.fillRect(px - 1, py - 1, 2, 2); }
+      }
+    } else {
+      const r = 10 + k * 34;
+      ctx.strokeStyle = s.col; ctx.lineWidth = 2; ctx.beginPath(); ctx.ellipse(x, y, r, r * 0.48, k * 1.4, 0, Math.PI * 2); ctx.stroke();
+      ctx.strokeStyle = s.hi; ctx.lineWidth = 1; ctx.beginPath(); ctx.ellipse(x, y, r * 0.6, r * 0.28, -k * 1.8, 0, Math.PI * 2); ctx.stroke();
+      for (let i = 0; i < 6; i++) { const q = k * 4 + i * Math.PI / 3; ctx.fillStyle = i % 2 ? s.col : s.hi; ctx.fillRect(x + Math.cos(q) * r, y + Math.sin(q) * r * 0.48, 3, 3); }
+    }
+    ctx.restore();
   }
   // 바닥 고리
   for (const r of FX.rings) {
