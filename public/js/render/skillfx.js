@@ -74,6 +74,16 @@ const elemColors = (sk) => { if (!elemCache.has(sk.id)) elemCache.set(sk.id, ele
 function visualMode(sk) {
   const id = sk.id ?? "", name = sk.name ?? "";
   const source = id + " " + name + " " + JSON.stringify(sk.fx ?? {});
+  const bySkill = {
+    sw_gale:"wind", sw_thrust:"blade", sw_block:"guard", sw_charge:"wind", sw_raid:"impact", sw_lowcut:"blade", sw_kick:"impact", sw_shoulder:"impact", sw_fiveslash:"blade", sw_moon:"moon", sw_draw:"blade", sw_vital:"lightning", sw_firedragon:"dragon", sw_thunder:"lightning", sw_eo_burst:"arcane", sw_eo_guard:"guard", sw_eo_rain:"rain", sw_final:"blade",
+    fi_jab:"impact", fi_counter:"guard", fi_imun:"impact", fi_combo:"impact", fi_palm:"wave", fi_twinclaw:"impact", fi_meteorkick:"meteor", fi_thousand:"impact", fi_sidestep:"wind", fi_dive:"wind", fi_burst:"impact", fi_tiger:"dragon", fi_reddragon:"dragon", fi_spinkick:"wind", fi_whiteheat:"flame", fi_rising:"impact", fi_trip:"impact", fi_landslide:"impact", fi_dance:"wind", fi_acupoint:"holy", fi_suppress:"impact", fi_final:"impact",
+    ar_shot:"rays", ar_mastery:"arcane", ar_double:"rays", ar_regain:"arcane", ar_triple:"rays", ar_multi:"rain", ar_volley:"rain", ar_entangle:"vines", ar_lethal:"lightning", ar_evasion:"wind", ar_absolute:"holy", ar_storm:"wind", ar_explosion:"meteor", ar_bombard:"rain", ar_pierce:"lightning", ar_rain:"rain", ar_snipe:"lightning", ar_pinpoint:"arcane", ar_final:"rain",
+    ro_cut:"shadow", ro_twin:"shadow", ro_smoke:"smoke", ro_footwork:"wind", ro_shadowstep:"shadow", ro_poison:"poison", ro_wire:"vortex", ro_check:"lightning", ro_open:"shadow", ro_afterimage:"shadow", ro_track:"arcane", ro_fan:"wind", ro_bloodmoon:"moon", ro_finale:"shadow", ro_hunt:"shadow", ro_final:"shadow",
+    ma_arcane:"arcane", ma_frostseal:"ice", ma_precise:"lightning", ma_firetrail:"flame", ma_blink:"vortex", ma_echo:"wave", ma_gravity:"vortex", ma_meteor:"meteor", ma_cut:"arcane", ma_recall:"arcane", ma_chain:"lightning", ma_blizzard:"ice", ma_final:"meteor",
+    pr_bolt:"rays", pr_answer:"holy", pr_afterglow:"holy", pr_shard:"ice", pr_bell:"wave", pr_halo:"holy", pr_sanctum:"holy", pr_ward:"guard", pr_relief:"holy", pr_corridor:"arcane", pr_hymn:"holy", pr_convert:"vortex", pr_radiance:"holy", pr_martyr:"holy", pr_lightray:"rays", pr_grace:"wave", pr_final:"holy",
+    sm_hammer:"forge", sm_rivet:"guard", sm_armor:"guard", sm_taunt:"forge", sm_mine:"vortex", sm_drone:"forge", sm_repair:"holy", sm_wall:"guard", sm_moth:"forge", sm_circuit:"lightning", sm_rivetgun:"rays", sm_overload:"forge", sm_final:"forge",
+  };
+  if (bySkill[id]) return bySkill[id];
   if (/ar_(rain|bombard)|애로우 레인|화살 폭격/.test(source)) return "rain";
   if (/ma_chain|sw_thunder|연쇄 번개|뇌령|번개|lightning/.test(source)) return "lightning";
   if (/ma_blizzard|눈보라|서리|빙결|ice/.test(source)) return "ice";
@@ -312,7 +322,7 @@ export function drawSkillFx(ctx, cx, cy) {
     ctx.globalAlpha = fade;
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
-    if (s.mode === "blade" || s.mode === "shadow" || s.mode === "wind") {
+    if (s.mode === "blade" || s.mode === "shadow" || s.mode === "wind" || s.mode === "moon") {
       const rot = a - 0.95 + k * 0.9, radius = (34 + s.tier * 9) * (0.65 + k * 0.4);
       const count = s.mode === "shadow" ? 3 : s.mode === "wind" ? 2 : 1;
       for (let j = 0; j < count; j++) {
@@ -327,7 +337,7 @@ export function drawSkillFx(ctx, cx, cy) {
         ctx.strokeStyle = s.hi; ctx.lineWidth = 2;
         ctx.beginPath(); ctx.ellipse(x, y, radius * 0.9, radius * 0.42, a, -0.8 + k, 1.9 + k); ctx.stroke();
       }
-    } else if (s.mode === "impact" || s.mode === "meteor" || s.mode === "dragon") {
+    } else if (s.mode === "impact" || s.mode === "meteor" || s.mode === "dragon" || s.mode === "flame") {
       const r = (18 + s.tier * 9) * (0.55 + k * 0.9);
       ctx.strokeStyle = s.col; ctx.lineWidth = 5 * (1 - k * 0.7);
       ctx.beginPath(); ctx.ellipse(x, y, r * 1.25, r * 0.58, 0, 0, Math.PI * 2); ctx.stroke();
@@ -344,6 +354,13 @@ export function drawSkillFx(ctx, cx, cy) {
         ctx.strokeStyle = s.hi; ctx.lineWidth = 7 * (1 - k * 0.65);
         ctx.beginPath(); ctx.moveTo(ox, oy - 8); ctx.bezierCurveTo(ox + Math.cos(a - 1) * 42, oy - 38, x + Math.cos(a + 1) * 36, y - 20, x, y); ctx.stroke();
         ctx.strokeStyle = "#ffffff"; ctx.lineWidth = 1.5; ctx.stroke();
+      }
+      if (s.mode === "flame") {
+        for (let i = 0; i < 5; i++) {
+          const q = a - 0.8 + i * 0.4;
+          ctx.strokeStyle = i % 2 ? s.hi : s.col; ctx.lineWidth = 3 - k;
+          ctx.beginPath(); ctx.arc(x, y, r * (0.5 + i * 0.08), q, q + 0.8); ctx.stroke();
+        }
       }
       if (s.mode === "meteor") {
         for (let i = 0; i < 4; i++) {
@@ -403,6 +420,15 @@ export function drawSkillFx(ctx, cx, cy) {
       ctx.globalAlpha = fade * 0.9; ctx.fillStyle = s.hi;
       ctx.fillRect(x - 2, y - 19, 4, 38); ctx.fillRect(x - 14, y - 2, 28, 4);
       for (let i = 0; i < 8; i++) { const q = i * Math.PI / 4; ctx.beginPath(); ctx.moveTo(x + Math.cos(q) * 9, y + Math.sin(q) * 9); ctx.lineTo(x + Math.cos(q) * (r + 12), y + Math.sin(q) * (r + 12)); ctx.stroke(); }
+    } else if (s.mode === "wave") {
+      for (let i = 0; i < 4; i++) {
+        const r = 10 + k * (24 + i * 8);
+        ctx.globalAlpha = fade * (1 - i * 0.16);
+        ctx.strokeStyle = i % 2 ? s.col : s.hi; ctx.lineWidth = 2 - i * 0.25;
+        ctx.beginPath(); ctx.ellipse(x, y, r, r * 0.42, 0, -0.72, 0.72); ctx.stroke();
+        ctx.beginPath(); ctx.ellipse(x, y, r, r * 0.42, 0, Math.PI - 0.72, Math.PI + 0.72); ctx.stroke();
+      }
+      ctx.fillStyle = s.hi; ctx.fillRect(x - 2, y - 2, 4, 4);
     } else if (s.mode === "forge") {
       const r = 16 + k * 16, rot = k * Math.PI * 1.8;
       ctx.strokeStyle = s.col; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(x, y, r, rot, rot + Math.PI * 1.65); ctx.stroke();
