@@ -183,8 +183,8 @@ export class FxLayer {
     if (b) {
       const now = performance.now() / 1000;
       const e = { b, t0: now, x, y, s: o.s ?? 1, flip, angle, follow: o.follow ?? null, dy: o.dy ?? 0, until: life ? now + life : null };
+      if (this.bk.length >= (FX_LIMITS.baked ?? 100)) return null;
       this.bk.push(e);
-      if (this.bk.length > 220) this.bk.shift();
       return e;
     }
     if (!id.startsWith("weather/")) scheduleBake(id, o.pal ?? null, bkey, true);

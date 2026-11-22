@@ -16,8 +16,9 @@ const FX = { rings: [], runes: [], pillars: [], streaks: [], motes: [], stars: [
 export const SFX_LIMITS = { motes: 420, rings: 100, runes: 56, pillars: 36, streaks: 140, stars: 64, sweeps: 80 };
 function pushFx(kind, effect) {
   const list = FX[kind], limit = SFX_LIMITS[kind] ?? 64;
-  if (list.length >= limit) list.shift();
+  if (list.length >= limit) return false;
   list.push(effect);
+  return true;
 }
 
 const beams = new Map();
@@ -45,8 +46,7 @@ function lighten(hex, k) {
   return `rgb(${f(r)},${f(g)},${f(b)})`;
 }
 function burst(x, y, n, cols, spd = 140, opt = {}) {
-  for (let i = 0; i < n; i++) {
-    if (FX.motes.length >= SFX_LIMITS.motes) FX.motes.shift();
+  for (let i = 0; i < n && FX.motes.length < SFX_LIMITS.motes; i++) {
     const a = opt.dir != null ? opt.dir + (Math.random() - 0.5) * (opt.spread ?? 1.4) : Math.random() * Math.PI * 2;
     const v = spd * (0.35 + Math.random() * 0.9);
     FX.motes.push({ x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v * (opt.flat ?? 0.6) - (opt.lift ?? 30), g: opt.g ?? 60, t: 0,
@@ -69,6 +69,35 @@ const ELEM = [
 function elemOf(sk) { for (const [re, cols] of ELEM) if (re.test(sk.name)) return cols; return null; }
 const elemCache = new Map();
 const elemColors = (sk) => { if (!elemCache.has(sk.id)) elemCache.set(sk.id, elemOf(sk)); return elemCache.get(sk.id); };
+
+const runeGlyphs = new Map();
+function runeGlyph(sigil, color) {
+  const key = `${sigil ?? "star"}|${color}`;
+  let cv = runeGlyphs.get(key);
+  if (cv) return cv;
+  cv = new OffscreenCanvas(16, 16);
+  const g = cv.getContext("2d");
+  g.translate(8, 8); g.strokeStyle = color; g.lineWidth = 1.5; g.lineJoin = "miter"; g.beginPath();
+  if (sigil === "heal") {
+    g.moveTo(-1,-5); g.lineTo(1,-5); g.lineTo(1,-1); g.lineTo(5,-1); g.lineTo(5,1); g.lineTo(1,1); g.lineTo(1,5); g.lineTo(-1,5); g.lineTo(-1,1); g.lineTo(-5,1); g.lineTo(-5,-1); g.lineTo(-1,-1); g.closePath();
+  } else if (sigil === "shield") {
+    g.moveTo(0,-6); g.lineTo(5,-3); g.lineTo(4,3); g.lineTo(0,6); g.lineTo(-4,3); g.lineTo(-5,-3); g.closePath();
+  } else if (sigil === "dash") {
+    g.moveTo(-5,-4); g.lineTo(0,0); g.lineTo(-5,4); g.moveTo(0,-4); g.lineTo(5,0); g.lineTo(0,4);
+  } else if (sigil === "blade") {
+    g.moveTo(-5,4); g.lineTo(4,-5); g.moveTo(-2,5); g.lineTo(5,-2);
+  } else if (sigil === "gear") {
+    g.rect(-4,-4,8,8); g.moveTo(0,-7); g.lineTo(0,-4); g.moveTo(0,4); g.lineTo(0,7); g.moveTo(-7,0); g.lineTo(-4,0); g.moveTo(4,0); g.lineTo(7,0);
+  } else {
+    g.moveTo(0,-6); g.lineTo(2,-2); g.lineTo(6,0); g.lineTo(2,2); g.lineTo(0,6); g.lineTo(-2,2); g.lineTo(-6,0); g.lineTo(-2,-2); g.closePath();
+  }
+  g.stroke();
+  if (sigil === "gear") { g.beginPath(); g.arc(0,0,1.7,0,Math.PI*2); g.stroke(); }
+  if (runeGlyphs.size >= 96) runeGlyphs.clear();
+  runeGlyphs.set(key, cv);
+  return cv;
+}
+
 
 /** 스킬 시전: 서버 cast 이벤트 { id, s, pl, x, y, ax, ay } */
 export function castFx(e, ent) {
@@ -259,30 +288,9 @@ export function drawSkillFx(ctx, cx, cy) {
     ctx.beginPath();
     for (let i = 0; i <= 3; i++) { const q = -rot * 0.7 + (i * Math.PI * 2) / 3; const px = x + Math.cos(q) * r.r * 0.7, py = y + Math.sin(q) * r.r * 0.35; i ? ctx.lineTo(px, py) : ctx.moveTo(px, py); }
     ctx.stroke();
-    // 기존 룬에 시전 종류별 중심 문장만 추가 (새 파티클·배열 생성 없음).
-    ctx.save(); ctx.translate(x, y); ctx.rotate(-rot * 0.35);
-    ctx.globalAlpha = a * 0.9; ctx.strokeStyle = r.hi; ctx.lineWidth = 1.5; ctx.lineJoin = "miter";
-    ctx.beginPath();
-    if (r.sigil === "heal") {
-      ctx.moveTo(-1,-5); ctx.lineTo(1,-5); ctx.lineTo(1,-1); ctx.lineTo(5,-1); ctx.lineTo(5,1);
-      ctx.lineTo(1,1); ctx.lineTo(1,5); ctx.lineTo(-1,5); ctx.lineTo(-1,1); ctx.lineTo(-5,1);
-      ctx.lineTo(-5,-1); ctx.lineTo(-1,-1); ctx.closePath();
-    } else if (r.sigil === "shield") {
-      ctx.moveTo(0,-6); ctx.lineTo(5,-3); ctx.lineTo(4,3); ctx.lineTo(0,6); ctx.lineTo(-4,3); ctx.lineTo(-5,-3); ctx.closePath();
-    } else if (r.sigil === "dash") {
-      ctx.moveTo(-5,-4); ctx.lineTo(0,0); ctx.lineTo(-5,4); ctx.moveTo(0,-4); ctx.lineTo(5,0); ctx.lineTo(0,4);
-    } else if (r.sigil === "blade") {
-      ctx.moveTo(-5,4); ctx.lineTo(4,-5); ctx.moveTo(-2,5); ctx.lineTo(5,-2);
-    } else if (r.sigil === "gear") {
-      ctx.rect(-4,-4,8,8); ctx.moveTo(0,-7); ctx.lineTo(0,-4); ctx.moveTo(0,4); ctx.lineTo(0,7);
-      ctx.moveTo(-7,0); ctx.lineTo(-4,0); ctx.moveTo(4,0); ctx.lineTo(7,0);
-    } else {
-      ctx.moveTo(0,-6); ctx.lineTo(2,-2); ctx.lineTo(6,0); ctx.lineTo(2,2); ctx.lineTo(0,6);
-      ctx.lineTo(-2,2); ctx.lineTo(-6,0); ctx.lineTo(-2,-2); ctx.closePath();
-    }
-    ctx.stroke();
-    if (r.sigil === "gear") { ctx.beginPath(); ctx.arc(0,0,1.7,0,Math.PI*2); ctx.stroke(); }
-    ctx.restore();
+    const glyph = runeGlyph(r.sigil, r.hi);
+    ctx.globalAlpha = a * 0.9;
+    ctx.drawImage(glyph, Math.round(x - 8), Math.round(y - 8));
   }
   // 궤적 섬광
   for (const s of FX.streaks) {

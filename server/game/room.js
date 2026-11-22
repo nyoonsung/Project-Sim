@@ -570,9 +570,15 @@ export class Room {
     this.tickN++;
     // 예약 실행
     if (this.timers.length) {
-      const due = this.timers.filter((t) => t.at <= now);
-      this.timers = this.timers.filter((t) => t.at > now);
-      for (const t of due) try { t.fn(now); } catch (e) { console.error(e); }
+      const timers = this.timers, initialLength = timers.length;
+      let kept = 0;
+      for (let i = 0; i < initialLength; i++) {
+        const timer = timers[i];
+        if (timer.at <= now) { try { timer.fn(now); } catch (e) { console.error(e); } }
+        else timers[kept++] = timer;
+      }
+      for (let i = initialLength; i < timers.length; i++) timers[kept++] = timers[i];
+      timers.length = kept;
     }
     if (now >= this.flowAt) { this.updateFlow(); this.flowAt = now + (this.units.size > 24 ? 0.65 : 0.5); }
     if (this.wave) this.tickWaves(now);
@@ -785,8 +791,10 @@ export class Room {
     return p;
   }
   tickProjectiles(now) {
-    const keep = [];
-    for (const p of this.projectiles) {
+    const projectiles = this.projectiles, initialLength = projectiles.length;
+    let kept = 0;
+    for (let pi = 0; pi < initialLength; pi++) {
+      const p = projectiles[pi];
       const speed = Math.hypot(p.vx, p.vy);
       const steps = Math.max(1, Math.ceil((speed * TICK_DT) / 8));
       let end = false;
@@ -819,9 +827,10 @@ export class Room {
       if (end) {
         p.onEnd?.(now, p);
         this.ev({ e: "pjx", id: p.id, x: p.x | 0, y: p.y | 0 });
-      } else keep.push(p);
+      } else projectiles[kept++] = p;
     }
-    this.projectiles = keep;
+    for (let i = initialLength; i < projectiles.length; i++) projectiles[kept++] = projectiles[i];
+    projectiles.length = kept;
   }
 
   // ── 예고 장판 (telegraph → 피해)

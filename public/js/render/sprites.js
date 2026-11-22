@@ -114,6 +114,7 @@ const cache = new Map();
  * look: { armor, core, mark, weapon, head, headColor, shield }
  */
 export function sprite(look, lookKey, anim, frame, yaw = 0, scale = 1) {
+  yaw = Math.round(yaw / 0.15) * 0.15;
   const key = `${lookKey}|${anim}|${frame}|${yaw}|${scale}`;
   let s = cache.get(key);
   if (s) return s;

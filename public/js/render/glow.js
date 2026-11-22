@@ -69,7 +69,7 @@ function glowChunk(cx, cy) {
 export function forEachChunk(cx, cy, W, H, fn) {
   for (let y = Math.floor(cy / CH); y <= Math.floor((cy + H) / CH); y++) for (let x = Math.floor(cx / CH); x <= Math.floor((cx + W) / CH); x++) fn(x, y);
 }
-export function forEachGlow(fn) { for (let i = 0; i < list.length; i += 5) fn(list[i], list[i + 1], list[i + 2], list[i + 3], list[i + 4]); }
+export function forEachGlow(fn) { for (let i = 0; i < list.length; i += 5) if (fn(list[i], list[i + 1], list[i + 2], list[i + 3], list[i + 4]) === false) break; }
 /** 빛 번짐 그리기. 절반 해상도 버퍼에 모아 그린 뒤 한 번에 '더하기' 합성 → 큰 빛이 많아도 칠하는 픽셀이 1/4.
  *  버퍼는 월드 짝수 좌표에 고정해서 화면이 1px 움직여도 빛이 깜박이지 않음. */
 let buf = null, bctx = null;

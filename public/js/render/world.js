@@ -61,6 +61,8 @@ function holeSprite() {
 }
 /** 치명타 숫자 그림 (28px로 그려 0.75배로 찍음) */
 function critImage(text) {
+  const key = "crit|" + text, cached = floaterTextCache.get(key);
+  if (cached) return cached;
   const m = new OffscreenCanvas(1, 1).getContext("2d");
   m.font = "28px Galmuri14";
   const w = Math.ceil(m.measureText(text).width) + 24, h = 48;
@@ -73,6 +75,24 @@ function critImage(text) {
   const gr = g.createLinearGradient(0, h / 2 - 12, 0, h / 2 + 12);
   gr.addColorStop(0, "#fff8d0"); gr.addColorStop(0.45, "#ffd35a"); gr.addColorStop(1, "#ff7a1a");
   g.fillStyle = gr; g.fillText(text, w / 2, h / 2);
+  if (floaterTextCache.size >= 320) floaterTextCache.clear();
+  floaterTextCache.set(key, c);
+  return c;
+}
+function floaterImage(text, color, font) {
+  const key = `text|${font}|${color}|${text}`;
+  let c = floaterTextCache.get(key);
+  if (c) return c;
+  const m = (labelMeasure ??= new OffscreenCanvas(1, 1).getContext("2d"));
+  m.font = font;
+  const width = Math.ceil(m.measureText(text).width) + 8, height = Math.ceil(parseFloat(font) * 1.5) + 8;
+  c = new OffscreenCanvas(width, height);
+  const g = c.getContext("2d");
+  g.font = font; g.textAlign = "center"; g.textBaseline = "middle";
+  g.lineJoin = "round"; g.lineWidth = 3; g.strokeStyle = "#000";
+  g.strokeText(text, width / 2, height / 2); g.fillStyle = color; g.fillText(text, width / 2, height / 2);
+  if (floaterTextCache.size >= 320) floaterTextCache.clear();
+  floaterTextCache.set(key, c);
   return c;
 }
 const lootBeams = new Map();
@@ -116,23 +136,32 @@ export function warmSkill(id) {
 }
 
 const labelCache = new Map();
+const floaterTextCache = new Map();
 let labelMeasure = null;
 // 디자인 칭호: 캔버스(640px)에 그리면 뭉개지므로, 캔버스 위 이미지 층에 원본 해상도로 띄움
 const titleImgs = new Map();
-let titleLayer = null;
-function syncTitleLayer(cv) {
+let titleLayer = null, titleRect = null, titleRectAt = 0;
+function syncTitleLayer(cv, t = now()) {
   const marks = G.titleMarks ?? [];
   if (!marks.length && !titleImgs.size) return;
   if (!titleLayer) { titleLayer = document.createElement("div"); titleLayer.id = "title-layer"; cv.parentNode.insertBefore(titleLayer, cv.nextSibling); }
-  const r = cv.getBoundingClientRect(), pr = cv.parentNode.getBoundingClientRect(), k = r.width / VW;
-  const seen = new Set();
+  if (!titleRect || t - titleRectAt > 0.12) {
+    const r = cv.getBoundingClientRect(), pr = cv.parentNode.getBoundingClientRect();
+    titleRect = { left: r.left - pr.left, top: r.top - pr.top, scale: r.width / VW };
+    titleRectAt = t;
+  }
+  const { left, top, scale: k } = titleRect, seen = new Set();
   for (const m of marks) {
     const d = titleDesign(m.tt);
     let img = titleImgs.get(m.id);
-    if (!img || img.dataset.tt !== m.tt) { img?.remove(); img = document.createElement("img"); img.src = d.src; img.dataset.tt = m.tt; img.className = "title-img"; titleLayer.appendChild(img); titleImgs.set(m.id, img); }
-    const w = d.w * k, h = w / d.ratio;
-    img.style.width = w + "px";
-    img.style.transform = `translate(${Math.round(r.left - pr.left + m.x * k - w / 2)}px, ${Math.round(r.top - pr.top + m.y * k - h)}px)`;
+    if (!img || img.dataset.tt !== m.tt) {
+      img?.remove(); img = document.createElement("img"); img.src = d.src; img.dataset.tt = m.tt; img.className = "title-img";
+      titleLayer.appendChild(img); titleImgs.set(m.id, img); img._titleWidth = -1; img._titlePos = "";
+    }
+    const width = d.w * k, height = width / d.ratio;
+    if (Math.abs((img._titleWidth ?? -1) - width) > 0.25) { img._titleWidth = width; img.style.width = width + "px"; }
+    const pos = `translate3d(${Math.round(left + m.x * k - width / 2)}px, ${Math.round(top + m.y * k - height)}px, 0)`;
+    if (img._titlePos !== pos) { img._titlePos = pos; img.style.transform = pos; }
     seen.add(m.id);
   }
   for (const [id, img] of titleImgs) if (!seen.has(id)) { img.remove(); titleImgs.delete(id); }
@@ -155,6 +184,7 @@ export class Renderer {
   setView(w, h, focusY = 0.5) {
     this.focusY = focusY;
     if (w === VW && h === VH) return;
+    titleRect = null;
     VW = w; VH = h;
     this.cv.width = w; this.cv.height = h;
     this.ctx.imageSmoothingEnabled = false;
@@ -240,10 +270,11 @@ export class Renderer {
   // ── 그리기
   frame() {
     const t = now();
-    const dt = Math.min(0.1, t - this.last);
+    const elapsed = Math.max(1e-3, t - this.last);
+    const dt = Math.min(0.1, elapsed);
     this.last = t;
-    this.fps = this.fps * 0.95 + (1 / Math.max(dt, 1e-3)) * 0.05;
-    tickQuality(dt, this);
+    this.fps = this.fps * 0.95 + (1 / elapsed) * 0.05;
+    tickQuality(elapsed, this);
     const ctx = this.ctx;
     if (!G.map) { ctx.fillStyle = "#000"; ctx.fillRect(0, 0, VW, VH); return; }
     // 위치: 나는 매 프레임 즉시 이동, 다른 유닛은 보간
@@ -353,7 +384,7 @@ export class Renderer {
       ctx.globalAlpha = Math.min(1, G.hurtFlash); ctx.drawImage(this.vig, 0, 0); ctx.globalAlpha = 1;
       G.hurtFlash = Math.max(0, G.hurtFlash - dt);
     }
-    syncTitleLayer(this.cv);
+    syncTitleLayer(this.cv, t);
     if (me && me.hp < 0.3 && !me.dead) {
       ctx.fillStyle = `rgba(160,0,20,${0.12 + Math.sin(t * 5) * 0.06})`;
       ctx.fillRect(0, 0, VW, 6); ctx.fillRect(0, VH - 6, VW, 6); ctx.fillRect(0, 0, 6, VH); ctx.fillRect(VW - 6, 0, 6, VH);
@@ -542,7 +573,7 @@ export class Renderer {
     const list = this.drawList, pool = this.drawPool, players = this.drawPlayers;
     list.length = 0; players.length = 0;
     const inView = (x, y, m = 80) => x - cx > -m && y - cy > -m && x - cx < VW + m && y - cy < VH + m * 1.5;
-    for (const e of G.ents.values()) if (e.k === "p" && !e.dead) players.push(e);
+    for (const e of G.ents.values()) if (e.k === "p" && !e.dead && inView(e.rx, e.ry, 120)) players.push(e);
     let count = 0;
     const add = (y, o = null, e = null, f = null) => {
       const it = pool[count] ?? (pool[count] = {});
@@ -783,6 +814,7 @@ export class Renderer {
       const dist = age * p.v;
       if (dist > p.r + 20) { G.projectiles.delete(id); continue; }
       const x = p.x + Math.cos(p.a) * dist - cx, y = p.y + Math.sin(p.a) * dist - cy;
+      if (x < -180 || y < -180 || x > VW + 180 || y > VH + 180) continue;
       const b = p.fx ? baked_(p.fx, p.pal ?? null) : null;
       const f = bakedFrame(b, age);
       if (f) {
@@ -800,39 +832,46 @@ export class Renderer {
   }
 
   drawBeams(ctx, cx, cy, t) {
-    G.beams = G.beams.filter((b) => {
-      const age = t - b.t0;
+    const beams = G.beams;
+    let kept = 0;
+    for (let i = 0; i < beams.length; i++) {
+      const b = beams[i], age = t - b.t0;
       if (b.boss) {
         const boss = G.ents.get(b.boss);
-        if (!boss || age > b.at + b.d) return false;
+        if (!boss || age > b.at + b.d) continue;
         const x = boss.rx - cx, y = boss.ry - cy - 16;
+        if (x < -b.l - 100 || y < -b.l - 100 || x > VW + b.l + 100 || y > VH + b.l + 100) { beams[kept++] = b; continue; }
         if (age < b.at) {
           ctx.strokeStyle = "rgba(255,60,60,0.7)"; ctx.lineWidth = 1;
           ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + Math.cos(b.a) * b.l, y + Math.sin(b.a) * b.l); ctx.stroke();
-          return true;
-        }
-        const a = b.a + b.rot * (age - b.at);
-        const w = b.w * (0.8 + Math.sin(t * 30) * 0.15);
-        for (const [lw, col] of [[w, "rgba(255,80,200,0.35)"], [w * 0.55, "rgba(255,160,255,0.7)"], [w * 0.2, "#fff"]]) {
-          ctx.strokeStyle = col; ctx.lineWidth = lw; ctx.lineCap = "round";
+        } else {
+          const a = b.a + b.rot * (age - b.at), width = b.w * (0.8 + Math.sin(t * 30) * 0.15);
+          ctx.lineCap = "round";
+          ctx.strokeStyle = "rgba(255,80,200,0.35)"; ctx.lineWidth = width;
           ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + Math.cos(a) * b.l, y + Math.sin(a) * b.l); ctx.stroke();
+          ctx.strokeStyle = "rgba(255,160,255,0.7)"; ctx.lineWidth = width * 0.55;
+          ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + Math.cos(a) * b.l, y + Math.sin(a) * b.l); ctx.stroke();
+          ctx.strokeStyle = "#fff"; ctx.lineWidth = width * 0.2;
+          ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + Math.cos(a) * b.l, y + Math.sin(a) * b.l); ctx.stroke();
+          ctx.lineWidth = 1; ctx.lineCap = "butt";
         }
-        ctx.lineWidth = 1; ctx.lineCap = "butt";
-        return true;
+        beams[kept++] = b;
+        continue;
       }
-      if (age > b.d) return false;
+      if (age > b.d) continue;
       const x0 = b.x0 - cx, y0 = b.y0 - cy - 14, x1 = b.x1 - cx, y1 = b.y1 - cy - 14;
+      if (Math.max(x0, x1) < -100 || Math.max(y0, y1) < -100 || Math.min(x0, x1) > VW + 100 || Math.min(y0, y1) > VH + 100) { beams[kept++] = b; continue; }
       const col = b.fx === "circuit" ? "#ffb040" : "#bfe8ff";
       ctx.strokeStyle = col; ctx.lineWidth = b.fx === "circuit" ? 1 : 2;
       ctx.beginPath(); ctx.moveTo(x0, y0);
       const n = 6;
       for (let k = 1; k < n; k++) ctx.lineTo(x0 + ((x1 - x0) * k) / n + (Math.random() - 0.5) * 10, y0 + ((y1 - y0) * k) / n + (Math.random() - 0.5) * 10);
       ctx.lineTo(x1, y1); ctx.stroke(); ctx.lineWidth = 1;
-      return true;
-    });
+      beams[kept++] = b;
+    }
+    beams.length = kept;
   }
 
-  drawLighting(ctx, cx, cy, t) {
     const town = G.kind === "town";
     const z = town ? { ambient: 0.4, light: 110 } : G.zone;
     // 빛 지도는 절반 해상도라, 화면이 1px 움직일 때마다 빛 구멍이 0.5px씩 번갈아 어긋나 깜박였음
@@ -855,23 +894,41 @@ export class Renderer {
     const spr = holeSprite();
     let holes = 0;
     const hole = (x0, y0, r, a = 1) => {
-      if (holes++ > this.maxHoles) return;
+      if (holes >= this.maxHoles || x0 < -r || y0 < -r || x0 > VW + r || y0 > VH + r) return false;
+      holes++;
       const x = x0 + dx, y = y0 + dy;
       L.globalAlpha = Math.min(1, a);
       L.drawImage(spr, x / 2 - r / 2, y / 2 - r / 2, r, r);
+      return true;
     };
-    for (const e of G.ents.values()) if (e.k === "p" && !e.dead) hole(e.rx - cx, e.ry - cy - 14, e.id === G.you ? z.light * 1.6 : z.light * 1.1);
-    for (const o of G.objects) {
-      if (o.kind !== "torch" && o.kind !== "campfire") continue; // 깜박이는 불만 매 프레임 (나머지는 조각에)
-      const x = o.x - cx, y = o.y - cy;
-      if (x < -150 || y < -150 || x > VW + 150 || y > VH + 150) continue;
-      hole(x, y - 14, (o.kind === "torch" ? 120 : o.kind === "campfire" ? 200 : o.kind === "npc" ? 110 : 140) * (0.92 + Math.sin(t * 9 + o.x) * 0.06), 0.85);
+    for (const e of G.ents.values()) {
+      if (holes >= this.maxHoles) break;
+      if (e.k === "p" && !e.dead) hole(e.rx - cx, e.ry - cy - 14, e.id === G.you ? z.light * 1.6 : z.light * 1.1);
     }
-    for (const p of G.projectiles.values()) { const d = (t - p.t0) * p.v; hole(p.x + Math.cos(p.a) * d - cx, p.y + Math.sin(p.a) * d - cy, 60, 0.6); }
-    for (const e of G.ents.values()) if (e.k === "b") hole(e.rx - cx, e.ry - cy - 20, 160, 0.7);
-    for (const l of G.loot.values()) hole(l.x - cx, l.y - cy, 30, 0.5);
-    // 색 빛이 있는 곳도 밝게
-    forEachGlow((x, y, r, c, a) => { const sx = x - cx, sy = y - cy; if (sx > -r && sy > -r && sx < VW + r && sy < VH + r) hole(sx, sy, r * 1.3, Math.min(1, a * 1.6)); });
+    if (holes < this.maxHoles) for (const o of G.objects) {
+      if (o.kind !== "torch" && o.kind !== "campfire") continue;
+      const x = o.x - cx, y = o.y - cy;
+      hole(x, y - 14, (o.kind === "torch" ? 120 : 200) * (0.92 + Math.sin(t * 9 + o.x) * 0.06), 0.85);
+      if (holes >= this.maxHoles) break;
+    }
+    if (holes < this.maxHoles) for (const p of G.projectiles.values()) {
+      const d = (t - p.t0) * p.v;
+      hole(p.x + Math.cos(p.a) * d - cx, p.y + Math.sin(p.a) * d - cy, 60, 0.6);
+      if (holes >= this.maxHoles) break;
+    }
+    if (holes < this.maxHoles) for (const e of G.ents.values()) {
+      if (e.k === "b") hole(e.rx - cx, e.ry - cy - 20, 160, 0.7);
+      if (holes >= this.maxHoles) break;
+    }
+    if (holes < this.maxHoles) for (const l of G.loot.values()) {
+      hole(l.x - cx, l.y - cy, 30, 0.5);
+      if (holes >= this.maxHoles) break;
+    }
+    if (holes < this.maxHoles) forEachGlow((x, y, r, c, a) => {
+      if (holes >= this.maxHoles) return false;
+      hole(x - cx, y - cy, r * 1.3, Math.min(1, a * 1.6));
+      return holes < this.maxHoles;
+    });
     L.globalAlpha = 1;
     ctx.imageSmoothingEnabled = true;
     ctx.drawImage(this.light, -dx, -dy, W * 2, H * 2);
@@ -941,36 +998,26 @@ export class Renderer {
       }
     }
     // 데미지 숫자
-    G.floaters = G.floaters.filter((f) => {
-      const age = t - f.t0;
-      if (age > 1.1) return false;
+    const floaters = G.floaters;
+    let write = 0;
+    for (let i = 0; i < floaters.length; i++) {
+      const f = floaters[i], age = t - f.t0;
+      if (age > 1.1) continue;
+      floaters[write++] = f;
       const x = Math.round(f.x - cx), y = Math.round(f.y - cy - age * 26);
       ctx.globalAlpha = Math.min(1, (1.1 - age) * 3);
       const style = {
         dmg: ["#ffffff", "14px Galmuri14"], crit: ["#ffcf3a", "bold 16px Galmuri11"], hurt: ["#ff5a5a", "14px Galmuri14"], heal: ["#6aff8a", "14px Galmuri14"],
         dot: ["#c8a0ff", "10px Galmuri9"], absorb: ["#c8e0ff", "10px Galmuri9"], miss: ["#aaaaaa", "10px Galmuri9"], gold: ["#ffd35a", "10px Galmuri9"], status: ["#ffb0ff", "12px Galmuri11"],
       }[f.kind] ?? ["#fff", "12px Galmuri11"];
-      // 튀어나왔다가 자리 잡는 숫자 (치명타는 더 크게)
       const crit = f.kind === "crit";
       const pop = age < 0.12 ? 1 + (1 - age / 0.12) * (crit ? 0.9 : 0.5) : 1;
-      ctx.save();
-      ctx.translate(x + (f.vx ?? 0) * age, y);
-      ctx.scale(pop, pop);
-      if (crit) {
-        // 치명타 숫자는 처음 한 번만 (그라데이션·빛 번짐까지) 그려 두고, 이후엔 이미지로 찍기만 → 숫자가 쏟아져도 가벼움
-        const img = f.img ??= critImage(f.text + "!");
-        ctx.drawImage(img, -img.width * 0.375, -img.height * 0.375, img.width * 0.75, img.height * 0.75);
-      } else {
-        ctx.font = style[1];
-        ctx.textAlign = "center"; ctx.textBaseline = "middle";
-        ctx.lineJoin = "round"; ctx.lineWidth = 3; ctx.strokeStyle = "#000";
-        ctx.strokeText(f.text, 0, 0);
-        ctx.fillStyle = style[0];
-        ctx.fillText(f.text, 0, 0);
-      }
-      ctx.restore();
-      ctx.globalAlpha = 1;
-      return true;
-    });
+      ctx.save(); ctx.translate(x + (f.vx ?? 0) * age, y); ctx.scale(pop, pop);
+      const img = f.img ??= crit ? critImage(f.text + "!") : floaterImage(f.text, style[0], style[1]);
+      const scale = crit ? 0.75 : 1;
+      ctx.drawImage(img, -img.width * scale / 2, -img.height * scale / 2, img.width * scale, img.height * scale);
+      ctx.restore(); ctx.globalAlpha = 1;
+    }
+    floaters.length = write;
   }
 }

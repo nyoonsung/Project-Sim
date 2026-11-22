@@ -139,8 +139,8 @@ function onSnapshot(m) {
 }
 
 function floater(x, y, text, kind) {
+  if (G.floaters.length >= 80) return;
   G.floaters.push({ x: x + (Math.random() * 14 - 7), y, text, kind, t0: now(), vx: (Math.random() - 0.5) * 30 });
-  if (G.floaters.length > 80) G.floaters.shift();
 }
 
 function onEvent(e) {
@@ -220,7 +220,7 @@ function onEvent(e) {
     case "got": G.ui.gotItem(e.item); sfx("item"); break;
     case "boss": G.boss = { id: e.id, name: e.name, mid: e.mid }; G.ui.onBoss(); break;
     case "bpat": G.bossCall = { id: e.id, p: e.p, t0: now() }; break; // 보스 패턴 이름 표시
-    case "warn": (G.warns ??= []).push({ ...e, t0: now() - lag() }); if (e.k === "barrage" || e.k === "spiral") G.bossCall = { id: e.id, p: e.k, t0: now(), hold: e.d }; sfx("wave"); break;
+    case "warn": if ((G.warns ??= []).length < 32) G.warns.push({ ...e, t0: now() - lag() }); if (e.k === "barrage" || e.k === "spiral") G.bossCall = { id: e.id, p: e.k, t0: now(), hold: e.d }; sfx("wave"); break;
     case "bossdead": G.boss = null; G.ui.onBoss(); G.ui.center("보스 처치!"); break;
     case "exit": G.exitOpen = !!e.open; break;
     case "vote": G.ui.showVote?.(e); if (!e.end && !e.yes.includes(G.you)) sfx("wave"); break;
@@ -240,8 +240,8 @@ function onEvent(e) {
     }
     case "stance": if (e.id === G.you) G.ui.toast(`${e.s} 자세`, "self"); break;
     case "nores": if (e.id === G.you) G.ui.noRes(e.k); break;
-    case "beam": G.beams.push({ ...e, t0: now(), d: e.d ?? 0.25 }); break;
-    case "bbeam": G.beams.push({ boss: e.id, a: e.a / 1000, rot: e.rot / 1000, d: e.d, w: e.w, l: e.l, at: e.at, fx: e.fx, t0: now() - lag() }); break;
+    case "beam": if (G.beams.length < 48) G.beams.push({ ...e, t0: now(), d: e.d ?? 0.25 }); break;
+    case "bbeam": if (G.beams.length < 48) G.beams.push({ boss: e.id, a: e.a / 1000, rot: e.rot / 1000, d: e.d, w: e.w, l: e.l, at: e.at, fx: e.fx, t0: now() - lag() }); break;
     case "parryup": if (ent) ent.parryUntil = now() + e.d; break;
     case "buff": if (e.id === G.you) G.ui.onMe(); break;
   }

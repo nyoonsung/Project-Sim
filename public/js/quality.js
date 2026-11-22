@@ -7,11 +7,11 @@ import { SFX_LIMITS } from "./render/skillfx.js";
 const STORE = "abyss.gfx";
 const PRESET = [
   // 0: 낮음 — 빛 번짐·입자 크게 줄이고 아직 안 구운 이펙트는 거의 생략
-  { glows: 50, live: 2, holes: 40, motes: 100, rings: 28, runes: 14, pillars: 10, streaks: 36, stars: 18, sweeps: 24, others: 0.3, weather: false, name: "낮음" },
-  // 1: 보통
-  { glows: 140, live: 4, holes: 80, motes: 220, rings: 56, runes: 28, pillars: 20, streaks: 72, stars: 32, sweeps: 42, others: 0.6, weather: true, name: "보통" },
-  // 2: 높음
-  { glows: 400, live: 8, holes: 120, motes: 420, rings: 100, runes: 56, pillars: 36, streaks: 140, stars: 64, sweeps: 80, others: 1, weather: true, name: "높음" },
+  { glows: 28, live: 1, holes: 24, motes: 40, rings: 12, runes: 6, pillars: 4, streaks: 16, stars: 8, sweeps: 10, baked: 24, others: 0.12, weather: false, name: "낮음" },
+  // 1: 보통 — 자동 모드 기본값도 다수 전투에 맞춰 부담을 낮춘다.
+  { glows: 90, live: 3, holes: 64, motes: 130, rings: 36, runes: 18, pillars: 12, streaks: 52, stars: 24, sweeps: 30, baked: 64, others: 0.45, weather: true, name: "보통" },
+  // 2: 높음 — 여유 있는 기기에서만 최대 연출
+  { glows: 340, live: 8, holes: 120, motes: 360, rings: 90, runes: 48, pillars: 32, streaks: 120, stars: 56, sweeps: 72, baked: 120, others: 1, weather: true, name: "높음" },
 ];
 export const Q = load();
 
@@ -32,6 +32,7 @@ export function apply() {
   const p = PRESET[Q.level];
   GLOW_LIMITS.max = p.glows;
   FX_LIMITS.live = p.live;
+  FX_LIMITS.baked = p.baked ?? 64;
   for (const key of Object.keys(SFX_LIMITS)) if (p[key] != null) SFX_LIMITS[key] = p[key];
   if (Q.renderer) Q.renderer.maxHoles = p.holes;
 }
@@ -42,7 +43,7 @@ export function tickQuality(dt, renderer) {
     Q.level = Q.mode === "high" ? 2 : Q.mode === "low" ? 0 : 1;
     apply();
   }
-  if (Q.mode !== "auto" || document.hidden || dt > 0.25) return;
+  if (Q.mode !== "auto" || document.hidden || dt > 0.6) return;
   const fps = 1 / Math.max(1e-3, dt);
   if (fps < 35) { Q.low += dt * 2; Q.high = 0; }
   else if (fps < 48) { Q.low += dt; Q.high = 0; }

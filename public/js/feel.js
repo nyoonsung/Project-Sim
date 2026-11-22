@@ -110,8 +110,7 @@ export const shakeEnabled = () => shakeOn;
 export function toggleShake() { shakeOn = !shakeOn; try { localStorage.setItem("abyss.shake", shakeOn ? "1" : "0"); } catch {} return shakeOn; }
 function sparks(x, y, dir, n, cols, spd = 120) {
   ensure();
-  for (let i = 0; i < n; i++) {
-    if (G.parts.length > 260) G.parts.shift();
+  for (let i = 0; i < n && G.parts.length < 260; i++) {
     const a = dir + (Math.random() - 0.5) * 1.6, v = spd * (0.4 + Math.random() * 0.8);
     G.parts.push({ x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v - 20, life: 0.18 + Math.random() * 0.22, t: 0, c: cols[(Math.random() * cols.length) | 0], s: Math.random() < 0.3 ? 2 : 1 });
   }
@@ -155,8 +154,13 @@ export function onMeHurt(v) {
 /** 매 프레임: 입자 이동 + 카메라 반동 감쇠 */
 export function tickFeel(dt) {
   ensure();
-  for (const p of G.parts) { p.t += dt; p.x += p.vx * dt; p.y += p.vy * dt; p.vy += 280 * dt; p.vx *= 1 - 4 * dt; }
-  G.parts = G.parts.filter((p) => p.t < p.life);
+  let write = 0;
+  for (let i = 0; i < G.parts.length; i++) {
+    const p = G.parts[i];
+    p.t += dt; p.x += p.vx * dt; p.y += p.vy * dt; p.vy += 280 * dt; p.vx *= 1 - 4 * dt;
+    if (p.t < p.life) G.parts[write++] = p;
+  }
+  G.parts.length = write;
   const k = Math.max(0, 1 - dt * 14);
   G.camKick.x *= k; G.camKick.y *= k;
   G.trauma = Math.max(0, (G.trauma ?? 0) - dt * 1.7);
