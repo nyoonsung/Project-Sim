@@ -202,154 +202,238 @@ export function itemIcon(it) {
 }
 
 // ── 스킬 아이콘: 스킬 종류(근접·투사체·범위·버프·회복·이동…)로 모양, 이펙트 속성(불·얼음·신성…)으로 색
-const ELEM = [["fire", "#ff8a3a"], ["ice", "#8ae6ff"], ["holy", "#ffe27a"], ["shadow", "#b47aff"], ["nature", "#7ae06a"], ["arcane", "#d08cff"], ["lightning", "#fff05a"], ["explosions", "#ff6a3a"], ["scifi", "#6affe0"], ["weather", "#9ad0ff"]];
-const GRADE_TINT = { 일반: "#d8dde6", 희귀: "#6ab4ff", 영웅: "#d8b0ff", 전설: "#ffbe5a", 신화: "#ff6a7a" };
-export function skillColor(sk) {
-  const fx = JSON.stringify(sk.fx ?? {});
-  for (const [k, c] of ELEM) if (fx.includes(`"${k}/`)) return c;
-  return GRADE_TINT[sk.grade] ?? "#d8dde6";
-}
-function kindOf(sk) {
-  const ds = (sk.steps ?? []).map((s) => s.do);
-  if (sk.kind === "passive") return "passive";
-  if (ds.includes("heal")) return "heal";
-  if (ds.includes("dash") || ds.includes("blink")) return "dash";
-  if (ds.includes("shield")) return "shield";
-  if (ds.includes("parry")) return "parry";
-  if (ds.includes("taunt")) return "taunt";
-  if (ds.includes("device")) return "device";
-  if (ds.includes("channel")) return "channel";
-  if (ds.includes("proj") || ds.includes("line")) return sk.anim === "shoot" ? "arrow" : "bolt";
-  if (ds.includes("zone")) return "zone";
-  if (ds.includes("area") || ds.includes("circle")) return "burst";
-  if (ds.includes("melee")) return sk.anim === "thrust" ? "thrust" : "slash";
-  if (ds.includes("buff")) return "buff";
-  return "star";
-}
+// ── 스킬 아이콘 v2: 직업·행동·원소별 고유 실루엣을 가진 32px 픽셀풍 엠블럼
 const urls = new Map();
-/** 스킬 아이콘 이미지 주소 (버튼용) */
-export function skillIconURL(sk) {
-  // 무기별 기본 공격은 그 무기 그림으로
-  if (!urls.has(sk.id) && sk.weaponBasic) urls.set(sk.id, itemIcon({ slot: "weapon", type: sk.weaponBasic, variant: 0, rarity: "일반", ilvl: 21 }).toDataURL());
-  if (!urls.has(sk.id)) urls.set(sk.id, skillIcon(sk).toDataURL());
-  return urls.get(sk.id);
+const GRADE_TINT = { 일반: "#b9c4d4", 희귀: "#62b9ff", 영웅: "#c18aff", 전설: "#ffbf59", 신화: "#ff617f" };
+const CLASS_TINT = {
+  sword: ["#b84b54", "#ffb08c", "#571d36"],
+  fist: ["#e36c32", "#ffd18a", "#5c281b"],
+  archer: ["#4aa979", "#b8f2a2", "#183b37"],
+  rogue: ["#8a5bc2", "#e2a9ff", "#281943"],
+  mage: ["#596fe0", "#b4d6ff", "#202b68"],
+  priest: ["#d5a63c", "#fff0a0", "#59401c"],
+  smith: ["#3eaaa5", "#b2fff0", "#173f4b"],
+};
+function skillPalette(sk) {
+  const source = String(sk.name ?? "") + " " + String(sk.id ?? "") + " " + JSON.stringify(sk.fx ?? {});
+  const rules = [
+    [/화룡|화염|불꽃|폭염|화상|fire|flame|meteor/i, ["#ff6537", "#ffe39a", "#6a1d24"]],
+    [/얼음|빙|서리|눈보라|frost|ice|blizzard/i, ["#54bce8", "#e0fbff", "#163f70"]],
+    [/번개|뇌령|천둥|전격|연쇄|lightning|thunder|chain/i, ["#f3d34f", "#fff9bf", "#604719"]],
+    [/독|맹독|부식|poison|toxic/i, ["#82cb4d", "#e0ff9b", "#244a25"]],
+    [/성역|성광|신의|천상|백광|광휘|축복|holy|radiance/i, ["#e8c35d", "#fff6c9", "#59441c"]],
+    [/그림자|암살|어둠|혈월|무음|shadow|void|curse/i, ["#a16be0", "#f0d4ff", "#321b5a"]],
+    [/바람|질풍|회오리|돌풍|wind|gale/i, ["#55cbb7", "#d6fff1", "#194e51"]],
+    [/대지|산사태|지진|진동|quake|earth/i, ["#bd8a50", "#ffe0a6", "#563821"]],
+  ];
+  for (const [re, colors] of rules) if (re.test(source)) return colors;
+  const cls = CLASS_TINT[sk.cls];
+  if (cls) return cls;
+  return [GRADE_TINT[sk.grade] ?? "#b9c4d4", "#ffffff", "#302a3c"];
 }
-export function skillIcon(sk) {
-  const key = "sk:" + sk.id;
+export function skillColor(sk) { return skillPalette(sk)[0]; }
+
+function motifOf(sk) {
+  const id = sk.id ?? "", name = sk.name ?? "";
+  const source = String(id) + " " + String(name) + " " + JSON.stringify(sk.fx ?? {});
+  if (/ar_(rain|bombard)|애로우 레인|화살 폭격/.test(source)) return "rain";
+  if (/ma_chain|연쇄 번개|번개|뇌령|lightning/.test(source)) return "lightning";
+  if (/ma_blizzard|눈보라|서리|얼음|frost|ice/.test(source)) return "ice";
+  if (/firedragon|reddragon|화룡|적룡/.test(source)) return "dragon";
+  if (/meteor|유성|낙점/.test(source)) return "meteor";
+  if (/final|궁극|종막|아포칼립스|신의 심판|천궁 강림|천공의 망치/.test(source)) {
+    if (sk.cls === "archer") return "rain";
+    if (sk.cls === "priest") return "holy";
+    if (sk.cls === "smith") return "forge";
+    if (sk.cls === "rogue") return "shadow";
+    if (sk.cls === "mage") return "meteor";
+    if (sk.cls === "fist") return "impact";
+    if (sk.cls === "sword") return "blade";
+  }
+  if (/heal|회복|응급|구휼|은총|relief|firstaid/.test(source) || (sk.steps ?? []).some((s) => s.do === "heal")) return "heart";
+  if (/shield|guard|막기|수호|방벽|검막|rivet/.test(source) || (sk.steps ?? []).some((s) => s.do === "shield" || s.do === "parry")) return "shield";
+  if (/sm_|hammer|망치|리벳|회로|드론|지뢰|수리|forge|gear|armor/.test(source)) return "forge";
+  if (/pr_|성역|성가|기도|찬가|빛|광휘|은총|holy/.test(source)) return "holy";
+  if (/ro_|단검|그림자|독날|연막|암살|절개|처형|poison|shadow/.test(source)) return "shadow";
+  if (/ar_|화살|사격|샷|보우|저격|arrow|bow/.test(source)) return "arrow";
+  if (/fi_|권|주먹|권무|권왕|발차기|유성각|정권|punch|kick/.test(source)) return "impact";
+  if (/sw_|검|베기|발도|일섬|어검|sword|blade|slash/.test(source)) return "blade";
+  if (/dash|blink|도약|돌진|활주|횡이동|발놀림/.test(source) || (sk.steps ?? []).some((s) => s.do === "dash" || s.do === "blink")) return "dash";
+  if (/buff|강화|마스터리|숙련|자세|기백|오라|절대|정밀/.test(source)) return "crest";
+  if (/circle|zone|channel|area|우물|회랑|룬|문양|공명/.test(source)) return "rune";
+  if ((sk.steps ?? []).some((s) => s.do === "device")) return "forge";
+  if ((sk.steps ?? []).some((s) => s.do === "proj" || s.do === "line")) return sk.anim === "shoot" ? "arrow" : "crystal";
+  if ((sk.steps ?? []).some((s) => s.do === "melee")) return "blade";
+  return "orb";
+}
+function hashId(s) { let h = 2166136261; for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 16777619); return h >>> 0; }
+
+function skillArt(sk) {
+  const key = "skill-v2:" + sk.id;
   if (cache.has(key)) return cache.get(key);
   const cv = document.createElement("canvas");
-  cv.width = 24; cv.height = 24;
+  cv.width = cv.height = 32;
   const g = cv.getContext("2d");
-  const c = skillColor(sk), ink = "#120e1a", wh = "#ffffff";
+  g.imageSmoothingEnabled = false;
+  const [c, hi, deep] = skillPalette(sk);
+  const seed = hashId(sk.id ?? sk.name ?? "skill");
+  const v = seed % 5;
+  const motif = motifOf(sk);
+  const ink = "#090b16", steel = "#d9e7f2", white = "#ffffff";
   const px = (x, y, color, w = 1, h = w) => P(g, color, Math.round(x), Math.round(y), w, h);
-  const path = (pts, color, width = 2) => {
-    g.strokeStyle = color; g.lineWidth = width; g.lineCap = "square"; g.lineJoin = "miter";
-    g.beginPath(); pts.forEach(([x, y], i) => i ? g.lineTo(x, y) : g.moveTo(x, y)); g.stroke();
-  };
-  const poly = (pts, color) => {
-    g.fillStyle = color; g.beginPath(); pts.forEach(([x, y], i) => i ? g.lineTo(x, y) : g.moveTo(x, y)); g.closePath(); g.fill();
-  };
-  const diamond = (x, y, rx, ry, color) => poly([[x, y-ry],[x+rx,y],[x,y+ry],[x-rx,y]], color);
-  const ray = (x, y, angle, len, color, width=1) => path([[x-Math.cos(angle)*2,y-Math.sin(angle)*2],[x+Math.cos(angle)*len,y+Math.sin(angle)*len]],color,width);
-  const kind = kindOf(sk);
-  switch (kind) {
-    case "slash":
-      path([[3,20],[8,13],[14,7],[21,3]], ink, 7);
-      path([[3,19],[8,12],[14,6],[21,2]], c, 4);
-      path([[8,13],[13,8],[18,4]], wh, 1);
-      path([[4,20],[6,19]], wh, 1);
+  const poly = (pts, color) => { g.fillStyle = color; g.beginPath(); pts.forEach(([x, y], i) => i ? g.lineTo(x, y) : g.moveTo(x, y)); g.closePath(); g.fill(); };
+  const line = (pts, color, width = 1) => { g.strokeStyle = color; g.lineWidth = width; g.lineCap = "square"; g.lineJoin = "miter"; g.beginPath(); pts.forEach(([x, y], i) => i ? g.lineTo(x, y) : g.moveTo(x, y)); g.stroke(); };
+  const diamond = (x, y, rx, ry, color) => poly([[x,y-ry],[x+rx,y],[x,y+ry],[x-rx,y]],color);
+  const ring = (x, y, r, color, width = 1) => { g.strokeStyle = color; g.lineWidth = width; g.beginPath(); g.arc(x,y,r,0,Math.PI*2); g.stroke(); };
+  const star = (x, y, r, color) => { const pts=[]; for(let i=0;i<8;i++){const a=-Math.PI/2+i*Math.PI/4,rr=i%2?r*0.42:r;pts.push([x+Math.cos(a)*rr,y+Math.sin(a)*rr]);} poly(pts,color); };
+
+  // 어두운 보석 바탕 + 절제된 방사광. 각 아이콘은 고유 패턴과 실루엣을 갖는다.
+  g.fillStyle = "#090b16"; g.fillRect(0,0,32,32);
+  const bg = g.createLinearGradient(2,1,30,31); bg.addColorStop(0,deep); bg.addColorStop(0.48,"#1a1b32"); bg.addColorStop(1,"#080a13");
+  g.fillStyle=bg;g.fillRect(2,2,28,28);
+  const halo=g.createRadialGradient(16,14,1,16,15,19);halo.addColorStop(0,c+"88");halo.addColorStop(0.45,c+"28");halo.addColorStop(1,"#00000000");
+  g.fillStyle=halo;g.fillRect(2,2,28,28);
+  g.globalAlpha=0.22;g.strokeStyle=hi;g.lineWidth=0.6;
+  for(let i=0;i<3;i++){const yy=5+i*10+(v%3);g.beginPath();g.moveTo(3,yy);g.lineTo(29,yy-4);g.stroke();}
+  g.globalAlpha=1;
+  for(let i=0;i<6;i++){const x=4+((seed>>(i*3))&15),y=4+((seed>>(i*2+5))&15);px(x,y,i%2?hi:c,1);}
+  g.save();
+  switch(motif){
+    case "blade": {
+      line([[7,25],[24,7],[27,4]],ink,7); line([[7,24],[23,8],[26,5]],steel,4);
+      line([[10,21],[22,9]],hi,1); line([[5,22],[11,28]],ink,4); line([[6,22],[11,27]],c,2);
+      line([[4,20],[10,26]],"#f4c978",1); diamond(23,8,2,3,white);
+      if(v%2===0){line([[10,27],[15,22]],c,2);px(15,21,hi,2,1);}
       break;
-    case "thrust":
+    }
     case "arrow":
-      path([[2,17],[14,9]], ink, 6);
-      path([[3,16],[14,9]], kind === "arrow" ? "#c89060" : c, 3);
-      poly([[11,5],[22,2],[18,13],[15,10]], ink);
-      poly([[13,5],[21,3],[18,11],[15,9]], c);
-      path([[14,7],[19,4]], wh, 1);
-      if (kind === "arrow") path([[3,12],[6,16],[3,19]], c, 2);
+    case "rain": {
+      const n=motif==="rain"?3:1;
+      for(let j=0;j<n;j++){
+        const ox=motif==="rain"?(j-1)*7:0, oy=motif==="rain"?Math.abs(j-1)*3:0;
+        line([[5+ox,24-oy],[22+ox,7-oy]],ink,4);
+        line([[5+ox,23-oy],[22+ox,6-oy]],motif==="rain"?(j===1?hi:c):"#bd8b55",2);
+        poly([[19+ox,5-oy],[27+ox,2-oy],[24+ox,10-oy],[22+ox,8-oy]],ink);
+        poly([[21+ox,5-oy],[26+ox,3-oy],[24+ox,8-oy]],hi);
+        line([[4+ox,22-oy],[8+ox,26-oy]],c,1);
+      }
+      if(motif==="rain"){ring(16,18,12,c,1);star(16,18,3,white);}
       break;
-    case "bolt":
-      poly([[3,10],[11,10],[8,3],[21,3],[13,12],[17,12],[5,22],[9,13],[4,13]], ink);
-      poly([[5,10],[12,10],[10,5],[19,5],[12,12],[15,12],[7,19],[10,12],[5,12]], c);
-      path([[11,7],[16,7]], wh, 1);
+    }
+    case "impact": {
+      poly([[16,2],[19,10],[28,7],[22,15],[29,22],[19,21],[16,30],[12,21],[3,24],[9,16],[3,9],[13,11]],ink);
+      poly([[16,5],[18,12],[25,9],[21,16],[26,21],[18,20],[16,26],[13,20],[6,22],[11,16],[6,11],[14,13]],c);
+      diamond(16,15,4,7,hi);px(15,13,white,2,4);
+      for(let i=0;i<4;i++)line([[16,3+i%2],[16+(i-1.5)*6,0]],hi,1);
       break;
-    case "burst":
-      for (let i=0;i<8;i++) ray(12,12,i*Math.PI/4,10,i%2?c:wh,i%2?2:1);
-      diamond(12,12,5,5,ink); diamond(12,12,3,3,c); px(11,11,wh,2,2);
+    }
+    case "shadow": {
+      g.strokeStyle=ink;g.lineWidth=6;g.beginPath();g.arc(16,16,9,-1.1,2.3);g.stroke();
+      g.strokeStyle=c;g.lineWidth=3;g.beginPath();g.arc(16,16,9,-1.1,2.3);g.stroke();
+      g.strokeStyle=hi;g.lineWidth=1.2;g.beginPath();g.arc(16,16,6,-0.8,2.1);g.stroke();
+      for(let i=0;i<3;i++)line([[5+i*2,9+i*2],[11+i*2,15+i*2],[17+i*2,21+i*2]],i===1?white:hi,1);
+      diamond(20,11,3,4,c);px(20,10,white,1,2);
       break;
-    case "zone":
-      g.strokeStyle=c; g.lineWidth=2; g.beginPath(); g.arc(12,12,9,0,Math.PI*2); g.stroke();
-      g.strokeStyle=wh; g.lineWidth=1; g.beginPath(); g.arc(12,12,5,0,Math.PI*2); g.stroke();
-      for(let i=0;i<8;i++){const angle=i*Math.PI/4;px(12+Math.cos(angle)*9-1,12+Math.sin(angle)*9-1,c,2,2);}
-      diamond(12,12,3,4,wh);
+    }
+    case "holy": {
+      ring(16,15,10,ink,4);ring(16,15,9,hi,1);ring(16,15,6,c,1);
+      poly([[14,4],[18,4],[18,12],[26,12],[26,17],[18,17],[18,25],[14,25],[14,17],[6,17],[6,12],[14,12]],ink);
+      poly([[15,5],[17,5],[17,13],[25,13],[25,16],[17,16],[17,24],[15,24],[15,16],[7,16],[7,13],[15,13]],white);
+      line([[7,22],[10,26],[13,22]],hi,2);line([[19,22],[22,26],[25,22]],hi,2);
+      star(16,4,3,hi);
       break;
-    case "buff":
-      poly([[3,17],[5,8],[9,12],[12,4],[15,12],[19,8],[21,17],[16,20],[8,20]],ink);
-      poly([[5,16],[7,10],[10,14],[12,7],[14,14],[18,10],[19,16],[15,18],[9,18]],c);
-      diamond(12,12,2,4,wh); px(11,2,wh,2,2);
+    }
+    case "forge": {
+      ring(16,15,10,ink,5);ring(16,15,9,c,2);ring(16,15,5,hi,1);
+      for(let i=0;i<8;i++){const a=i*Math.PI/4;line([[16+Math.cos(a)*9,15+Math.sin(a)*9],[16+Math.cos(a)*13,15+Math.sin(a)*13]],ink,3);px(16+Math.cos(a)*11,15+Math.sin(a)*11,hi,2);}
+      poly([[8,6],[18,6],[22,10],[19,14],[10,14],[7,11]],ink);poly([[9,7],[17,7],[20,10],[18,12],[10,12]],steel);
+      line([[13,12],[8,19],[11,22],[16,17]],ink,4);line([[13,12],[8,19],[11,22],[16,17]],c,2);
+      diamond(16,15,2,3,white);
       break;
-    case "heal":
-      poly([[8,2],[16,2],[16,8],[22,8],[22,16],[16,16],[16,22],[8,22],[8,16],[2,16],[2,8],[8,8]],ink);
-      poly([[9,4],[15,4],[15,9],[20,9],[20,15],[15,15],[15,20],[9,20],[9,15],[4,15],[4,9],[9,9]],c);
-      px(10,7,wh,4,10); px(7,10,wh,10,4);
+    }
+    case "lightning": {
+      poly([[18,1],[8,15],[14,15],[10,29],[25,11],[18,11],[23,1]],ink);
+      poly([[18,4],[11,14],[16,14],[12,25],[22,12],[17,12],[21,4]],hi);
+      line([[7,9],[10,12],[8,16]],white,1);line([[23,17],[26,20],[24,24]],c,2);
+      px(18,11,white,2,2);break;
+    }
+    case "ice":
+    case "crystal": {
+      poly([[16,2],[24,11],[21,25],[16,30],[10,24],[8,11]],ink);
+      poly([[16,4],[22,12],[19,23],[16,27],[12,22],[10,12]],c);
+      poly([[16,5],[16,25],[12,22],[10,12]],hi);line([[16,5],[21,12],[16,25]],white,1);
+      for(const [x,y] of [[5,7],[26,7],[5,23],[27,22]])diamond(x,y,2,4,hi);
       break;
-    case "shield":
-      poly([[12,1],[22,5],[20,15],[12,23],[4,15],[2,5]],ink);
-      poly([[12,3],[20,6],[18,14],[12,20],[6,14],[4,6]],c);
-      path([[12,5],[12,18]],wh,1); path([[7,10],[17,10]],wh,1);
-      diamond(12,10,2,3,"#fff6c0");
+    }
+    case "dragon": {
+      g.strokeStyle=ink;g.lineWidth=7;g.beginPath();g.moveTo(5,24);g.bezierCurveTo(2,10,17,4,25,10);g.bezierCurveTo(29,14,23,21,17,18);g.stroke();
+      g.strokeStyle=c;g.lineWidth=4;g.beginPath();g.moveTo(5,23);g.bezierCurveTo(3,11,17,5,24,11);g.bezierCurveTo(27,14,22,19,18,17);g.stroke();
+      poly([[20,7],[29,5],[25,12],[21,12]],ink);poly([[22,8],[27,6],[24,10]],hi);
+      star(8,12,4,white);for(let i=0;i<3;i++)px(5+i*3,27-i*2,hi,2,2);
       break;
-    case "dash":
-      path([[2,5],[10,12],[2,19]],ink,6); path([[8,5],[16,12],[8,19]],ink,6);
-      path([[2,5],[10,12],[2,19]],c,3); path([[8,5],[16,12],[8,19]],wh,2);
-      path([[15,5],[21,12],[15,19]],c,2);
+    }
+    case "meteor": {
+      g.save();g.translate(16,16);g.rotate(-0.65);
+      poly([[-12,1],[-3,-5],[8,-4],[12,1],[7,8],[-4,9]],ink);
+      poly([[-8,1],[-2,-3],[7,-3],[10,1],[6,6],[-3,7]],c);
+      poly([[-2,-2],[7,-2],[9,1],[3,2]],hi);
+      for(let i=0;i<4;i++)line([[-16,5+i*3],[-7,5+i*3]],i%2?c:hi,1);
+      g.restore();star(25,7,3,white);break;
+    }
+    case "shield": {
+      poly([[16,2],[27,6],[25,19],[16,29],[7,19],[5,6]],ink);
+      poly([[16,5],[24,8],[22,18],[16,25],[10,18],[8,8]],c);
+      line([[16,6],[16,24]],hi,1);line([[10,12],[22,12]],hi,1);
+      diamond(16,12,3,4,white);px(15,11,white,2,2);break;
+    }
+    case "heart": {
+      poly([[16,27],[4,16],[3,10],[6,6],[11,6],[16,11],[21,6],[26,6],[29,11],[27,17]],ink);
+      poly([[16,24],[6,15],[5,10],[8,8],[12,8],[16,13],[21,8],[25,8],[27,12],[25,16]],c);
+      diamond(16,15,3,5,hi);px(13,9,white,2,2);break;
+    }
+    case "dash": {
+      poly([[3,8],[13,16],[3,24],[3,19],[8,16],[3,12]],ink);
+      poly([[11,5],[23,16],[11,27],[11,21],[17,16],[11,10]],c);
+      line([[4,5],[11,10]],hi,1);line([[13,7],[21,15]],white,1);
+      star(25,7,3,hi);px(6,26,white,2,1);break;
+    }
+    case "rune": {
+      ring(16,16,11,ink,4);ring(16,16,10,c,1.5);ring(16,16,6,hi,1);
+      poly([[16,5],[19,13],[25,16],[19,19],[16,27],[13,19],[7,16],[13,13]],ink);
+      poly([[16,7],[18,14],[23,16],[18,18],[16,24],[14,18],[9,16],[14,14]],hi);
+      diamond(16,16,3,4,white);
+      for(let i=0;i<4;i++){const a=i*Math.PI/2;px(16+Math.cos(a)*10-1,16+Math.sin(a)*10-1,c,2,2);}break;
+    }
+    case "crest":
+    case "orb":
+    default: {
+      ring(16,16,10,ink,4);ring(16,16,9,c,1.5);
+      const points=[];for(let i=0;i<6;i++){const a=-Math.PI/2+i*Math.PI/3;points.push([16+Math.cos(a)*7,16+Math.sin(a)*7]);}
+      poly(points,ink);const inner=[];for(let i=0;i<6;i++){const a=-Math.PI/2+i*Math.PI/3;inner.push([16+Math.cos(a)*5,16+Math.sin(a)*5]);}
+      poly(inner,hi);diamond(16,15,3,5,white);
+      for(let i=0;i<4;i++)star(5+(i%2)*22,7+Math.floor(i/2)*18,2,c);
       break;
-    case "parry":
-      path([[4,3],[19,20]],ink,5); path([[20,3],[5,20]],ink,5);
-      path([[4,3],[19,20]],c,2); path([[20,3],[5,20]],wh,2);
-      diamond(12,12,4,4,c);
-      break;
-    case "taunt":
-      poly([[3,5],[8,9],[12,2],[16,9],[21,5],[19,20],[5,20]],ink);
-      poly([[5,8],[9,11],[12,5],[15,11],[19,8],[17,18],[7,18]],c);
-      path([[8,15],[16,15]],wh,1);
-      break;
-    case "device":
-      poly([[7,1],[17,1],[18,6],[23,9],[20,17],[15,19],[12,23],[7,19],[2,17],[1,9],[6,6]],ink);
-      poly([[8,4],[16,4],[17,8],[20,10],[18,16],[13,18],[11,20],[8,17],[4,15],[4,10],[7,8]],c);
-      g.strokeStyle=wh;g.lineWidth=1.5;g.beginPath();g.arc(12,12,4,0,Math.PI*2);g.stroke();diamond(12,12,2,3,wh);
-      break;
-    case "channel":
-      g.strokeStyle=ink;g.lineWidth=5;g.beginPath();g.arc(12,12,8,-1.7,4.8);g.stroke();
-      g.strokeStyle=c;g.lineWidth=2;g.beginPath();g.arc(12,12,8,-1.7,4.8);g.stroke();
-      g.strokeStyle=wh;g.lineWidth=1;g.beginPath();g.arc(12,12,4,0,Math.PI*1.65);g.stroke();
-      diamond(12,12,3,4,wh);
-      break;
-    case "passive":
-      poly([[2,12],[7,5],[17,5],[22,12],[17,19],[7,19]],ink);
-      poly([[4,12],[8,7],[16,7],[20,12],[16,17],[8,17]],c);
-      g.strokeStyle=wh;g.lineWidth=1.5;g.beginPath();g.ellipse(12,12,5,3,0,0,Math.PI*2);g.stroke();
-      diamond(12,12,2,3,wh);
-      break;
-    default:
-      for(let i=0;i<8;i++) ray(12,12,i*Math.PI/4,10,c,2);
-      diamond(12,12,6,6,ink); diamond(12,12,4,4,c); px(11,11,wh,2,2);
+    }
   }
-  centerArt(cv);
-  cache.set(key, cv);
+  g.restore();
+
+  const grade = ["일반","희귀","영웅","전설","신화"].indexOf(sk.grade);
+  const rim = grade >= 3 ? (sk.grade === "신화" ? "#ff607c" : "#ffc45e") : grade === 2 ? "#b58aff" : grade === 1 ? "#5fbaff" : "#687487";
+  g.strokeStyle="#03040a";g.lineWidth=2;g.strokeRect(1,1,30,30);
+  g.strokeStyle=rim;g.lineWidth=1;g.strokeRect(2.5,2.5,27,27);
+  line([[3,7],[3,3],[7,3]],hi,1);line([[25,3],[29,3],[29,7]],rim,1);
+  line([[3,25],[3,29],[7,29]],rim,1);line([[25,29],[29,29],[29,25]],rim,1);
+  if(grade>=1){diamond(27,5,2,3,grade>=3?"#fff1bd":rim);px(27,4,white,1,1);}
+  if(grade>=3){g.globalAlpha=0.7;star(5,5,2,hi);star(27,27,2,hi);g.globalAlpha=1;}
+  if(sk.kind==="ultimate"){star(16,4,3,white);g.globalAlpha=0.5;ring(16,16,13,hi,1);g.globalAlpha=1;}
+  if(sk.kind==="passive"){px(5,15,hi,2,2);px(25,15,hi,2,2);}
+  cv._motif = motif;
+  cache.set(key,cv);
   return cv;
 }
-
-/** 그림이 칸 한쪽으로 치우쳐 있으면 가운데로 옮김 (24x24 아이콘) */
-function centerArt(cv) {
-  const g = cv.getContext("2d"), W = cv.width, H = cv.height;
-  const d = g.getImageData(0, 0, W, H).data;
-  let x0 = W, y0 = H, x1 = -1, y1 = -1;
-  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if (d[(y * W + x) * 4 + 3] > 20) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
-  if (x1 < 0) return;
-  const dx = Math.round((W - 1 - x1 - x0) / 2), dy = Math.round((H - 1 - y1 - y0) / 2);
-  if (!dx && !dy) return;
-  const tmp = document.createElement("canvas"); tmp.width = W; tmp.height = H;
-  tmp.getContext("2d").drawImage(cv, 0, 0);
-  g.clearRect(0, 0, W, H); g.drawImage(tmp, dx, dy);
+export function skillIconURL(sk) {
+  if (!urls.has(sk.id) && sk.weaponBasic) urls.set(sk.id, itemIcon({ slot: "weapon", type: sk.weaponBasic, variant: 0, rarity: "일반", ilvl: 21 }).toDataURL());
+  if (!urls.has(sk.id)) urls.set(sk.id, skillArt(sk).toDataURL());
+  return urls.get(sk.id);
 }
+export function skillIcon(sk) { return skillArt(sk); }
