@@ -237,6 +237,19 @@ function motifOf(sk) {
   const id = sk.id ?? "", name = sk.name ?? "";
   const source = String(id) + " " + String(name) + " " + JSON.stringify(sk.fx ?? {});
   if (/ar_(rain|bombard)|애로우 레인|화살 폭격/.test(source)) return "rain";
+  if (/sw_moon|ro_bloodmoon|만월|혈월/.test(source)) return "moon";
+  if (/sw_fiveslash|ro_twin|ar_triple|ar_multi|double|twin|쌍날|오연|연환|천수/.test(source)) return "twin";
+  if (/fi_meteorkick|fi_spinkick|fi_rising|발차기|유성각|회천각|승룡각/.test(source)) return "kick";
+  if (/sw_gale|fi_sidestep|질풍|횡이동|wind/.test(source)) return "wind";
+  if (/ro_wire|sm_mine|덫|철사|지뢰|trap/.test(source)) return "trap";
+  if (/ar_entangle|root-snare|인탱글|뿌리/.test(source)) return "vines";
+  if (/ar_evasion|ar_absolute|ar_mastery|ar_regain|ma_precise|정밀 시전|마스터리|리게인|이베이젼|앱솔루트/.test(source)) return "crest";
+  if (/ro_check|ro_track|fi_acupoint|급소|약점 추적|점혈|표식/.test(source)) return "target";
+  if (/ma_firetrail|화염 궤적|flame/.test(source)) return "flame";
+  if (/ma_gravity|중력 우물|vortex/.test(source)) return "vortex";
+  if (/ma_echo|잔향|echo|공명/.test(source)) return "wave";
+  if (/pr_bell|징벌의 종|bell/.test(source)) return "bell";
+  if (/sm_drone|sm_moth|축전 방벽 드론|수리 나방/.test(source)) return "orbit";
   if (/ma_chain|연쇄 번개|번개|뇌령|lightning/.test(source)) return "lightning";
   if (/ma_blizzard|눈보라|서리|얼음|frost|ice/.test(source)) return "ice";
   if (/firedragon|reddragon|화룡|적룡/.test(source)) return "dragon";
@@ -255,15 +268,15 @@ function motifOf(sk) {
   if (/sm_|hammer|망치|리벳|회로|드론|지뢰|수리|forge|gear|armor/.test(source)) return "forge";
   if (/pr_|성역|성가|기도|찬가|빛|광휘|은총|holy/.test(source)) return "holy";
   if (/ro_|단검|그림자|독날|연막|암살|절개|처형|poison|shadow/.test(source)) return "shadow";
-  if (/ar_|화살|사격|샷|보우|저격|arrow|bow/.test(source)) return "arrow";
-  if (/fi_|권|주먹|권무|권왕|발차기|유성각|정권|punch|kick/.test(source)) return "impact";
-  if (/sw_|검|베기|발도|일섬|어검|sword|blade|slash/.test(source)) return "blade";
+  if (/ar_|화살|사격|샷|보우|저격|arrow|bow/.test(source)) return "ray";
+  if (/fi_|권|주먹|권무|권왕|정권|punch/.test(source)) return "impact";
+  if (/sw_|검|베기|발도|일섬|어검|sword|blade|slash/.test(source)) return "arc";
   if (/dash|blink|도약|돌진|활주|횡이동|발놀림/.test(source) || (sk.steps ?? []).some((s) => s.do === "dash" || s.do === "blink")) return "dash";
   if (/buff|강화|마스터리|숙련|자세|기백|오라|절대|정밀/.test(source)) return "crest";
   if (/circle|zone|channel|area|우물|회랑|룬|문양|공명/.test(source)) return "rune";
   if ((sk.steps ?? []).some((s) => s.do === "device")) return "forge";
-  if ((sk.steps ?? []).some((s) => s.do === "proj" || s.do === "line")) return sk.anim === "shoot" ? "arrow" : "crystal";
-  if ((sk.steps ?? []).some((s) => s.do === "melee")) return "blade";
+  if ((sk.steps ?? []).some((s) => s.do === "proj" || s.do === "line")) return sk.anim === "shoot" ? "ray" : "crystal";
+  if ((sk.steps ?? []).some((s) => s.do === "melee")) return "arc";
   return "orb";
 }
 function hashId(s) { let h = 2166136261; for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 16777619); return h >>> 0; }
@@ -299,23 +312,21 @@ function skillArt(sk) {
   for(let i=0;i<6;i++){const x=4+((seed>>(i*3))&15),y=4+((seed>>(i*2+5))&15);px(x,y,i%2?hi:c,1);}
   g.save();
   switch(motif){
-    case "blade": {
-      line([[7,25],[24,7],[27,4]],ink,7); line([[7,24],[23,8],[26,5]],steel,4);
-      line([[10,21],[22,9]],hi,1); line([[5,22],[11,28]],ink,4); line([[6,22],[11,27]],c,2);
-      line([[4,20],[10,26]],"#f4c978",1); diamond(23,8,2,3,white);
-      if(v%2===0){line([[10,27],[15,22]],c,2);px(15,21,hi,2,1);}
-      break;
+    case "arc": {
+      g.strokeStyle=ink;g.lineWidth=8;g.beginPath();g.arc(15,17,11,-2.45,0.65);g.stroke();
+      g.strokeStyle=c;g.lineWidth=5;g.beginPath();g.arc(15,17,11,-2.45,0.65);g.stroke();
+      g.strokeStyle=hi;g.lineWidth=1.5;g.beginPath();g.arc(15,17,8,-2.35,0.45);g.stroke();
+      star(25,7,3,white);px(5,24,hi,2,2);break;
     }
-    case "arrow":
+    case "ray":
     case "rain": {
-      const n=motif==="rain"?3:1;
+      const n=motif==="rain"?5:1;
       for(let j=0;j<n;j++){
-        const ox=motif==="rain"?(j-1)*7:0, oy=motif==="rain"?Math.abs(j-1)*3:0;
-        line([[5+ox,24-oy],[22+ox,7-oy]],ink,4);
-        line([[5+ox,23-oy],[22+ox,6-oy]],motif==="rain"?(j===1?hi:c):"#bd8b55",2);
-        poly([[19+ox,5-oy],[27+ox,2-oy],[24+ox,10-oy],[22+ox,8-oy]],ink);
-        poly([[21+ox,5-oy],[26+ox,3-oy],[24+ox,8-oy]],hi);
-        line([[4+ox,22-oy],[8+ox,26-oy]],c,1);
+        const ox=motif==="rain"?(j-2)*5:0, oy=motif==="rain"?Math.abs(j-2)*2:0;
+        line([[6+ox,23-oy],[22+ox,7-oy]],ink,5);
+        line([[6+ox,22-oy],[21+ox,7-oy]],motif==="rain"?(j===2?white:hi):c,2);
+        diamond(22+ox,7-oy,2,3,hi);
+        px(6+ox,22-oy,white,2,2);
       }
       if(motif==="rain"){ring(16,18,12,c,1);star(16,18,3,white);}
       break;
@@ -346,9 +357,9 @@ function skillArt(sk) {
     case "forge": {
       ring(16,15,10,ink,5);ring(16,15,9,c,2);ring(16,15,5,hi,1);
       for(let i=0;i<8;i++){const a=i*Math.PI/4;line([[16+Math.cos(a)*9,15+Math.sin(a)*9],[16+Math.cos(a)*13,15+Math.sin(a)*13]],ink,3);px(16+Math.cos(a)*11,15+Math.sin(a)*11,hi,2);}
-      poly([[8,6],[18,6],[22,10],[19,14],[10,14],[7,11]],ink);poly([[9,7],[17,7],[20,10],[18,12],[10,12]],steel);
-      line([[13,12],[8,19],[11,22],[16,17]],ink,4);line([[13,12],[8,19],[11,22],[16,17]],c,2);
-      diamond(16,15,2,3,white);
+      poly([[16,8],[22,12],[21,20],[16,24],[11,20],[10,12]],ink);
+      poly([[16,10],[20,13],[19,19],[16,22],[13,19],[12,13]],c);
+      diamond(16,15,3,5,white);px(15,13,hi,2,3);
       break;
     }
     case "lightning": {
@@ -404,6 +415,65 @@ function skillArt(sk) {
       diamond(16,16,3,4,white);
       for(let i=0;i<4;i++){const a=i*Math.PI/2;px(16+Math.cos(a)*10-1,16+Math.sin(a)*10-1,c,2,2);}break;
     }
+    case "moon": {
+      ring(16,16,11,ink,4);ring(16,16,10,hi,1);
+      g.fillStyle=c;g.beginPath();g.arc(15,16,9,0,Math.PI*2);g.fill();
+      g.fillStyle=deep;g.beginPath();g.arc(20,12,8,0,Math.PI*2);g.fill();
+      star(9,22,3,white);px(24,7,hi,2,2);break;
+    }
+    case "twin": {
+      g.strokeStyle=ink;g.lineWidth=7;g.beginPath();g.arc(11,16,8,-2.1,1.1);g.stroke();g.beginPath();g.arc(21,16,8,2.1,5.3);g.stroke();
+      g.strokeStyle=c;g.lineWidth=4;g.beginPath();g.arc(11,16,8,-2.1,1.1);g.stroke();g.beginPath();g.arc(21,16,8,2.1,5.3);g.stroke();
+      star(16,16,4,hi);px(15,15,white,2,2);break;
+    }
+    case "kick": {
+      g.strokeStyle=ink;g.lineWidth=7;g.beginPath();g.arc(15,16,11,-2.3,0.8);g.stroke();
+      g.strokeStyle=c;g.lineWidth=4;g.beginPath();g.arc(15,16,11,-2.3,0.8);g.stroke();
+      ring(16,16,5,hi,1);star(24,8,4,white);line([[5,25],[9,22]],hi,2);break;
+    }
+    case "trap": {
+      poly([[7,7],[25,7],[25,25],[7,25]],ink);poly([[9,9],[23,9],[23,23],[9,23]],c);
+      line([[9,9],[23,23]],hi,2);line([[23,9],[9,23]],hi,2);
+      ring(16,16,5,white,1);diamond(16,16,2,4,hi);break;
+    }
+    case "vines": {
+      g.strokeStyle=ink;g.lineWidth=5;g.beginPath();g.moveTo(5,25);g.bezierCurveTo(8,6,22,27,26,7);g.stroke();
+      g.strokeStyle=c;g.lineWidth=2.5;g.beginPath();g.moveTo(5,25);g.bezierCurveTo(8,6,22,27,26,7);g.stroke();
+      for(const [x,y,a] of [[9,13,-0.7],[17,17,0.3],[23,12,-0.4]]){g.save();g.translate(x,y);g.rotate(a);poly([[-1,0],[0,-5],[4,-2],[2,2]],hi);g.restore();}
+      star(7,25,2,white);break;
+    }
+    case "target": {
+      ring(16,16,12,ink,3);ring(16,16,10,c,1.5);ring(16,16,5,hi,1.5);
+      line([[16,2],[16,10]],white,1);line([[16,22],[16,30]],white,1);
+      line([[2,16],[10,16]],white,1);line([[22,16],[30,16]],white,1);
+      diamond(16,16,2,3,hi);px(15,15,white,2,2);break;
+    }
+    case "flame": {
+      poly([[16,2],[21,11],[27,16],[24,25],[17,29],[8,26],[5,19],[10,13],[12,7],[15,14]],ink);
+      poly([[16,7],[20,14],[24,18],[21,24],[16,26],[10,23],[9,19],[14,14]],c);
+      poly([[16,14],[19,20],[16,25],[13,22]],hi);px(15,19,white,2,2);break;
+    }
+    case "vortex": {
+      g.strokeStyle=ink;g.lineWidth=5;g.beginPath();g.arc(16,16,11,-2.7,4.4);g.stroke();
+      g.strokeStyle=c;g.lineWidth=2.5;g.beginPath();g.arc(16,16,11,-2.6,4.2);g.stroke();
+      g.strokeStyle=hi;g.lineWidth=1.5;g.beginPath();g.arc(16,16,6,-2,3.6);g.stroke();
+      star(16,16,3,white);for(let i=0;i<3;i++)px(5+i*10,6+(i%2)*19,hi,2,2);break;
+    }
+    case "wave": {
+      for(let i=0;i<3;i++){g.strokeStyle=i===1?hi:c;g.lineWidth=3-i;g.beginPath();g.arc(8,16,6+i*5,-1.1,1.1);g.stroke();g.beginPath();g.arc(24,16,6+i*5,Math.PI-1.1,Math.PI+1.1);g.stroke();}
+      diamond(16,16,3,6,white);break;
+    }
+    case "bell": {
+      poly([[11,7],[13,3],[19,3],[21,7],[24,19],[27,22],[5,22],[8,19]],ink);
+      poly([[12,8],[14,5],[18,5],[20,8],[22,18],[24,20],[8,20],[10,18]],hi);
+      line([[9,13],[23,13]],c,2);ring(16,24,3,white,1);star(16,3,2,white);break;
+    }
+    case "orbit": {
+      g.strokeStyle=ink;g.lineWidth=4;g.beginPath();g.ellipse(16,16,12,6,0.7,0,Math.PI*2);g.stroke();
+      g.strokeStyle=c;g.lineWidth=2;g.beginPath();g.ellipse(16,16,12,6,0.7,0,Math.PI*2);g.stroke();
+      g.strokeStyle=hi;g.lineWidth=2;g.beginPath();g.ellipse(16,16,6,12,-0.7,0,Math.PI*2);g.stroke();
+      star(16,16,4,white);for(const [x,y] of [[6,10],[25,21],[20,5]]){diamond(x,y,2,3,hi);}break;
+    }
     case "crest":
     case "orb":
     default: {
@@ -432,7 +502,6 @@ function skillArt(sk) {
   return cv;
 }
 export function skillIconURL(sk) {
-  if (!urls.has(sk.id) && sk.weaponBasic) urls.set(sk.id, itemIcon({ slot: "weapon", type: sk.weaponBasic, variant: 0, rarity: "일반", ilvl: 21 }).toDataURL());
   if (!urls.has(sk.id)) urls.set(sk.id, skillArt(sk).toDataURL());
   return urls.get(sk.id);
 }
