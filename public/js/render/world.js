@@ -872,6 +872,7 @@ export class Renderer {
     beams.length = kept;
   }
 
+  drawLighting(ctx, cx, cy, t) {
     const town = G.kind === "town";
     const z = town ? { ambient: 0.4, light: 110 } : G.zone;
     // 빛 지도는 절반 해상도라, 화면이 1px 움직일 때마다 빛 구멍이 0.5px씩 번갈아 어긋나 깜박였음
