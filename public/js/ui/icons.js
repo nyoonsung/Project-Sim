@@ -233,8 +233,19 @@ function skillPalette(sk) {
 }
 export function skillColor(sk) { return skillPalette(sk)[0]; }
 
+const ICON_MOTIF = {
+  c_thrust:"ray", c_shot:"ray", c_bolt:"crystal", c_bash:"impact", c_smite:"impact", c_jab:"impact", c_stab:"shadow", c_pound:"impact", c_slash:"arc", c_dash:"dash", c_firstaid:"heart",
+  sw_gale:"wind", sw_thrust:"ray", sw_block:"shield", sw_charge:"dash", sw_raid:"impact", sw_lowcut:"moon", sw_kick:"kick", sw_shoulder:"impact", sw_fiveslash:"twin", sw_moon:"moon", sw_draw:"arc", sw_vital:"target", sw_firedragon:"dragon", sw_thunder:"lightning", sw_eo_burst:"orbit", sw_eo_guard:"shield", sw_eo_rain:"rain", sw_final:"arc",
+  fi_jab:"impact", fi_counter:"shield", fi_imun:"impact", fi_combo:"twin", fi_palm:"wave", fi_twinclaw:"twin", fi_meteorkick:"meteor", fi_thousand:"impact", fi_sidestep:"wind", fi_dive:"dash", fi_burst:"impact", fi_tiger:"dragon", fi_reddragon:"dragon", fi_spinkick:"kick", fi_whiteheat:"flame", fi_rising:"kick", fi_trip:"trap", fi_landslide:"vortex", fi_dance:"wind", fi_acupoint:"target", fi_suppress:"target", fi_final:"impact",
+  ar_shot:"ray", ar_mastery:"crest", ar_double:"twin", ar_regain:"crest", ar_triple:"twin", ar_multi:"rain", ar_volley:"rain", ar_entangle:"vines", ar_lethal:"target", ar_evasion:"dash", ar_absolute:"crest", ar_storm:"wind", ar_explosion:"meteor", ar_bombard:"rain", ar_pierce:"lightning", ar_rain:"rain", ar_snipe:"target", ar_pinpoint:"target", ar_final:"rain",
+  ro_cut:"shadow", ro_twin:"twin", ro_smoke:"smoke", ro_footwork:"wind", ro_shadowstep:"dash", ro_poison:"poison", ro_wire:"trap", ro_check:"target", ro_open:"shadow", ro_afterimage:"dash", ro_track:"target", ro_fan:"vortex", ro_bloodmoon:"moon", ro_finale:"shadow", ro_hunt:"target", ro_final:"shadow",
+  ma_arcane:"crystal", ma_frostseal:"ice", ma_precise:"target", ma_firetrail:"flame", ma_blink:"vortex", ma_echo:"wave", ma_gravity:"vortex", ma_meteor:"meteor", ma_cut:"arc", ma_recall:"orbit", ma_chain:"lightning", ma_blizzard:"ice", ma_final:"meteor",
+  pr_bolt:"ray", pr_answer:"holy", pr_afterglow:"orbit", pr_shard:"crystal", pr_bell:"bell", pr_halo:"holy", pr_sanctum:"holy", pr_ward:"shield", pr_relief:"heart", pr_corridor:"rune", pr_hymn:"crest", pr_convert:"vortex", pr_radiance:"holy", pr_martyr:"heart", pr_lightray:"ray", pr_grace:"wave", pr_final:"holy",
+  sm_hammer:"forge", sm_rivet:"shield", sm_armor:"shield", sm_taunt:"crest", sm_mine:"trap", sm_drone:"orbit", sm_repair:"heart", sm_wall:"shield", sm_moth:"orbit", sm_circuit:"lightning", sm_rivetgun:"ray", sm_overload:"forge", sm_final:"forge",
+};
 function motifOf(sk) {
   const id = sk.id ?? "", name = sk.name ?? "";
+  if (ICON_MOTIF[id]) return ICON_MOTIF[id];
   const source = String(id) + " " + String(name) + " " + JSON.stringify(sk.fx ?? {});
   if (/ar_(rain|bombard)|애로우 레인|화살 폭격/.test(source)) return "rain";
   if (/sw_moon|ro_bloodmoon|만월|혈월/.test(source)) return "moon";
@@ -414,6 +425,17 @@ function skillArt(sk) {
       poly([[16,7],[18,14],[23,16],[18,18],[16,24],[14,18],[9,16],[14,14]],hi);
       diamond(16,16,3,4,white);
       for(let i=0;i<4;i++){const a=i*Math.PI/2;px(16+Math.cos(a)*10-1,16+Math.sin(a)*10-1,c,2,2);}break;
+    }
+    case "wind": {
+      g.strokeStyle=ink;g.lineWidth=5;g.beginPath();g.ellipse(16,16,12,5,-0.45,-2.7,2.6);g.stroke();
+      g.strokeStyle=c;g.lineWidth=2.5;g.beginPath();g.ellipse(16,16,12,5,-0.45,-2.7,2.6);g.stroke();
+      g.strokeStyle=hi;g.lineWidth=1.5;g.beginPath();g.ellipse(16,16,7,3,0.45,-2.4,2.3);g.stroke();
+      star(24,8,3,white);px(7,23,hi,2,2);break;
+    }
+    case "poison":
+    case "smoke": {
+      for(let i=0;i<6;i++){const a=i*Math.PI/3,xx=16+Math.cos(a)*7,yy=16+Math.sin(a)*6;g.fillStyle=motif==="smoke"?"#7b7892":c;g.beginPath();g.arc(xx,yy,4+(i%2),0,Math.PI*2);g.fill();}
+      ring(16,16,7,hi,1);diamond(16,15,3,5,white);break;
     }
     case "moon": {
       ring(16,16,11,ink,4);ring(16,16,10,hi,1);
