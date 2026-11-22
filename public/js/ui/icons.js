@@ -31,7 +31,12 @@ const STRING = ["#ffffff", "#e8e2d4", "#b8b0a0", "#7a7468"];
 const PAPER = ["#fffdf2", "#f2e8cc", "#d2c49c", "#9a8a62"];
 const CORE = ["#3a3446", "#26222e", "#18151e", "#0c0a10"];
 const GEM = { 일반: null, 희귀: ["#e6f4ff", "#7cc4ff", "#2e7ee0", "#163e8a"], 영웅: ["#fbeaff", "#dc9cff", "#9a50e0", "#4e2290"], 전설: ["#fff4d0", "#ffc04a", "#e07a14", "#82400a"], 신화: ["#fff0f0", "#ff7a8a", "#e02040", "#7a0a20"] };
-const AURA = { 전설: "#ffb347", 신화: "#ff4a64" };
+const AURA = { 전설: "#ffb347", 신화: "#ff4a64", 심연: "#70f4e8" };
+const TITLE_AURA = {
+  "태초의": "#fff0b0", "몰락한 왕의": "#ff647d", "별을 삼킨": "#c18aff",
+  "영원한": "#65d9e5", "잊힌 신의": "#ffe4a0", "끝없는": "#7caaff",
+  "심연을 본": "#70f4e8", "황혼의": "#d88aff",
+};
 // 옷감 색: 등급을 살짝 닮게
 const CLOTH = { 일반: ["#d8dce4", "#9aa2b2", "#626a7c", "#363c4a"], 희귀: ["#cfe6ff", "#6a9ee0", "#3a62a8", "#1c3466"], 영웅: ["#eedcff", "#a678d8", "#6a44a0", "#3a2260"], 전설: ["#fff0d0", "#e0a050", "#a0601e", "#5a320c"], 신화: ["#ffe0e4", "#e05a6a", "#a02436", "#5a0c1a"] };
 
@@ -126,21 +131,25 @@ export function matIndex(it) {
   if (Number.isInteger(it.mat) && it.mat >= 0 && it.mat < MAT_RAMP.length) return it.mat;
   return Math.max(0, Math.min(MAT_RAMP.length - 1, Math.floor(((it.ilvl ?? 1) - 1) / 10)));
 }
+/** 재질의 대표색을 UI 카드의 얇은 장식에 공유한다. */
+export function materialAccent(it) {
+  return MAT_RAMP[matIndex(it)][1];
+}
 
 export function itemIcon(it) {
   const mi = matIndex(it);
-  const key = `${it.slot}|${it.type}|${it.variant}|${it.rarity}|${mi}|${it.relic ?? ""}|${it.relicColor ?? ""}`;
+  const key = `${it.slot}|${it.type}|${it.variant}|${it.rarity}|${mi}|${it.relic ?? ""}|${it.relicColor ?? ""}|${it.title ?? ""}|${it.ench ?? ""}`;
   if (cache.has(key)) return cache.get(key);
   const cv = document.createElement("canvas");
   cv.width = N; cv.height = N;
   const g = cv.getContext("2d");
   const B = makeBuf();
   shape(B, it);
-  const gem = GEM[it.rarity] ?? null;
+  const gem = GEM[it.rarity] ?? (it.rarity === "심연" ? ["#efffff", "#8efff2", "#36c8c0", "#12666c"] : null);
   const RAMP = { M: MAT_RAMP[mi], W: WOOD, G: GOLD, L: LEATHER, S: STRING, P: PAPER, K: CORE, C: CLOTH[it.rarity] ?? CLOTH.일반, R: gem ?? MAT_RAMP[mi] };
   const at = (x, y) => (x < 0 || y < 0 || x >= N || y >= N ? null : B.c[y * N + x]);
   // 오라 (전설·신화·제2 던전 유물): 외곽선 바깥으로 은은한 빛. 유물은 유물 고유 색
-  const aura = it.relic ? it.relicColor ?? "#ff75d8" : AURA[it.rarity];
+  const aura = it.relic ? it.relicColor ?? "#ff75d8" : (TITLE_AURA[it.title] ?? AURA[it.rarity]);
   if (aura) {
     // 부드러운 빛: 외곽선 바깥으로 갈수록 옅게 (대각선 방향은 더 옅게)
     for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
@@ -175,6 +184,17 @@ export function itemIcon(it) {
   // 보석 반짝임 (영웅 이상) · 신화 별빛
   if (gem && it.rarity !== "희귀") for (let i = 0; i < N * N; i++) if (B.c[i] === "R" && B.c[i - N] !== "R" && B.c[i - 1] !== "R") { P(g, "#ffffff", i % N, (i / N) | 0); break; }
   if (it.rarity === "신화") for (const [x, y] of [[1, 1], [16, 13], [2, 9]]) if (!at(x, y)) { P(g, "#ffd0d8", x, y); g.globalAlpha = 0.5; P(g, "#ff8a9a", x - 1, y); P(g, "#ff8a9a", x + 1, y); P(g, "#ff8a9a", x, y - 1); P(g, "#ff8a9a", x, y + 1); g.globalAlpha = 1; }
+  // 접두 수식어별 작은 문장: 같은 재료·종류라도 이름의 개성이 아이콘에 드러난다.
+  if (TITLE_AURA[it.title]) {
+    const tc = TITLE_AURA[it.title];
+    P(g, "#080612", 1, 1, 5, 5);
+    P(g, tc, 2, 2, 3, 1); P(g, tc, 3, 1, 1, 3); P(g, "#ffffff", 3, 2);
+  }
+  // 인챈트 각인: 수선은 금색, 나머지는 보랏빛 작은 룬.
+  if (it.ench) {
+    const ec = it.ench === "mend" ? "#ffe08a" : "#d8a8ff";
+    P(g, "#080612", 1, 14, 4, 3); P(g, ec, 2, 14, 2, 1); P(g, ec, 3, 13, 1, 3); P(g, "#ffffff", 3, 14);
+  }
   // 제2 던전 유물 표시: 오른쪽 아래 작은 마름모 (유물 색)
   if (it.relic) { const rc = it.relicColor ?? "#ff75d8"; P(g, "#0a0612", 14, 15, 3, 1); P(g, "#0a0612", 15, 14, 1, 3); P(g, "#ffffff", 15, 15); g.globalAlpha = 0.85; P(g, rc, 14, 15); P(g, rc, 16, 15); P(g, rc, 15, 14); P(g, rc, 15, 16); g.globalAlpha = 1; }
   cache.set(key, cv);
@@ -218,34 +238,109 @@ export function skillIcon(sk) {
   const key = "sk:" + sk.id;
   if (cache.has(key)) return cache.get(key);
   const cv = document.createElement("canvas");
-  cv.width = 16; cv.height = 16;
+  cv.width = 24; cv.height = 24;
   const g = cv.getContext("2d");
   const c = skillColor(sk), ink = "#120e1a", wh = "#ffffff";
-  const line = (pts, col, w = 1) => { for (const [x, y] of pts) P(g, col, x, y, w, w); };
-  switch (kindOf(sk)) {
-    case "slash": for (let k = 0; k < 11; k++) { const a = -0.9 + k * 0.17; const x = Math.round(8 + Math.cos(a) * 6), y = Math.round(9 + Math.sin(a) * 6); P(g, ink, x - 1, y - 1, 3, 3); } for (let k = 0; k < 11; k++) { const a = -0.9 + k * 0.17; P(g, k > 7 ? wh : c, Math.round(8 + Math.cos(a) * 6), Math.round(9 + Math.sin(a) * 6), 2, 2); } break;
-    case "thrust": P(g, ink, 1, 6, 14, 4); P(g, c, 2, 7, 10, 2); P(g, wh, 12, 7, 2, 2); P(g, wh, 14, 7, 1, 2); P(g, c, 3, 5, 2, 6); break;
-    case "arrow": P(g, ink, 1, 6, 14, 4); P(g, "#c89060", 2, 7, 9, 2); P(g, c, 11, 6, 2, 4); P(g, wh, 13, 7, 2, 2); P(g, c, 2, 5, 2, 1); P(g, c, 2, 10, 2, 1); break;
-    case "bolt": P(g, ink, 5, 4, 10, 8); P(g, c, 6, 5, 8, 6); P(g, wh, 9, 6, 4, 4); line([[1, 7], [3, 8], [2, 10], [4, 6]], c); break;
-    case "burst": for (let k = 0; k < 8; k++) { const a = (k / 8) * Math.PI * 2; for (let r = 2; r < 7; r++) P(g, r > 4 ? c : wh, Math.round(8 + Math.cos(a) * r), Math.round(8 + Math.sin(a) * r), 1, 1); } P(g, wh, 7, 7, 2, 2); break;
-    case "zone": for (const r of [6, 3]) for (let k = 0; k < 24; k++) { const a = (k / 24) * Math.PI * 2; P(g, r === 6 ? c : wh, Math.round(8 + Math.cos(a) * r), Math.round(8 + Math.sin(a) * r * 0.7), 1, 1); } break;
-    case "buff": for (const oy of [2, 7]) { line([[3, oy + 5], [4, oy + 4], [5, oy + 3], [6, oy + 2], [7, oy + 1], [8, oy], [9, oy + 1], [10, oy + 2], [11, oy + 3], [12, oy + 4], [13, oy + 5]], ink, 2); line([[4, oy + 4], [5, oy + 3], [6, oy + 2], [7, oy + 1], [8, oy], [9, oy + 1], [10, oy + 2], [11, oy + 3], [12, oy + 4]], oy === 2 ? wh : c, 1); } break;
-    case "heal": P(g, ink, 5, 1, 6, 14); P(g, ink, 1, 5, 14, 6); P(g, c, 6, 2, 4, 12); P(g, c, 2, 6, 12, 4); P(g, wh, 7, 3, 2, 4); break;
-    case "shield": P(g, ink, 2, 1, 12, 10); P(g, ink, 4, 11, 8, 3); P(g, ink, 6, 14, 4, 1); P(g, c, 3, 2, 10, 8); P(g, c, 5, 10, 6, 3); P(g, c, 7, 13, 2, 1); P(g, wh, 4, 3, 3, 3); break;
-    case "dash": for (const ox of [2, 7]) { line([[ox, 3], [ox + 1, 4], [ox + 2, 5], [ox + 3, 6], [ox + 4, 7], [ox + 4, 8], [ox + 3, 9], [ox + 2, 10], [ox + 1, 11], [ox, 12]], ink, 2); line([[ox, 4], [ox + 1, 5], [ox + 2, 6], [ox + 3, 7], [ox + 3, 8], [ox + 2, 9], [ox + 1, 10], [ox, 11]], ox === 7 ? wh : c, 1); } break;
-    case "parry": for (let k = 0; k < 12; k++) { P(g, ink, 1 + k, 1 + k, 3, 3); P(g, ink, 12 - k, 1 + k, 3, 3); } for (let k = 0; k < 12; k++) { P(g, c, 2 + k, 2 + k, 1, 1); P(g, wh, 13 - k, 2 + k, 1, 1); } break;
-    case "taunt": P(g, ink, 6, 1, 4, 10); P(g, ink, 6, 12, 4, 3); P(g, c, 7, 2, 2, 8); P(g, c, 7, 13, 2, 1); break;
-    case "device": P(g, ink, 3, 3, 10, 10); P(g, c, 4, 4, 8, 8); P(g, ink, 6, 6, 4, 4); P(g, wh, 7, 7, 2, 2); for (const [x, y] of [[7, 1], [7, 13], [1, 7], [13, 7]]) P(g, c, x, y, 2, 2); break;
-    case "channel": for (let k = 0; k < 20; k++) { const a = k * 0.55, r = 1 + k * 0.32; P(g, k > 14 ? wh : c, Math.round(8 + Math.cos(a) * r), Math.round(8 + Math.sin(a) * r), 1, 1); } break;
-    case "passive": P(g, ink, 4, 4, 8, 8); P(g, c, 5, 5, 6, 6); P(g, ink, 7, 7, 2, 2); break;
-    default: line([[8, 1], [8, 2], [7, 3], [9, 3], [1, 6], [2, 6], [3, 6], [13, 6], [14, 6], [15, 6]], c); P(g, c, 5, 4, 6, 7); P(g, wh, 7, 6, 2, 2); P(g, c, 3, 11, 2, 3); P(g, c, 11, 11, 2, 3);
+  const px = (x, y, color, w = 1, h = w) => P(g, color, Math.round(x), Math.round(y), w, h);
+  const path = (pts, color, width = 2) => {
+    g.strokeStyle = color; g.lineWidth = width; g.lineCap = "square"; g.lineJoin = "miter";
+    g.beginPath(); pts.forEach(([x, y], i) => i ? g.lineTo(x, y) : g.moveTo(x, y)); g.stroke();
+  };
+  const poly = (pts, color) => {
+    g.fillStyle = color; g.beginPath(); pts.forEach(([x, y], i) => i ? g.lineTo(x, y) : g.moveTo(x, y)); g.closePath(); g.fill();
+  };
+  const diamond = (x, y, rx, ry, color) => poly([[x, y-ry],[x+rx,y],[x,y+ry],[x-rx,y]], color);
+  const ray = (x, y, angle, len, color, width=1) => path([[x-Math.cos(angle)*2,y-Math.sin(angle)*2],[x+Math.cos(angle)*len,y+Math.sin(angle)*len]],color,width);
+  const kind = kindOf(sk);
+  switch (kind) {
+    case "slash":
+      path([[3,20],[8,13],[14,7],[21,3]], ink, 7);
+      path([[3,19],[8,12],[14,6],[21,2]], c, 4);
+      path([[8,13],[13,8],[18,4]], wh, 1);
+      path([[4,20],[6,19]], wh, 1);
+      break;
+    case "thrust":
+    case "arrow":
+      path([[2,17],[14,9]], ink, 6);
+      path([[3,16],[14,9]], kind === "arrow" ? "#c89060" : c, 3);
+      poly([[11,5],[22,2],[18,13],[15,10]], ink);
+      poly([[13,5],[21,3],[18,11],[15,9]], c);
+      path([[14,7],[19,4]], wh, 1);
+      if (kind === "arrow") path([[3,12],[6,16],[3,19]], c, 2);
+      break;
+    case "bolt":
+      poly([[3,10],[11,10],[8,3],[21,3],[13,12],[17,12],[5,22],[9,13],[4,13]], ink);
+      poly([[5,10],[12,10],[10,5],[19,5],[12,12],[15,12],[7,19],[10,12],[5,12]], c);
+      path([[11,7],[16,7]], wh, 1);
+      break;
+    case "burst":
+      for (let i=0;i<8;i++) ray(12,12,i*Math.PI/4,10,i%2?c:wh,i%2?2:1);
+      diamond(12,12,5,5,ink); diamond(12,12,3,3,c); px(11,11,wh,2,2);
+      break;
+    case "zone":
+      g.strokeStyle=c; g.lineWidth=2; g.beginPath(); g.arc(12,12,9,0,Math.PI*2); g.stroke();
+      g.strokeStyle=wh; g.lineWidth=1; g.beginPath(); g.arc(12,12,5,0,Math.PI*2); g.stroke();
+      for(let i=0;i<8;i++){const angle=i*Math.PI/4;px(12+Math.cos(angle)*9-1,12+Math.sin(angle)*9-1,c,2,2);}
+      diamond(12,12,3,4,wh);
+      break;
+    case "buff":
+      poly([[3,17],[5,8],[9,12],[12,4],[15,12],[19,8],[21,17],[16,20],[8,20]],ink);
+      poly([[5,16],[7,10],[10,14],[12,7],[14,14],[18,10],[19,16],[15,18],[9,18]],c);
+      diamond(12,12,2,4,wh); px(11,2,wh,2,2);
+      break;
+    case "heal":
+      poly([[8,2],[16,2],[16,8],[22,8],[22,16],[16,16],[16,22],[8,22],[8,16],[2,16],[2,8],[8,8]],ink);
+      poly([[9,4],[15,4],[15,9],[20,9],[20,15],[15,15],[15,20],[9,20],[9,15],[4,15],[4,9],[9,9]],c);
+      px(10,7,wh,4,10); px(7,10,wh,10,4);
+      break;
+    case "shield":
+      poly([[12,1],[22,5],[20,15],[12,23],[4,15],[2,5]],ink);
+      poly([[12,3],[20,6],[18,14],[12,20],[6,14],[4,6]],c);
+      path([[12,5],[12,18]],wh,1); path([[7,10],[17,10]],wh,1);
+      diamond(12,10,2,3,"#fff6c0");
+      break;
+    case "dash":
+      path([[2,5],[10,12],[2,19]],ink,6); path([[8,5],[16,12],[8,19]],ink,6);
+      path([[2,5],[10,12],[2,19]],c,3); path([[8,5],[16,12],[8,19]],wh,2);
+      path([[15,5],[21,12],[15,19]],c,2);
+      break;
+    case "parry":
+      path([[4,3],[19,20]],ink,5); path([[20,3],[5,20]],ink,5);
+      path([[4,3],[19,20]],c,2); path([[20,3],[5,20]],wh,2);
+      diamond(12,12,4,4,c);
+      break;
+    case "taunt":
+      poly([[3,5],[8,9],[12,2],[16,9],[21,5],[19,20],[5,20]],ink);
+      poly([[5,8],[9,11],[12,5],[15,11],[19,8],[17,18],[7,18]],c);
+      path([[8,15],[16,15]],wh,1);
+      break;
+    case "device":
+      poly([[7,1],[17,1],[18,6],[23,9],[20,17],[15,19],[12,23],[7,19],[2,17],[1,9],[6,6]],ink);
+      poly([[8,4],[16,4],[17,8],[20,10],[18,16],[13,18],[11,20],[8,17],[4,15],[4,10],[7,8]],c);
+      g.strokeStyle=wh;g.lineWidth=1.5;g.beginPath();g.arc(12,12,4,0,Math.PI*2);g.stroke();diamond(12,12,2,3,wh);
+      break;
+    case "channel":
+      g.strokeStyle=ink;g.lineWidth=5;g.beginPath();g.arc(12,12,8,-1.7,4.8);g.stroke();
+      g.strokeStyle=c;g.lineWidth=2;g.beginPath();g.arc(12,12,8,-1.7,4.8);g.stroke();
+      g.strokeStyle=wh;g.lineWidth=1;g.beginPath();g.arc(12,12,4,0,Math.PI*1.65);g.stroke();
+      diamond(12,12,3,4,wh);
+      break;
+    case "passive":
+      poly([[2,12],[7,5],[17,5],[22,12],[17,19],[7,19]],ink);
+      poly([[4,12],[8,7],[16,7],[20,12],[16,17],[8,17]],c);
+      g.strokeStyle=wh;g.lineWidth=1.5;g.beginPath();g.ellipse(12,12,5,3,0,0,Math.PI*2);g.stroke();
+      diamond(12,12,2,3,wh);
+      break;
+    default:
+      for(let i=0;i<8;i++) ray(12,12,i*Math.PI/4,10,c,2);
+      diamond(12,12,6,6,ink); diamond(12,12,4,4,c); px(11,11,wh,2,2);
   }
   centerArt(cv);
   cache.set(key, cv);
   return cv;
 }
 
-/** 그림이 칸 한쪽으로 치우쳐 있으면 가운데로 옮김 (16x16 아이콘) */
+/** 그림이 칸 한쪽으로 치우쳐 있으면 가운데로 옮김 (24x24 아이콘) */
 function centerArt(cv) {
   const g = cv.getContext("2d"), W = cv.width, H = cv.height;
   const d = g.getImageData(0, 0, W, H).data;

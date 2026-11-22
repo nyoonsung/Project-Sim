@@ -45,6 +45,10 @@ export function updateSkillbar() {
     const id = skills[i], sk = id && SKILLS[id];
     const nm = el.querySelector(".nm"), cd = el.querySelector(".cd"), cdt = el.querySelector(".cdt");
     toggle(el, "empty", !sk);
+    const grade = sk?.grade ?? "";
+    const kind = sk?.kind ?? "";
+    if (el.dataset.grade !== grade) el.dataset.grade = grade;
+    if (el.dataset.kind !== kind) el.dataset.kind = kind;
     setText(nm, sk ? sk.name : "");
     if (el._bc !== (sk?.grade ?? "")) { el._bc = sk?.grade ?? ""; el.style.borderColor = sk ? GRADE_COLOR[sk.grade] : ""; }
     setVar(el, "--gc", sk ? GRADE_COLOR[sk.grade] : "#59527a");

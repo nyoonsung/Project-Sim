@@ -8,7 +8,7 @@ import { Q, setMode, setLessOthers, preset } from "../quality.js";
 import { KEYS, keyLabel, bindKey, resetKeys, RESERVED } from "../keys.js";
 import { profLevel, profPow, profCost, isUncapped } from "/shared/prof.js";
 import { h, openWin, refreshWin, closeWin, isOpen, tipOn } from "./dom.js";
-import { itemIcon } from "./icons.js";
+import { itemIcon, skillIconURL, materialAccent } from "./icons.js";
 import { CLASS_INFO, STATS, stageOf, stageLevel, xpToNext } from "/shared/classes.js";
 import { SKILLS, skillsOf, unlockStage } from "/shared/skills.js";
 import { deriveStats, defReduction } from "/shared/stats.js";
@@ -53,6 +53,15 @@ function iconEl(it) {
   c.width = 18; c.height = 18;
   c.getContext("2d").drawImage(itemIcon(it), 0, 0);
   return c;
+}
+function accentItemCell(el, it) {
+  if (!it) return el;
+  el.classList.add("mat-cell");
+  el.style.setProperty("--mat-accent", materialAccent(it));
+  if (it.relic) el.classList.add("has-relic");
+  if (it.mythic) el.classList.add("has-mythic");
+  if (it.ench) el.classList.add(it.ench === "mend" ? "has-mend-enchant" : "has-enchant");
+  return el;
 }
 
 // ── 툴팁
@@ -197,8 +206,14 @@ export function openSkills() {
         else next[i] = null;
         send({ t: "skills", list: next });
       } }, h("span", { class: "key", text: keyLabel(KEYS.slots[i]) }), h("span", { class: "nm", text: sk?.name ?? "" }), sk && G.autoSkills.has(sk.id) && canAuto(sk) ? h("span", { class: "auto-dot", text: "A" }) : null);
-      if (sk) el.style.borderColor = GRADE_COLOR[sk.grade];
-      if (sk) tipOn(el, () => skillTip(sk));
+      if (sk) {
+        el.dataset.grade = sk.grade;
+        el.dataset.kind = sk.kind;
+        el.style.borderColor = GRADE_COLOR[sk.grade];
+        el.prepend(h("img", { class: "ic", src: skillIconURL(sk), alt: "", draggable: "false" }));
+        el.classList.add("skill-equip");
+        tipOn(el, () => skillTip(sk));
+      }
       return el;
     }));
     const groups = ["기본", "일반", "희귀", "영웅", "전설", "신화"];
@@ -213,7 +228,7 @@ export function openSkills() {
         const equipped = c.skills.includes(s.id);
         const cost = Object.entries(s.cost ?? {}).map(([k, v]) => `${RES_NAME[k]} ${v}`).join(" ");
         return h("div", { class: `sk${locked ? " locked" : ""}${selSkill === s.id ? " sel" : ""}${equipped ? " equipped" : ""}`, onclick: () => { if (!locked) { selSkill = selSkill === s.id ? null : s.id; refreshWin("skills"); } } },
-          h("div", { class: "sk-top" }, h("b", { class: "grade-" + s.grade, text: s.name }), " ", h("span", { class: "meta", text: { basic: "기본 공격", active: "액티브", passive: "패시브", ultimate: "궁극기" }[s.kind] }),
+          h("div", { class: "sk-top" }, h("img", { class: "sk-icon", src: skillIconURL(s), alt: "", draggable: "false" }), h("b", { class: "grade-" + s.grade, text: s.name }), " ", h("span", { class: "meta", text: { basic: "기본 공격", active: "액티브", passive: "패시브", ultimate: "궁극기" }[s.kind] }),
             canAuto(s) && !locked ? h("button", { class: "auto-tg" + (G.autoSkills.has(s.id) ? " on" : ""), title: "자동: 쿨타임이 돌면 가까운 적에게 알아서 사용 (회복은 체력 70% 아래일 때)", onclick: (e) => { e.stopPropagation(); setAuto(s.id, !G.autoSkills.has(s.id)); refreshWin("skills"); } }, G.autoSkills.has(s.id) ? "자동" : "수동") : null),
           h("div", { class: "meta", text: `${s.kind === "basic" ? `공격 간격 ${basicGap(s)}s` : s.kind === "passive" ? "패시브" : `쿨 ${s.cd}s`}${cost ? " · " + cost : ""}${s.stance ? " · " + s.stance : ""}${locked ? ` · 🔒 ${CLASS_INFO[c.cls].ranks[need]} 필요(Lv.${stageLevel(c.cls, need)})` : ""}` }),
           h("div", { class: "desc", text: s.desc }),
@@ -262,6 +277,7 @@ export function openInv(pos = {}) {
       const it = c.equip[slot];
       const el = h("div", { class: "cell" + (it ? " r-" + it.rarity : "") + (selItem === it?.uid ? " sel" : ""), onclick: () => { if (it) { selItem = it.uid; refreshWin("inv"); } } },
         it ? iconEl(it) : h("span", { class: "lbl", text: SLOT_NAME[slot] }), it?.enh ? h("span", { class: "enh", text: "+" + it.enh }) : null);
+      accentItemCell(el, it);
       el.addEventListener("dblclick", () => it && send({ t: "unequip", slot }));
       if (it) tipOn(el, () => itemTip(it));
       return el;
@@ -275,6 +291,7 @@ export function openInv(pos = {}) {
         it && multi && picked.has(it.uid) ? h("span", { class: "pick", text: "✓" }) : null,
         it?.dur != null && it.dur < it.maxDur ? h("span", { class: "dur-mini" + (it.dur <= 0 ? " broken" : it.dur <= it.maxDur * 0.2 ? " low" : "") }, h("i", { style: { width: Math.max(0, (it.dur / it.maxDur) * 100) + "%" } })) : null);
       if (it) {
+        accentItemCell(el, it);
         el.addEventListener("dblclick", () => !multi && send({ t: "equip", uid: it.uid }));
         el.addEventListener("contextmenu", (e) => { e.preventDefault(); if (multi || it.locked) return;
           // 영웅 이상·+5 이상은 한 번 더 눌러야 팔림 (어디서든 팔 수 있어서 실수 방지)

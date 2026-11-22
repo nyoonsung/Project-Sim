@@ -102,6 +102,11 @@ export function castFx(e, ent) {
   }
   // 종류별 대표 연출 (모든 스킬)
   const kinds = new Set(steps);
+  const sigil = kinds.has("heal") ? "heal"
+    : kinds.has("shield") || kinds.has("parry") ? "shield"
+      : kinds.has("dash") || kinds.has("blink") ? "dash"
+        : kinds.has("melee") ? "blade"
+          : kinds.has("device") ? "gear" : "star";
   if (kinds.has("dash") || kinds.has("blink")) {
     // 잔상 줄기 + 출발점 먼지
     const dist = (sk.steps.find((s) => s.dist)?.dist ?? 100);
@@ -130,14 +135,14 @@ export function castFx(e, ent) {
     pushFx("streaks", { x, y: y - 14, x2: x + Math.cos(aim) * Math.min(d, range), y2: y - 14 + Math.sin(aim) * Math.min(d, range), col, hi, t0: now(), life: 0.18, w: 1 + tier });
   }
   if (kinds.has("circle") || kinds.has("zone") || kinds.has("area") || kinds.has("device")) {
-    pushFx("runes", { x: tx, y: ty, r: 22 + tier * 6, col, hi, t0: now(), life: 0.6, n: 6 + tier * 2 });
+    pushFx("runes", { x: tx, y: ty, r: 22 + tier * 6, col, hi, sigil, t0: now(), life: 0.6, n: 6 + tier * 2 });
   }
   // 1단계(희귀~): 발밑 충격파
   ring(x, y, 6, 30 + tier * 9 + pt * 6, col, 0.35 + tier * 0.05, 2);
   addGlow(x, y - 8, 60 + tier * 25, col, 0.25 + tier * 0.08);
   burst(x, y - 10, 5 + tier * 5 + pt * 6, [col, hi, "#ffffff"], 110 + tier * 25, { life: 0.4 + tier * 0.06 });
   // 2단계(영웅~): 회전 룬 진 + 궤적 섬광
-  if (tier >= 2 || pt >= 1) pushFx("runes", { x, y, r: 26 + tier * 6, col, hi, t0: now(), life: 0.55 + tier * 0.1, n: 6 + tier * 2 });
+  if (tier >= 2 || pt >= 1) pushFx("runes", { x, y, r: 26 + tier * 6, col, hi, sigil, t0: now(), life: 0.55 + tier * 0.1, n: 6 + tier * 2 });
   if (ranged && tier >= 2) pushFx("streaks", { x, y: y - 14, x2: x + Math.cos(aim) * Math.min(d, range), y2: y - 14 + Math.sin(aim) * Math.min(d, range), col, hi, t0: now(), life: 0.22, w: 2 + tier });
   if (areaAt && tier >= 1) { ring(tx, ty, 4, 34 + tier * 12, col, 0.5, 3, 0.5); ring(tx, ty, 2, 20 + tier * 8, hi, 0.4, 1.5, 0.5); }
   // 3단계(전설~): 빛 기둥 + 두 겹 고리 + 화면 흔들림
@@ -254,6 +259,30 @@ export function drawSkillFx(ctx, cx, cy) {
     ctx.beginPath();
     for (let i = 0; i <= 3; i++) { const q = -rot * 0.7 + (i * Math.PI * 2) / 3; const px = x + Math.cos(q) * r.r * 0.7, py = y + Math.sin(q) * r.r * 0.35; i ? ctx.lineTo(px, py) : ctx.moveTo(px, py); }
     ctx.stroke();
+    // 기존 룬에 시전 종류별 중심 문장만 추가 (새 파티클·배열 생성 없음).
+    ctx.save(); ctx.translate(x, y); ctx.rotate(-rot * 0.35);
+    ctx.globalAlpha = a * 0.9; ctx.strokeStyle = r.hi; ctx.lineWidth = 1.5; ctx.lineJoin = "miter";
+    ctx.beginPath();
+    if (r.sigil === "heal") {
+      ctx.moveTo(-1,-5); ctx.lineTo(1,-5); ctx.lineTo(1,-1); ctx.lineTo(5,-1); ctx.lineTo(5,1);
+      ctx.lineTo(1,1); ctx.lineTo(1,5); ctx.lineTo(-1,5); ctx.lineTo(-1,1); ctx.lineTo(-5,1);
+      ctx.lineTo(-5,-1); ctx.lineTo(-1,-1); ctx.closePath();
+    } else if (r.sigil === "shield") {
+      ctx.moveTo(0,-6); ctx.lineTo(5,-3); ctx.lineTo(4,3); ctx.lineTo(0,6); ctx.lineTo(-4,3); ctx.lineTo(-5,-3); ctx.closePath();
+    } else if (r.sigil === "dash") {
+      ctx.moveTo(-5,-4); ctx.lineTo(0,0); ctx.lineTo(-5,4); ctx.moveTo(0,-4); ctx.lineTo(5,0); ctx.lineTo(0,4);
+    } else if (r.sigil === "blade") {
+      ctx.moveTo(-5,4); ctx.lineTo(4,-5); ctx.moveTo(-2,5); ctx.lineTo(5,-2);
+    } else if (r.sigil === "gear") {
+      ctx.rect(-4,-4,8,8); ctx.moveTo(0,-7); ctx.lineTo(0,-4); ctx.moveTo(0,4); ctx.lineTo(0,7);
+      ctx.moveTo(-7,0); ctx.lineTo(-4,0); ctx.moveTo(4,0); ctx.lineTo(7,0);
+    } else {
+      ctx.moveTo(0,-6); ctx.lineTo(2,-2); ctx.lineTo(6,0); ctx.lineTo(2,2); ctx.lineTo(0,6);
+      ctx.lineTo(-2,2); ctx.lineTo(-6,0); ctx.lineTo(-2,-2); ctx.closePath();
+    }
+    ctx.stroke();
+    if (r.sigil === "gear") { ctx.beginPath(); ctx.arc(0,0,1.7,0,Math.PI*2); ctx.stroke(); }
+    ctx.restore();
   }
   // 궤적 섬광
   for (const s of FX.streaks) {
