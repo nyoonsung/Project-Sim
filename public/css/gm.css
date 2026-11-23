@@ -48,3 +48,20 @@ body.gm { overflow: auto; user-select: text; }
 .gm-give .form .flexrow { flex-wrap: nowrap; min-width: 0; }
 .gm-give .form .flexrow input { flex: none; width: 90px; }
 .gm-preview { position: static; max-width: 320px; }
+
+/* GM 베르단 섬 진행 현황 */
+.gm-island-flags { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 10px; }
+.gm-island-flag { padding: 4px 7px; border: 1px solid var(--line2); background: var(--panel2); color: var(--dim); font-size: 11px; }
+.gm-island-flag.active { border-color: var(--good); color: var(--good); }
+.gm-progress-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 8px; margin: 10px 0; }
+.gm-progress-row { min-width: 0; padding: 9px; border: 1px solid var(--line); background: #0e0c14; }
+.gm-progress-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 12px; }
+.gm-progress-state { flex: none; color: var(--dim); font-size: 10px; }
+.gm-progress-state.done { color: var(--good); }
+.gm-progress-state.locked { color: var(--bad); }
+.gm-progress-track { height: 8px; margin-top: 8px; overflow: hidden; background: #302b3a; border-radius: 8px; }
+.gm-progress-fill { height: 100%; background: var(--epic); border-radius: 8px; transition: width .2s ease; }
+.gm-progress-fill.done { background: var(--good); }
+.gm-progress-meta { margin-top: 5px; color: var(--dim); font-size: 10px; }
+.gm-unlock-note { padding: 7px 9px; border-left: 2px solid var(--gold); background: var(--panel2); color: var(--dim); font-size: 11px; }
+.gm-resource-lines { display: grid; gap: 3px; margin-top: 9px; }
