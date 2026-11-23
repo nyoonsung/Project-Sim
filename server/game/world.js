@@ -296,12 +296,20 @@ export class World {
     for (const [id, b] of u.buffs) buffs.push([id, Math.round((b.until - now) * 10) / 10, b.n ?? 0]);
     const st = [];
     for (const [id, x] of u.status) st.push([id, Math.round((x.until - now) * 10) / 10]);
+    const swordSeq = s.char.cls2 === "swordmaster" ? u.seq : null;
+    const seqDone = !!swordSeq && (swordSeq.doneUntil ?? 0) > now;
+    const seqLeft = swordSeq?.n ? Math.max(0, 6 - (now - (swordSeq.at ?? now))) : 0;
+    const seq = s.char.cls2 === "swordmaster" ? {
+      n: seqDone ? 3 : Math.max(0, Math.min(2, swordSeq?.n ?? 0)),
+      left: seqDone ? Math.max(0, swordSeq.doneUntil - now) : seqLeft,
+      done: seqDone,
+    } : null;
     const o = { t: "me", hp: Math.ceil(u.hp), mh: u.maxHp, mp: Math.floor(u.mp), mm: u.maxMp, ki: Math.floor(u.ki), holy: Math.floor(u.holy), parts: u.parts, gap: u.gap, r2: Math.floor(u.r2 ?? 0),
-      sh: u.shield ? Math.round(u.shield.amt) : 0, cds, buffs, st, lv: s.char.level, xp: s.char.xp, gold: s.char.gold, stance: u.stance, acu: u.acupoint ?? 0,
+      sh: u.shield ? Math.round(u.shield.amt) : 0, cds, buffs, st, seq, lv: s.char.level, xp: s.char.xp, gold: s.char.gold, stance: u.stance, acu: u.acupoint ?? 0,
       dead: u.dead ? 1 : 0, cons: s.char.cons, cs: Math.round((u.stats.cast ?? 1) * 100) / 100, spd: Math.round(u.stats.move * moveMul(u) * (u.guarding && now < u.guarding ? 0.35 : 1) * 10) / 10, pcd: Object.fromEntries(Object.entries(s.potionCd).map(([k, v]) => [k, Math.max(0, Math.round((v - Date.now())))])) };
     // 바뀐 게 없으면 보내지 않음 (최대 1초에 한 번은 보냄)
     const key = JSON.stringify([o.cs, o.hp, o.mh, o.mp, o.mm, o.ki, o.holy, o.parts, o.gap, o.r2, o.sh, o.lv, o.xp, o.gold, o.stance, o.acu, o.dead, o.cons, o.spd,
-      Object.entries(o.cds).map(([k, v]) => [k, Math.round(now * 10 + v / 100)]), buffs.map((b) => [b[0], Math.round((now + b[1]) * 10), b[2]]), st.map((x) => [x[0], Math.round((now + x[1]) * 10)]), Object.keys(o.pcd).filter((k) => o.pcd[k] > 0)]);
+      Object.entries(o.cds).map(([k, v]) => [k, Math.round(now * 10 + v / 100)]), buffs.map((b) => [b[0], Math.round((now + b[1]) * 10), b[2]]), st.map((x) => [x[0], Math.round((now + x[1]) * 10)]), [seq?.n ?? 0, !!seq?.done, Math.ceil(seq?.left ?? 0)], Object.keys(o.pcd).filter((k) => o.pcd[k] > 0)]);
     const tn = Date.now();
     if (s.profOut) { o.pf = s.profOut; s.profOut = null; } // 숙련 경험치 변경분
     else if (key === s.meKey && tn - (s.meAt ?? 0) < 1000) return;
@@ -737,12 +745,16 @@ export class World {
     const seen = new Set();
     const out = [];
     for (const id of list.slice(0, SKILL_SLOTS)) {
-      if (id && avail.has(id) && !seen.has(id)) {
+      if (id && SKILLS[id]?.kind === "passive") {
+        s.notice(`${SKILLS[id].name}은(는) 패시브라 장착할 필요가 없어요. 해금되면 자동 적용돼요.`);
+        out.push(null);
+      } else if (id && avail.has(id) && !seen.has(id)) {
         const sk = SKILLS[id];
         if (sk.exclusive && seen.has(sk.exclusive)) { s.notice(`${sk.name}은(는) ${SKILLS[sk.exclusive].name}과(와) 같이 장착할 수 없어요.`); out.push(null); continue; }
         seen.add(id); out.push(id);
       } else out.push(null);
     }
+    while (out.length < SKILL_SLOTS) out.push(null);
     // 무기 전용 기본 공격(활쏘기·마력탄)은 1번 칸에만, 모험가는 든 무기에 맞춰 자동
     for (let i = 1; i < out.length; i++) if (out[i] && SKILLS[out[i]].weaponBasic) out[i] = null;
     if (s.char.cls === "adventurer") out[0] = adventurerBasic(s.char.equip.weapon?.type);
