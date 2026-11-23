@@ -30,7 +30,7 @@ assert.equal(sanitizeChar({ ...newCharacter("a"), level: 300 }, "a").level, 250)
 ok("레벨 상한 250 · 210부터 레벨업 둔화");
 
 // ── 사전 밸런스
-assert.equal(CLASS_DMG.archer, 0.475);
+assert.equal(CLASS_DMG.archer, 0.57);
 {
   const a = deriveStats({ cls: "archer", level: 100, stats: {}, equip: {}, skills: [] });
   const b = Math.round(((5 + 2.2 * 100) * 0.9) * 1.2 * 0.5);
