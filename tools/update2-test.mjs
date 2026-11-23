@@ -151,6 +151,15 @@ assert.deepEqual(
   for (let k = 0; k < 3; k++) dealDamage(fakeRoom, boss, pl, { pow: 5 }, 1);
   assert.ok(pl.hp > 0 && pl.hp < 1000 && pl.hp >= 1000 * (1 - 3 * BOSS_HIT_CAP) - 1, `보스 공격 3대를 맞아도 살아남음 (${pl.hp})`);
 }
+{
+  const { levelGapXpMultiplier } = await import("../server/game/room.js");
+  for (const f of [1, 15, 30]) assert.equal(levelGapXpMultiplier(250, f, 4), 1, "왕릉은 레벨 차이 경험치 감소 없음");
+  assert.ok(levelGapXpMultiplier(250, 1, 3) < 1, "베르단 제1 던전 감소 규칙은 유지");
+  const { Room } = await import("../server/game/room.js");
+  const { makeFloor } = await import("../server/game/dungeon.js");
+  const r4 = new Room({ clock: 0 }, { id: "tomb-ilvl", kind: "dungeon", floor: 3, dungeon: 4, map: makeFloor(3, 4401, 1, 4) });
+  for (let k = 0; k < 5; k++) { const it = r4.rollGear("adventurer", "normal"); if (it?.ilvl) assert.equal(it.ilvl, 250, "왕릉 아이템 레벨 250"); }
+}
 ok("베르단 제1 던전 100층 · 왕릉 30층(Lv.191~220) 난이도 · 보스 한 대 30% 상한");
 
 // ── 보스 패턴: 26 보스 모두 실제로 패턴을 쓰고 오류 없음

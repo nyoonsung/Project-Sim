@@ -27,6 +27,8 @@ export function levelGapXpMultiplier(level, floor, dungeon = 1) {
   // 에르덴 제2 던전: 레벨 180부터 경험치 획득량 감소 (180 → 95%, 190 → 45%, 197+ → 10%)
   if (dungeon === 2) return level < 180 ? 1 : Math.max(0.1, 1 - (level - 179) * 0.05);
   // 베르단 던전: 실제 몬스터 레벨보다 6레벨 이상 높으면 레벨당 8%씩 감소
+  // 기억왕의 지하왕릉: 베르단 100층을 깬 고레벨 유저가 오는 곳이라 레벨 차이 경험치 감소 없음
+  if (dungeon === 4) return 1;
   if (dungeon >= 3) { const L = effLevel(floor, dungeon); return level <= L + 5 ? 1 : Math.max(0.1, 1 - (level - L - 5) * 0.08); }
   if (level <= floor + 5) return 1;
   return Math.max(0.05, 1 - (level - floor - 5) * 0.15);
@@ -514,7 +516,8 @@ export class Room {
   /** 이 층의 장비 드롭. 제2 던전은 아이템 레벨 100(최고) + 한 단계 좋은 등급표 (예전엔 1~30레벨짜리가 나왔음) */
   rollGear(cls, tier) {
     // 베르단 섬: 전설 3.5% · 신화 1.5% · 심연 0.5%, 아이템 레벨 = 실제 몬스터 레벨(151~250)
-    if (this.dungeon >= 3) return rollVerdanItem(secureRandom, { ilvl: Math.min(ILVL_CAP, this.lvl), cls, tier, zone: this.dungeon === 3 ? Math.floor((this.floor - 1) / 10) + 1 : 10 });
+    // 왕릉은 베르단 100층 이후 던전: 아이템 레벨은 최고치(250)로 고정
+    if (this.dungeon >= 3) return rollVerdanItem(secureRandom, { ilvl: this.dungeon === 4 ? ILVL_CAP : Math.min(ILVL_CAP, this.lvl), cls, tier, zone: this.dungeon === 3 ? Math.floor((this.floor - 1) / 10) + 1 : 10 });
     if (this.dungeon !== 2) return rollItem(secureRandom, { ilvl: Math.max(1, this.floor), cls, tier });
     const up = { normal: "elite", elite: "boss", boss: "boss" }[tier] ?? tier;
     return rollItem(secureRandom, { ilvl: Math.min(100, this.lvl), cls, tier: up });
