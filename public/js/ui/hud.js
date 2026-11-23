@@ -280,6 +280,7 @@ function drawMapOn(cv, maxS, big) {
   for (const o of G.objects) {
     if (o.kind === "portal") { g.fillStyle = o.id === "exit" && !G.exitOpen ? "#555" : "#7ff0ff"; g.fillRect(ox + (o.x / TILE) * s - 2, oy + (o.y / TILE) * s - 2, 4, 4); }
     if (o.kind === "npc") { g.fillStyle = "#9ef0a0"; g.fillRect(ox + (o.x / TILE) * s - 1, oy + (o.y / TILE) * s - 1, 3, 3); }
+    if (o.kind === "dummy") { g.fillStyle = "#ffd35a"; g.fillRect(ox + (o.x / TILE) * s - 2, oy + (o.y / TILE) * s - 2, 4, 4); }
   }
   for (const e of G.ents.values()) {
     if (e.dead) continue;
@@ -307,7 +308,7 @@ export function interactTarget() {
   if (!me) return null;
   let best = null, bd = 145;
   for (const o of G.objects) {
-    if (o.kind !== "npc") continue;
+    if (o.kind !== "npc" && o.kind !== "dummy") continue;
     const d = Math.hypot(o.x - me.rx, o.y - me.ry);
     if (d < bd) { bd = d; best = o; }
   }
@@ -316,7 +317,7 @@ export function interactTarget() {
 export function updateInteract() {
   const t = interactTarget();
   const el = $("#interact-hint");
-  const txt = t ? `[G] ${t.name}와(과) 대화` : "";
+  const txt = t ? (t.kind === "dummy" ? "[G] 허수아비 피해 측정 초기화" : `[G] ${t.name}와(과) 대화`) : "";
   if (el._t === txt) return; // 바뀔 때만 화면 갱신
   el._t = txt;
   el.classList.toggle("hidden", !t);
