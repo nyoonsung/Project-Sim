@@ -265,14 +265,23 @@ export const D2_MONSTER_STAT_MULTIPLIER = 1 / 150;
 export const D2_BOSS_STAT_MULTIPLIER = 0.2;
 export const D2_BOSS_HP_REDUCTION = 0.5; // 제2 던전 중간·주요 보스 HP를 현재의 절반으로
 export const D2_BOSS_SPEED_MULTIPLIER = 0.8;
+/** 왕릉 전용 난이도 보정: 220레벨 풀세팅 솔로 공략을 목표로 한 독립 배율 */
+export const TOMB_BALANCE = Object.freeze({
+  monsterHp: 0.28,
+  monsterDamage: 0.60,
+  bossHp: 0.04,
+  bossDamage: 0.02,
+  finalBossHp: 1.15,
+  speed: 0.90,
+});
 export const d2Level = (floor) => 100 + Math.round((floor * 5) / 3);
-/** 그 층의 실제 레벨 (제1 던전은 층 = 레벨) */
-export const effLevel = (floor, dungeon = 1) => (dungeon === 2 ? d2Level(floor) : dungeon === 3 ? 150 + floor : dungeon === 4 ? 250 + floor : floor);
+/** 그 층의 실제 레벨 (제1 던전은 층 = 레벨, 왕릉은 Lv.191~220) */
+export const effLevel = (floor, dungeon = 1) => (dungeon === 2 ? d2Level(floor) : dungeon === 3 ? 150 + floor : dungeon === 4 ? 190 + floor : floor);
 // 베르단 섬 배율: 에르덴 제2 던전 30층을 기준으로 시작해 층마다 성장.
 //  15~25층 사이에 2차 전직(공격력·HP 2배)을 반영한 벽이 있고, 제2 던전(지하왕릉)은 베르단 100층의 약 1.2배 압박(웨이브 밀도·생명력·공격력·패턴).
 export const VERDAN_SCALE = {
   hp0: 1.25, hpG: 0.0185, dmg0: 1.18, dmgG: 0.0125, wallHp: 0.55, wallDmg: 0.4, wallFrom: 15, wallTo: 25,
-  tombHp: 1.07, tombDmg: 1.07, tombHpG: 0.011, tombDmgG: 0.008,
+  tombHp: 1.02, tombDmg: 1.02, tombHpG: 0.004, tombDmgG: 0.003,
 };
 export function verdanGrowth(floor, dungeon) {
   const V = VERDAN_SCALE;
@@ -290,12 +299,13 @@ export function verdanGrowth(floor, dungeon) {
 export function floorScale(floor, dungeon = 1) {
   if (dungeon === 3 || dungeon === 4) {
     const b = floorScale(30, 2), g = verdanGrowth(floor, dungeon), L = effLevel(floor, dungeon);
+    const rewardLevel = dungeon === 4 ? 252 : L; // 왕릉 레벨 상한은 220으로 낮추되 보상 곡선은 기존 유지
     return {
       hp: b.hp * g.hp,
       dmg: b.dmg * g.dmg,
-      speed: b.speed * (dungeon === 4 ? 1.04 : 1.0),
-      xp: Math.pow(1.045, Math.min(L, 252) - 1) * (dungeon === 4 ? 1.9 : 1.6),
-      gold: Math.pow(1.04, Math.min(L, 252) - 1) * (dungeon === 4 ? 1.6 : 1.45),
+      speed: b.speed * (dungeon === 4 ? TOMB_BALANCE.speed : 1.0),
+      xp: Math.pow(1.045, Math.min(rewardLevel, 252) - 1) * (dungeon === 4 ? 1.9 : 1.6),
+      gold: Math.pow(1.04, Math.min(rewardLevel, 252) - 1) * (dungeon === 4 ? 1.6 : 1.45),
       level: L,
     };
   }
@@ -350,8 +360,8 @@ export function monsterStats(id, floor, party = 1, dungeon = 1) {
   const L = effLevel(floor, dungeon), fx = FIXES[dungeon];
   const hard = dungeon >= 2; // 제2 던전 이후는 같은 능력치 규칙(심연 배율)을 이어 쓴다
   return {
-    hp: Math.round((def.hp / norm[zi].hp) * fx.hp * s.hp * pScale * hpBoost(party, L) * (hard ? D2_MONSTER_STAT_MULTIPLIER : 1)),
-    dmg: (def.dmg / norm[zi].dmg) * fx.dmg * s.dmg * (hard ? D2_MONSTER_DAMAGE_MULTIPLIER * D2_MONSTER_STAT_MULTIPLIER : 1),
+    hp: Math.round((def.hp / norm[zi].hp) * fx.hp * s.hp * pScale * hpBoost(party, L) * (hard ? D2_MONSTER_STAT_MULTIPLIER : 1) * (dungeon === 4 ? TOMB_BALANCE.monsterHp : 1)),
+    dmg: (def.dmg / norm[zi].dmg) * fx.dmg * s.dmg * (hard ? D2_MONSTER_DAMAGE_MULTIPLIER * D2_MONSTER_STAT_MULTIPLIER : 1) * (dungeon === 4 ? TOMB_BALANCE.monsterDamage : 1),
     xp: def.xp * 6 * s.xp,
     level: L,
   };
@@ -372,15 +382,15 @@ export function bossStats(id, floor, party = 1, dungeon = 1) {
   const selectedBossDamageMultiplier = hard || (dungeon === 1 && floor >= 20)
     ? BOSS_DAMAGE_INCREASE_MULTIPLIER
     : 1;
-  const finalHp = hard && floor >= dungeonMax(dungeon) ? 1.5 : 1;
+  const finalHp = dungeon === 4 && floor >= dungeonMax(dungeon) ? TOMB_BALANCE.finalBossHp : hard && floor >= dungeonMax(dungeon) ? 1.5 : 1;
   // 베르단 보스는 보스 정의의 hp 차이(구역 안 상대값)를 일부 반영한다
   const verdanRel = dungeon >= 3 ? Math.pow((def.hp ?? 60000) / (def.mid ? 60000 : 120000), 0.35) : 1;
   // 베르단 보스는 층 성장의 제곱근만 체력에 반영(공격력은 0.8제곱): 일반 몹보다 완만하게 → 처치 시간이 에르덴 제2 던전 보스의 1.2~1.4배 수준
   const vg = dungeon >= 3 ? verdanGrowth(floor, dungeon) : null;
   const vHp = vg ? Math.pow(vg.hp / VERDAN_SCALE.hp0, -0.5) : 1, vDmg = vg ? Math.pow(vg.dmg / VERDAN_SCALE.dmg0, -0.2) : 1;
   return {
-    hp: Math.round(baseHp * hpMul * pScale * capBonus * finalHp * verdanRel * vHp * hpBoost(party, effLevel(floor, dungeon)) * bossHpMultiplier * (hard ? D2_BOSS_STAT_MULTIPLIER * D2_BOSS_HP_REDUCTION : 1)),
-    dmg: baseDmg * (def.mid ? 1.5 : 1.7) * bossDamageMultiplier * finalBossDamageMultiplier * (hard ? D2_BOSS_STAT_MULTIPLIER : 1) * selectedBossDamageMultiplier * vDmg,
+    hp: Math.round(baseHp * hpMul * pScale * capBonus * finalHp * verdanRel * vHp * hpBoost(party, effLevel(floor, dungeon)) * bossHpMultiplier * (hard ? D2_BOSS_STAT_MULTIPLIER * D2_BOSS_HP_REDUCTION : 1) * (dungeon === 4 ? TOMB_BALANCE.bossHp : 1)),
+    dmg: baseDmg * (def.mid ? 1.5 : 1.7) * bossDamageMultiplier * finalBossDamageMultiplier * (hard ? D2_BOSS_STAT_MULTIPLIER : 1) * selectedBossDamageMultiplier * vDmg * (dungeon === 4 ? TOMB_BALANCE.bossDamage : 1),
     xp: (def.xp ?? 25) * 6 * s.xp,
     level: effLevel(floor, dungeon),
   };
