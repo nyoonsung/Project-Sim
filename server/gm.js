@@ -23,7 +23,30 @@ export async function handleGm(req, res, path, { readJson, send, isAdmin, ip, ur
   if (path === "/api/gm/players" && req.method === "GET") {
     const q = String(url.searchParams.get("q") ?? "").slice(0, 20).replace(/[%_]/g, "");
     const page = Math.max(0, Number(url.searchParams.get("page") ?? 0) | 0);
-    const rows = Q.playerList.all(`%${q}%`, 50, page * 50).map((r) => ({ ...r, online: world.sessions.has(r.id), room: world.sessions.get(r.id)?.unit.room?.kind ?? null, floor: world.sessions.get(r.id)?.unit.room?.floor ?? null, dungeon: world.sessions.get(r.id)?.unit.room?.dungeon ?? null, island: world.sessions.get(r.id)?.char.island ?? "erden" }));
+    const rows = Q.playerList.all(`%${q}%`, 50, page * 50).map((r) => {
+      const s = world.sessions.get(r.id), c = s?.char;
+      return {
+        ...r,
+        online: !!s,
+        level: c ? c.level : r.level,
+        cls: c ? c.cls : r.cls,
+        best_floor: c ? c.best : r.best_floor,
+        best2: c ? c.best2 : r.best2,
+        best3: c ? c.best3 : r.best3,
+        best4: c ? c.best4 : r.best4,
+        checkpoint2: c ? c.checkpoint2 : r.checkpoint2,
+        checkpoint3: c ? c.checkpoint3 : r.checkpoint3,
+        checkpoint4: c ? c.checkpoint4 : r.checkpoint4,
+        cleared3: c ? c.cleared3 : r.cleared3,
+        cleared4: c ? c.cleared4 : r.cleared4,
+        verdan_pass: c ? c.verdanPass : r.verdan_pass,
+        cls2: c ? c.cls2 : r.cls2,
+        room: s?.unit.room?.kind ?? null,
+        floor: s?.unit.room?.floor ?? null,
+        dungeon: s?.unit.room?.dungeon ?? null,
+        island: c ? c.island : r.island ?? "erden",
+      };
+    });
     return send(res, 200, { list: rows });
   }
   if (path === "/api/gm/audit" && req.method === "GET") return send(res, 200, { list: Q.auditList.all(200) });
