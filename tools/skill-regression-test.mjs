@@ -1,13 +1,54 @@
 import assert from "node:assert/strict";
 import { Room } from "../server/game/room.js";
 import { makeFloor } from "../server/game/dungeon.js";
-import { makePlayerUnit, newCharacter, refreshStats } from "../server/game/player.js";
-import { SKILL_LIST, SKILLS, skillReach } from "../shared/skills.js";
+import { makePlayerUnit, newCharacter, refreshStats, defaultLoadout, defaultLoadout2, sanitizeChar } from "../server/game/player.js";
+import { SKILL_LIST, SKILLS, skillReach, passivesOf } from "../shared/skills.js";
 import { CLASS_INFO } from "../shared/classes.js";
 import { CLASS_DMG } from "../shared/stats.js";
-import { TICK_DT } from "../shared/constants.js";
+import { TICK_DT, SKILL_SLOTS } from "../shared/constants.js";
 import { moveCircle } from "../shared/move.js";
 import { dealDamage } from "../server/game/combat.js";
+
+// 12칸 스킬바·기존 세이브 이전·패시브 자동 적용을 검증한다.
+assert.equal(SKILL_SLOTS, 12, "스킬바는 12칸이어야 한다.");
+for (const cls of ["sword", "fist", "archer", "rogue", "mage", "priest", "smith"]) {
+  const ch = newCharacter("LoadoutTest");
+  ch.cls = cls;
+  ch.level = 250;
+  const loadout = defaultLoadout(ch);
+  assert.equal(loadout.length, SKILL_SLOTS, `${cls}: 기본 스킬 세트는 12칸이어야 한다.`);
+  for (const id of loadout.filter(Boolean)) assert.notEqual(SKILLS[id]?.kind, "passive", `${cls}: 패시브는 장착 칸을 차지하지 않는다.`);
+}
+{
+  const legacy = newCharacter("LegacySkillSave");
+  legacy.cls = "sword";
+  legacy.level = 120;
+  legacy.skills = ["sw_gale", "sw_thrust", "sw_fiveslash", "sw_thunder", "sw_eo_vortex", "sw_eo_bolt", "c_dash", "c_firstaid"];
+  const migrated = sanitizeChar(legacy, "LegacySkillSave");
+  assert.equal(migrated.skills.length, SKILL_SLOTS, "8칸 저장 데이터는 12칸으로 변환되어야 한다.");
+  assert.equal(migrated.skills[0], "sw_gale", "기존 전투 스킬을 보존해야 한다.");
+  assert.ok(migrated.skills.includes("c_dash") && migrated.skills.includes("c_firstaid"), "대시와 응급처치를 보존해야 한다.");
+}
+{
+  const smith = newCharacter("PassiveSmith");
+  smith.cls = "smith";
+  smith.level = 10;
+  assert.ok(passivesOf(smith).some((sk) => sk.id === "sm_armor"), "대장장이 중장갑 설계는 해금되면 자동 적용되어야 한다.");
+  const stats = deriveStats({ cls: "smith", level: 10, stats: {}, equip: {}, skills: [] });
+  assert.equal(stats.maxHp, 701, "중장갑 설계의 HP +10%가 장착 없이 적용되어야 한다.");
+  assert.equal(stats.def, 59, "중장갑 설계의 방어 +10%가 장착 없이 적용되어야 한다.");
+}
+{
+  const master = newCharacter("PassiveSwordmaster");
+  master.cls = "sword";
+  master.cls2 = "swordmaster";
+  master.level = 176;
+  const passives = passivesOf(master);
+  for (const id of ["sg_orthodox", "sg_parryflow"]) assert.ok(passives.some((sk) => sk.id === id), `소드마스터 ${id} 패시브는 등급 레벨 도달 시 자동 적용되어야 한다.`);
+  const loadout = defaultLoadout2(master);
+  assert.equal(loadout.length, SKILL_SLOTS);
+  assert.ok(!loadout.includes("sg_orthodox") && !loadout.includes("sg_parryflow"), "소드마스터 패시브는 스킬칸을 차지하지 않는다.");
+}
 
 for (const sk of SKILL_LIST.filter((s) => s.kind === "ultimate")) {
   assert.ok(Number.isFinite(skillReach(sk)) && skillReach(sk) > 0, `${sk.id}: 유효한 자동 사용 사거리가 있어야 한다.`);
