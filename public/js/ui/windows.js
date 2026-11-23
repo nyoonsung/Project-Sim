@@ -248,7 +248,7 @@ export function openSkills() {
         const passive = s.kind === "passive";
         const equipped = c.skills.includes(s.id);
         const cost = Object.entries(s.cost ?? {}).map(([k, v]) => `${RES_NAME[k]} ${v}`).join(" ");
-        return h("div", { class: `sk${locked ? " locked" : ""}${selSkill === s.id ? " sel" : ""}${equipped ? " equipped" : ""}${passive ? " passive-auto" : ""}`, onclick: () => { if (passive) return G.ui.toast("패시브는 장착하지 않아도 해금 즉시 자동 적용돼요.", "info"); if (!locked) { selSkill = selSkill === s.id ? null : s.id; refreshWin("skills"); } } },
+        return h("div", { class: `sk${locked ? " locked" : ""}${selSkill === s.id ? " sel" : ""}${equipped ? " equipped" : ""}${passive ? " passive-auto" : ""}`, onclick: () => { if (locked) return; if (passive) return G.ui.toast("패시브는 해금되면 장착 없이 자동 적용돼요.", "info"); selSkill = selSkill === s.id ? null : s.id; refreshWin("skills"); } },
           h("div", { class: "sk-top" }, h("img", { class: "sk-icon", src: skillIconURL(s), alt: "", draggable: "false" }), h("b", { class: "grade-" + s.grade, text: s.name }), " ", h("span", { class: "meta", text: { basic: "기본 공격", active: "액티브", passive: "패시브 · 자동 적용", ultimate: "궁극기" }[s.kind] }),
             canAuto(s) && !locked ? h("button", { class: "auto-tg" + (G.autoSkills.has(s.id) ? " on" : ""), title: "자동: 쿨타임이 돌면 가까운 적에게 알아서 사용 (회복은 체력 70% 아래일 때)", onclick: (e) => { e.stopPropagation(); setAuto(s.id, !G.autoSkills.has(s.id)); refreshWin("skills"); } }, G.autoSkills.has(s.id) ? "자동" : "수동") : null),
           h("div", { class: "meta", text: `${s.kind === "basic" ? `공격 간격 ${basicGap(s)}s` : s.kind === "passive" ? "해금 즉시 자동 적용 · 스킬칸 불필요" : `쿨 ${s.cd}s`}${cost ? " · " + cost : ""}${s.stance ? " · " + s.stance : ""}${locked ? (s.path ? ` · 🔒 ${s.tier}등급 Lv.${TIER_LEVEL[s.tier]} 필요` : ` · 🔒 ${CLASS_INFO[c.cls].ranks[need]} 필요(Lv.${stageLevel(c.cls, need)})`) : s.path ? ` · ${s.tier}등급` : ""}` }),
@@ -264,7 +264,7 @@ export function openSkills() {
         h("div", { class: "sword-guide-step" }, h("b", { text: "2 · 회전연참" }), h("span", { text: "적 가까이에서 사용해 원형 공격을 적중" })),
         h("div", { class: "sword-guide-arrow", text: "↓" }),
         h("div", { class: "sword-guide-step" }, h("b", { text: "3 · 쇄도검" }), h("span", { text: "적을 향해 조준하고 좁은 직선 공격을 적중" }))),
-      h("div", { class: "sword-guide-note", text: "세 기술 모두 적중해야 진행돼요. 다음 단계는 6초 안에 이어야 하며, 빗나가거나 다른 공격 기술을 먼저 적중시키면 진행이 초기화돼요. 스킬을 썼는데 빗나간 경우에도 초기화될 수 있어요." }),
+      h("div", { class: "sword-guide-note", text: "세 기술 모두 적중해야 진행돼요. 다음 단계는 6초 안에 이어야 하며, 빗나가거나 다른 액티브 스킬을 적중시키면 진행이 초기화돼요. 다음 기술을 시도했지만 적중하지 못해도 진행이 끊겨요." }),
       h("div", { class: "sword-guide-passive", text: "정통 검식 · 검격 받아치기 · 검식 완성 · 무극발도는 해금된 뒤 스킬칸에 넣지 않아도 자동 적용돼요. 진행 상태는 전투 화면의 검식 표시에서 확인할 수 있어요." })) : null;
     return [
       swordGuide,
