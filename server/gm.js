@@ -1,10 +1,11 @@
 // 관리 API: 관리자 키로 로그인한 서버 주인만 쓸 수 있고, 모든 변경은 감사 기록에 남긴다
 import { Q, secLog } from "./db.js";
-import { defaultLoadout, INV_SIZE } from "./game/player.js";
+import { defaultLoadout, defaultLoadout2, INV_SIZE } from "./game/player.js";
 import { world } from "./net.js";
-import { rollItem, makeItem, RARITIES, SLOTS, canEquip } from "../shared/items.js";
+import { rollItem, makeItem, RARITIES, SLOTS, canEquip, VMATS, ensureDur, makeClassRelic } from "../shared/items.js";
 import { CLASS_INFO } from "../shared/classes.js";
 import { MAX_LEVEL, ITEMS, TITLE_COLORS, TITLE_MAX } from "../shared/constants.js";
+import { PATHS, CLASS2_LEVEL } from "../shared/classes2.js";
 import { secureRandom } from "./game/secure.js";
 import { hashPassword } from "./auth.js";
 
@@ -22,7 +23,7 @@ export async function handleGm(req, res, path, { readJson, send, isAdmin, ip, ur
   if (path === "/api/gm/players" && req.method === "GET") {
     const q = String(url.searchParams.get("q") ?? "").slice(0, 20).replace(/[%_]/g, "");
     const page = Math.max(0, Number(url.searchParams.get("page") ?? 0) | 0);
-    const rows = Q.playerList.all(`%${q}%`, 50, page * 50).map((r) => ({ ...r, online: world.sessions.has(r.id), room: world.sessions.get(r.id)?.unit.room?.kind ?? null, floor: world.sessions.get(r.id)?.unit.room?.floor ?? null }));
+    const rows = Q.playerList.all(`%${q}%`, 50, page * 50).map((r) => ({ ...r, online: world.sessions.has(r.id), room: world.sessions.get(r.id)?.unit.room?.kind ?? null, floor: world.sessions.get(r.id)?.unit.room?.floor ?? null, dungeon: world.sessions.get(r.id)?.unit.room?.dungeon ?? null, island: world.sessions.get(r.id)?.char.island ?? "erden" }));
     return send(res, 200, { list: rows });
   }
   if (path === "/api/gm/audit" && req.method === "GET") return send(res, 200, { list: Q.auditList.all(200) });
@@ -89,6 +90,110 @@ export async function handleGm(req, res, path, { readJson, send, isAdmin, ip, ur
       });
       audit("edit", target, ch);
       return send(res, ok ? 200 : 400, ok ? { ok: true } : { error: "수정 실패" });
+    }
+    case "progress": {
+      const floorLimits = { best2: 30, best3: 100, best4: 30 };
+      const checkpointLimits = { checkpoint2: 30, checkpoint3: 100, checkpoint4: 30 };
+      const validCheckpoint = (v, max) => v === 1 || (v >= 11 && v <= max && (v - 1) % 10 === 0);
+      const patch = {};
+      for (const [k, max] of Object.entries(floorLimits)) {
+        if (b[k] === undefined) continue;
+        if (!int(b[k], 0, max)) return send(res, 400, { error: `${k} 범위가 잘못됐어요.` });
+        patch[k] = b[k];
+      }
+      for (const [k, max] of Object.entries(checkpointLimits)) {
+        if (b[k] === undefined) continue;
+        if (!int(b[k], 1, max) || !validCheckpoint(b[k], max)) return send(res, 400, { error: `${k}는 1, 11, 21 … 층 체크포인트만 가능해요.` });
+        patch[k] = b[k];
+      }
+      for (const k of ["cleared2", "cleared3", "cleared4", "verdanPass"]) {
+        if (b[k] !== undefined && typeof b[k] !== "boolean") return send(res, 400, { error: `${k} 값이 잘못됐어요.` });
+        if (b[k] !== undefined) patch[k] = b[k];
+      }
+      if (b.island !== undefined && !["erden", "verdan"].includes(b.island)) return send(res, 400, { error: "섬 값이 잘못됐어요." });
+      if (b.cls2 !== undefined && typeof b.cls2 !== "string") return send(res, 400, { error: "2차 직업 값이 잘못됐어요." });
+      let why = null;
+      const ok = world.gmApplyChar(id, (c) => {
+        if (b.cls2) {
+          const path = PATHS[b.cls2];
+          if (!path || path.base !== c.cls || c.level < CLASS2_LEVEL) { why = "현재 직업과 레벨에 맞는 2차 전직 경로가 아니에요."; return; }
+          c.cls2 = b.cls2;
+          c.skills = defaultLoadout2(c);
+        } else if (b.cls2 === "") {
+          c.cls2 = null;
+          c.skills = defaultLoadout(c);
+        }
+        Object.assign(c, patch);
+        if (patch.verdanPass === true && b.island === undefined) c.island = "verdan";
+        if (patch.verdanPass === false) c.island = "erden";
+        if (b.island === "verdan") c.verdanPass = true;
+        if (b.island !== undefined) c.island = b.island;
+      });
+      if (why) return send(res, 400, { error: why });
+      if (!ok) return send(res, 400, { error: "진행도 수정에 실패했어요." });
+      audit("edit_progress", target, patch);
+      return send(res, 200, { ok: true });
+    }
+    case "resources": {
+      const mats = b.mats && typeof b.mats === "object" && !Array.isArray(b.mats) ? b.mats : {};
+      const sigils = b.sigils && typeof b.sigils === "object" && !Array.isArray(b.sigils) ? b.sigils : {};
+      const matIds = new Set(VMATS.map((m) => m.id));
+      for (const [k, v] of Object.entries(mats)) if (!matIds.has(k) || !int(v, 0, 999999)) return send(res, 400, { error: "베르단 재료 지급 값이 잘못됐어요." });
+      for (const [k, v] of Object.entries(sigils)) if (!/^(10|[1-9])$/.test(k) || !int(v, 0, 9999)) return send(res, 400, { error: "지역 각인 지급 값이 잘못됐어요." });
+      const hearts = b.hearts === undefined ? 0 : b.hearts;
+      if (!int(hearts, 0, 9999)) return send(res, 400, { error: "섬 심장핵 지급 값이 잘못됐어요." });
+      const details = { mats, sigils, hearts };
+      let overflow = false;
+      const ok = world.gmApplyChar(id, (c) => {
+        c.mats ??= {}; c.sigils ??= {};
+        for (const [k, v] of Object.entries(mats)) if ((c.mats[k] ?? 0) + v > 999999) overflow = true;
+        for (const [k, v] of Object.entries(sigils)) if ((c.sigils[k] ?? 0) + v > 9999) overflow = true;
+        if ((c.hearts ?? 0) + hearts > 9999) overflow = true;
+        if (overflow) return;
+        for (const [k, v] of Object.entries(mats)) c.mats[k] = (c.mats[k] ?? 0) + v;
+        for (const [k, v] of Object.entries(sigils)) c.sigils[k] = (c.sigils[k] ?? 0) + v;
+        c.hearts = (c.hearts ?? 0) + hearts;
+      });
+      if (overflow) return send(res, 400, { error: "재화 한도를 초과해요." });
+      if (!ok) return send(res, 400, { error: "재화 지급에 실패했어요." });
+      audit("give_verdan_resources", target, details);
+      return send(res, 200, { ok: true });
+    }
+    case "restore": {
+      const s = world.gmFind(id);
+      if (!s) return send(res, 400, { error: "접속 중인 플레이어만 즉시 회복할 수 있어요." });
+      const u = s.unit;
+      u.dead = false; u.hp = u.maxHp; u.mp = u.maxMp;
+      u.status.clear(); u.buffs.clear(); u.shield = null;
+      s.sendMe?.();
+      s.notice("관리자가 HP·MP를 모두 회복하고 상태 이상을 해제했어요.");
+      audit("restore_player", target, { room: u.room?.id ?? null });
+      return send(res, 200, { ok: true });
+    }
+    case "repair-all": {
+      let repaired = 0;
+      const ok = world.gmApplyChar(id, (c) => {
+        for (const it of [...Object.values(c.equip ?? {}), ...(c.inv ?? [])]) {
+          if (!it) continue;
+          ensureDur(it);
+          if (Number.isFinite(it.maxDur)) { it.dur = it.maxDur; repaired++; }
+        }
+      });
+      audit("repair_all", target, { count: repaired });
+      return send(res, ok ? 200 : 400, ok ? { ok: true, count: repaired } : { error: "장비 수리에 실패했어요." });
+    }
+    case "give-class-relic": {
+      let made = null;
+      const ok = world.gmApplyChar(id, (c) => {
+        if (c.inv.length >= INV_SIZE) return;
+        made = makeClassRelic(c.cls, MAX_LEVEL);
+        if (!made) return;
+        made.uid = c.nextUid++;
+        c.inv.push(made);
+      });
+      audit("give_class_relic", target, { name: made?.name ?? null, cls: made?.classRelic ?? null });
+      if (made) world.sessions.get(id)?.notice(`관리자가 직업 전용 심연 무기 [${made.name}]을(를) 지급했어요.`);
+      return send(res, ok && made ? 200 : 400, ok && made ? { ok: true, item: made } : { error: "가방이 가득 찼거나 지급에 실패했어요." });
     }
     case "give": {
       const rarity = RARITIES.includes(b.rarity) ? b.rarity : "일반";
