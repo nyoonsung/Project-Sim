@@ -475,7 +475,9 @@ export function makeVerdanTown() {
   objs.push({ kind: "npc", id: "smithy", name: "대장장이 그론", x: P(28) + 16, y: P(23) + 12 });
   objs.push({ kind: "npc", id: "enchanter", name: "마법부여사 리엔", x: P(5) + 16, y: P(22) + 12 });
   objs.push({ kind: "npc", id: "trainer", name: "훈련 교관", x: P(11) + 16, y: P(17) + 16 });
-  objs.push({ kind: "dummy", id: "dummy", x: P(10) + 16, y: P(12) + 8 });
+  // 베르단 마을 서쪽 훈련 구역: 전용 돌바닥을 깔아 무작위 나무·풀 장식과 겹치지 않게 한다.
+  carveRect(m, 9, 11, 3, 3, T.PLAZA);
+  objs.push({ kind: "dummy", id: "dummy", x: P(10) + 16, y: P(12) + 16 });
   objs.push({ kind: "npc", id: "board", name: "모험가 게시판", x: P(25) + 16, y: P(13) });
   // 선착장
   objs.push({ kind: "boat", x: P(23) + 16, y: P(27) + 20, sail: "#c8e0ff" });
