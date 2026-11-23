@@ -346,7 +346,11 @@ function bindInput() {
     if (e.code === "KeyI") toggleWin("inv", WIN.openInv);
     if (e.code === "KeyP") toggleWin("party", WIN.openParty);
     if (e.code === "KeyH") toggleWin("help", WIN.openHelp);
-    if (e.code === "KeyG") { const o = HUD.interactTarget(); if (o) WIN.openNpc(o); }
+    if (e.code === "KeyG") {
+      const o = HUD.interactTarget();
+      if (o?.kind === "dummy") send({ t: "dummy", op: "reset" });
+      else if (o) WIN.openNpc(o);
+    }
     if (e.code === "KeyM") HUD.toggleBigMap();
     if (e.code === "KeyL") { e.preventDefault(); G.toggleChat?.(); return; } // preventDefault: 'l'이 입력칸에 찍히지 않게
     if (e.code === "KeyB") toggleWin("codex", WIN.openCodex);
