@@ -37,7 +37,7 @@ const SCHEMA = {
   vote: (m) => typeof m.ok === "boolean",
   town: () => true,
   skills: (m) => Array.isArray(m.list) && m.list.length === 8 && m.list.every((x) => x === null || isId(x)),
-  stat: (m) => isId(m.key) && isInt(m.n, 1, 500),
+  stat: (m) => isId(m.key) && isInt(m.n, 1, 1_000_000),
   resetStats: () => true,
   class: (m) => isId(m.cls),
   rename: (m) => isStr(m.name, 24),
