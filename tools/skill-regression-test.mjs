@@ -42,7 +42,7 @@ for (const cls of ["sword", "fist", "archer", "rogue", "mage", "priest", "smith"
   const master = newCharacter("PassiveSwordmaster");
   master.cls = "sword";
   master.cls2 = "swordmaster";
-  master.level = 176;
+  master.level = 188;
   const passives = passivesOf(master);
   for (const id of ["sg_orthodox", "sg_parryflow"]) assert.ok(passives.some((sk) => sk.id === id), `소드마스터 ${id} 패시브는 등급 레벨 도달 시 자동 적용되어야 한다.`);
   const loadout = defaultLoadout2(master);
