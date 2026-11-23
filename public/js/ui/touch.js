@@ -130,7 +130,7 @@ function skillButtons() {
   const ring = (r, angs) => angs.forEach((a) => pos.push([Math.cos((a * Math.PI) / 180) * r, -Math.sin((a * Math.PI) / 180) * r]));
   ring(92, [180, 135, 90]);
   ring(160, [196, 166, 136, 106]);
-  ring(224, [205, 175, 145, 115]);
+  ring(224, [165, 140, 115, 90]);
   slots.forEach((el, i) => {
     el.classList.add("tb");
     if (i === 0) el.classList.add("big");
