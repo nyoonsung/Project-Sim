@@ -123,15 +123,15 @@ export async function handleGm(req, res, path, { readJson, send, isAdmin, ip, ur
           c.cls2 = null;
           c.skills = defaultLoadout(c);
         }
+        if (patch.verdanPass === false && b.island === "verdan") { why = "입도 권한을 해제할 때는 현재 섬을 에르덴으로 선택해 주세요."; return; }
         Object.assign(c, patch);
-        if (b.island === "verdan") c.verdanPass = true;
         if (b.island !== undefined) c.island = b.island;
-        if (patch.verdanPass === true && b.island === undefined) c.island = "verdan";
-        if (patch.verdanPass === false) c.island = "erden";
+        if (c.island === "verdan") c.verdanPass = true;
+        if (!c.verdanPass) c.island = "erden";
       });
       if (why) return send(res, 400, { error: why });
       if (!ok) return send(res, 400, { error: "진행도 수정에 실패했어요." });
-      audit("edit_progress", target, patch);
+      audit("edit_progress", target, { ...patch, ...(b.island !== undefined ? { island: b.island } : {}), ...(b.cls2 !== undefined ? { cls2: b.cls2 } : {}) });
       return send(res, 200, { ok: true });
     }
     case "resources": {
