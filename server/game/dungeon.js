@@ -353,7 +353,9 @@ export function makeTown() {
   objs.push({ kind: "npc", id: "smithy", name: "대장장이 브론", x: P(31) + 16, y: P(12) + 4 });
   objs.push({ kind: "campfire", fx: "fire/campfire", x: P(29) + 16, y: P(12) + 4 });
   objs.push({ kind: "npc", id: "trainer", name: "훈련 교관", x: P(8) + 16, y: P(23) + 16 });
-  objs.push({ kind: "dummy", id: "dummy", x: P(10) + 16, y: P(22) + 8 });
+  // 훈련장 건물 옆에 별도 돌바닥을 만들어 허수아비가 장식물·풀 장식과 겹치지 않게 한다.
+  carveRect(m, 9, 21, 3, 3, T.PLAZA);
+  objs.push({ kind: "dummy", id: "dummy", x: P(10) + 16, y: P(22) + 16 });
   objs.push({ kind: "npc", id: "board", name: "모험가 게시판", x: P(25) + 16, y: P(14) });
   objs.push({ kind: "npc", id: "enchanter", name: "마법부여사 엘라", x: P(28) + 16, y: P(8) + 8 });
   // 시장 노점 (광장 아래쪽)
@@ -366,7 +368,7 @@ export function makeTown() {
   for (const [tx, ty] of [[16, 13], [23, 13]]) objs.push({ kind: "bench", x: P(tx) + 16, y: P(ty) + 26 });
   for (const [tx, ty] of [[14, 13], [25, 17], [14, 17]]) { set(m, tx, ty, T.WALL); objs.push({ kind: "planter", s: R.pick(["bush0", "bush1", "bush4"]), f: R.pick(["flower0", "flower1", "flower2", "flower3"]), x: P(tx) + 16, y: P(ty) + 28 }); }
   // 소품
-  for (const [s, tx, ty] of [["crate", 9, 10], ["jars", 9, 11], ["crate", 29, 10], ["box", 34, 9], ["chest", 36, 19], ["cauldron", 38, 19], ["scarecrow", 11, 21], ["redjar", 30, 26], ["bucket", 8, 25], ["crates", 32, 19], ["jar", 11, 13], ["box", 28, 19], ["jars", 12, 19], ["crate", 29, 21]]) {
+  for (const [s, tx, ty] of [["crate", 9, 10], ["jars", 9, 11], ["crate", 29, 10], ["box", 34, 9], ["chest", 36, 19], ["cauldron", 38, 19], ["redjar", 30, 26], ["bucket", 8, 25], ["crates", 32, 19], ["jar", 11, 13], ["box", 28, 19], ["jars", 12, 19], ["crate", 29, 21]]) {
     if (get(m, tx, ty) === T.WALL) continue;
     objs.push({ kind: "prop", s, x: P(tx) + 16, y: P(ty) + 24, small: true });
   }
