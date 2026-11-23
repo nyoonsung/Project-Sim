@@ -31,7 +31,7 @@ assert.deepEqual(new Set(generic.filter((it) => it.slot === "offhand").map((it) 
 for (const slot of ["helmet", "armor", "trinket"]) {
   assert.deepEqual(new Set(generic.filter((it) => it.slot === slot).map((it) => it.variant)), new Set([0, 1, 2, 3]));
 }
-const relics = items.filter((it) => it.relic);
+const relics = items.filter((it) => it.relic && !it.classRelic);
 assert.equal(relics.length, 5);
 assert.equal(new Set(relics.map((it) => it.relic)).size, 5, "all five unique Abyss relics are included");
 const classRelics = items.filter((it) => it.classRelic);
