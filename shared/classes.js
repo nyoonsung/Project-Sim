@@ -52,7 +52,7 @@ export const CLASS_INFO = {
     name: "권투사", role: "탱커", position: "반격·위협 탱커",
     desc: "반격·방어·위협 관리로 적을 붙잡고, 콤보와 상태이상 연계로 꾸준히 공격.",
     stats: ["str2", "tough", "grit", "crit"],
-    hpMul: 1.75, defMul: 1.7, mpBase: 40, dmgType: "phys", resource: "ki", // 2차 업데이트 전 조정: 체력 +25%·방어 +26%
+    hpMul: 2.1875, defMul: 2.125, mpBase: 40, dmgType: "phys", resource: "ki", // 탱커 생존력 보강: 기존 HP·방어 계수 각각 25% 상향
     ranks: [...tiers3(["입문 권투사", "정식 권투사"]), "권사", "권성", "권왕"],
     look: { armor: ["#f2c79b", "#d49a6a", "#a8704a", "#6e452c"], core: ["#b8322a", "#86221c", "#561410"], mark: "#ffcc40", weapon: null, head: "band", headColor: "#e33b2e" },
   },
@@ -92,7 +92,7 @@ export const CLASS_INFO = {
     name: "대장장이", role: "탱커", position: "방벽·장치 탱커",
     desc: "높은 방어력, 도발, 방벽과 장치로 전열을 만들고 파티를 보호.",
     stats: ["str2", "dura", "eng", "crit"],
-    hpMul: 1.5, defMul: 1.6, mpBase: 50, dmgType: "phys", resource: "parts",
+    hpMul: 1.875, defMul: 2.0, mpBase: 50, dmgType: "phys", resource: "parts", // 탱커 생존력 보강: 기존 HP·방어 계수 각각 25% 상향
     ranks: ["1성", "2성", "3성", "4성", "5성", "6성", "7성", "8성", "9성"],
     look: { armor: ["#c8a27a", "#9c7652", "#6e5236", "#463220"], core: ["#5c5f6a", "#40424c", "#2a2b33"], mark: "#ff8a30", weapon: "hammer", head: "helm", headColor: "#7a7f8c" },
   },
