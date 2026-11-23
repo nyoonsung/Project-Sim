@@ -36,7 +36,7 @@ export const CLASS_INFO = {
     name: "모험가", role: "기본", position: "전직 전 기본 상태",
     desc: "던전에 첫발을 내딛은 모험가. 10층 전직소에서 직업을 고를 수 있다.",
     stats: ["str", "agi", "vit", "int", "spi", "crit"],
-    hpMul: 1.0, defMul: 1.0, mpBase: 60, dmgType: "phys", resource: null,
+    hpMul: 1.15, defMul: 1.15, mpBase: 60, dmgType: "phys", resource: null, // 모험가 전용 스킬 업데이트: 생존력 보강
     ranks: ["모험가"],
     look: { armor: ["#d9c7a5", "#b09a72", "#857152", "#5c4d39"], core: ["#6b5a48", "#4c3f33", "#33291f"], mark: "#e0b04a", weapon: "sword", head: "band", headColor: "#a33b2e" },
   },

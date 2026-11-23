@@ -68,7 +68,7 @@ export function castSkill(room, u, slot, ax, ay, tx, now, exp) {
   if (!sk || sk.kind === "passive") return;
   if (sk.cls !== "common" && sk.cls !== ch.cls) return;
   if (sk.path) { if (ch.cls2 !== sk.path || ch.level < (TIER_LEVEL[sk.tier] ?? 999)) return; }
-  else if (sk.cls !== "common" && stageOf(ch.cls, ch.level) < unlockStage(sk, CLASS_INFO[ch.cls].ranks.length)) return;
+  else if (sk.cls !== "common" && (stageOf(ch.cls, ch.level) < unlockStage(sk, CLASS_INFO[ch.cls].ranks.length) || ch.level < (sk.minLv ?? 0))) return;
   if (isHardCC(u)) return;
   // 이동기는 시전 중이어도 바로 나감 (시전 취소)
   if (sk.moveSkill && u.casting && !u.channel && now >= (u.cds.get(id) ?? 0) && now >= (u.moveLock ?? 0)) cancelCast(room, u);

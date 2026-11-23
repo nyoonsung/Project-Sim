@@ -44,6 +44,7 @@ export function onMessage(m) {
     case "boatAsk": G.ui.onBoatAsk?.(m); break;
     case "crafted": G.ui.onCrafted?.(m); break;
     // PvP 결투장
+    case "bossRetry": G.ui.onBossRetry?.(m); break;
     case "pvpQ": G.pvpQ = !!m.on; G.ui.onPvp?.(); break;
     case "pvpTop": G.pvpTop = m.list ?? []; G.ui.onPvp?.(); break;
     case "pvpInvite": G.ui.onPvpInvite?.(m); break;
@@ -441,7 +442,8 @@ export function tryCast(slot, at) {
 // ── 스킬 자동 사용 (공용 스킬 제외, 스킬마다 수동/자동 선택. 설정은 이 브라우저에 저장)
 const AUTO_KEY = "abyss-auto-skills";
 G.autoSkills = (() => { try { return new Set(JSON.parse(localStorage.getItem(AUTO_KEY) || "[]")); } catch { return new Set(); } })();
-export const canAuto = (sk) => !!sk && sk.cls !== "common" && sk.kind !== "passive";
+// 자동 사용: 패시브·이동기(대시 등)만 빼고 모두 (모험가 공용·전용 스킬 포함)
+export const canAuto = (sk) => !!sk && sk.kind !== "passive" && !sk.moveSkill;
 export function setAuto(id, on) {
   if (on) G.autoSkills.add(id); else G.autoSkills.delete(id);
   try { localStorage.setItem(AUTO_KEY, JSON.stringify([...G.autoSkills])); } catch {}

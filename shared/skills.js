@@ -51,6 +51,48 @@ add("common", [
     steps: [{ do: "heal", target: "self", pctMax: 0.18 }] },
 ]);
 
+// ─────────────────────────── 0. 모험가 전용 (다재다능) ───────────────────────────
+//  전직하지 않고도 에르덴 섬을 깰 수 있게: 여러 직업의 재능을 조금씩. 전직 직업보다 살짝 약한 대신 고루 갖춤.
+//  minLv: 이 레벨부터 열림 (모험가는 성장 단계가 하나뿐이라 레벨로 해금)
+add("adventurer", [
+  { id: "ad_whirl", name: "회전 베기", grade: "일반", kind: "active", minLv: 5, cd: 5, cost: { mp: 6 }, aim: "self", anim: "spin",
+    desc: "[검사의 재능] 몸을 돌려 주변의 적을 모두 벤다.", limit: "최대 6명.",
+    fx: { swing: "melee/spin-slash", hit: "impacts/hit-spark" }, steps: [{ do: "circle", radius: 64, pow: 1.3, max: 6 }] },
+  { id: "ad_volley", name: "연발 화살", grade: "희귀", kind: "active", minLv: 10, cd: 6, cost: { mp: 8 }, aim: "dir", anim: "shoot",
+    desc: "[궁수의 재능] 부채꼴로 화살 세 발을 쏜다. 근접 무기를 들어도 쓸 수 있다.", limit: "화살마다 한 명.",
+    fx: { proj: "projectiles/arrow", hit: "impacts/hit-spark" }, steps: [{ do: "proj", speed: 540, range: 300, pow: 0.85, radius: 5, count: 3, spread: 30 }] },
+  { id: "ad_fireball", name: "화염구", grade: "희귀", kind: "active", minLv: 15, cd: 8, cost: { mp: 12 }, aim: "point", range: 300, anim: "cast", cast: 0.3,
+    desc: "[마법사의 재능] 지점에 화염구를 떨어뜨려 폭발시키고 불태운다.", limit: "짧은 시전.",
+    fx: { area: "explosions/small-explosion", scale: 0.8 }, steps: [{ do: "area", radius: 66, pow: 2.0, telegraph: 0.3, status: { type: "burn", dur: 3, pow: 0.2 } }] },
+  { id: "ad_guard", name: "수호 태세", grade: "희귀", kind: "active", minLv: 20, cd: 16, cost: { mp: 10 }, aim: "self", anim: "guard",
+    desc: "[대장장이의 재능] 보호막(최대 체력 18%)을 두르고 5초 동안 받는 피해 15% 감소.", limit: "보호막은 겹치지 않는다.",
+    fx: { self: "holy/divine-shield" }, steps: [{ do: "shield", target: "self", pctMax: 0.18, dur: 5 }, { do: "buff", target: "self", id: "ad_guard", dur: 5, mods: { dr: 0.15 } }] },
+  { id: "ad_versatile", name: "다재다능", grade: "희귀", kind: "passive", minLv: 25,
+    desc: "여러 재능을 익혀 피해 +6%, 최대 체력 +8%.", limit: "자동 적용.",
+    passive: { mods: { dmg: 0.06, hpPct: 0.08 } } },
+  { id: "ad_rush", name: "돌파", grade: "영웅", kind: "active", minLv: 30, cd: 8, cost: { mp: 8 }, aim: "dir", anim: "dash", moveSkill: true,
+    desc: "[도적의 재능] 앞으로 파고들어 도착 지점 주변을 베고 넘어뜨린다.", limit: "이동기 연속 사용 제한.",
+    fx: { self: "spawn/poof", hit: "impacts/heavy-landing" }, steps: [{ do: "dash", dist: 120, speed: 560 }, { do: "circle", radius: 50, pow: 1.5, cc: { type: "down", dur: 0.6 }, groggy: 14 }] },
+  { id: "ad_prayer", name: "치유의 기도", grade: "영웅", kind: "active", minLv: 40, cd: 22, cost: { mp: 15 }, aim: "self", anim: "cast", cast: 0.3,
+    desc: "[성직자의 재능] 최대 체력의 22%를 회복한다.", limit: "자신만.",
+    fx: { self: "holy/heal" }, steps: [{ do: "heal", target: "self", pctMax: 0.22 }] },
+  { id: "ad_quake", name: "대지 강타", grade: "영웅", kind: "active", minLv: 55, cd: 12, cost: { mp: 14 }, aim: "self", anim: "smash",
+    desc: "[권투사의 재능] 땅을 내려쳐 주변 적에게 큰 피해를 주고 잠깐 기절시킨다.", limit: "보스는 그로기 게이지만.",
+    fx: { hit: "impacts/ground-slam", hitScale: 0.8 }, steps: [{ do: "circle", radius: 82, pow: 2.1, max: 8, cc: { type: "stun", dur: 0.8 }, groggy: 22 }] },
+  { id: "ad_veteran", name: "노련한 모험가", grade: "영웅", kind: "passive", minLv: 60,
+    desc: "수많은 모험의 경험: 치명타 확률 +5%, 방어력 +10%.", limit: "자동 적용.",
+    passive: { mods: { crit: 0.05, defPct: 0.1 } } },
+  { id: "ad_storm", name: "칼날 폭풍", grade: "전설", kind: "ultimate", minLv: 75, cd: 30, cost: { mp: 25 }, aim: "point", range: 260, anim: "cast",
+    desc: "지점에 칼날 폭풍을 일으켜 1.8초 동안 여섯 번 벤다.", limit: "대상별 피해 상한.",
+    fx: { area: "melee/dagger-flurry", scale: 0.9 }, steps: [{ do: "area", radius: 92, pow: 1.15, ticks: 6, interval: 0.3, telegraph: 0.2 }] },
+  { id: "ad_awaken", name: "영웅의 각성", grade: "전설", kind: "ultimate", minLv: 90, cd: 40, cost: { mp: 20 }, aim: "self", anim: "cast",
+    desc: "12초 동안 피해 +30%, 공격 속도 +15%, 받는 피해 -10%.", limit: "40초에 한 번.",
+    fx: { self: "ui/level-up" }, steps: [{ do: "buff", target: "self", id: "ad_awaken", dur: 12, mods: { dmg: 0.3, aspd: 0.15, dr: 0.1 } }] },
+  { id: "ad_legend", name: "전설의 모험가", grade: "영웅", kind: "passive", minLv: 100,
+    desc: "어떤 직업도 고르지 않고 정상에 선 자: 피해 +10%, 최대 체력 +10%, 치명타 +3%.", limit: "자동 적용.",
+    passive: { mods: { dmg: 0.1, hpPct: 0.1, crit: 0.03 } } },
+]);
+
 // ─────────────────────────── 1. 검사 ───────────────────────────
 add("sword", [
   // 검술 자세
@@ -641,7 +683,7 @@ export function passivesOf(ch) {
     if (sk.kind !== "passive") return false;
     if (sk.path) return sk.path === ch.cls2 && level >= (TIER_LEVEL[sk.tier] ?? 999);
     if (sk.cls === "common") return true;
-    return sk.cls === ch.cls && stage >= unlockStage(sk, stagesInClass);
+    return sk.cls === ch.cls && stage >= unlockStage(sk, stagesInClass) && level >= (sk.minLv ?? 0);
   });
 }
 /** 직업의 스킬 목록 */

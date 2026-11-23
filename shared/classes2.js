@@ -13,7 +13,7 @@ export const CLASS2_MUL = { atk: 2, hp: 2, def: 1.5 };
 export const PATH_DMG = {
   darkknight: 0.97, swordmaster: 0.81, vajra: 0.184, striker: 0.351, archmage: 0.874, warlock: 0.843,
   arcanearcher: 0.74, windwalker: 0.873, sentinel: 1.25, nightblade: 1.05, assassin: 1.44, trickster: 1.05,
-  inquisitor: 1.0, heretic: 0.775, volcano: 0.264, mechanic: 0.595, king: 1.25,
+  inquisitor: 1.0, heretic: 0.775, volcano: 0.264, mechanic: 0.595, king: 1.35,
 };
 // res2: 2차 전직 고유 자원 (없으면 null). 이름·최대치
 export const PATHS = {

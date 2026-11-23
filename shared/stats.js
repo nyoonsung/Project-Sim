@@ -7,6 +7,7 @@ import { CLASS2_MUL, PATHS } from "./classes2.js";
 
 // 직업 피해 배율: 도적 아래 다섯 직업의 피해 기여도를 1.5배 상향한다.
 export const CLASS_DMG = {
+  adventurer: 2.0, // 모험가 전용 스킬과 함께: 전직 직업의 약 85~90% (에르덴 섬 클리어 가능 수준)
   sword: 1.80, // 기존 대비 1.5배
   archer: 0.5985, // 0.57 → 0.5985 (+5%)
   rogue: 1.30, // 1.62에서 약 20% 하향
@@ -63,7 +64,7 @@ export function deriveStats(ch) {
     aspd: Math.min(1.6, 1 + g("aspd") + gear.aspd + p("aspd")),
     cast: Math.min(1.5, (info.castMul ?? 1) + g("cast")),
     steady: Math.min(0.6, g("steady")),
-    crit: Math.min(CRIT.CHANCE_CAP, CRIT.BASE_CHANCE + g("crit") + gear.crit),
+    crit: Math.min(CRIT.CHANCE_CAP, CRIT.BASE_CHANCE + g("crit") + gear.crit + p("crit")),
     critDmg: Math.min(CRIT.DAMAGE_CAP, CRIT.BASE_DAMAGE + gear.critDmg),
     move: BASE_MOVE_SPEED * (MOVE_MUL[ch.cls] ?? 1) * (1 + Math.min(0.4, g("move") + gear.move)),
     mpRegen: (1.2 + 0.08 * L) * (info.mpRegenMul ?? 1) * (1 + g("mpRegen") + gear.mpRegen),

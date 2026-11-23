@@ -361,6 +361,7 @@ export class World {
       case "vault": this.openAbyssVault(s); break;
       case "town": if (room?.kind === "pvp") { room.forfeit(s, "leave"); break; } if (room && !this.isTown(room)) this.toTown(s, "마을로 돌아왔어요."); break;
       case "pvp": this.pvpOp(s, m); break;
+      case "retryBoss": this.retryBoss(s); break;
       case "boat": this.travelBoat(s, m.to); break;
       case "class2": this.changeClass2(s, m.path); break;
       case "craft": this.craft(s, m); break;
@@ -595,6 +596,26 @@ export class World {
       this.save(p.session);
       this.sendChar(p.session);
     }
+  }
+  /** 보스층을 깨면 "보스에 다시 도전하시겠습니까?" — 혼자면 본인, 파티면 파티장이 고름 */
+  offerBossRetry(room, bossName) {
+    if (room.kind !== "dungeon" || !this.rooms.has(room.id)) return;
+    for (const p of room.players.values()) {
+      const s = p.session, party = this.partyOf(s);
+      s.send({ t: "bossRetry", floor: room.floor, dungeon: room.dungeon, boss: bossName, leader: !party || party.leader === s.userId ? 1 : 0 });
+    }
+  }
+  retryBoss(s) {
+    const room = s.unit.room;
+    if (!room || room.kind !== "dungeon" || !room.bossCleared || room.transition) return s.notice("지금은 보스에 다시 도전할 수 없어요.");
+    const party = this.partyOf(s);
+    if (party && party.leader !== s.userId) return s.notice("파티장만 다시 도전을 고를 수 있어요.");
+    const group = [...room.players.values()].map((p) => this.sessions.get(p.userId)).filter((g) => g && g.unit.room === room);
+    if (!group.length) return;
+    for (const g of group) if (g.unit.dead) { g.unit.dead = false; g.unit.hp = Math.round(g.unit.maxHp * 0.5); }
+    const newRoom = this.moveGroup(group, room.floor, "dungeon", { dungeon: room.dungeon, partySize: group.length });
+    for (const g of group) g.notice(`${room.floor}층 보스에 다시 도전해요!`);
+    return newRoom;
   }
   vaultReply(s, ok, text, item = null) {
     s.send?.({ t: "vaultResult", ok, text, item: item ? { name: item.name, rarity: item.rarity, relic: item.relic ?? null } : null });

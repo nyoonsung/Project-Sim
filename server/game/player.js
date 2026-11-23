@@ -159,7 +159,7 @@ export function defaultLoadout(ch) {
 export function availableSkills(ch) {
   const stage = stageOf(ch.cls, ch.level);
   const n = CLASS_INFO[ch.cls].ranks.length;
-  return Object.values(SKILLS).filter((s) => s.cls === "common" || (s.path ? ch.cls2 === s.path && ch.level >= (TIER_LEVEL[s.tier] ?? 999) : s.cls === ch.cls && stage >= unlockStage(s, n)));
+  return Object.values(SKILLS).filter((s) => s.cls === "common" || (s.path ? ch.cls2 === s.path && ch.level >= (TIER_LEVEL[s.tier] ?? 999) : s.cls === ch.cls && stage >= unlockStage(s, n) && ch.level >= (s.minLv ?? 0)));
 }
 /** 2차 전직 기본 세트: 열린 2차 액티브를 우선 배치하고 남은 칸은 1차 액티브로 채운다. */
 export function defaultLoadout2(ch) {
@@ -245,6 +245,14 @@ export function gainXp(room, u, amount) {
         const sk = Object.values(SKILLS).find((x) => x.path === ch.cls2 && x.tier === Number(tier));
         if (sk) u.session.notice(`${PATHS[ch.cls2].name} ${tier}등급 스킬 [${sk.name}]이(가) 열렸어요! 스킬 창(K)에서 장착하세요.`);
       }
+    }
+    // 모험가 전용 스킬: 열리는 레벨이 되면 빈 스킬칸에 자동 장착 (패시브는 장착 없이 적용)
+    if (ch.cls === "adventurer") for (const sk of Object.values(SKILLS)) {
+      if (sk.cls !== "adventurer" || sk.minLv !== ch.level) continue;
+      if (sk.kind === "passive") { u.session.notice(`모험가 패시브 [${sk.name}]을(를) 익혔어요! (자동 적용)`); continue; }
+      const slot = ch.skills.findIndex((id, i) => i < SKILL_SLOTS - 2 && !id);
+      if (slot >= 0 && !ch.skills.includes(sk.id)) { ch.skills[slot] = sk.id; u.session.notice(`모험가 스킬 [${sk.name}]을(를) 익혀 ${slot + 1}번 칸에 자동으로 넣었어요!`); room.world?.sendChar?.(u.session); }
+      else u.session.notice(`모험가 스킬 [${sk.name}]을(를) 익혔어요! 스킬 창(K)에서 장착하세요.`);
     }
     const prevStage = stageOf(ch.cls, ch.level - 1), stage = stageOf(ch.cls, ch.level);
     if (stage > prevStage) {

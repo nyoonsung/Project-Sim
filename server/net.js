@@ -58,6 +58,7 @@ const SCHEMA = {
   lock: (m) => isUid(m.uid),
   ping: (m) => isNum(m.c, 0, 1e15),
   dummy: (m) => ["reset"].includes(m.op),
+  retryBoss: () => true, // 보스층 클리어 뒤 같은 보스에 다시 도전
   // PvP 결투장: 대기열 · 세팅 저장(프리셋/직접 배분 · 스킬칸) · 친선 결투 신청/수락/거절 · 순위
   pvp: (m) => ["queue", "leave", "save", "challenge", "accept", "decline", "top"].includes(m.a)
     && (m.preset === undefined || ["atk", "bal", "def", "custom"].includes(m.preset))

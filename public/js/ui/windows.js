@@ -216,7 +216,7 @@ export function openSkills() {
     if (!c) return [];
     const stage = stageOf(c.cls, c.level);
     const n = CLASS_INFO[c.cls].ranks.length;
-    const list = [...skillsOf("common"), ...(c.cls === "adventurer" ? [] : skillsOf(c.cls)), ...(c.cls2 ? skillsOfPath(c.cls2) : [])];
+    const list = [...skillsOf("common"), ...skillsOf(c.cls), ...(c.cls2 ? skillsOfPath(c.cls2) : [])];
     const safe = G.mapKind === "town" || G.mapKind === "safe";
     const slots = h("div", { class: "skill-slots" }, ...c.skills.map((id, i) => {
       const sk = id && SKILLS[id];
@@ -245,14 +245,14 @@ export function openSkills() {
       cards.push(h("h4", { text: gname === "2차" ? `2차 전직 — ${PATHS[c.cls2]?.name} (9등급 Lv.170 → 1등급 Lv.218)` : gname === "기본" ? "공용 스킬 (모험가 기본기)" : gname === "신화" ? "신화 스킬 (최종 단계)" : `${gname} 스킬` }));
       cards.push(h("div", { class: "skill-list" }, ...items.map((s) => {
         const need = unlockStage(s, n);
-        const locked = s.path ? c.level < TIER_LEVEL[s.tier] : s.cls !== "common" && stage < need;
+        const locked = s.path ? c.level < TIER_LEVEL[s.tier] : s.cls !== "common" && (stage < need || c.level < (s.minLv ?? 0));
         const passive = s.kind === "passive";
         const equipped = c.skills.includes(s.id);
         const cost = Object.entries(s.cost ?? {}).map(([k, v]) => `${RES_NAME[k]} ${v}`).join(" ");
         return h("div", { class: `sk${locked ? " locked" : ""}${selSkill === s.id ? " sel" : ""}${equipped ? " equipped" : ""}${passive ? " passive-auto" : ""}`, onclick: () => { if (locked) return; if (passive) return G.ui.toast("패시브는 해금되면 장착 없이 자동 적용돼요.", "info"); selSkill = selSkill === s.id ? null : s.id; refreshWin("skills"); } },
           h("div", { class: "sk-top" }, h("img", { class: "sk-icon", src: skillIconURL(s), alt: "", draggable: "false" }), h("b", { class: "grade-" + s.grade, text: s.name }), " ", h("span", { class: "meta", text: { basic: "기본 공격", active: "액티브", passive: "패시브 · 자동 적용", ultimate: "궁극기" }[s.kind] }),
             canAuto(s) && !locked ? h("button", { class: "auto-tg" + (G.autoSkills.has(s.id) ? " on" : ""), title: "자동: 쿨타임이 돌면 가까운 적에게 알아서 사용 (회복은 체력 70% 아래일 때)", onclick: (e) => { e.stopPropagation(); setAuto(s.id, !G.autoSkills.has(s.id)); refreshWin("skills"); } }, G.autoSkills.has(s.id) ? "자동" : "수동") : null),
-          h("div", { class: "meta", text: `${s.kind === "basic" ? `공격 간격 ${basicGap(s)}s` : s.kind === "passive" ? "해금 즉시 자동 적용 · 스킬칸 불필요" : `쿨 ${s.cd}s`}${cost ? " · " + cost : ""}${s.stance ? " · " + s.stance : ""}${locked ? (s.path ? ` · 🔒 ${s.tier}등급 Lv.${TIER_LEVEL[s.tier]} 필요` : ` · 🔒 ${CLASS_INFO[c.cls].ranks[need]} 필요(Lv.${stageLevel(c.cls, need)})`) : s.path ? ` · ${s.tier}등급` : ""}` }),
+          h("div", { class: "meta", text: `${s.kind === "basic" ? `공격 간격 ${basicGap(s)}s` : s.kind === "passive" ? "해금 즉시 자동 적용 · 스킬칸 불필요" : `쿨 ${s.cd}s`}${cost ? " · " + cost : ""}${s.stance ? " · " + s.stance : ""}${locked ? (s.path ? ` · 🔒 ${s.tier}등급 Lv.${TIER_LEVEL[s.tier]} 필요` : s.minLv && c.level < s.minLv ? ` · 🔒 Lv.${s.minLv} 필요` : ` · 🔒 ${CLASS_INFO[c.cls].ranks[need]} 필요(Lv.${stageLevel(c.cls, need)})`) : s.path ? ` · ${s.tier}등급` : s.minLv ? ` · Lv.${s.minLv} 해금` : ""}` }),
           h("div", { class: "desc", text: s.desc }),
           s.kind !== "passive" && !locked ? profBlock(s) : null);
       })));
@@ -1084,5 +1084,18 @@ export function openPvpResult(m) {
     m.ranked ? h("div", { class: "note", text: `레이팅 ${m.rating} (${m.delta >= 0 ? "+" : ""}${m.delta}) · ${m.tier}` }) : h("div", { class: "note", text: "친선전이라 순위에는 반영되지 않아요." }),
     ...(m.log ?? []).filter((r) => r.r).map((r) => h("div", { class: "note", text: `${r.r}라운드: ${r.w < 0 ? "무승부" : r.w === m.me ? "승리" : "패배"}${r.why === "time" ? " (시간 종료)" : ""}${r.t ? ` · ${r.t}초` : ""}` })),
     h("button", { class: "btn primary", onclick: () => closeWin("pvp-result") }, "확인"),
+  ], { w: 320 });
+}
+
+// ───────── 보스층 클리어 뒤: 다시 도전할지 고르기 ─────────
+export function openBossRetry(m) {
+  openWin("boss-retry", "보스 처치!", () => [
+    h("div", { class: "pvp-big", text: `${m.floor}층 클리어`, style: "color:#ffd35a;font-size:22px" }),
+    h("div", { class: "note", text: `${m.boss ?? "보스"}을(를) 쓰러뜨렸어요. 보스에 다시 도전하시겠습니까?` }),
+    m.leader
+      ? h("div", { class: "flexrow" },
+        h("button", { class: "btn primary", onclick: () => { send({ t: "retryBoss" }); closeWin("boss-retry"); } }, "⚔ 다시 도전"),
+        h("button", { class: "btn", onclick: () => closeWin("boss-retry") }, "계속 진행 (포탈로)"))
+      : h("div", { class: "note", text: "파티장이 다시 도전할지 골라요. 계속 진행하려면 포탈로 가세요." }),
   ], { w: 320 });
 }

@@ -171,7 +171,7 @@ export class Room {
     if (u.type === "p") {
       const ch = u.session.char, eq = (u.session.realChar ?? ch).equip ?? {};
       const tt = ch.title != null ? ch.titles?.find((x) => x.id === ch.title) : null;
-      return { id: u.id, k: "p", n: u.name, tt: tt?.text ?? null, tc: tt?.color ?? null, c: ch.cls, mh: u.maxHp, lv: ch.level, w: eq.weapon?.type ?? null, o: eq.offhand?.type ?? null, party: this.partyId ? 1 : 0, ...(u.pvp ? { sd: u.pvp } : {}), x: u.x | 0, y: u.y | 0 };
+      return { id: u.id, k: "p", n: u.name, tt: tt?.text ?? null, tc: tt?.color ?? null, c: ch.cls, mh: u.maxHp, lv: ch.level, w: eq.weapon?.type ?? null, o: eq.offhand?.type ?? null, party: this.partyId ? 1 : 0, ...(u.pvp ? { sd: u.pvp } : {}), ...(ch.cls2 ? { c2: ch.cls2 } : {}), x: u.x | 0, y: u.y | 0 };
     }
     if (u.type === "m") return { id: u.id, k: "m", n: u.name, m: u.mid, mh: u.maxHp, lv: u.level, el: u.elite ? 1 : 0, x: u.x | 0, y: u.y | 0 };
     if (u.type === "b") return { id: u.id, k: "b", n: u.name, b: u.bid, mh: u.maxHp, lv: u.level, x: u.x | 0, y: u.y | 0 };
@@ -613,7 +613,10 @@ export class Room {
     }
     this.map.objects.push(portal);
     this.ev({ e: "obj", o: portal });
+    this.bossCleared = true;
     this.world.onBossCleared(this, isMain);
+    // 보스 다시 도전 선택 창 (전리품을 다 주운 뒤)
+    this.schedule(2.6, () => this.world.offerBossRetry?.(this, b.name));
   }
 
   // ── 매 틱
