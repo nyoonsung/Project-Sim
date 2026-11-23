@@ -98,7 +98,7 @@ async function openPlayer(id) {
   const d = await api(`/api/gm/player/${id}`);
   const u = d.user, c = d.char;
   const msg = h("div");
-  const act = (path, body, after) => async () => { try { const r = await api(`/api/gm/player/${id}/${path}`, body()); flash(msg, true, r.tempPassword ? `임시 비밀번호: ${r.tempPassword}  (플레이어에게 알려 주세요)` : "완료했어요." + (r.item ? ` (${r.item.name})` : "")); if (r.tempPassword) return; after?.(); setTimeout(() => openPlayer(id), 400); } catch (e) { flash(msg, false, e.message); } };
+  const act = (path, body, after) => async () => { try { const r = await api(`/api/gm/player/${id}/${path}`, body()); flash(msg, true, r.tempPassword ? `임시 비밀번호: ${r.tempPassword}  (플레이어에게 알려 주세요)` : r.count != null ? `심연 풀세트 ${r.count}개를 지급했어요. (+99 · Lv.250)` : "완료했어요." + (r.item ? ` (${r.item.name})` : "")); if (r.tempPassword) return; after?.(); setTimeout(() => openPlayer(id), 400); } catch (e) { flash(msg, false, e.message); } };
   const field = (lbl, el) => [h("span", { text: lbl }), el];
   const lv = h("input", { type: "number", min: 1, max: 250, value: c?.level ?? 1 });
   const gold = h("input", { type: "number", min: 0, step: 1, value: c?.gold ?? 0 });
@@ -176,7 +176,8 @@ async function openPlayer(id) {
           h("div", { class: "flexrow" },
             h("button", { class: "btn small", onclick: act("restore", () => ({})) }, "즉시 부활·HP/MP 회복"),
             h("button", { class: "btn small", onclick: act("repair-all", () => ({})) }, "가방·장착 장비 전체 수리"),
-            h("button", { class: "btn small primary", onclick: () => { if (confirm("레벨 250 직업 전용 심연 무기를 지급할까요?")) act("give-class-relic", () => ({}))(); } }, "직업 전용 심연 무기 지급"))),
+            ...(u.username === "GM_윤성" ? [h("button", { class: "btn small primary", onclick: () => { if (confirm("GM_윤성 계정에 전체 심연 장비 38개를 지급할까요?\n모든 무기·보조장비·방어구 변형·고유 유물·8개 직업 전용 무기를 포함합니다.\n모두 Lv.250 · +99 · 최대 옵션 5개 · 최대 내구도 · 잠금 상태이며, 기존 장비는 유지됩니다.")) act("give-abyss-max-bundle", () => ({}))(); } }, c?.gmAbyssMaxSetV1 ? "심연 풀세트 지급 완료" : "GM_윤성 심연 풀세트(+99) 지급")] : []),
+            h("button", { class: "btn small", onclick: () => { if (confirm("레벨 250 직업 전용 심연 무기를 지급할까요?")) act("give-class-relic", () => ({}))(); } }, "직업 전용 심연 무기 지급"))),
         resourceBox,
         h("details", { class: "box" }, h("summary", { text: "무작위 아이템 지급" }), h("div", { class: "form" }, ...field("등급", rar), ...field("아이템 레벨", ilvl), ...field("부위", slot)),
           h("button", { class: "btn small primary", onclick: act("give", () => ({ rarity: rar.value, ilvl: +ilvl.value, slot: slot.value || undefined })) }, "무작위로 지급")),
