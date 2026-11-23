@@ -146,7 +146,7 @@ export class Room {
     const d = {
       id: newUnitId(), team: "m", type: "m", mid: "dummy", name: "훈련 허수아비", x, y, r: 12, hp: 1e9, maxHp: 1e9, atk: 0, def: 0, level: 1,
       xp: 0, speed: 0, ai: "dummy", def_: { name: "허수아비" }, status: new Map(), buffs: new Map(), threat: new Map(), facing: Math.PI / 2,
-      dummy: true, dps: { total: 0, start: 0, last: 0 }, dead: false,
+      dummy: true, dpsByPlayer: new Map(), dead: false,
     };
     this.units.set(d.id, d);
     return d;
@@ -864,10 +864,16 @@ export class Room {
   }
 
   tickDummy(d, now) {
-    if (d.dps.total > 0 && now - d.dps.last > 5) {
-      const secs = Math.max(1, d.dps.last - d.dps.start);
-      this.ev({ e: "msg", text: `허수아비 측정: ${secs.toFixed(1)}초 동안 ${Math.round(d.dps.total).toLocaleString()} 피해 (초당 ${Math.round(d.dps.total / secs).toLocaleString()})`, kind: "info" });
-      d.dps = { total: 0, start: 0, last: 0 };
+    if (!(d.dpsByPlayer instanceof Map)) d.dpsByPlayer = new Map();
+    for (const [userId, stat] of d.dpsByPlayer) {
+      if (!stat.total || now - stat.last <= 5) continue;
+      const secs = Math.max(1, stat.last - stat.start);
+      const text = `허수아비 측정: ${secs.toFixed(1)}초 동안 ${Math.round(stat.total).toLocaleString()} 피해 (초당 ${Math.round(stat.total / secs).toLocaleString()})`;
+      const session = this.world.sessions?.get(userId)
+        ?? [...this.players.values()].find((p) => p.userId === userId)?.session;
+      if (session?.notice) session.notice(text);
+      else session?.send?.({ t: "ev", list: [{ e: "msg", text, kind: "info" }] });
+      d.dpsByPlayer.delete(userId);
     }
   }
 
