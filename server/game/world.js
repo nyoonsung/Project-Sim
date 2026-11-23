@@ -384,7 +384,7 @@ export class World {
     if (!this.isTown(room)) return s.notice("훈련 허수아비는 마을에서만 이용할 수 있어요.");
     const dummy = [...room.units.values()].find((u) => u.dummy);
     if (!dummy) return s.notice("이 마을에는 훈련 허수아비가 없어요.");
-    if (Math.hypot(dummy.x - s.unit.x, dummy.y - s.unit.y) > 130) return s.notice("훈련 허수아비 가까이에서 G 키를 눌러 주세요.");
+    if (Math.hypot(dummy.x - s.unit.x, dummy.y - s.unit.y) >= 145) return s.notice("훈련 허수아비 가까이에서 G 키를 눌러 주세요.");
     dummy.dpsByPlayer?.delete(s.userId);
     s.notice("내 허수아비 피해 측정 기록을 초기화했어요.");
   }
