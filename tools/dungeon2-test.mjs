@@ -281,13 +281,13 @@ ok(true, "제2 던전 드롭 레벨 100 · 소환물 드롭 없음 · 심연 유
   assert.ok(packets.some((p) => p.t === "vaultResult" && !p.ok && p.text.includes("마을")), "out-of-town requests must return a visible failure result");
 }
 
-// 직업 피해 배율: 도적 아래 다섯 직업의 피해 기여도를 1.5배 상향했다.
-assert.equal(CLASS_DMG.smith, 5.25);
-assert.equal(CLASS_DMG.fist, 6.00);
+// 현재 직업 피해 배율: 탱커 화력 보강 및 궁수 피해량 20% 상향 반영.
+assert.equal(CLASS_DMG.smith, 7.35);
+assert.equal(CLASS_DMG.fist, 8.10);
 assert.equal(CLASS_DMG.priest, 2.025);
-assert.equal(CLASS_DMG.archer, 0.475); // 2차 업데이트 전 조정: 궁수 딜량 50%
+assert.equal(CLASS_DMG.archer, 0.57);
 assert.equal(CLASS_DMG.rogue, 1.30);
-ok(true, "도적 아래 다섯 직업 피해 배율 1.5배 상향");
+ok(true, "현재 직업 피해 배율 회귀 확인");
 
 // 성직자 신규 광역기 4종이 실제 서버 판정용 area 단계·큰 반경·강한 계수를 가진다.
 for (const id of ["pr_halo", "pr_sanctum", "pr_radiance", "pr_apocalypse"]) {
