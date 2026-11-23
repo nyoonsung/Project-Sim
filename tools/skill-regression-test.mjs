@@ -90,7 +90,7 @@ assert.ok(SKILLS.sm_golem.steps[0].dur >= 16);
 
 // 직업 밸런스 패치 수치와 궁수 광역 스킬 등록을 고정 검증한다.
 assert.equal(CLASS_DMG.sword, 1.80, "검사 피해 배율 1.5배 상향");
-assert.equal(CLASS_DMG.archer, 0.475, "궁수 피해량 50% (2차 업데이트 전 조정)");
+assert.equal(CLASS_DMG.archer, 0.57, "궁수 현재 피해량에서 20% 상향");
 assert.equal(CLASS_INFO.archer.defFinal, 0.5, "궁수 방어력 50% (2차 업데이트 전 조정)");
 assert.ok(CLASS_INFO.fist.hpMul >= 1.7 && CLASS_INFO.fist.defMul >= 1.65, "권투사 체력·방어 상향 (2차 업데이트 전 조정)");
 assert.equal(CLASS_INFO.archer.hpMul, 0.96);
@@ -108,8 +108,8 @@ assert.equal(CLASS_INFO.priest.hpMul, 1.24);
 assert.equal(CLASS_INFO.priest.defMul, 1.10);
 assert.ok(SKILLS.pr_bolt.steps[0].pow >= 0.95);
 assert.ok(SKILLS.pr_halo.steps[0].pow >= 3.25);
-assert.equal(CLASS_DMG.fist, 6.00, "권투사 피해 배율 1.5배 상향");
-assert.equal(CLASS_DMG.smith, 5.25, "대장장이 피해 배율 1.5배 상향");
+assert.equal(CLASS_DMG.fist, 8.10, "권투사 탱커 피해량 35% 추가 상향");
+assert.equal(CLASS_DMG.smith, 7.35, "대장장이 탱커 피해량 40% 추가 상향");
 assert.equal(SKILLS.ar_volley.cls, "archer");
 assert.equal(SKILLS.ar_bombard.cls, "archer");
 assert.equal(SKILLS.ar_volley.steps[0].count, 9);
