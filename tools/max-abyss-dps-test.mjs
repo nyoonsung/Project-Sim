@@ -54,7 +54,7 @@ function offensiveGear(cls) {
     offhand.base = baseStats("offhand", "shield", MAX_LEVEL, 5, 0);
     offhand.base.def += 66;
     offhand.base.hp += 360;
-    offhand.base.dr += 0.084;
+    offhand.base.dr = (offhand.base.dr ?? 0) + 0.084;
   } else {
     offhand = pickItem((it) => it.slot === "offhand" && it.type === gear.o[0] && !it.relic, cls + " 보조장비");
   }
@@ -62,15 +62,15 @@ function offensiveGear(cls) {
   const helmet = pickItem((it) => it.relic === "eclipse-visor", "일식의 면갑");
   helmet.variant = 2;
   helmet.base = baseStats("helmet", undefined, MAX_LEVEL, 5, 2);
-  helmet.base.critDmg += 0.156;
+  helmet.base.critDmg = (helmet.base.critDmg ?? 0) + 0.156;
 
   const armor = pickItem((it) => it.relic === "chrono-mantle", "무음의 망토");
   armor.variant = 2;
   armor.base = baseStats("armor", undefined, MAX_LEVEL, 5, 2);
   armor.base.def += 81.6;
   armor.base.hp += 432;
-  armor.base.move += 0.06;
-  armor.base.dr += 0.072;
+  armor.base.move = (armor.base.move ?? 0) + 0.06;
+  armor.base.dr = (armor.base.dr ?? 0) + 0.072;
 
   const trinket = pickItem((it) => it.relic === "star-heart", "심연의 인장");
   trinket.variant = 0;
@@ -78,7 +78,7 @@ function offensiveGear(cls) {
   trinket.base.hp += 288;
   trinket.base.mp += 192;
   trinket.base.atkPct += 0.12;
-  trinket.base.crit += 0.048;
+  trinket.base.crit = (trinket.base.crit ?? 0) + 0.048;
 
   return {
     weapon: tuned(classWeapon),
