@@ -77,7 +77,19 @@ const SQL = {
   secByUser: "SELECT * FROM security_log WHERE user_id = ? ORDER BY id DESC LIMIT ?",
   itemLog: "INSERT INTO item_log (at, user_id, kind, detail) VALUES (?, ?, ?, ?)",
   itemLogByUser: "SELECT * FROM item_log WHERE user_id = ? ORDER BY id DESC LIMIT ?",
-  playerList: `SELECT u.id, u.username, u.email, u.role, u.created_at, u.last_login, u.last_ip, u.banned_until, u.ban_reason, u.muted_until, c.level, c.cls, c.best_floor, COALESCE(json_extract(c.data, '$.best2'), 0) AS best2
+  playerList: `SELECT u.id, u.username, u.email, u.role, u.created_at, u.last_login, u.last_ip, u.banned_until, u.ban_reason, u.muted_until,
+                 c.level, c.cls, c.best_floor,
+                 COALESCE(json_extract(c.data, '$.best2'), 0) AS best2,
+                 COALESCE(json_extract(c.data, '$.best3'), 0) AS best3,
+                 COALESCE(json_extract(c.data, '$.best4'), 0) AS best4,
+                 COALESCE(json_extract(c.data, '$.checkpoint2'), 1) AS checkpoint2,
+                 COALESCE(json_extract(c.data, '$.checkpoint3'), 1) AS checkpoint3,
+                 COALESCE(json_extract(c.data, '$.checkpoint4'), 1) AS checkpoint4,
+                 COALESCE(json_extract(c.data, '$.cleared3'), 0) AS cleared3,
+                 COALESCE(json_extract(c.data, '$.cleared4'), 0) AS cleared4,
+                 COALESCE(json_extract(c.data, '$.verdanPass'), 0) AS verdan_pass,
+                 COALESCE(json_extract(c.data, '$.island'), 'erden') AS island,
+                 json_extract(c.data, '$.cls2') AS cls2
                FROM users u LEFT JOIN characters c ON c.user_id = u.id WHERE u.username LIKE ? ORDER BY u.id DESC LIMIT ? OFFSET ?`,
   ranking: `SELECT u.username, c.level, c.cls, c.best_floor, COALESCE(json_extract(c.data, '$.best2'), 0) AS best2, COALESCE(json_extract(c.data, '$.best3'), 0) AS best3, COALESCE(json_extract(c.data, '$.best4'), 0) AS best4, json_extract(c.data, '$.cls2') AS cls2 FROM characters c JOIN users u ON u.id = c.user_id
             WHERE u.role = 'player' ORDER BY best4 DESC, best3 DESC, c.best_floor DESC, c.level DESC LIMIT 20`,
