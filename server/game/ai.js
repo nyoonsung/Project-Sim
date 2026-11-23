@@ -75,6 +75,19 @@ export const D2_BOSS_PATTERN = Object.freeze({
   intervalPhase2: 2.55,
   intervalPhase3: 1.85,
 });
+// 왕릉 보스는 220레벨 솔로 공략을 목표로 패턴 중첩을 줄이고 회피 시간을 넉넉하게 준다.
+export const TOMB_BOSS_PATTERN = Object.freeze({
+  power: 0.68,
+  telegraph: 1.2,
+  telegraphMin: 0.95,
+  countScale: 0.72,
+  comboPhase2: 0.18,
+  comboPhase3: 0.28,
+  comboDelay: 1.25,
+  intervalPhase1: 4.4,
+  intervalPhase2: 3.7,
+  intervalPhase3: 3.0,
+});
 
 // 제2 던전 각 보스의 2·3페이즈 전용 패턴. 같은 난이도라도 보스마다 공략법이 달라진다.
 export const D2_BOSS_SIGNATURES = Object.freeze({
@@ -377,15 +390,16 @@ export function tickBoss(room, b, now) {
   const phase2Threshold = 0.5;
   if (b.phase === 1 && b.hp < b.maxHp * phase2Threshold) {
     b.phase = 2;
-    b.speed *= room.dungeon >= 2 ? 1.08 : 1.15;
+    b.speed *= room.dungeon === 4 ? 1.04 : room.dungeon >= 2 ? 1.08 : 1.15;
     room.ev({ e: "msg", text: `${b.name}이(가) 힘을 끌어올렸어요! (2페이즈)`, kind: "boss" });
     room.ev({ e: "fx", fx: "status/rage", x: b.x | 0, y: b.y | 0, s: 1.5, at: b.id });
     b.patternAt = now + 1;
   }
   // 심연 보스의 3페이즈: 20% 이하에서 분노. 기존 텔레그래프는 유지해 회피 여지를 남긴다.
-  if (room.dungeon >= 2 && b.phase === 2 && b.hp < b.maxHp * 0.2) {
+  const finalPhaseThreshold = room.dungeon === 4 ? 0.15 : 0.2;
+  if (room.dungeon >= 2 && b.phase === 2 && b.hp < b.maxHp * finalPhaseThreshold) {
     b.phase = 3;
-    b.speed *= 1.12;
+    b.speed *= room.dungeon === 4 ? 1.05 : 1.12;
     room.ev({ e: "msg", text: `${b.name}이(가) 완전히 폭주합니다! (분노 상태)`, kind: "boss" });
     room.ev({ e: "fx", fx: "status/rage", x: b.x | 0, y: b.y | 0, s: 2.0, at: b.id });
     b.patternAt = now + 0.85;
@@ -440,26 +454,33 @@ export function tickBoss(room, b, now) {
       ...(b.phase >= 2 ? [{ type: "cross", len: 430, width: 40, tel: 0.86, pow: 1.25, fx: "shadow/dark-explosion" }, { type: "walk", n: 10, gap: 0.08, step: 42, radius: 42, tel: 0.72, pow: 1.3, fx: "shadow/dark-explosion" }] : []),
       ...(b.phase === 3 ? [{ type: "nova", step: 90, n: 3, tel: 0.85, pow: 1.35, fx: "shadow/dark-explosion" }] : []),
     ] : [];
-    const allPats = verdan ? [...native, ...native, ...verdanExtra] : [...native, ...extra, ...abyssExtra, ...signature];
+    const allPats = room.dungeon === 4
+      ? [...native, ...verdanExtra]
+      : verdan ? [...native, ...native, ...verdanExtra] : [...native, ...extra, ...abyssExtra, ...signature];
     if (!allPats.length) return;
     const pickIndex = (b.patIdx++ * 7 + Math.floor(Math.random() * allPats.length)) % allPats.length;
     let chosen = allPats[pickIndex];
     // 같은 종류의 패턴이 연속으로 뽑히는 것을 방지해 매번 다른 회피 동선을 요구한다.
     if (allPats.length > 1 && chosen.type === b.lastPatternType) chosen = allPats[(pickIndex + 1) % allPats.length];
     b.lastPatternType = chosen.type;
-    const tune = (pat) => room.dungeon >= 2
-      ? { ...pat, ...(pat.tel == null ? {} : { tel: Math.max(D2_BOSS_PATTERN.telegraphMin, pat.tel * D2_BOSS_PATTERN.telegraph) }), ...(pat.n == null ? {} : { n: Math.max(1, Math.ceil(pat.n * D2_BOSS_PATTERN.countScale)) }), pow: (pat.pow ?? 1) * D2_BOSS_PATTERN.power }
-      : pat;
+    const tune = (pat) => room.dungeon === 4
+      ? { ...pat, ...(pat.tel == null ? {} : { tel: Math.max(TOMB_BOSS_PATTERN.telegraphMin, pat.tel * TOMB_BOSS_PATTERN.telegraph) }), ...(pat.n == null ? {} : { n: Math.max(1, Math.ceil(pat.n * TOMB_BOSS_PATTERN.countScale)) }), pow: (pat.pow ?? 1) * TOMB_BOSS_PATTERN.power }
+      : room.dungeon >= 2
+        ? { ...pat, ...(pat.tel == null ? {} : { tel: Math.max(D2_BOSS_PATTERN.telegraphMin, pat.tel * D2_BOSS_PATTERN.telegraph) }), ...(pat.n == null ? {} : { n: Math.max(1, Math.ceil(pat.n * D2_BOSS_PATTERN.countScale)) }), pow: (pat.pow ?? 1) * D2_BOSS_PATTERN.power }
+        : pat;
     b.tune = tune;
-    b.restAfter = 0;
+    b.restAfter = room.dungeon === 4 ? 0.8 : 0;
     startPattern(room, b, tune(chosen), t, now);
     // 심연 보스는 2·3페이즈에서 서로 다른 공격을 겹쳐 압박한다.
     // 순차 결합(seq)·이동 안전 지대는 그 자체가 연계 → 위에 또 겹치지 않음 (예고 순서 유지)
     const comboPool = room.dungeon >= 2 ? allPats.filter((x) => x !== chosen && !["seq", "safemove", "fakesafe", "flood", "darkness"].includes(x.type)) : extra;
-    const comboChance = room.dungeon >= 2 || room.dungeon === 4 ? (b.phase === 3 ? D2_BOSS_PATTERN.comboPhase3 : D2_BOSS_PATTERN.comboPhase2) : room.dungeon === 3 ? (b.phase === 3 ? 0.62 : 0.42) : 0.35;
+    const comboChance = room.dungeon === 4
+      ? (b.phase === 3 ? TOMB_BOSS_PATTERN.comboPhase3 : TOMB_BOSS_PATTERN.comboPhase2)
+      : room.dungeon >= 2 ? (b.phase === 3 ? D2_BOSS_PATTERN.comboPhase3 : D2_BOSS_PATTERN.comboPhase2)
+        : room.dungeon === 3 ? (b.phase === 3 ? 0.62 : 0.42) : 0.35;
     if (b.phase >= 2 && comboPool.length && !["seq", "safemove"].includes(chosen.type) && Math.random() < comboChance) {
       const p2 = tune(comboPool[Math.floor(Math.random() * comboPool.length)]);
-      room.schedule(room.dungeon >= 2 ? D2_BOSS_PATTERN.comboDelay : 0.8, () => {
+      room.schedule(room.dungeon === 4 ? TOMB_BOSS_PATTERN.comboDelay : room.dungeon >= 2 ? D2_BOSS_PATTERN.comboDelay : 0.8, () => {
         if (!b.dead) {
           const keep = b.pattern;
           startPattern(room, b, p2, pickTarget(room, b, room.now) ?? t, room.now);
@@ -467,10 +488,13 @@ export function tickBoss(room, b, now) {
         }
       });
     }
-    const iv = room.dungeon === 3 ? [3.2, 2.5, 1.9] : room.dungeon === 4 ? [3.0, 2.3, 1.75] : [D2_BOSS_PATTERN.intervalPhase1, D2_BOSS_PATTERN.intervalPhase2, D2_BOSS_PATTERN.intervalPhase3];
+    const iv = room.dungeon === 4
+      ? [TOMB_BOSS_PATTERN.intervalPhase1, TOMB_BOSS_PATTERN.intervalPhase2, TOMB_BOSS_PATTERN.intervalPhase3]
+      : room.dungeon === 3 ? [3.2, 2.5, 1.9]
+        : [D2_BOSS_PATTERN.intervalPhase1, D2_BOSS_PATTERN.intervalPhase2, D2_BOSS_PATTERN.intervalPhase3];
     b.patternAt = now + (room.dungeon >= 2
       ? iv[Math.min(2, b.phase - 1)]
-      : (b.phase === 2 ? 2.1 : 2.9)) + Math.random() * (room.dungeon >= 2 ? 0.55 : 0.45) + (b.restAfter ?? 0);
+      : (b.phase === 2 ? 2.1 : 2.9)) + Math.random() * (room.dungeon === 4 ? 0.75 : room.dungeon >= 2 ? 0.55 : 0.45) + (b.restAfter ?? 0);
     return;
   }
   // 평타 (가까우면)
