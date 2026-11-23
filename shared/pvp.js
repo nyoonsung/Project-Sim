@@ -37,7 +37,7 @@ export const PVP = {
   slowDurMax: 2.5,
   // 직업별 PvP 전용 보정. PvE 직업 배율(권투사 ×10.5, 궁수 ×0.6 …)과 스킬 계수 차이를 상쇄해
   //  '서로 체력을 깎는 속도'가 같도록 맞춘 뒤, 봇 1대1 모의전(7직업 × 20판)에서 직업별 승률 44~57%가 되게 다듬은 값
-  classDmg: { sword: 1.56, fist: 0.21, archer: 1.57, rogue: 1.77, mage: 3.8, priest: 0.59, smith: 0.442 },
+  classDmg: { sword: 1.56, fist: 0.21, archer: 1.57, rogue: 1.74, mage: 3.8, priest: 0.61, smith: 0.455 },
   classHp: { sword: 1.0, fist: 1.0, archer: 1.0, rogue: 1.0, mage: 1.0, priest: 1.0, smith: 1.0 },
   classHeal: { sword: 1.0, fist: 1.0, archer: 1.0, rogue: 1.0, mage: 1.0, priest: 0.25, smith: 1.0 }, // 직업별 치유 보정 (성직자가 자힐로 끝없이 버티지 않게)
   // 순위

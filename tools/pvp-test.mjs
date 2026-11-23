@@ -129,6 +129,25 @@ ok("레벨·스탯·장비·2차 전직 평준화 · 기권 · 원래 캐릭터 
 }
 ok("대기열 매칭(레이팅 범위) · 물약 금지 · 3판 2선승 · 레이팅 반영 · 마을 귀환");
 
+// ── 승패 주고받기 방지: 같은 두 사람의 순위전은 1시간에 3판까지만 레이팅 반영, 방금 붙은 상대와 바로 재매칭 안 함
+{
+  const a = mkSession(world, "sword"), b = mkSession(world, "mage");
+  for (let k = 0; k < 3; k++) duel(world, a, b, { seed: 300 + k });
+  const ra = a.char.pvp.rating, rb = b.char.pvp.rating, ga = a.char.pvp.games;
+  const r = duel(world, a, b, { seed: 400 });
+  assert.equal(a.char.pvp.games, ga + 1, "판 수는 기록");
+  assert.ok(a.char.pvp.rating === ra && b.char.pvp.rating === rb, "4번째 판은 레이팅 그대로");
+  void r;
+  world.pvpOp(a, { a: "queue" }); world.pvpOp(b, { a: "queue" });
+  assert.ok(!a.pvpRoom && world.pvpQueue.has(a.userId), "방금 붙은 상대와 바로 재매칭 안 함");
+  for (const x of [a, b]) world.pvpQueue.get(x.userId).at -= 61_000;
+  world.pvpMatchmake();
+  assert.ok(a.pvpRoom && a.pvpRoom === b.pvpRoom, "1분 넘게 기다리면 허용");
+  a.pvpRoom.forfeit(a, "leave");
+  for (let i = 0; i < 100; i++) { world.clock += 0.05; b.unit.room.tick?.(); }
+}
+ok("승패 주고받기 방지 (같은 상대 레이팅 동결 · 즉시 재매칭 금지)");
+
 // ── 친선 결투 신청/수락
 {
   const a = mkSession(world, "priest", { name: "Alpha" }), b = mkSession(world, "smith", { name: "Beta" });
@@ -195,7 +214,7 @@ ok("상대 판정 · 기절 점감(→면역) · 한 대 상한 · 치유 감소
   Math.random = () => ((rs = (Math.imul(rs, 1664525) + 1013904223) >>> 0) / 2 ** 32); // 결과 재현 가능하게
   for (const A of PVP_CLASSES) for (const B of PVP_CLASSES) {
     if (A >= B) continue;
-    for (let k = 0; k < 6; k++) {
+    for (let k = 0; k < 8; k++) {
       const sa = mkSession(world, A), sb = mkSession(world, B);
       const [p, q] = k % 2 ? [sb, sa] : [sa, sb];
       const r = duel(world, p, q, { ranked: false, seed: seed++ });

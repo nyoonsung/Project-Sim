@@ -87,6 +87,7 @@ export class World {
     this.town.island = "erden"; this.town2.island = "verdan"; this.town3.island = "astra";
     this.resumes = new Map(); // 서버 재시작 뒤 던전 복귀: 파티(멤버·층)별로 다시 만든 방
     this.pvpQueue = new Map(); // PvP 대기열: userId → { at(ms), rating }
+    this.pvpPairs = new Map(); // 같은 두 사람의 최근 순위전 시각 (승패 주고받기 방지)
     this.pvpTop = null;
     this.announcement = null;
     this.startedAt = Date.now();
@@ -237,7 +238,8 @@ export class World {
     }
     s.char.resume = { ...r, at: Date.now() }; // 원래 파티 정보 그대로 (또 재시작돼도 같은 방으로)
     this.save(s);
-    s.notice(`서버 업데이트로 잠깐 끊겼어요. ${r.floor}층으로 돌아왔어요. (층은 처음부터 다시 시작해요)`);
+    const where = dungeon === 5 ? `${CONSTELLATIONS[Math.ceil(r.floor / 5) - 1]?.name ?? "성좌"}의 시련 ${((r.floor - 1) % 5) + 1}단계` : `${r.floor}층`;
+    s.notice(`서버 업데이트로 잠깐 끊겼어요. ${where}(으)로 돌아왔어요. (처음부터 다시 시작해요)`);
     return true;
   }
   joinRoom(s, room) {
@@ -579,7 +581,11 @@ export class World {
     } else if (id === "safe") {
       this.moveGroup(group, room.floor, "safe", { dungeon });
     } else if (id === "victory") {
-      if (dungeon === 5) { for (const g of group) this.astraClear(g, room); return; }
+      if (dungeon === 5) {
+        this.astraReward(room); // 보통은 처치 순간에 이미 받음 (중복 없음)
+        for (const g of group) { g.char.island = "astra"; this.toTown(g, `${room.astra?.name ?? "별자리"}의 시련을 마치고 아스트라엘로 돌아왔어요.`); this.sendChar(g); }
+        return;
+      }
       for (const g of group) {
         if (dungeon >= 3) {
           const first = !g.char[K.cleared];
@@ -663,9 +669,12 @@ export class World {
     if (u.dead) u.dead = false;
     u.hp = Math.max(u.hp, Math.round(u.maxHp * 0.6));
     u.status.clear(); u.buffs.clear(); u.shield = null;
-    this.townOf(s).addPlayer(u);
+    const town = this.townOf(s);
+    town.addPlayer(u);
     if (text) s.notice(text);
     this.save(s);
+    // 새로 밝힌 별의 이야기는 아스트라엘에 돌아오는 순간 펼쳐짐 (보스 재도전·패배 귀환이어도)
+    if (town === this.town3 && s.astraStories?.length) { for (const n of s.astraStories.splice(0)) this.sendStory(s, n, true); }
   }
 
   // ── PvP 결투장 (1대1 · 3판 2선승 · 레이팅 순위)
@@ -755,6 +764,9 @@ export class World {
       for (const b of list) {
         if (b.id === a.id || used.has(b.id)) continue;
         const wait = Math.max(now - a.at, now - b.at) / 1000;
+        // 방금 붙은 상대와는 바로 다시 붙이지 않음 (둘 다 1분 넘게 기다렸으면 허용)
+        const last = this.pvpPairs.get(this.pvpPairKey(a.id, b.id))?.at(-1) ?? 0;
+        if (now - last < 120_000 && Math.min(now - a.at, now - b.at) < 60_000) continue;
         const spread = PVP.queueSpread + wait * PVP.queueSpreadPerSec;
         const d = Math.abs(a.rating - b.rating);
         if (d <= spread && (!best || d < best.d)) best = { b, d };
@@ -788,10 +800,20 @@ export class World {
     const [a, b] = room.sides;
     const res = [winner === 0 ? 1 : winner === 1 ? 0 : 0.5, winner === 1 ? 1 : winner === 0 ? 0 : 0.5];
     const deltas = [0, 0];
+    // 같은 두 사람이 1시간 안에 순위전을 3판 넘게 하면 레이팅은 그대로 (승패 주고받기 방지)
+    let frozen = false;
+    if (room.ranked) {
+      const key = this.pvpPairKey(a.userId, b.userId), now = Date.now();
+      const hist = (this.pvpPairs.get(key) ?? []).filter((t) => now - t < 3600_000);
+      frozen = hist.length >= 3;
+      hist.push(now);
+      this.pvpPairs.set(key, hist);
+      if (this.pvpPairs.size > 5000) for (const [k, v] of this.pvpPairs) if (now - v.at(-1) > 3600_000) this.pvpPairs.delete(k);
+    }
     if (room.ranked) {
       const ra = a.char.pvp ?? newPvpRecord(), rb = b.char.pvp ?? newPvpRecord();
-      deltas[0] = eloDelta(ra.rating, rb.rating, res[0], ra.games);
-      deltas[1] = eloDelta(rb.rating, ra.rating, res[1], rb.games);
+      deltas[0] = frozen ? 0 : eloDelta(ra.rating, rb.rating, res[0], ra.games);
+      deltas[1] = frozen ? 0 : eloDelta(rb.rating, ra.rating, res[1], rb.games);
       for (const [s, rec, d, r] of [[a, ra, deltas[0], res[0]], [b, rb, deltas[1], res[1]]]) {
         rec.rating = Math.max(0, rec.rating + d);
         rec.best = Math.max(rec.best ?? 0, rec.rating);
@@ -805,6 +827,7 @@ export class World {
     }
     for (const [i, s] of [[0, a], [1, b]]) {
       const rec = s.char.pvp ?? newPvpRecord();
+      if (frozen) s.notice("같은 상대와 1시간 안에 순위전을 여러 번 해서 이번 판은 레이팅이 바뀌지 않아요.");
       s.send({ t: "pvpEnd", win: res[i] === 1 ? 1 : res[i] === 0 ? 0 : null, sc: room.score, me: i, opp: room.sides[1 - i].name, ranked: room.ranked ? 1 : 0, delta: deltas[i], rating: rec.rating, tier: pvpTier(rec.rating).name, why, log: room.log });
     }
     if (room.ranked) {
@@ -818,6 +841,7 @@ export class World {
     }
     room.schedule(3.5, () => { for (const s of room.sides) if (this.sessions.get(s.userId) === s && s.unit.room === room) this.toTown(s, "결투장에서 마을로 돌아왔어요."); });
   }
+  pvpPairKey(x, y) { return x < y ? `${x}|${y}` : `${y}|${x}`; }
   refreshPvpTop(broadcast = false) {
     try { this.pvpTop = Q.pvpTop.all().slice(0, 10).map((r) => ({ n: r.username, c: r.cls, r: r.rating, w: r.w, l: r.l })); } catch { this.pvpTop = []; }
     if (broadcast) for (const s of this.sessions.values()) s.send({ t: "pvpTop", list: this.pvpTop });
@@ -908,11 +932,20 @@ export class World {
     if (K.hidden && !group.every((g) => CONSTELLATIONS.slice(0, 12).every((k) => g.char.astra.stars[k.key]))) return s.notice("열두 별을 모두 밝힌 사람만 열세 번째 별자리에 닿을 수 있어요.");
     this.moveGroup(group, trialFloor(c, 1), "dungeon", { dungeon: 5 });
   }
-  /** 수호성을 쓰러뜨리고 별을 밝힘 → 마을로 */
+  /** 수호성을 쓰러뜨린 순간 방 안 모두에게 한 번만 보상 (별 밝힘·축복·별가루). 이야기는 마을로 돌아갈 때 펼침 */
+  astraReward(room) {
+    if (!room.astra || room.astraDone) return;
+    room.astraDone = true;
+    for (const p of room.players.values()) {
+      const g = p.session, n = this.astraClear(g, room);
+      if (n) (g.astraStories ??= []).push(n);
+    }
+  }
+  /** 한 사람의 시련 클리어 기록·보상. 처음 밝힌 별이면 이야기 장 번호를 돌려줌 */
   astraClear(g, room) {
     const c = g.char;
     c.astra ??= newAstraRecord();
-    const K = room.astra ?? CONST_BY_KEY[CONSTELLATIONS[Math.min(12, Math.ceil(room.floor / 5) - 1)].key];
+    const K = room.astra;
     const a = c.astra;
     const first = !a.stars[K.key];
     a.clears[K.key] = Math.min(99999, (a.clears[K.key] ?? 0) + 1);
@@ -934,10 +967,11 @@ export class World {
     }
     a.dust = Math.min(999999, (a.dust ?? 0) + dust);
     c.best5 = Math.max(c.best5 ?? 0, room.floor);
-    c.island = "astra";
-    this.toTown(g, first ? `${K.name}의 별이 다시 빛나요! 별가루 ${dust}개를 얻었어요.` : `${K.name}의 시련을 다시 넘었어요. 별가루 ${dust}개를 얻었어요.`);
+    if (g.unit.room === room) { refreshStats(g.unit); g.send({ t: "ev", list: [{ e: "msg", text: first ? `✦ ${K.name}의 별이 다시 빛나요! 별가루 ${dust}개 · 축복 「${K.bless?.name ?? "별의 칭호"}」` : `✦ ${K.name}의 시련을 다시 넘었어요. 별가루 ${dust}개`, kind: "star" }] }); }
+    g.dirty = true;
+    this.save(g);
     this.sendChar(g);
-    if (first) this.sendStory(g, K.id, true);
+    return first ? K.id : 0;
   }
   /** 축복의 제단: 밝힌 별자리의 축복을 장착·해제·강화 (별가루) */
   blessOp(s, m) {

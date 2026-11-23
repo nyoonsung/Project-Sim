@@ -62,7 +62,7 @@ export function simulate(cls, L, F, { maxT = 300, rarity = "희귀", log = false
   room.addPlayer(u);
   let dmgTaken = 0, maxHit = 0, potions = 5, t = 0, xp0 = ch.xp + 0;
   const range = RANGE[cls] ?? 34;
-  const kind = floorKind(F);
+  const kind = floorKind(F, dungeon);
   let target = null;
   const M = map;
   const passable = (x, y) => x >= 0 && y >= 0 && x < M.w && y < M.h && [1, 6, 3].includes(M.tiles[y * M.w + x]) && !(M.tiles[y * M.w + x] === 3 && !M.doorsOpen);

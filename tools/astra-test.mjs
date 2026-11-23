@@ -281,11 +281,19 @@ ok("시련 규칙: 돌진·견고·분열·껍질·천칭·정화·독침·위�
   for (let i = 0; i < 600 && ![...r.units.values()].some((u) => u.boss); i++) { s.unit.x = r.map.bossAt[0]; s.unit.y = r.map.bossAt[1] + 120; world.tick(); }
   const b = [...r.units.values()].find((u) => u.boss);
   assert.ok(b && b.bid === "ab_aries", "수호성 등장");
+  const dust0 = s.char.astra.dust;
   hit(r, s.unit, b, b.hp * 10);
   tick(5);
   const portal = r.map.objects.find((o) => o.kind === "portal" && o.id === "victory");
   assert.ok(portal, "별의 포탈");
-  const dust0 = s.char.astra.dust;
+  assert.ok(s.char.astra.stars.aries && s.char.astra.dust >= dust0 + 100, "처치 순간 바로 보상 (재도전·접속 끊김에도 안전)");
+  world.retryBoss(s);
+  assert.ok(s.unit.room !== r && s.unit.room.floor === 5, "보스 다시 도전");
+  r = s.unit.room;
+  for (let i = 0; i < 600 && ![...r.units.values()].some((u) => u.boss); i++) { s.unit.x = r.map.bossAt[0]; s.unit.y = r.map.bossAt[1] + 120; world.tick(); }
+  const b2 = [...r.units.values()].find((u) => u.boss);
+  hit(r, s.unit, b2, b2.hp * 10);
+  tick(5);
   s.packets.length = 0;
   world.usePortal(r, "victory");
   assert.ok(s.unit.room === world.town3, "아스트라엘로 귀환");
@@ -295,7 +303,7 @@ ok("시련 규칙: 돌진·견고·분열·껍질·천칭·정화·독침·위�
   const d1 = s.char.astra.dust;
   r = roomFor("aries", 5);
   world.usePortal(r, "victory");
-  assert.ok(s.char.astra.dust > d1 && s.char.astra.dust - d1 < 100 && s.char.astra.clears.aries === 2, "재클리어 보상");
+  assert.ok(s.char.astra.dust > d1 && s.char.astra.dust - d1 < 100 && s.char.astra.clears.aries === 3, "재클리어 보상");
 }
 ok("수호성 처치 → 별 밝힘 · 축복 1단계 자동 장착 · 별가루 · 이야기");
 
@@ -363,6 +371,19 @@ ok("열세 번째 별자리: 열두 별 이후 개방 · 칭호 · 축복 4칸")
   assert.ok(a.unit.room === world.town3 && b.unit.room === world.town3, "패배 → 아스트라엘");
 }
 ok("파티 시련: 모두 입도 · 파티장만 · 함께 입장 · 패배 시 아스트라엘로");
+
+// 서버 업데이트로 끊긴 뒤 시련으로 복귀
+{
+  const x = mk(7020, 220);
+  x.char.verdanPass = true; x.char.best3 = 60; x.char.astra = { pass: true, stars: {}, bless: {}, equip: [], dust: 0, clears: {}, seen: [] };
+  world.markResume([x], trialFloor(4, 3), "dungeon", 5);
+  assert.ok(world.tryResume(x), "복귀");
+  assert.ok(x.unit.room.dungeon === 5 && x.unit.room.floor === trialFloor(4, 3) && x.unit.room.astra.key === "cancer", "같은 시련 같은 단계");
+  assert.ok(x.notes.at(-1).includes("게자리의 시련 3단계"), x.notes.at(-1));
+  world.toTown(x);
+  assert.ok(x.unit.room === world.town3);
+}
+ok("서버 업데이트 후 시련 복귀");
 
 // 전 성좌 × 5단계 실제 전투 틱 (예외 0)
 {

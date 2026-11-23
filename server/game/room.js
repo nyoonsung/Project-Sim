@@ -617,7 +617,7 @@ export class Room {
     const portal = this.astra
       ? { kind: "portal", id: "victory", x: b.x, y: b.y, label: `아스트라엘로 (${this.astra.name}의 별)` , color: "town" }
       : { kind: "portal", id: isFinal ? "victory" : isMain ? "safe" : "exit", x: b.x, y: b.y, label: isFinal ? VICTORY[this.dungeon] : isMain ? "안전 구역으로" : `${this.floor + 1}층으로` };
-    if (this.astra) this.whisper(3);
+    if (this.astra) { this.whisper(3); this.world.astraReward?.(this); }
     if (this.dungeon === 2 && isFinal) {
       for (const p of this.players.values()) {
         const ch = p.session.char;

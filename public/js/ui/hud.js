@@ -17,7 +17,7 @@ const BUFF_NAME = { pvp_zone: "거점 장악", riposte: "반격 기회", imun: "
   dk_veil: "황혼의 장막", dusk_veil_drain: "장막 흡혈", dk_eclipse: "피의 월식", sg_flow: "검식", sg_complete: "검식 완성", vj_guard: "호신", vj_form: "금강불괴", st_rush: "전진 보법",
   wl_veil: "그림자 장막", aa_focus: "비전 집중", tr_chase: "독혈 추격", nb_dark: "어둠의 칼날", nb_linger: "그림자 잔류", nb_smoke: "잔영 연막", stealth: "은신", as_behind: "배후",
   iq_stance: "자세", iq_passion: "수난의 반격", iq_gospel: "복음", ht_doom: "유예된 종말", kg_aid: "응급처치", kg_sense: "야전 감각", kg_fervor: "개척의 열기",
-  vm_storm: "폭풍걸음", vm_heart: "심장부", tether_root: "집중", aa_gate_root: "천궁개문" };
+  vm_storm: "폭풍걸음", vm_heart: "심장부", astra_leo: "사자의 위엄", tether_root: "집중", aa_gate_root: "천궁개문" };
 const ST_NAME = { burn: "화상", poison: "중독", bleed: "출혈", slow: "감속", root: "속박", stun: "기절", down: "넘어짐", freeze: "빙결", shock: "감전", weaken: "약화", blind: "실명" };
 const SWORD_SEQUENCE_NAMES = ["일섬", "회전연참", "쇄도검"];
 
