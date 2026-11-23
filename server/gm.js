@@ -39,6 +39,7 @@ export async function handleGm(req, res, path, { readJson, send, isAdmin, ip, ur
         checkpoint2: c ? c.checkpoint2 : r.checkpoint2,
         checkpoint3: c ? c.checkpoint3 : r.checkpoint3,
         checkpoint4: c ? c.checkpoint4 : r.checkpoint4,
+        cleared2: c ? c.cleared2 : r.cleared2,
         cleared3: c ? c.cleared3 : r.cleared3,
         cleared4: c ? c.cleared4 : r.cleared4,
         verdan_pass: c ? c.verdanPass : r.verdan_pass,
