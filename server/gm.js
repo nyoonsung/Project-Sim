@@ -102,17 +102,29 @@ export async function handleGm(req, res, path, { readJson, send, isAdmin, ip, ur
       if (b.best !== undefined) { if (!int(b.best, 0, 100)) return send(res, 400, { error: "최고 층 범위가 잘못됐어요." }); ch.best = b.best; }
       if (b.cls !== undefined) { if (!CLASS_INFO[b.cls]) return send(res, 400, { error: "없는 직업이에요." }); ch.cls = b.cls; }
       if (b.cons !== undefined) {
-        if (typeof b.cons !== "object") return send(res, 400, { error: "소모품 값이 잘못됐어요." });
+        if (typeof b.cons !== "object" || b.cons === null || Array.isArray(b.cons)) return send(res, 400, { error: "소모품 값이 잘못됐어요." });
         ch.cons = {};
         for (const [k, v] of Object.entries(b.cons)) if (ITEMS[k] && int(v, 0, ITEMS[k].max)) ch.cons[k] = v;
       }
+      if (b.stats !== undefined && (!b.stats || typeof b.stats !== "object" || Array.isArray(b.stats))) return send(res, 400, { error: "스탯 값은 능력치별 정수로 입력해 주세요." });
+      let statError = null;
       const ok = world.gmApplyChar(id, (c) => {
+        const targetClass = ch.cls ?? c.cls;
+        if (b.stats !== undefined) {
+          const allowed = CLASS_INFO[targetClass]?.stats ?? [];
+          if (!allowed.length || Object.keys(b.stats).some((k) => !allowed.includes(k)) || allowed.some((k) => !int(b.stats[k], 0, 1_000_000))) {
+            statError = "선택한 직업의 능력치만 0~1,000,000 사이 정수로 지정할 수 있어요.";
+            return;
+          }
+          ch.stats = Object.fromEntries(allowed.map((k) => [k, b.stats[k]]));
+        }
         if (ch.cls && ch.cls !== c.cls) { c.unspent += Object.values(c.stats ?? {}).reduce((a, x) => a + x, 0); c.stats = {}; c.skills = c.skills.map((s) => (s && s.startsWith("c_") ? s : null)); for (const sl of ["weapon", "offhand"]) if (c.equip[sl] && !canEquip(c.equip[sl], ch.cls)) { c.inv.push(c.equip[sl]); c.equip[sl] = null; } }
         if (ch.level && ch.level !== c.level) c.xp = 0;
         const clsChanged = ch.cls && ch.cls !== c.cls;
         Object.assign(c, { ...ch, cons: { ...c.cons, ...(ch.cons ?? {}) } });
         if (clsChanged) c.skills = defaultLoadout(c); // 직업을 바꾸면 그 직업 기본 스킬 세트
       });
+      if (statError) return send(res, 400, { error: statError });
       audit("edit", target, ch);
       return send(res, ok ? 200 : 400, ok ? { ok: true } : { error: "수정 실패" });
     }
