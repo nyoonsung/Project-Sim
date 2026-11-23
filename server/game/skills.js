@@ -1,5 +1,5 @@
 // 스킬 실행 엔진: shared/skills.js 의 steps 를 서버에서 판정
-import { SKILLS, unlockStage } from "../../shared/skills.js";
+import { SKILLS, unlockStage, passivesOf } from "../../shared/skills.js";
 import { wearOnCast } from "./wear.js";
 import { profOf, profLevel, profGain, profPow, profCost, PROF_MAX, isUncapped } from "../../shared/prof.js";
 import { CLASS_INFO, stageOf } from "../../shared/classes.js";
@@ -107,6 +107,19 @@ export function castSkill(room, u, slot, ax, ay, tx, now, exp) {
   for (const [k, v] of Object.entries(cost)) if (k !== "gap") u[k] -= v;
   if (sk.hpCost) { const v = Math.round(u.maxHp * sk.hpCost); u.hp = Math.max(1, u.hp - v); room.ev({ e: "dmg", id: u.id, v, c: 0, a: 0, d: 1, p: 1 }); }
   if (sk.path) u.lastPathCast = now;
+  if (ch.cls2 === "swordmaster" && sk.kind !== "basic" && sk.kind !== "passive") {
+    const token = (u.seqCastToken ?? 0) + 1;
+    u.seqCastToken = token;
+    u.seqPending = { id, token };
+    room.schedule(1.25, (t2) => {
+      if (u.seqPending?.token !== token) return;
+      u.seqPending = null;
+      if ((u.seq?.n ?? 0) > 0) {
+        u.seq = { n: 0, at: t2, last: id, doneUntil: 0 };
+        u.session.meDirty = true;
+      }
+    });
+  }
   u.lastAction = now;
   const aim = Math.atan2(ay - u.y, ax - u.x);
   const ctx = { sk, aim, ax, ay, tx, mul: 0, prof: plv, pf: 1 + profPow(plv), now };
@@ -188,7 +201,7 @@ function gainProf(room, u, sk, now) {
       room.ev({ e: "msg", text: `${u.name}님의 [${sk.name}] 숙련도 Lv.${after.lv}! ${after.lv === 5 ? "이펙트가 강화됐어요!" : unc ? "끝없는 수련!" : "최고 숙련 달성!"}`, kind: after.lv >= PROF_MAX ? "legend" : "info" });
   }
 }
-const hasPassive = (ch, id) => ch.skills.includes(id);
+const hasPassive = (ch, id) => passivesOf(ch).some((sk) => sk.id === id);
 
 function runSteps(room, u, ctx, steps, i, now) {
   for (; i < steps.length; i++) {
@@ -737,9 +750,9 @@ export function onFrontGuard(room, u, now) {
 /** 패시브 발동 */
 function triggerPassive(room, u, on, now) {
   const ch = u.session.char;
-  for (const id of ch.skills) {
-    const s = SKILLS[id];
-    const tr = s?.kind === "passive" && s.passive?.trigger;
+  for (const s of passivesOf(ch)) {
+    const id = s.id;
+    const tr = s.passive?.trigger;
     if (!tr || tr.on !== on) continue;
     if (now < (u.icd.get(id) ?? 0)) continue;
     u.icd.set(id, now + (tr.icd ?? 0));
@@ -764,9 +777,9 @@ export function onPlayerHit(room, u, t, dmg, crit, now, o) {
     byPlayer.set(userId, dps);
   }
   u.acuLastHit = now;
-  for (const id of ch.skills) {
-    const s = SKILLS[id];
-    const tr = s?.kind === "passive" && s.passive?.trigger;
+  for (const s of passivesOf(ch)) {
+    const id = s.id;
+    const tr = s.passive?.trigger;
     if (!tr) continue;
     if (tr.on === "hit" && now >= (u.icd.get(id) ?? 0) && (tr.chance == null || Math.random() < tr.chance)) {
       u.icd.set(id, now + (tr.icd ?? 0));
@@ -860,17 +873,16 @@ export function tickPlayerSkills(room, u, now, inp) {
 const DOTS = ["burn", "poison", "bleed"];
 const hasDot = (t) => DOTS.some((k) => t.status.has(k));
 const p2Cache = new WeakMap();
-/** 장착한 2차 전직 패시브 효과 모음 (스킬 구성이 바뀔 때만 다시 계산) */
+/** 해금된 2차 전직 패시브 효과 모음 (스킬칸 장착 불필요) */
 export function p2of(u) {
   const ch = u?.session?.char;
   if (!ch?.cls2) return {};
-  const key = ch.cls2 + "|" + ch.level + "|" + ch.skills.join(",");
+  const key = ch.cls2 + "|" + ch.cls + "|" + ch.level;
   const c = p2Cache.get(u);
   if (c && c.key === key) return c.v;
   const v = {};
-  for (const id of ch.skills) {
-    const sk = SKILLS[id];
-    if (sk?.kind !== "passive" || !sk.passive?.p2 || sk.path !== ch.cls2 || ch.level < (TIER_LEVEL[sk.tier] ?? 999)) continue;
+  for (const sk of passivesOf(ch)) {
+    if (!sk.passive?.p2 || sk.path !== ch.cls2) continue;
     Object.assign(v, sk.passive.p2);
   }
   p2Cache.set(u, { key, v });
@@ -1071,7 +1083,7 @@ function hit2(room, u, t, dmg, crit, now, o = {}) {
   if (P2.breath && sk?.cls === "fist" && now >= (u.icd.get("p2_breath") ?? 0)) { u.icd.set("p2_breath", now + 0.25); gainR2(u, 5); }
   if (P2.adapt && sk && (sk.cls === "common" || sk.path === "king") && sk.id !== u.adaptLast && now >= (u.icd.get("p2_adapt") ?? 0)) { u.icd.set("p2_adapt", now + 0.3); u.adaptLast = sk.id; gainR2(u, P2.adapt); }
   // 정통 검식(소드마스터): 일섬 → 회전연참 → 쇄도검
-  if (u.cls2 === "swordmaster" && sk?.path === "swordmaster") swordSeq(room, u, t, sk, now);
+  if (u.cls2 === "swordmaster" && sk && sk.kind !== "basic" && sk.kind !== "passive") swordSeq(room, u, t, sk, now);
   // 저격 표식·사냥꾼의 호흡(센티넬): 조준 에너지를 쓴 사격
   if (u.cls2 === "sentinel" && sk && (o.r2spent ?? u.lastSpent ?? 0) >= 30 && now - (u.lastSpentAt ?? -9) < 0.6) {
     if (P2.huntBreath && t.status.get("mark2")?.src === u.id && now >= (u.icd.get("p2_hb") ?? 0)) { u.icd.set("p2_hb", now + 1); heal(room, u, u, u.maxHp * P2.huntBreath, now); }
@@ -1102,18 +1114,27 @@ function shredHit(room, t) {
 const SEQ = ["sg_ilseom", "sg_whirl", "sg_rush"];
 function swordSeq(room, u, t, sk, now) {
   const i = SEQ.indexOf(sk.id);
-  if (i < 0) return;
+  if (u.seqPending?.id === sk.id) u.seqPending = null;
   const P2 = p2of(u);
-  const cur = u.seq ?? { n: 0, at: 0, last: null };
-  if (sk.id === cur.last && now - cur.at < 0.6) return; // 같은 기술의 연타는 같은 형식
-  if (i === cur.n && now - cur.at < 6) cur.n++;
-  else if (i === 0) cur.n = 1;
+  const cur = u.seq ?? { n: 0, at: 0, last: null, doneUntil: 0 };
+  if (i < 0) {
+    if (cur.n > 0) {
+      u.seq = { n: 0, at: now, last: sk.id, doneUntil: 0 };
+      u.session.meDirty = true;
+    }
+    return;
+  }
+  if (sk.id === cur.last && now - cur.at < 0.6) return; // 다단히트 한 번의 시전은 한 단계로 계산
+  if (i === 0) cur.n = 1;
+  else if (i === cur.n && now - cur.at <= 6) cur.n++;
   else cur.n = 0;
-  cur.at = now; cur.last = sk.id;
+  cur.at = now; cur.last = sk.id; cur.doneUntil = 0;
   u.seq = cur;
+  u.session.meDirty = true;
   if (P2.swordSeq && cur.n > 0) { u.buffs.set("sg_flow", { until: now + 6, mods: { dmg: P2.swordSeq * cur.n }, n: cur.n }); room.ev({ e: "buff", id: u.id, b: "sg_flow", d: 6 }); }
   if (cur.n >= 3) {
     cur.n = 0;
+    cur.doneUntil = now + 2.5;
     room.ev({ e: "msg", text: "검식 완성!", kind: "self", id: u.id });
     if (P2.seqFinish) { u.buffs.set("sg_complete", { until: now + 6, mods: { dmg: P2.seqFinish, crit: 0.1 } }); room.ev({ e: "buff", id: u.id, b: "sg_complete", d: 6 }); }
     if (P2.seqFinisher && now >= (u.icd.get("p2_mugeuk") ?? 0) && !t.dead) {
