@@ -116,7 +116,9 @@ kbd { font-family: "GalmuriMono11", "Galmuri11", monospace; font-size: 10px; pad
 .win h4 { margin: 10px 0 6px; color: var(--gold); font-size: 13px; }
 .win table { width: 100%; border-collapse: collapse; } .win td { padding: 2px 4px; } .win td:last-child { text-align: right; }
 .statrow { display: flex; align-items: center; gap: 6px; padding: 3px 0; border-bottom: 1px dashed #2a2638; }
-.statrow .sn { width: 84px; } .statrow .sv { width: 40px; text-align: right; color: var(--gold); } .statrow .sd { flex: 1; color: var(--dim); font-size: 11px; }
+.statrow .sn { width: 72px; flex-shrink: 0; } .statrow .sv { width: 36px; flex-shrink: 0; text-align: right; color: var(--gold); } .statrow .sd { flex: 1; min-width: 34px; color: var(--dim); font-size: 10px; }
+.statrow .stat-amount { width: 48px; min-width: 42px; padding: 3px 4px; text-align: center; background: #0e0c14; border: 1px solid var(--line2); color: var(--text); }
+.statrow .stat-apply { border-color: var(--epic); color: var(--epic); }
 .grade-일반 { color: var(--common); } .grade-희귀 { color: var(--rare); } .grade-영웅 { color: var(--epic); } .grade-전설 { color: var(--legend); } .grade-신화 { color: var(--mythic); } .grade-심연 { color: var(--abyss); text-shadow: 0 0 8px #70f4e866; }
 .skill-list { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
 .sk { padding: 6px 8px; background: #0e0c14; border: 2px solid var(--line); cursor: pointer; }
