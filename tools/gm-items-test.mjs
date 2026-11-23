@@ -9,7 +9,7 @@ import { makeMaxAbyssBundle, MAX_ABYSS_BUNDLE_COUNT } from "../server/gm-items.j
 const items = makeMaxAbyssBundle();
 assert.equal(MAX_ABYSS_BUNDLE_COUNT, 38);
 assert.equal(items.length, MAX_ABYSS_BUNDLE_COUNT);
-assert.equal(new Set(items.map((it) => it.uid)).size, 1, "items are not assigned account UIDs before delivery");
+assert.ok(items.every((it) => it.uid == null), "account UIDs are assigned only when the bundle is delivered");
 for (const item of items) {
   assert.equal(item.rarity, "심연");
   assert.equal(item.ilvl, MAX_LEVEL);
