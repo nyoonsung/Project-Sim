@@ -8,6 +8,8 @@ import {
 import { CLASS_DMG } from "../shared/stats.js";
 import { SKILLS } from "../shared/skills.js";
 import { Room } from "../server/game/room.js";
+import { newCharacter, makePlayerUnit } from "../server/game/player.js";
+import { dealDamage } from "../server/game/combat.js";
 import { rollAbyssRelic } from "../shared/items.js";
 import { makeFloor, mapPayload, makeTown, safeZone } from "../server/game/dungeon.js";
 import { levelGapXpMultiplier, unitXpMultiplier } from "../server/game/room.js";
@@ -371,8 +373,78 @@ ok(true, "제2 던전 보스별 전용 2·3페이즈 패턴 / 공격 연계 강�
 }
 ok(true, "제2 던전 구형 투사체·순간이동 이펙트 및 적 투사체 상한");
 
-// 기존 마을·안전 구역 생성 경로 회귀 확인.
+// 에르덴 훈련 허수아비: 전용 바닥·도보 접근·소품과 겹치지 않는 배치.
 const town = makeTown();
+const trainingDummy = town.objects.find((o) => o.kind === "dummy");
+assert.ok(trainingDummy, "Erden town must contain a training dummy");
+assert.deepEqual(
+  [Math.floor(trainingDummy.x / TILE), Math.floor(trainingDummy.y / TILE)],
+  [10, 22],
+  "training dummy must sit on the dedicated training pad",
+);
+assert.ok(!circleHitsWall(town, trainingDummy.x, trainingDummy.y, 9), "training dummy tile must be walkable");
+for (let y = 21; y <= 23; y++) for (let x = 9; x <= 11; x++) {
+  assert.equal(town.tiles[y * town.w + x], 9, "training pad must stay clear of random foliage and trees");
+}
+assert.ok(
+  !town.objects.some((o) => o.kind === "prop" && Math.hypot(o.x - trainingDummy.x, o.y - trainingDummy.y) < 48),
+  "training dummy must not overlap a decorative prop",
+);
+{
+  const canStand = (x, y) => !circleHitsWall(town, x * TILE + TILE / 2, y * TILE + TILE / 2, 9);
+  const sx = Math.floor(town.start[0] / TILE), sy = Math.floor(town.start[1] / TILE);
+  const tx = Math.floor(trainingDummy.x / TILE), ty = Math.floor(trainingDummy.y / TILE);
+  const queue = [[sx, sy]], visited = new Set([sy * town.w + sx]);
+  for (let i = 0; i < queue.length; i++) {
+    const [x, y] = queue[i];
+    for (const [dx, dy] of [[1,0],[-1,0],[0,1],[0,-1]]) {
+      const nx = x + dx, ny = y + dy, key = ny * town.w + nx;
+      if (nx < 0 || ny < 0 || nx >= town.w || ny >= town.h || visited.has(key) || !canStand(nx, ny)) continue;
+      visited.add(key); queue.push([nx, ny]);
+    }
+  }
+  assert.ok(visited.has(ty * town.w + tx), "training dummy must be reachable from the town spawn");
+}
+
+// 공유 마을에서도 훈련 허수아비의 DPS 기록은 플레이어별로 분리되고, G 키 초기화도 본인 기록만 지운다.
+{
+  const notices = new Map();
+  const sessions = new Map();
+  const worldStub = { clock: 0, sessions };
+  const room = new Room(worldStub, { id: "training-dummy", kind: "town", floor: 0, dungeon: 1, map: town });
+  const makeTestPlayer = (userId) => {
+    const noteList = [];
+    notices.set(userId, noteList);
+    const session = {
+      userId, name: `tester${userId}`, char: newCharacter(`tester${userId}`),
+      send() {}, notice: (message) => noteList.push(message), sendMe() {},
+    };
+    sessions.set(userId, session);
+    const unit = makePlayerUnit(session);
+    session.unit = unit;
+    room.addPlayer(unit);
+    unit.x = trainingDummy.x + (userId === 101 ? -42 : 42);
+    unit.y = trainingDummy.y;
+    return { session, unit };
+  };
+  const a = makeTestPlayer(101), b = makeTestPlayer(202);
+  const dummy = [...room.units.values()].find((u) => u.dummy);
+  assert.ok(dummy?.dpsByPlayer instanceof Map, "dummy must hold per-player DPS records");
+  dealDamage(room, a.unit, dummy, { fixed: 100, crit: "none" }, 1);
+  dealDamage(room, b.unit, dummy, { fixed: 80, crit: "none" }, 1);
+  assert.equal(dummy.dpsByPlayer.get(101)?.total, 100);
+  assert.equal(dummy.dpsByPlayer.get(202)?.total, 80);
+  const resetWorld = { isTown: (r) => r?.kind === "town" };
+  World.prototype.resetDummy.call(resetWorld, a.session);
+  assert.equal(dummy.dpsByPlayer.has(101), false, "reset should clear only the requesting player's record");
+  assert.equal(dummy.dpsByPlayer.get(202)?.total, 80, "other players' records must remain intact");
+  room.tickDummy(dummy, 7);
+  assert.ok(!notices.get(101).some((m) => m.startsWith("허수아비 측정:")), "reset player must not receive stale results");
+  assert.ok(notices.get(202).some((m) => m.startsWith("허수아비 측정:")), "other player should receive their own DPS result");
+  assert.equal(dummy.dpsByPlayer.size, 0);
+}
+ok(true, "훈련 허수아비 위치·접근성·개인별 DPS·초기화 회귀 확인");
+
 const safe = safeZone(10, 2);
 assert.equal(town.kind, "town");
 assert.equal(safe.kind, "safe");
