@@ -1021,7 +1021,7 @@ body:not(.touch) #skillbar {
 }
 
 /* PvP 결투장 */
-.pvp-banner { position: absolute; top: 8px; left: 50%; transform: translateX(-50%); z-index: 30; pointer-events: none;
+.pvp-banner { position: absolute; top: 40px; left: 50%; transform: translateX(-50%); z-index: 30; pointer-events: none;
   background: rgba(16, 10, 14, 0.82); border: 1px solid #8a1a24; border-radius: 6px; padding: 4px 14px; text-align: center; min-width: 300px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5); }
 .pvp-banner .pvp-row { display: flex; gap: 12px; align-items: center; justify-content: center; font-size: 13px; }
@@ -1032,3 +1032,31 @@ body:not(.touch) #skillbar {
 .pvp-rec { margin: 6px 0; font-size: 13px; }
 .pvp-big { font-size: 34px; font-weight: bold; text-align: center; margin: 6px 0; }
 .arena-tabs { margin-bottom: 4px; }
+
+/* ── 3차 업데이트: 아스트라엘 ── */
+.toast.star { color: #e8d8ff; border-color: #a880ff; background: linear-gradient(90deg, #1a1236ee, #0c0a1cee); box-shadow: 0 0 18px #a880ff66; font-style: italic; letter-spacing: 0.3px; }
+.boat-dest { display: block; width: 100%; margin: 6px 0; }
+.boat-dest.astra { background: linear-gradient(90deg, #3a2a7a, #6a4ab0); border-color: #c8a0ff; }
+.star-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 8px; margin: 8px 0; max-height: 52vh; overflow-y: auto; }
+.star-card { border: 1px solid #3a3458; border-radius: 6px; padding: 8px; background: #120f22; display: flex; flex-direction: column; gap: 4px; position: relative; }
+.star-card.lit { border-color: var(--sc); box-shadow: inset 0 0 14px color-mix(in srgb, var(--sc) 30%, transparent); }
+.star-card.today::after { content: ""; position: absolute; inset: -1px; border-radius: 6px; border: 1px dashed #ffe08a; pointer-events: none; }
+.star-card.locked { opacity: 0.55; }
+.sc-head { display: flex; align-items: center; gap: 6px; }
+.sc-sign { font-size: 20px; color: var(--sc); width: 24px; text-align: center; text-shadow: 0 0 8px var(--sc); }
+.sc-today { margin-left: auto; font-size: 11px; color: #ffe08a; }
+.sc-rule { font-size: 12px; color: #c8c0e0; line-height: 1.4; }
+.sc-bless { font-size: 11px; color: #ffe08a; }
+.sc-foot { display: flex; gap: 4px; align-items: center; margin-top: auto; }
+.sc-state { font-size: 12px; color: #a098c0; margin-right: auto; }
+.star-card.lit .sc-state { color: var(--sc); }
+.bless-list { display: flex; flex-direction: column; gap: 6px; max-height: 50vh; overflow-y: auto; }
+.bless-row { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border: 1px solid #3a3458; border-radius: 6px; background: #120f22; }
+.bless-row.on { border-color: var(--sc); background: #1c1636; }
+.bless-row .bl-text { flex: 1; min-width: 0; }
+.bless-row .desc { font-size: 12px; color: #b8b0d8; }
+.story { position: relative; padding: 14px 10px 6px; background: radial-gradient(ellipse at top, #241a4a, #0c0a1a 70%); border-radius: 6px; margin-bottom: 8px; }
+.story-sign { text-align: center; font-size: 34px; color: var(--sc); text-shadow: 0 0 18px var(--sc); animation: storyGlow 2.4s ease-in-out infinite; }
+.story-line { opacity: 0; animation: storyIn 0.9s ease-out forwards; color: #e8e0ff; line-height: 1.65; margin: 8px 4px; }
+@keyframes storyIn { from { opacity: 0; transform: translateY(6px); filter: blur(2px); } to { opacity: 1; transform: none; filter: none; } }
+@keyframes storyGlow { 50% { text-shadow: 0 0 30px var(--sc); transform: scale(1.06); } }

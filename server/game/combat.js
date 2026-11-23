@@ -4,6 +4,9 @@ import { defReduction } from "../../shared/stats.js";
 import { PATH_DMG } from "../../shared/classes2.js";
 import { wearOnHit } from "./wear.js";
 import { PVP } from "../../shared/pvp.js";
+import { SKILLS } from "../../shared/skills.js";
+/** 투사체·원거리 판정 스킬 (궁수자리 규칙) */
+const SKILL_RANGED = new Set(Object.values(SKILLS).filter((s) => (s.steps ?? []).some((st) => ["proj", "line"].includes(st.do))).map((s) => s.id));
 
 /** PvP 결투장: 서로 다른 편(pvp 1·2)이면 적 */
 export const foe = (a, b) => a.team !== b.team || (a.pvp != null && b.pvp != null && a.pvp !== b.pvp);
@@ -141,7 +144,7 @@ export function dealDamage(room, src, t, o, now) {
     if (!o.dot && src.team === "p" && o.crit !== "none") {
       if (o.crit === "force") { crit = true; dmg *= CRIT.BASE_DAMAGE + (o.critDmg ?? 0); }
       else {
-        const chance = Math.min(room.kind === "pvp" ? PVP.critCap : CRIT.CHANCE_CAP, src.stats.crit + buffSum(src, "crit") + (o.critBonus ?? 0));
+        const chance = Math.min(room.kind === "pvp" ? PVP.critCap : CRIT.CHANCE_CAP, src.stats.crit + buffSum(src, "crit") + (o.critBonus ?? 0) + (room.rule?.crit ?? 0));
         if (Math.random() < chance) {
           crit = true;
           dmg *= Math.min(room.kind === "pvp" ? PVP.critDmgCap : CRIT.DAMAGE_CAP + 0.5, Math.min(CRIT.DAMAGE_CAP, src.stats.critDmg + buffSum(src, "critDmg") + (src.abyss?.has("eclipse_focus") ? 0.20 : 0)) + (o.critDmg ?? 0));
@@ -173,6 +176,15 @@ export function dealDamage(room, src, t, o, now) {
   if (o.capPct && !t.boss) dmg = Math.min(dmg, t.maxHp * o.capPct + 1);
   // 보스 한 대의 피해 상한: 최대 체력의 30% → 가득 찬 체력이면 보스 공격 3대는 반드시 버틴다
   if (t.team === "p" && src?.boss && !o.dot) dmg = Math.min(dmg, t.maxHp * BOSS_HIT_CAP);
+  // 3차 성좌의 시련 규칙: 천칭(체력 비례)·게(껍질)·궁수(원거리)
+  const R = room.rule;
+  if (R) {
+    const pSrc = src && src.team === "p" ? ownerOf(room, src) : null;
+    if (R.libra && pSrc?.maxHp && t.team === "m") dmg *= 0.75 + 0.5 * Math.max(0, pSrc.hp / pSrc.maxHp);
+    if (R.libra && t.type === "p") dmg *= 1 - 0.3 * (1 - Math.max(0, t.hp / t.maxHp));
+    if (R.shell && t.team === "m" && t.hp > t.maxHp * 0.5) dmg *= 1 - R.shell;
+    if (R.ranged && pSrc && (o.ranged || (o.skill && SKILL_RANGED.has(o.skill)))) dmg *= 1 + R.ranged;
+  }
   // PvP 전용 배율: 전체 피해·직업 보정·거점 점유 보너스, 한 대 상한 (PvE 계수와 분리)
   if (room.kind === "pvp" && t.type === "p" && src && src.team === "p") {
     const o2 = ownerOf(room, src);
@@ -189,6 +201,8 @@ export function dealDamage(room, src, t, o, now) {
   }
   const real = dmg - absorbed;
   t.hp = Math.max(0, t.hp - real);
+  // 전갈자리·뱀주인자리: 몬스터에게 맞으면 독
+  if (room.rule?.poison && t.type === "p" && src?.team === "m" && !o.dot && real > 0 && !t.status.has("poison")) applyStatus(room, src, t, { type: "poison", dur: 4, pow: 0.05 }, now);
   t.lastHurt = now;
   if (t.team === "p" && real > 0) {
     if (t.abyss?.has("null_guard") && t.hp > 0 && t.hp / t.maxHp <= 0.4 && now >= (t.icd.get("a_null_guard") ?? 0)) {
@@ -228,6 +242,7 @@ export function dealDamage(room, src, t, o, now) {
 export function heal(room, src, t, amount, now, { noEvent = false } = {}) {
   if (!t || t.dead) return 0;
   if (room.kind === "pvp") amount *= PVP.heal * (PVP.classHeal[(src?.type === "d" ? room.units.get(src.owner) : src)?.cls ?? t.cls] ?? 1);
+  if (room.rule?.heal && t.type === "p") amount *= room.rule.heal;
   const before = t.hp;
   t.hp = Math.min(t.maxHp, t.hp + Math.round(amount));
   const v = t.hp - before;
@@ -268,7 +283,7 @@ export function moveMul(u) {
   let m = 1;
   if (u.status.has("slow")) m *= 1 - (u.status.get("slow").v || 0.3);
   if (u.status.has("root") || isHardCC(u)) return 0;
-  m *= 1 + buffSum(u, "move");
+  m *= 1 + buffSum(u, "move") + (u.type === "p" ? u.room?.rule?.move ?? 0 : 0);
   return Math.max(0.1, m);
 }
 

@@ -6,6 +6,7 @@ import { castFx, hitFx, profUpFx } from "./render/skillfx.js";
 import { profOf, profCost } from "/shared/prof.js";
 import { onTown } from "./update.js";
 import { sfx, onEnemyHit, onEnemyDie, onMeHurt } from "./feel.js";
+import { SPECTACLE } from "./render/spectacle.js";
 import { TICK_DT, PLAYER_RADIUS, SLOT_KEYS, VIEW_W, VIEW_H, ITEMS } from "/shared/constants.js";
 import { SKILLS, skillReach } from "/shared/skills.js";
 import { zoneOf, ZONES } from "/shared/zones.js";
@@ -42,6 +43,12 @@ export function onMessage(m) {
     case "ev": for (const e of m.list) onEvent(e); break;
     case "vaultResult": G.ui.onVaultResult?.(m); break;
     case "boatAsk": G.ui.onBoatAsk?.(m); break;
+    case "boatPick": G.ui.onBoatPick?.(m); break;
+    case "story":
+      // 별을 처음 밝히고 돌아오면(이야기 장이 열림) 하늘이 터지는 연출
+      if (m.n > 0 && m.fresh) { SPECTACLE.starLit(G.local.x, G.local.y, m.color); G.ui.center?.(`${m.sign} 별이 다시 빛나요!`); setTimeout(() => G.ui.onStory?.(m), 1600); }
+      else G.ui.onStory?.(m);
+      break;
     case "crafted": G.ui.onCrafted?.(m); break;
     // PvP 결투장
     case "bossRetry": G.ui.onBossRetry?.(m); break;
@@ -87,7 +94,8 @@ function onMap(m) {
   if (G.kind !== "pvp") { G.pvp = null; G.pvpSide = null; G.ui.onPvpState?.(); }
   if (G.kind === "town") onTown((t) => G.ui?.center(t));
   G.mapKind = m.kind === "town" ? "town" : m.kind === "safe" ? "safe" : m.kind;
-  G.zone = m.floor ? zoneOf(m.floor, G.dungeon) : m.kind === "pvp" ? (ZONES.find((z) => z.name === "타락한 성역") ?? ZONES[0]) : ZONES[0];
+  // 결투장: 밝은 조명 (어두우면 상대 움직임을 읽기 어려움)
+  G.zone = m.floor ? zoneOf(m.floor, G.dungeon) : m.kind === "pvp" ? { ...(ZONES.find((z) => z.name === "타락한 성역") ?? ZONES[0]), ambient: 0.25, light: 320 } : ZONES[0];
   G.map = new TileMap({ ...m, kind: m.kind === "town" ? "town" : m.kind }, G.zone);
   G.map.doorsOpen = m.doorsOpen;
   G.map.explored.fill(1); // 투기장 한 방이라 지도 전체를 바로 보여 줌
@@ -165,6 +173,8 @@ function onEvent(e) {
         ent.dead = true; ent.diedAt = now();
         R?.fx(ent.k === "p" ? "spawn/soul-rise" : ent.k === "b" ? "explosions/big-explosion" : "spawn/poof", ent.rx, ent.ry - (ent.k === "p" ? 0 : 8), { s: ent.k === "b" ? 0.7 : ent.k === "p" ? 1 : 0.55 });
         if (ent.k === "m" || ent.k === "b") onEnemyDie(ent);
+        if (ent.k === "b") SPECTACLE.bossKill(ent.rx, ent.ry);
+        else if (ent.k === "m" && ent.info?.el && (G.crowdK ?? 1) >= 0.5) SPECTACLE.eliteKill(ent.rx, ent.ry);
         if (ent.k !== "p") setTimeout(() => G.ents.get(e.id)?.dead && G.ents.delete(e.id), 400);
       }
       break;
@@ -180,6 +190,7 @@ function onEvent(e) {
     case "miss": if (ent) floater(ent.rx, ent.ry - 34, "회피", "miss"); break;
     case "gold": if (e.own === G.you) { floater(e.x, e.y - 20, `+${e.v}G`, "gold"); sfx("coin"); } break;
     case "fx": {
+      if (e.fx === "status/rage" && G.ents.get(e.at)?.k === "b") SPECTACLE.phase(e.x, e.y);
       // 사람이 많을 때: 내 것·내 근처 것은 다 보여 주고, 남의 이펙트는 일부만 (메이플처럼 붐비면 남의 이펙트를 줄임)
       // 내 것: 내가 낸 이펙트, 또는 붐비지 않을 때 내 근처 이펙트
       const me = G.ents.get(G.you), mine = e.at === G.you || e.src === G.you || ((G.crowdK ?? 1) >= 1 && me && Math.hypot(e.x - me.rx, e.y - me.ry) < 140);
@@ -213,7 +224,7 @@ function onEvent(e) {
     case "stx": if (ent) ent.st.delete(e.s); break;
     case "msg": if (!(e.kind === "self" && e.id !== G.you)) G.ui.toast(e.text, e.kind); break;
     case "notice": G.ui.toast(e.text, "info"); break;
-    case "lvl": if (ent) { R?.fx("ui/level-up", ent.rx, ent.ry, { follow: e.id }); if (e.id === G.you) { G.ui.center(`레벨 업! Lv.${e.l}`); sfx("level"); } } break;
+    case "lvl": if (ent) { R?.fx("ui/level-up", ent.rx, ent.ry, { follow: e.id }); if (e.id === G.you) { SPECTACLE.levelUp(ent.rx, ent.ry); G.ui.center(`레벨 업! Lv.${e.l}`); sfx("level"); } } break;
     case "loot": G.loot.set(e.id, { ...e, t0: now() }); break;
     case "lootx": {
       const l = G.loot.get(e.id);
@@ -229,7 +240,13 @@ function onEvent(e) {
       break;
     }
     case "got": G.ui.gotItem(e.item); sfx("item"); break;
-    case "boss": G.boss = { id: e.id, name: e.name, mid: e.mid }; G.ui.onBoss(); break;
+    case "boss": {
+      const fresh = G.boss?.id !== e.id;
+      G.boss = { id: e.id, name: e.name, mid: e.mid }; G.ui.onBoss();
+      const b = G.ents.get(e.id);
+      if (fresh && b) { SPECTACLE.phase(b.rx, b.ry, e.mid ? "#ffb050" : "#ff3a4a"); G.shake = Math.max(G.shake, 4); }
+      break;
+    }
     case "bpat": G.bossCall = { id: e.id, p: e.p, t0: now() }; break; // 보스 패턴 이름 표시
     case "warn": if ((G.warns ??= []).length < 32) G.warns.push({ ...e, t0: now() - lag() }); if (e.k === "barrage" || e.k === "spiral") G.bossCall = { id: e.id, p: e.k, t0: now(), hold: e.d }; sfx("wave"); break;
     case "bossdead": G.boss = null; G.ui.onBoss(); G.ui.center("보스 처치!"); break;

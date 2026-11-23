@@ -111,7 +111,7 @@ const ui = {
   onChar() { HUD.updateSkillbar(); WIN.refreshAll(); },
   onMe() { HUD.updateBars(); },
   onProf() { if (isOpen("skills") && !(G._profRefresh > performance.now())) { G._profRefresh = performance.now() + 500; refreshWin("skills"); } },
-  onMap() { closeWin("boss-retry"); HUD.updateZoneLabel(); WIN.refreshAll(); HUD.toast(G.mapKind === "town" ? (G.island === "verdan" ? "베르단 섬 마을" : "에르덴 섬 · 모험가 마을") : G.mapKind === "safe" ? "안전 구역 — 전직소" : G.mapKind === "pvp" ? "결투장 — 1대1 결투" : `${DUNGEON_LABEL[G.dungeon] ?? ""}${G.floor}층 · ${G.zone.name}`, "floor"); },
+  onMap() { closeWin("boss-retry"); HUD.updateZoneLabel(); WIN.refreshAll(); if (G.dungeon !== 5 || G.mapKind !== "dungeon") HUD.toast(G.mapKind === "town" ? (G.island === "astra" ? "아스트라엘 · 별무덤 마을" : G.island === "verdan" ? "베르단 섬 마을" : "에르덴 섬 · 모험가 마을") : G.mapKind === "safe" ? "안전 구역 — 전직소" : G.mapKind === "pvp" ? "결투장 — 1대1 결투" : `${DUNGEON_LABEL[G.dungeon] ?? ""}${G.floor}층 · ${G.zone.name}`, "floor"); },
   chat: HUD.chatLine,
   onParty() { HUD.updateParty(); WIN.refreshAll(); },
   invite(from) {
@@ -167,6 +167,8 @@ const ui = {
   onWho() { if (isOpen("who")) refreshWin("who"); },
   onVaultResult(m) { WIN.onAbyssVaultResult(m); },
   onBoatAsk(m) { WIN.onBoatAsk(m); },
+  onBoatPick(m) { WIN.onBoatPick(m); },
+  onStory(m) { WIN.onStory(m); },
   onPvp() { if (isOpen("arena")) refreshWin("arena"); },
   onPvpState() { HUD.updatePvp(); },
   onPvpEnd(m) { WIN.openPvpResult(m); },

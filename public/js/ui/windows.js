@@ -18,6 +18,7 @@ import { optInfo, VMODS, VMATS, SIGIL_NAMES, CRAFT_TIERS, CRAFT_SLOTS, VERDAN_RA
 import { RARITY_COLOR, SLOT_NAME, OPTIONS, MYTHIC_EFFECTS, ABYSS_EFFECTS, WEAPON_TYPES, OFFHAND_TYPES, VARIANT_TRAITS, RARITIES, RARITY_WEIGHTS, RARITY_MUL, MATERIALS, ARMOR_NAMES, repairCost, ENH_PCT, ENCHANTS, enchantOdds, enchantCost, specialRerollCost, enhanceOdds, enhanceCost, enhMul, sellPrice, canEquip, MAX_ENH } from "/shared/items.js";
 import { sprite, playerLook } from "../render/sprites.js";
 import { PVP, PVP_PRESETS, presetStats, pvpTier } from "/shared/pvp.js";
+import { ASTRA, CONSTELLATIONS, blessUpCost } from "/shared/astra.js";
 
 const fmtPct = (v) => (v * 100).toFixed(1) + "%";
 const RES_NAME_BASE = { mp: "MP", ki: "내력", holy: "성광", parts: "부품", gap: "틈" };
@@ -381,6 +382,8 @@ export function openHelp() {
     h("div", { class: "note", text: "모험가로 시작해 10층 전직소에서 검사·권투사·궁수·도적·마법사·성직자·대장장이 중 하나를 고르거나 보류할 수 있어요. 첫 전직을 확정하면 직업이 고정돼요." }),
     h("h4", { text: "베르단 섬 (2차 업데이트)" }),
     h("div", { class: "note", text: "최대 레벨 250 (210부터 레벨업이 더뎌져요). 에르덴 마을 아래 선착장의 뱃사공에게 레벨 150 이상 + 심연 등급 아이템 1개를 공물로 바치면 베르단 섬으로 건너가요(처음 한 번만). 베르단 섬: 레벨 170부터 2차 전직(직업별 2~3갈래, 모험가로 에르덴을 돌파했다면 「모험가의 왕」), 100층 베르단 제1 던전, 그 100층을 깨면 열리는 30층 「기억왕의 지하왕릉」, 재료·지역 각인으로 원하는 부위와 수식어를 고르는 베르단 공방. 레벨 250에는 직업 전용 아이템을 받아요. 에르덴 제2 던전은 레벨 180부터 경험치가 줄어요." }),
+    h("h4", { text: "아스트라엘 (3차 업데이트)" }),
+    h("div", { class: "note", text: "레벨 200 + 베르단 제1 던전 50층을 넘기면 어느 섬의 뱃사공에게서든 별이 떨어진 섬 아스트라엘로 건너갈 수 있어요. 별자리 기록관 엘시에게서 열두 성좌의 시련(각 5단계)을 골라요. 시련마다 전투 규칙이 달라요 — 몬스터가 갈라지거나, 체력이 높을수록 강해지거나, 자연 회복이 막히거나. 마지막 단계의 수호성을 쓰러뜨리면 별이 다시 빛나고, 성좌의 이야기 한 장과 축복을 얻어요. 축복의 제단에서 축복을 3개까지 품고 별가루로 강화해요(결투장에선 미적용). 오늘의 별은 별가루 2배. 열두 별을 모두 밝히면 숨겨진 열세 번째 별자리가 열려요." }),
     h("div", { class: "flexrow" }, h("button", { class: "btn small danger", onclick: () => G.ui.logout() }, "로그아웃 · 다른 계정으로")),
   ], { w: 460 });
 }
@@ -657,28 +660,108 @@ export function openVerdanGate(d) {
 }
 let boatAsk = null;
 export function onBoatAsk(m) { boatAsk = m.item; openBoat(); }
-/** 뱃사공 */
+export function onBoatPick() { openBoat(); }
+const ISLE = { erden: "에르덴 섬", verdan: "베르단 섬", astra: "아스트라엘" };
+const BOATMAN = { erden: "뱃사공 노아", verdan: "뱃사공 마레", astra: "뱃사공 시리우스" };
+/** 뱃사공: 세 섬을 잇는 배 */
 export function openBoat() {
-  openWin("boat", G.char?.island === "verdan" ? "뱃사공 마레 — 에르덴행" : "뱃사공 노아 — 베르단행", () => {
-    const c = G.char;
-    if (c.island === "verdan") return [
-      h("div", { class: "note", text: "에르덴 섬으로 돌아가는 배예요. 한 번 입도했으니 언제든 다시 건너올 수 있어요." }),
-      h("button", { class: "btn primary", onclick: () => { send({ t: "boat" }); closeWin("boat"); } }, "⛵ 에르덴 섬으로"),
-    ];
-    if (c.verdanPass) return [
-      h("div", { class: "note", text: "이미 공물을 바쳤으니 자유롭게 건널 수 있어요." }),
-      h("button", { class: "btn primary", onclick: () => { send({ t: "boat" }); closeWin("boat"); } }, "⛵ 베르단 섬으로"),
-    ];
-    const abyss = c.inv.filter((it) => it.rarity === "심연");
-    return [
-      h("div", { class: "note", text: "베르단 섬으로 건너려면 레벨 150 이상이어야 하고, 심연 등급 아이템 1개를 공물로 바쳐야 해요. (처음 한 번만 · 아이템은 사라져요)" }),
-      h("div", { class: "note", text: `레벨 ${c.level}/150 ${c.level >= 150 ? "✓" : "✗"} · 가방의 심연 아이템 ${abyss.length}개 ${abyss.length ? "✓" : "✗"}` }),
-      boatAsk ? h("div", { class: "note warn", text: `공물로 바칠 아이템: [${boatAsk.name}] — 확인을 누르면 사라져요.` }) : null,
-      boatAsk ? h("button", { class: "btn primary", onclick: () => { send({ t: "boat", to: "pay" }); boatAsk = null; closeWin("boat"); } }, "공물을 바치고 출항") :
-        h("button", { class: "btn primary", disabled: c.level < 150 || !abyss.length, onclick: () => send({ t: "boat" }) }, "⛵ 베르단 섬으로 (공물 확인)"),
-    ];
-  }, { w: 380 });
+  const here = G.char?.island ?? "erden";
+  openWin("boat", `${BOATMAN[here] ?? "뱃사공"} — 어디로 갈까요?`, () => {
+    const c = G.char, here = c.island ?? "erden";
+    const go = (to) => () => { send({ t: "boat", to }); boatAsk = null; closeWin("boat"); };
+    const out = [h("div", { class: "note", text: `지금 있는 곳: ${ISLE[here]}. 파티 중이거나 거래 중에는 배를 탈 수 없어요.` })];
+    // 에르덴
+    if (here !== "erden") out.push(h("button", { class: "btn primary boat-dest", onclick: go("erden") }, "⛵ 에르덴 섬 · 모험가 마을"));
+    // 베르단
+    if (here !== "verdan") {
+      if (c.verdanPass) out.push(h("button", { class: "btn primary boat-dest", onclick: go("verdan") }, "⛵ 베르단 섬"));
+      else {
+        const abyss = c.inv.filter((it) => it.rarity === "심연");
+        out.push(h("h4", { text: "베르단 섬 (첫 입도)" }),
+          h("div", { class: "note", text: `레벨 150 이상 + 심연 등급 아이템 1개를 공물로 바쳐야 해요. (처음 한 번만 · 아이템은 사라져요) — 레벨 ${c.level}/150 ${c.level >= 150 ? "✓" : "✗"} · 심연 아이템 ${abyss.length}개 ${abyss.length ? "✓" : "✗"}` }),
+          boatAsk ? h("div", { class: "note warn", text: `공물로 바칠 아이템: [${boatAsk.name}] — 확인을 누르면 사라져요.` }) : null,
+          boatAsk ? h("button", { class: "btn primary", onclick: go("pay") }, "공물을 바치고 출항")
+            : h("button", { class: "btn", disabled: c.level < 150 || !abyss.length, onclick: () => send({ t: "boat", to: "verdan" }) }, "⛵ 베르단 섬으로 (공물 확인)"));
+      }
+    }
+    // 아스트라엘
+    if (here !== "astra") {
+      const a = c.astra ?? {};
+      if (a.pass) out.push(h("button", { class: "btn primary boat-dest astra", onclick: go("astra") }, "🌌 아스트라엘 · 별무덤 마을"));
+      else {
+        const okLv = c.level >= 200, okB = c.verdanPass && (c.best3 ?? 0) >= 50;
+        out.push(h("h4", { text: "🌌 아스트라엘 (첫 입도)" }),
+          h("div", { class: "note", text: "별이 떨어진 은빛 섬. 열세 성좌의 시련이 기다려요. 공물은 필요 없어요." }),
+          h("div", { class: "note", text: `레벨 ${c.level}/200 ${okLv ? "✓" : "✗"} · 베르단 제1 던전 ${c.best3 ?? 0}/50층 ${okB ? "✓" : "✗"}` }),
+          h("button", { class: "btn primary boat-dest astra", disabled: !okLv || !okB, onclick: go("astra") }, "🌌 아스트라엘로 출항"));
+      }
+    }
+    return out;
+  }, { w: 400 });
 }
+
+// ───────── 3차 업데이트: 아스트라엘 ─────────
+const blessText = (k, lv) => `${k.bless.name} ${lv}단계 — ${k.bless.desc}`;
+/** 별자리 기록관 엘시: 성좌의 시련 고르기 + 별의 기록 */
+export function openObservatory() {
+  openWin("observatory", "별자리 기록관 엘시 — 성좌의 시련", () => {
+    const c = G.char, a = c.astra ?? { stars: {}, bless: {}, clears: {}, seen: [] };
+    const lit = CONSTELLATIONS.filter((k) => a.stars?.[k.key]).length;
+    const twelve = CONSTELLATIONS.slice(0, 12).every((k) => a.stars?.[k.key]);
+    const isLeader = !G.party.length || G.party.some((p) => p.name === G.name && p.leader);
+    const today = c.today ?? 0;
+    const card = (k) => {
+      const on = !!a.stars?.[k.key];
+      const locked = k.hidden && !twelve;
+      return h("div", { class: "star-card" + (on ? " lit" : "") + (locked ? " locked" : "") + (k.id === today ? " today" : ""), style: { "--sc": k.color } },
+        h("div", { class: "sc-head" }, h("span", { class: "sc-sign", text: locked ? "?" : k.sign }), h("b", { text: locked ? "??? 자리" : k.name }), k.id === today ? h("span", { class: "sc-today", text: "오늘의 별 ×2" }) : null),
+        h("div", { class: "sc-rule", text: locked ? "열두 별을 모두 밝히면 모습을 드러내요." : `규칙 「${k.rule.name}」 ${k.rule.desc}` }),
+        !locked && k.bless ? h("div", { class: "sc-bless", text: `축복: ${k.bless.name}` }) : null,
+        h("div", { class: "sc-foot" },
+          h("span", { class: "sc-state", text: on ? `★ 밝힘 · ${a.clears?.[k.key] ?? 0}회` : "☆ 꺼짐" }),
+          on ? h("button", { class: "btn small", onclick: () => send({ t: "story", n: k.id }) }, "기록") : null,
+          h("button", { class: "btn small primary", disabled: locked || !isLeader, onclick: () => { send({ t: "trial", c: k.id }); closeWin("observatory"); } }, on ? "다시 도전" : "시련 시작")));
+    };
+    return [
+      h("div", { class: "note", text: `밝힌 별 ${lit}/13 · 별가루 ${a.dust ?? 0}개. 시련은 별자리마다 5단계, 마지막 단계에서 수호성과 싸워요. 시련마다 전투 규칙이 달라요.` }),
+      h("div", { class: "note", text: "성좌들은 싸움에 끼어들지 않아요. 다만 당신에게 말을 걸 뿐이에요." }),
+      !isLeader ? h("div", { class: "note warn", text: "파티장만 시련을 고를 수 있어요." }) : null,
+      h("div", { class: "star-grid" }, ...CONSTELLATIONS.map(card)),
+      h("button", { class: "btn small", onclick: () => send({ t: "story", n: 0 }) }, "서장 다시 읽기"),
+    ];
+  }, { w: 720 });
+}
+/** 제단지기 세레스: 축복 장착·강화 */
+export function openAltar() {
+  openWin("altar", "축복의 제단 — 제단지기 세레스", () => {
+    const c = G.char, a = c.astra ?? { stars: {}, bless: {}, equip: [] };
+    const slots = a.stars?.ophiuchus ? ASTRA.blessSlotsMax : ASTRA.blessSlots;
+    const own = CONSTELLATIONS.filter((k) => k.bless && a.stars?.[k.key]);
+    const row = (k) => {
+      const lv = a.bless?.[k.key] ?? 1, on = a.equip?.includes(k.key), cost = blessUpCost(lv);
+      return h("div", { class: "bless-row" + (on ? " on" : ""), style: { "--sc": k.color } },
+        h("span", { class: "sc-sign", text: k.sign }),
+        h("div", { class: "bl-text" }, h("b", { text: `${k.bless.name} · ${lv}/${ASTRA.blessMax}` }), h("div", { class: "desc", text: k.bless.desc })),
+        h("button", { class: "btn small" + (on ? "" : " primary"), disabled: !on && a.equip.length >= slots, onclick: () => send({ t: "bless", a: on ? "unequip" : "equip", key: k.key }) }, on ? "내리기" : "품기"),
+        h("button", { class: "btn small", disabled: lv >= ASTRA.blessMax || (a.dust ?? 0) < cost, onclick: () => send({ t: "bless", a: "up", key: k.key }) }, lv >= ASTRA.blessMax ? "최대" : `강화 ✦${cost}`));
+    };
+    return [
+      h("div", { class: "note", text: `밝힌 별자리의 축복을 최대 ${slots}개까지 품을 수 있어요. (열세 번째 별을 되찾으면 4개) 별가루로 축복을 더 밝게 만들 수 있어요. 결투장에서는 축복이 적용되지 않아요.` }),
+      h("div", { class: "note", text: `품은 축복 ${a.equip?.length ?? 0}/${slots} · 별가루 ✦${a.dust ?? 0}` }),
+      own.length ? h("div", { class: "bless-list" }, ...own.map(row)) : h("div", { class: "note warn", text: "아직 밝힌 별이 없어요. 별자리 기록관 엘시에게서 시련을 골라 보세요." }),
+    ];
+  }, { w: 520 });
+}
+/** 별의 기록 (성좌 이야기 팝업) */
+export function onStory(m) {
+  openWin("story", m.title, () => [
+    h("div", { class: "story", style: { "--sc": m.color ?? "#c8a0ff" } },
+      h("div", { class: "story-sign", text: m.sign ?? "✦" }),
+      ...(m.text ?? []).map((line, i) => h("p", { class: "story-line", style: { animationDelay: `${0.25 + i * 0.55}s` }, text: line }))),
+    h("button", { class: "btn primary", onclick: () => closeWin("story") }, "닫기"),
+  ], { w: 460 });
+}
+
 /** 2차 전직소 */
 export function openClass2() {
   openWin("class2", "베르단 2차 전직소", () => {
@@ -756,12 +839,12 @@ export function openNpc(o) {
     if (two) { const x0 = Math.max(8, (W - (w + 420 + 12)) / 2); open({ x: x0 }); openInv({ x: x0 + w + 12 }); }
     else open();
   };
-  ({ gate: openGate, gate2: openGate2, gate3: () => openVerdanGate(3), gate4: () => openVerdanGate(4), vault: openAbyssVault, boatman: openBoat, boatman2: openBoat, class2_master: openClass2, vforge: () => pair(openForge, 460),
+  ({ gate: openGate, gate2: openGate2, gate3: () => openVerdanGate(3), gate4: () => openVerdanGate(4), vault: openAbyssVault, boatman: openBoat, boatman2: openBoat, boatman3: openBoat, observatory: openObservatory, altar: openAltar, class2_master: openClass2, vforge: () => pair(openForge, 460),
     shop: () => pair(openShop, 440), smithy: () => pair(openSmithy, 420), enchanter: () => pair(openEnchant, 440), trainer: openTrainer, board: openBoard, class_master: openClass, arena: () => openArena("duel"), pvpboard: () => openArena("rank") })[o.id]?.();
 }
 
 export function refreshAll() {
-  for (const id of ["char", "skills", "inv", "party", "shop", "smithy", "enchant", "class", "gate", "gate2", "gate3", "gate4", "boat", "class2", "forge", "abyss-vault", "trainer", "titles", "trade", "arena"]) if (isOpen(id)) refreshWin(id);
+  for (const id of ["char", "skills", "inv", "party", "shop", "smithy", "enchant", "class", "gate", "gate2", "gate3", "gate4", "boat", "observatory", "altar", "class2", "forge", "abyss-vault", "trainer", "titles", "trade", "arena"]) if (isOpen(id)) refreshWin(id);
 }
 
 // ───────── 조작 키 설정 (O) ─────────
@@ -1004,7 +1087,7 @@ export function openArena(tab) {
     const tabs = h("div", { class: "flexrow arena-tabs" }, ...[["duel", "결투"], ["setup", "결투 세팅"], ["rank", "순위"]].map(([k, n]) =>
       h("button", { class: "btn small" + (arenaTab === k ? " primary" : ""), onclick: () => { arenaTab = k; if (k === "rank") loadArenaRank(); refreshWin("arena"); } }, n)));
     const rec = h("div", { class: "pvp-rec" },
-      h("b", { text: tier.name, style: `color:${tier.color}` }), ` 레이팅 ${pv.rating} (최고 ${pv.best}) · ${pv.w}승 ${pv.l}패${pv.d ? ` ${pv.d}무` : ""}${pv.streak >= 2 ? ` · ${pv.streak}연승` : ""}${pv.games < 10 ? ` · 배치 ${pv.games}/10` : ""}`);
+      h("b", { text: tier.name, style: { color: tier.color } }), ` 레이팅 ${pv.rating} (최고 ${pv.best}) · ${pv.w}승 ${pv.l}패${pv.d ? ` ${pv.d}무` : ""}${pv.streak >= 2 ? ` · ${pv.streak}연승` : ""}${pv.games < 10 ? ` · 배치 ${pv.games}/10` : ""}`);
     if (arenaTab === "rank") return [tabs, rec, arenaRankTable()];
     if (arenaTab === "setup") return [tabs, ...arenaSetup(c)];
     const can = c.cls !== "adventurer";
@@ -1038,7 +1121,7 @@ function arenaRankTable() {
   if (!arenaRank) return h("div", { class: "note", text: "불러오는 중…" });
   if (!list.length) return h("div", { class: "note", text: "아직 순위전 기록이 없어요. 첫 승자가 되어 보세요!" });
   return h("table", {}, h("tr", {}, ...["#", "이름", "직업", "등급", "레이팅", "전적"].map((t) => h("td", { text: t }))),
-    ...list.map((r, i) => { const t = pvpTier(r.rating); return h("tr", {}, h("td", { text: i + 1 }), h("td", { text: r.username }), h("td", { text: CLASS_INFO[r.cls]?.name ?? "" }), h("td", { text: t.name, style: `color:${t.color}` }), h("td", { text: r.rating }), h("td", { text: `${r.w}승 ${r.l}패${r.d ? ` ${r.d}무` : ""}` })); }));
+    ...list.map((r, i) => { const t = pvpTier(r.rating); return h("tr", {}, h("td", { text: i + 1 }), h("td", { text: r.username }), h("td", { text: CLASS_INFO[r.cls]?.name ?? "" }), h("td", { text: t.name, style: { color: t.color } }), h("td", { text: r.rating }), h("td", { text: `${r.w}승 ${r.l}패${r.d ? ` ${r.d}무` : ""}` })); }));
 }
 function arenaSetup(c) {
   if (c.cls === "adventurer") return [h("div", { class: "note warn", text: "1차 전직을 마치면 결투 세팅을 할 수 있어요." })];
@@ -1050,7 +1133,7 @@ function arenaSetup(c) {
     h("button", { class: "btn small" + (D.preset === k ? " primary" : ""), onclick: () => { if (k === "custom" && D.preset !== "custom") D.stats = { ...presetStats(c.cls, D.preset) }; D.preset = k; refreshWin("arena"); } }, n)));
   const statRows = keys.map((k) => h("div", { class: "statrow" }, h("span", { class: "sn", text: STATS[k]?.name ?? k }),
     D.preset === "custom"
-      ? h("input", { type: "number", min: "0", max: String(PVP.statMax), value: String(stats[k] ?? 0), style: "width:72px", onchange: (e) => { D.stats[k] = Math.max(0, Math.min(PVP.statMax, Math.floor(Number(e.target.value) || 0))); refreshWin("arena"); } })
+      ? h("input", { type: "number", min: "0", max: String(PVP.statMax), value: String(stats[k] ?? 0), style: { width: "72px" }, onchange: (e) => { D.stats[k] = Math.max(0, Math.min(PVP.statMax, Math.floor(Number(e.target.value) || 0))); refreshWin("arena"); } })
       : h("span", { class: "sd", text: String(stats[k] ?? 0) }),
     h("span", { class: "sd", text: STATS[k]?.desc ?? "" })));
   const preview = deriveStats({ cls: c.cls, level: PVP.level, stats, equip: {}, skills: [] });
@@ -1079,7 +1162,7 @@ export function openPvpResult(m) {
   const win = m.win === 1, draw = m.win == null;
   const whyTxt = { forfeit: "상대 기권", leave: "기권", disconnect: "접속 종료" }[m.why];
   openWin("pvp-result", draw ? "결투 무승부" : win ? "🏆 결투 승리!" : "결투 패배", () => [
-    h("div", { class: "pvp-big", text: `${m.sc?.[m.me] ?? 0} : ${m.sc?.[1 - m.me] ?? 0}`, style: `color:${draw ? "#c8d0e0" : win ? "#ffd35a" : "#ff7a7a"}` }),
+    h("div", { class: "pvp-big", text: `${m.sc?.[m.me] ?? 0} : ${m.sc?.[1 - m.me] ?? 0}`, style: { color: draw ? "#c8d0e0" : win ? "#ffd35a" : "#ff7a7a" } }),
     h("div", { class: "note", text: `상대: ${m.opp}${whyTxt ? ` · ${whyTxt}` : ""}` }),
     m.ranked ? h("div", { class: "note", text: `레이팅 ${m.rating} (${m.delta >= 0 ? "+" : ""}${m.delta}) · ${m.tier}` }) : h("div", { class: "note", text: "친선전이라 순위에는 반영되지 않아요." }),
     ...(m.log ?? []).filter((r) => r.r).map((r) => h("div", { class: "note", text: `${r.r}라운드: ${r.w < 0 ? "무승부" : r.w === m.me ? "승리" : "패배"}${r.why === "time" ? " (시간 종료)" : ""}${r.t ? ` · ${r.t}초` : ""}` })),
@@ -1090,7 +1173,7 @@ export function openPvpResult(m) {
 // ───────── 보스층 클리어 뒤: 다시 도전할지 고르기 ─────────
 export function openBossRetry(m) {
   openWin("boss-retry", "보스 처치!", () => [
-    h("div", { class: "pvp-big", text: `${m.floor}층 클리어`, style: "color:#ffd35a;font-size:22px" }),
+    h("div", { class: "pvp-big", text: `${m.floor}층 클리어`, style: { color: "#ffd35a", fontSize: "22px" } }),
     h("div", { class: "note", text: `${m.boss ?? "보스"}을(를) 쓰러뜨렸어요. 보스에 다시 도전하시겠습니까?` }),
     m.leader
       ? h("div", { class: "flexrow" },

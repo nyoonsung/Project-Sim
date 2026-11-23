@@ -3,6 +3,7 @@ import { TILE, TICK_DT, PLAYER_RADIUS } from "../../shared/constants.js";
 import { applyInput, moveCircle, circleHitsWall, blocksShot, lineOfSight, tileAt } from "../../shared/move.js";
 import { PATH_DMG } from "../../shared/classes2.js";
 import { PVP } from "../../shared/pvp.js";
+import { CONST_BY_KEY, astraOf } from "../../shared/astra.js";
 import { MONSTERS, BOSSES, monsterStats, bossStats, floorScale, zoneOf, effLevel, normDungeon, dungeonMax, progKeys, D2_MONSTER_STAT_MULTIPLIER, D2_BOSS_STAT_MULTIPLIER, D2_BOSS_SPEED_MULTIPLIER } from "../../shared/zones.js";
 import { rollItem, rollAbyssRelic, rollVerdanItem, ILVL_CAP, VMATS, vmatTier, SIGIL_NAMES } from "../../shared/items.js";
 import { wearOnDeath } from "./wear.js";
@@ -58,6 +59,10 @@ export class Room {
     this.lvl = effLevel(Math.max(1, floor), this.dungeon);
     // 지하왕릉 11~20층: 예고 공격 지연·반복
     this.echoTele = this.dungeon === 4 && kind === "dungeon" && !!zoneOf(Math.max(1, floor), 4).echoTele;
+    // 3차: 성좌의 시련 — 성좌마다 다른 규칙 (room.rule)
+    this.astra = this.dungeon === 5 && kind === "dungeon" ? CONST_BY_KEY[zoneOf(Math.max(1, floor), 5).astra] ?? null : null;
+    this.rule = this.astra?.rule ?? null;
+    if (this.astra) { this.stage = astraOf(floor).stage; this.astraAt = (world.clock ?? 0) + 6; }
     this.units = new Map();
     this.players = new Map();
     this.projectiles = [];
@@ -119,6 +124,7 @@ export class Room {
     const def = MONSTERS[mid];
     if (!def) return null;
     const st = monsterStats(mid, Math.max(1, this.floor), this.partySize, this.dungeon);
+    if (this.rule) { st.hp = st.hp * (this.rule.mobHp ?? 1) * (opts.splitHp ?? 1); st.dmg *= this.rule.mobDmg ?? 1; }
     const m = {
       id: newUnitId(), team: "m", type: "m", mid, name: (elite ? "정예 " : "") + def.name, x, y, r: 11 * (def.look.scale ?? 1) * (elite ? 1.2 : 1),
       hp: Math.round(st.hp * (elite ? 3 : 1)), maxHp: Math.round(st.hp * (elite ? 3 : 1)), atk: st.dmg * (elite ? 1.5 : 1), def: (def.ai === "guard" ? 12 + this.lvl * 1.2 : 2 + this.lvl * 1.6) * (elite ? 1.5 : 1) * (this.dungeon === 2 ? D2_MONSTER_STAT_MULTIPLIER : this.dungeon >= 3 ? 0.6 : 1),
@@ -126,6 +132,8 @@ export class Room {
       status: new Map(), buffs: new Map(), threat: new Map(), facing: Math.PI / 2, aggro: !!opts.aggro, home: [x, y],
       atkReady: 0, windup: null, dead: false, fly: !!def.fly, summoned: !!opts.summoned,
     };
+    if (this.rule?.mobSpeed) m.speed *= this.rule.mobSpeed;
+    if (opts.splitChild) m.splitChild = true;
     this.units.set(m.id, m);
     this.ev({ e: "add", ...this.describe(m) });
     return m;
@@ -133,6 +141,8 @@ export class Room {
   spawnBoss(bid, x, y) {
     const def = BOSSES[bid];
     const st = bossStats(bid, this.floor, this.partySize, this.dungeon);
+    if (this.rule) { st.hp = Math.round(st.hp * (this.rule.mobHp ?? 1)); st.dmg *= this.rule.mobDmg ?? 1; }
+    if (this.astra) this.schedule(0.8, () => this.whisper(2));
     const b = {
       id: newUnitId(), team: "m", type: "b", bid, name: def.name, x, y, r: 14 * Math.min(2.2, def.look.scale ?? 1),
       hp: st.hp, maxHp: st.hp, atk: st.dmg, def: (6 + this.lvl * 2.2) * (this.dungeon === 2 ? D2_BOSS_STAT_MULTIPLIER : this.dungeon >= 3 ? 0.6 : 1), level: st.level, xp: st.xp, speed: def.speed * (this.dungeon === 2 ? D2_BOSS_SPEED_MULTIPLIER : this.dungeon >= 3 ? 0.85 : 1),
@@ -426,6 +436,7 @@ export class Room {
     // 보상: 파티원 각자(개인 드롭)
     const killer = src?.team === "p" ? (src.type === "d" ? this.units.get(src.owner) : src) : null;
     if (killer) skillOnKill(this, killer, t, now);
+    if (this.rule) this.astraOnKill(t, killer, now);
     for (const p of this.players.values()) {
       if (p.dead || Math.hypot(p.x - t.x, p.y - t.y) > 700) continue;
       const ch = p.session.char;
@@ -532,7 +543,8 @@ export class Room {
       this.world.sendChar?.(p.session);
       p.session.send({ t: "ev", list: [{ e: "msg", text: "균열 결정 1개를 획득했어요.", kind: "legend" }] });
     }
-    if (this.dungeon >= 3) this.verdanDrops(p, t);
+    if (this.dungeon === 5) this.astraDrops(p, t);
+    else if (this.dungeon >= 3) this.verdanDrops(p, t);
     const n = t.boss ? (t.mid ? 1 + (Math.random() < 0.5) : 2 + (Math.random() < 0.5)) : Math.random() < (t.elite ? 0.35 : 0.07) ? 1 : 0;
     for (let i = 0; i < n; i++) {
       const it = this.rollGear(p.session.char.cls, tier);
@@ -544,7 +556,7 @@ export class Room {
   /** 베르단 재료(20층 단위 5단계) · 지역 각인(10층 주요 보스) · 섬 심장핵(100층) */
   grantMats(p, n) {
     const ch = p.session.char;
-    const tier = this.dungeon === 4 ? 4 : vmatTier(this.floor);
+    const tier = this.dungeon === 4 ? 4 : this.dungeon === 5 ? (this.astra?.id >= 7 ? 4 : 3) : vmatTier(this.floor);
     const id = VMATS[tier].id;
     ch.mats ??= {};
     ch.mats[id] = Math.min(999999, (ch.mats[id] ?? 0) + n);
@@ -602,7 +614,10 @@ export class Room {
     const finalFloor = dungeonMax(this.dungeon);
     const isFinal = isMain && this.floor >= finalFloor;
     const VICTORY = { 1: "마을로 (던전 정복!)", 2: "마을로 (심연 정복!)", 3: "마을로 (베르단 정복!)", 4: "마을로 (지하왕릉 정복!)" };
-    const portal = { kind: "portal", id: isFinal ? "victory" : isMain ? "safe" : "exit", x: b.x, y: b.y, label: isFinal ? VICTORY[this.dungeon] : isMain ? "안전 구역으로" : `${this.floor + 1}층으로` };
+    const portal = this.astra
+      ? { kind: "portal", id: "victory", x: b.x, y: b.y, label: `아스트라엘로 (${this.astra.name}의 별)` , color: "town" }
+      : { kind: "portal", id: isFinal ? "victory" : isMain ? "safe" : "exit", x: b.x, y: b.y, label: isFinal ? VICTORY[this.dungeon] : isMain ? "안전 구역으로" : `${this.floor + 1}층으로` };
+    if (this.astra) this.whisper(3);
     if (this.dungeon === 2 && isFinal) {
       for (const p of this.players.values()) {
         const ch = p.session.char;
@@ -617,6 +632,75 @@ export class Room {
     this.world.onBossCleared(this, isMain);
     // 보스 다시 도전 선택 창 (전리품을 다 주운 뒤)
     this.schedule(2.6, () => this.world.offerBossRetry?.(this, b.name));
+  }
+
+  // ── 3차: 성좌의 시련
+  /** 성좌의 속삭임 (싸움에 끼어들지 않고 말만 건넴): 0 입장 · 2 수호성 등장 · 3 별이 밝혀짐 */
+  whisper(i) {
+    if (!this.astra) return;
+    const line = this.astra.whisper[Math.min(this.astra.whisper.length - 1, i === 0 ? 0 : i === 2 ? 1 : 2)];
+    this.ev({ e: "msg", text: `${this.astra.sign} ${this.astra.name}: “${line}”`, kind: "star" });
+  }
+  tickAstra(now) {
+    if (now >= this.astraAt) {
+      this.astraAt = now + 1e9;
+      if (this.stage === 1) { this.whisper(0); this.ev({ e: "msg", text: `시련의 규칙 — ${this.rule.name}: ${this.rule.desc}`, kind: "warn" }); }
+    }
+    const R = this.rule;
+    // 물병자리: 10초마다 플레이어 근처에 별비(회복 장판)
+    if (R.starfall && now >= (this.starAt ??= now + 6)) {
+      this.starAt = now + 10;
+      const ps = [...this.players.values()].filter((p) => !p.dead);
+      if (ps.length) {
+        const p = ps[Math.floor(Math.random() * ps.length)];
+        let x = p.x + (Math.random() * 120 - 60), y = p.y + (Math.random() * 90 - 45);
+        if (circleHitsWall(this.map, x, y, 20)) { x = p.x; y = p.y; }
+        this.ev({ e: "fx", fx: "arcane/star-fall", x: x | 0, y: y | 0, s: 0.8 });
+        this.addZone({ team: "p", x, y, r: 72, dur: 5, interval: 0.5, fx: "holy/heal-aoe", tick: (t2, z) => {
+          for (const q of this.players.values()) if (!q.dead && Math.hypot(q.x - z.x, q.y - z.y) <= z.r + q.r) heal(this, null, q, q.maxHp * 0.025, t2);
+        } });
+      }
+    }
+    // 물고기자리·뱀주인자리: 주기적인 어둠
+    if (R.darkness && now >= (this.darkAt ??= now + 8)) {
+      this.darkAt = now + 15;
+      this.ev({ e: "dark", d: 4.5, v: 150 });
+      this.ev({ e: "msg", text: "꿈결 같은 어둠이 내려앉아요…", kind: "warn" });
+    }
+  }
+  astraOnKill(t, killer, now) {
+    const R = this.rule;
+    // 쌍둥이자리: 일반 몬스터는 한 번 둘로 갈라짐
+    if (R.split && t.type === "m" && !t.boss && !t.splitChild && !t.summoned && !t.dummy && this.aliveMonsters() < 90) {
+      const x = t.x + (Math.random() * 30 - 15), y = t.y + (Math.random() * 30 - 15);
+      if (!circleHitsWall(this.map, x, y, 10)) {
+        const c = this.spawnMonster(t.mid, x, y, false, { summoned: true, splitChild: true, aggro: true, splitHp: 0.35 });
+        if (c) { c.name = "갈라진 " + c.name; this.ev({ e: "fx", fx: "arcane/mana-burst", x: x | 0, y: y | 0, s: 0.5 }); }
+      }
+    }
+    // 사자자리: 정예를 쓰러뜨리면 피해 +5% (10초, 최대 10중첩)
+    if (R.eliteBuff && t.elite && killer) {
+      const b = killer.buffs.get("astra_leo");
+      const n = Math.min(10, (b && b.until > now ? b.n : 0) + 1);
+      killer.buffs.set("astra_leo", { until: now + 10, n, mods: { dmg: R.eliteBuff * n } });
+      this.ev({ e: "buff", id: killer.id, b: "astra_leo", d: 10 });
+    }
+    // 염소자리: 적을 쓰러뜨릴 때마다 회복
+    if (R.killHeal && !t.summoned) for (const p of this.players.values()) if (!p.dead) heal(this, null, p, p.maxHp * R.killHeal, now, { noEvent: true });
+  }
+  /** 별가루: 일반 3% · 정예 40% · 수호성 확정 (오늘의 성좌는 2배) */
+  astraDrops(p, t) {
+    const ch = p.session.char;
+    ch.astra ??= { pass: true, stars: {}, bless: {}, equip: [], dust: 0, clears: {}, seen: [] };
+    let n = 0;
+    if (t.boss) { n = 6 + this.astra.id; const m = this.grantMats(p, 10); p.session.send({ t: "ev", list: [{ e: "msg", text: `${m.name} 10개를 얻었어요.`, kind: "legend" }] }); }
+    else if (t.elite) n = Math.random() < 0.4 ? 1 + (Math.random() < 0.3 ? 1 : 0) : 0;
+    else if (!t.summoned && Math.random() < 0.03) n = 1;
+    if (!n) return;
+    if (this.world.todayStar?.() === this.astra.id) n *= 2;
+    ch.astra.dust = Math.min(999999, (ch.astra.dust ?? 0) + n);
+    p.session.dirty = true;
+    if (t.boss || t.elite) p.session.send({ t: "ev", list: [{ e: "msg", text: `✦ 별가루 ${n}개`, kind: "star" }] });
   }
 
   // ── 매 틱
@@ -638,6 +722,7 @@ export class Room {
     if (now >= this.flowAt) { this.updateFlow(); this.flowAt = now + (this.units.size > 24 ? 0.65 : 0.5); }
     if (this.wave) this.tickWaves(now);
     if (this.dungeon === 4 && this.kind === "dungeon") this.tickTomb(now);
+    if (this.astra) this.tickAstra(now);
     if (this.wave && this.wave.spawned >= this.total && !this.exitOpen && now >= (this.rescueAt ?? 0)) { this.rescueAt = now + 8; this.rescueStragglers(); }
     if (this.map.traps?.length) this.tickTraps(now);
     for (const u of this.players.values()) this.tickPlayer(u, now);
@@ -680,7 +765,7 @@ export class Room {
     const s = u.stats;
     // 자원 회복
     u.mp = Math.min(u.maxMp, u.mp + s.mpRegen * TICK_DT * (u.lastHurt && now - u.lastHurt < 3 ? 0.6 : 1));
-    if (s.hpRegen) u.hp = Math.min(u.maxHp, u.hp + s.hpRegen * TICK_DT * (this.kind === "pvp" ? PVP.heal : 1));
+    if (s.hpRegen && !this.rule?.noRegen) u.hp = Math.min(u.maxHp, u.hp + s.hpRegen * TICK_DT * (this.kind === "pvp" ? PVP.heal : 1));
     if (this.map.safe && !u.lastHurt) u.hp = Math.min(u.maxHp, u.hp + u.maxHp * 0.05 * TICK_DT);
     if (this.map.safe) { u.hp = Math.min(u.maxHp, u.hp + u.maxHp * 0.03 * TICK_DT); u.mp = Math.min(u.maxMp, u.mp + u.maxMp * 0.05 * TICK_DT); }
     if (u.cls === "sword" || u.cls === "fist") {
@@ -1282,7 +1367,7 @@ export class Room {
       const hp = u.maxHp ? Math.ceil((u.hp / u.maxHp) * 1000) : 1000;
       parts.set(u, `[${u.id},${u.x | 0},${u.y | 0},${Math.round((u.facing ?? 0) * 100)},${hp},${flags}]`);
     }
-    const crowd = this.players.size > 8;
+    const crowd = this.players.size > 8, busy = this.players.size > 30;
     for (const p of this.players.values()) {
       const s = p.session;
       // 플레이어마다 '마지막으로 보낸 상태'를 기억해서 바뀐 유닛만 보냄 (2초마다 전체)
@@ -1291,8 +1376,15 @@ export class Room {
       const near = [];
       for (const [u, str] of parts) {
         // 사람이 많으면(8명 초과) 다른 플레이어 위치는 0.1초마다(번갈아) — 화면에선 부드럽게 이어 그려서 티가 거의 안 남
-        if (crowd && u.type === "p" && u !== p && !full && (this.tickN + u.id + p.id) % 2) continue;
-        if (u === p || u.type === "b" || (u.type === "p" && this.partyId) || Math.abs(u.x - p.x) < VIEW + 100 && Math.abs(u.y - p.y) < VIEW) {
+        // 아주 붐비면(30명 초과) 멀리 있는 사람일수록 더 드물게 (가까이 0.1초 · 중간 0.15초 · 멀리 0.25초)
+        if (crowd && u.type === "p" && u !== p && !full) {
+          const far = Math.max(Math.abs(u.x - p.x), Math.abs(u.y - p.y));
+          const every = !busy || far < 300 ? 2 : far < 600 ? 3 : 5;
+          if ((this.tickN + u.id + p.id) % every) continue;
+        }
+        // 아주 붐비면 화면(가로 640·세로 모드 높이 포함) 밖의 다른 플레이어는 보내지 않음
+        const vx = busy && u.type === "p" ? 480 : VIEW + 100, vy = busy && u.type === "p" ? 520 : VIEW;
+        if (u === p || u.type === "b" || (u.type === "p" && this.partyId) || Math.abs(u.x - p.x) < vx && Math.abs(u.y - p.y) < vy) {
           if (full || sent.get(u.id) !== str) { near.push(str); sent.set(u.id, str); }
         } else if (sent.has(u.id)) sent.delete(u.id);
       }

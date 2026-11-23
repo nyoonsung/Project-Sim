@@ -7,7 +7,7 @@ import { SKILLS } from "/shared/skills.js";
 import { SLOT_KEYS, ITEMS, TILE, T, GRADE_COLOR } from "/shared/constants.js";
 import { xpToNext, CLASS_INFO } from "/shared/classes.js";
 import { PATHS } from "/shared/classes2.js";
-const DNAME = { 1: "제1 던전", 2: "제2 던전", 3: "베르단 제1 던전", 4: "기억왕의 지하왕릉" };
+const DNAME = { 1: "제1 던전", 2: "제2 던전", 3: "베르단 제1 던전", 4: "기억왕의 지하왕릉", 5: "성좌의 시련" };
 import { skillTip } from "./windows.js";
 import { skillIconURL } from "./icons.js";
 import { pixImg } from "./pix.js";
@@ -150,7 +150,7 @@ export function updateBars() {
   }
   // 소드마스터 검식: 실제 적중 서버 판정에 맞춰 3단계 진행을 표시
   const seqBox = $("#sword-seq");
-  const swordmaster = G.char?.cls2 === "swordmaster";
+  const swordmaster = G.char?.cls2 === "swordmaster" && !G.char?.pvpActive; // 결투장에서는 2차 전직이 꺼짐
   toggle(seqBox, "hidden", !swordmaster);
   if (swordmaster) {
     const seq = m.seq ?? {};
@@ -240,8 +240,10 @@ export function updateBoss() {
 
 export function updateZoneLabel() {
   const z = $("#zone-label");
-  if (G.kind === "town" || G.mapKind === "town") z.textContent = G.island === "verdan" ? "베르단 섬 마을" : "에르덴 섬 · 모험가 마을";
+  if (G.kind === "town" || G.mapKind === "town") z.textContent = G.island === "astra" ? "아스트라엘 · 별무덤 마을" : G.island === "verdan" ? "베르단 섬 마을" : "에르덴 섬 · 모험가 마을";
+  else if (G.mapKind === "pvp") z.textContent = "⚔ 결투장";
   else if (G.mapKind === "safe") z.textContent = `${G.dungeon === 1 ? "" : DNAME[G.dungeon] + " "}${G.floor}층 안전 구역 · 전직소`;
+  else if (G.dungeon === 5) z.textContent = `✦ ${G.zone?.name ?? "성좌의 시련"} · ${((G.floor - 1) % 5) + 1}/5단계`;
   else z.textContent = `${DNAME[G.dungeon] ?? "제1 던전"} · ${G.floor}층 · ${G.zone?.name ?? ""}`;
 }
 
@@ -320,7 +322,7 @@ function drawMapOn(cv, maxS, big) {
     g.fillStyle = "#000"; g.fillText(text, cv.width / 2 + 1, cv.height - 2);
     g.fillStyle = G.exitOpen ? "#7ff0ff" : "#ffd35a"; g.fillText(text, cv.width / 2, cv.height - 3);
   }
-  if (big) { g.font = "16px Galmuri11"; g.textAlign = "center"; g.textBaseline = "top"; g.fillStyle = "#ffd35a"; g.fillText(G.mapKind === "town" ? (G.island === "verdan" ? "베르단 섬 마을" : "모험가 마을") : `${G.dungeon === 1 ? "" : DNAME[G.dungeon] + " "}${G.floor}층 · ${G.zone?.name ?? ""}`, cv.width / 2, 8); }
+  if (big) { g.font = "16px Galmuri11"; g.textAlign = "center"; g.textBaseline = "top"; g.fillStyle = "#ffd35a"; g.fillText(G.mapKind === "town" ? (G.island === "astra" ? "아스트라엘" : G.island === "verdan" ? "베르단 섬 마을" : "모험가 마을") : (G.dungeon === 5 ? `${G.zone?.name ?? ""} · ${((G.floor - 1) % 5) + 1}/5` : `${G.dungeon === 1 ? "" : DNAME[G.dungeon] + " "}${G.floor}층 · ${G.zone?.name ?? ""}`), cv.width / 2, 8); }
 }
 
 // 상호작용 안내

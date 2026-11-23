@@ -2,6 +2,7 @@
 import { T, TILE } from "../../shared/constants.js";
 import { rng } from "../../shared/rng.js";
 import { zoneOf, floorKind, effLevel } from "../../shared/zones.js";
+import { CONST_BY_KEY, ASTRA } from "../../shared/astra.js";
 
 function grid(w, h, fill = T.VOID) {
   return { w, h, tiles: new Uint8Array(w * h).fill(fill), objects: [], spawns: [] };
@@ -211,7 +212,7 @@ function normalFloor(floor, seed, party, dungeon = 1) {
   const total = d4 ? Math.min(cap, Math.round(rawTotal * 0.68)) : Math.min(cap, rawTotal);
   const elite = d4 ? Math.min(0.32, 0.22 + floor * 0.003) : d3 ? Math.min(0.48, 0.34 + floor * 0.0014) : d2 ? Math.min(0.45, 0.32 + floor * 0.004) : Math.min(0.3, 0.07 + floor * 0.0025);
   const waveCount = d4 ? Math.max(3, Math.min(6, 3 + Math.floor(lv / 30))) : Math.max(3, Math.min(d3 ? 8 : d2 ? 7 : 6, 3 + Math.floor(lv / 20)));
-  m.waves = { total, waves: waveCount, points: pts, pool: zone.monsters, elite };
+  m.waves = { total, waves: waveCount, points: pts, pool: zone.monsters, elite: Math.min(0.75, elite + (zone.astra ? CONST_BY_KEY[zone.astra]?.rule?.elite ?? 0 : 0)) };
   // 지하왕릉 1~10층: 석관 — 지나가다 건드리면 열리며 추가 웨이브와 보상
   if (zone.sarco) {
     const spots = [];
@@ -236,7 +237,7 @@ function normalFloor(floor, seed, party, dungeon = 1) {
 function bossFloor(floor, seed, dungeon = 1) {
   const R = rng(seed);
   const zone = zoneOf(floor, dungeon);
-  const kind = floorKind(floor);
+  const kind = floorKind(floor, dungeon);
   const AW = kind === "boss" ? 30 : 26, AH = kind === "boss" ? 22 : 19;
   const W = AW + 8, H = AH + 26;
   const m = grid(W, H);
@@ -259,7 +260,7 @@ function bossFloor(floor, seed, dungeon = 1) {
   addTorches(m, R, zone, 5);
   addDeco(m, R, zone, 20);
   decorate(m, R, zone, { cx: px(mid), cy: px(ay + Math.floor(AH / 2)), traps: 0, start: m.start });
-  m.objects.push({ kind: "sign", x: px(mid + 3), y: px(ry + 1), text: kind === "boss" ? "주요 보스의 방" : "중간보스의 방" });
+  m.objects.push({ kind: "sign", x: px(mid + 3), y: px(ry + 1), text: zone.astra ? `${CONST_BY_KEY[zone.astra]?.name ?? ""}의 수호성` : kind === "boss" ? "주요 보스의 방" : "중간보스의 방" });
   m.objects.push({ kind: "portal", id: "town", x: px(mid - 3), y: px(ry + 6), label: "마을로", color: "town" });
   m.kind = kind;
   return m;
@@ -305,7 +306,7 @@ export function makeArena() {
 }
 
 export function makeFloor(floor, seed, party = 1, dungeon = 1) {
-  const kind = floorKind(floor);
+  const kind = floorKind(floor, dungeon);
   return kind === "normal" ? normalFloor(floor, seed, party, dungeon) : bossFloor(floor, seed, dungeon);
 }
 
@@ -379,9 +380,9 @@ export function makeTown() {
   objs.push({ kind: "npc", id: "board", name: "모험가 게시판", x: P(25) + 16, y: P(14) });
   objs.push({ kind: "npc", id: "enchanter", name: "마법부여사 엘라", x: P(28) + 16, y: P(8) + 8 });
   // PvP 결투장: 광장 서쪽의 명예의 전당 판자(상위 순위 표시) + 결투장 관리인
-  for (const tx of [15, 16, 17]) set(m, tx, 17, T.WALL);
-  objs.push({ kind: "pvpboard", id: "pvpboard", name: "결투장 명예의 전당", x: P(16) + 16, y: P(17) + 30 });
-  objs.push({ kind: "npc", id: "arena", name: "결투장 관리인 카일", x: P(18) + 4, y: P(18) + 14 });
+  for (const tx of [10, 11, 12]) set(m, tx, 11, T.WALL);
+  objs.push({ kind: "pvpboard", id: "pvpboard", name: "결투장 명예의 전당", x: P(11) + 16, y: P(11) + 30 });
+  objs.push({ kind: "npc", id: "arena", name: "결투장 관리인 카일", x: P(12) + 24, y: P(13) + 6 });
   // 시장 노점 (광장 아래쪽)
   for (const [tx, goods, win] of [[14, ["bread", "jars", "redjar"], "#ff6ac8"], [23, ["crates", "box", "pack"], "#6ad8ff"]]) {
     set(m, tx, 19, T.WALL); set(m, tx + 1, 19, T.WALL); set(m, tx + 2, 19, T.WALL);
@@ -504,9 +505,10 @@ export function makeVerdanTown() {
   objs.push({ kind: "dummy", id: "dummy", x: P(10) + 16, y: P(12) + 16 });
   objs.push({ kind: "npc", id: "board", name: "모험가 게시판", x: P(25) + 16, y: P(13) });
   // PvP 결투장: 명예의 전당 판자 + 결투장 관리인
-  for (const tx of [16, 17, 18]) set(m, tx, 18, T.WALL);
-  objs.push({ kind: "pvpboard", id: "pvpboard", name: "결투장 명예의 전당", x: P(17) + 16, y: P(18) + 30 });
-  objs.push({ kind: "npc", id: "arena", name: "결투장 관리인 세이라", x: P(19) + 8, y: P(19) + 14 });
+  // 광장 동쪽 길 아래 풀밭 (분수·수정 장식과 겹치지 않게)
+  for (const tx of [29, 30, 31]) set(m, tx, 18, T.WALL);
+  objs.push({ kind: "pvpboard", id: "pvpboard", name: "결투장 명예의 전당", x: P(30) + 16, y: P(18) + 30 });
+  objs.push({ kind: "npc", id: "arena", name: "결투장 관리인 세이라", x: P(33) + 12, y: P(19) + 14 });
   // 선착장
   objs.push({ kind: "boat", x: P(23) + 16, y: P(27) + 20, sail: "#c8e0ff" });
   objs.push({ kind: "npc", id: "boatman2", name: "뱃사공 마레", x: P(18) + 16, y: P(25) + 12 });
@@ -549,6 +551,97 @@ export function makeVerdanTown() {
   m.kind = "town";
   m.island = "verdan";
   m.safe = true;
+  return m;
+}
+
+/** 3차: 아스트라엘 · 별무덤 마을 — 밤하늘 아래 은빛 섬. 가운데 성도 비석(밝힌 별이 빛남), 위쪽 별자리 관측소, 오른쪽 축복의 제단, 아래 선착장 */
+export function makeAstraTown() {
+  const W = 40, H = 30;
+  const m = grid(W, H, T.GRASS);
+  const R = rng(1313);
+  const P = (tx) => tx * TILE;
+  for (let x = 0; x < W; x++) { set(m, x, 0, T.WALL); set(m, x, 1, T.WALL); set(m, x, H - 1, T.WALL); }
+  for (let y = 0; y < H; y++) { set(m, 0, y, T.WALL); set(m, W - 1, y, T.WALL); }
+  carveRect(m, 12, 10, 16, 10, T.PLAZA);
+  carveRect(m, 15, 3, 10, 5, T.PLAZA);
+  carveRect(m, 18, 8, 4, 2, T.PATH);
+  carveRect(m, 18, 20, 4, 6, T.PATH);
+  carveRect(m, 1, 14, 11, 3, T.PATH);
+  carveRect(m, 28, 14, 7, 3, T.PATH);
+  carveRect(m, 1, 26, 38, 3, T.WATER);
+  carveRect(m, 19, 26, 2, 3, T.PATH);
+  const objs = m.objects;
+  const bld = (sp, tx, ty, w, h, extra = {}) => {
+    for (let y = ty + h - 2; y < ty + h; y++) for (let x = tx; x < tx + w; x++) set(m, x, y, T.WALL);
+    objs.push({ kind: "prop", s: sp, x: P(tx) + (w * TILE) / 2, y: P(ty + h), ...extra });
+  };
+  bld("lodge", 16, 1, 4, 6, { sign: { text: "별자리 관측소", color: "#c8a0ff" }, win: "#d8c0ff" });
+  bld("h_tall", 22, 2, 3, 4, { win: "#b8a0ff" });
+  bld("h_beige", 33, 8, 4, 3, { sign: { text: "축복의 제단", color: "#ffe08a" }, win: "#fff0b0" });
+  bld("h_food", 3, 19, 3, 3, { sign: { text: "잡화점", color: "#ffd35a" }, win: "#ffcf7a" });
+  bld("h_red", 7, 19, 4, 3, { sign: { text: "대장간", color: "#ff7a4a" }, win: "#ff9a5a" });
+  bld("h_green", 29, 19, 4, 3, { sign: { text: "마법부여", color: "#c8a0ff" }, win: "#e0c8ff" });
+  bld("lodge2", 34, 19, 4, 5, { sign: { text: "여관", color: "#ff8ad8" }, win: "#ffd08a" });
+  bld("h_round", 3, 4, 3, 3, { mill: true, win: "#b8a0ff" });
+  // 성도 비석 (광장 가운데): 밝힌 별자리가 빛남
+  for (const [x, y] of [[19, 14], [20, 14], [19, 15], [20, 15]]) set(m, x, y, T.WALL);
+  objs.push({ kind: "starchart", id: "starchart", name: "성도 비석", x: P(20), y: P(16) - 2 });
+  objs.push({ kind: "mosaic", x: P(20), y: P(15) + 8, flatY: -999 });
+  for (const [tx, ty, c] of [[13, 11, "crystal1"], [26, 11, "crystal3"], [13, 18, "crystal2"], [26, 18, "crystal0"]]) { set(m, tx, ty, T.WALL); objs.push({ kind: "prop", s: c, x: P(tx) + 16, y: P(ty) + 28, glow: "#c8a0ff" }); }
+  for (const tx of [15, 24]) { bld("statue", tx, 3, 2, 2); objs[objs.length - 1].glow = "#c8a0ff"; }
+  // NPC
+  objs.push({ kind: "npc", id: "observatory", name: "별자리 기록관 엘시", x: P(20) + 8, y: P(8) + 12 });
+  objs.push({ kind: "npc", id: "altar", name: "제단지기 세레스", x: P(34) + 16, y: P(12) + 8 });
+  objs.push({ kind: "npc", id: "shop", name: "잡화 상인 루나", x: P(4) + 16, y: P(23) + 6 });
+  objs.push({ kind: "npc", id: "smithy", name: "대장장이 오리온", x: P(9) + 16, y: P(23) + 6 });
+  objs.push({ kind: "npc", id: "enchanter", name: "마법부여사 베가", x: P(31) + 16, y: P(23) + 6 });
+  objs.push({ kind: "npc", id: "trainer", name: "훈련 교관", x: P(6) + 16, y: P(12) + 16 });
+  carveRect(m, 8, 10, 3, 3, T.PLAZA);
+  objs.push({ kind: "dummy", id: "dummy", x: P(9) + 16, y: P(11) + 16 });
+  // 결투장 (에르덴·베르단과 같은 순위)
+  for (const tx of [30, 31, 32]) set(m, tx, 12, T.WALL);
+  objs.push({ kind: "pvpboard", id: "pvpboard", name: "결투장 명예의 전당", x: P(31) + 16, y: P(12) + 30 });
+  objs.push({ kind: "npc", id: "arena", name: "결투장 관리인 노바", x: P(31) + 16, y: P(15) + 8 });
+  // 선착장
+  objs.push({ kind: "boat", x: P(23) + 16, y: P(27) + 20, sail: "#d8c8ff" });
+  objs.push({ kind: "npc", id: "boatman3", name: "뱃사공 시리우스", x: P(18) + 16, y: P(25) + 12 });
+  objs.push({ kind: "prop", s: "signboard", x: P(21) + 20, y: P(25) + 22, small: true });
+  const pole = (tx, ty) => [P(tx) + 16, P(ty) + 16];
+  objs.push({ kind: "lights", pts: [pole(12, 10), pole(16, 10)] });
+  objs.push({ kind: "lights", pts: [pole(23, 10), pole(27, 10)] });
+  objs.push({ kind: "lights", pts: [pole(17, 21), pole(17, 24)] });
+  objs.push({ kind: "lights", pts: [pole(22, 21), pole(22, 24)] });
+  for (const [tx, ty] of [[12, 10], [16, 10], [23, 10], [27, 10], [17, 21], [17, 24], [22, 21], [22, 24], [2, 13], [10, 13]])
+    objs.push({ kind: "lamp", x: P(tx) + 16, y: P(ty) + 30, post: true });
+  for (const [sp, tx, ty] of [["crate", 2, 18], ["jars", 11, 18], ["box", 36, 17], ["chest", 27, 21], ["cauldron", 36, 17], ["rock_big", 2, 9], ["boulder", 37, 25], ["stump", 12, 23], ["banner2", 14, 9], ["banner4", 25, 9]]) {
+    if (get(m, tx, ty) === T.WALL) continue;
+    objs.push({ kind: "prop", s: sp, x: P(tx) + 16, y: P(ty) + 24, small: true });
+  }
+  const free = (tx, ty, r = 0) => { for (let y = ty - r; y <= ty + r; y++) for (let x = tx - r; x <= tx + r; x++) if (get(m, x, y) !== T.GRASS) return false; return true; };
+  const groves = ["grove_pine", "grove_lime", "grove_pine", "grove_pink"];
+  for (let x = 1; x < W - 1; x += 3) objs.push({ kind: "prop", s: R.pick(groves), x: P(x) + 16, y: P(2) - 4, border: true });
+  for (let y = 3; y < H - 4; y += 2) { objs.push({ kind: "prop", s: R.pick(["tree_white", "tree_pine", "tree_pink_s"]), x: 14, y: P(y) + 24, border: true }); objs.push({ kind: "prop", s: R.pick(["tree_white", "tree_pine", "tree_green_s"]), x: P(W) - 14, y: P(y) + 24, border: true }); }
+  let n = 0;
+  for (let i = 0; i < 400 && n < 10; i++) {
+    const tx = R.int(2, W - 3), ty = R.int(3, H - 6);
+    if (!free(tx, ty, 1) || !free(tx, ty + 1, 0)) continue;
+    if (objs.some((o) => Math.hypot(o.x - P(tx), o.y - P(ty)) < 70)) continue;
+    if (tx >= 27 && tx <= 35 && ty >= 8 && ty <= 13) continue; // 명예의 전당 판자 뒤는 비움
+    objs.push({ kind: "prop", s: R.pick(["tree_white", "tree_pink", "tree_white"]), x: P(tx) + 16, y: P(ty) + 30 });
+    set(m, tx, ty, T.WALL);
+    n++;
+  }
+  for (let i = 0; i < 80; i++) {
+    const tx = R.int(1, W - 2), ty = R.int(2, H - 5);
+    if (get(m, tx, ty) !== T.GRASS) continue;
+    objs.push({ kind: "prop", s: R.pick(["bush1", "bush3", "flower1", "flower3", "rock_s", "flower2"]), x: P(tx) + R.int(4, 28), y: P(ty) + R.int(16, 30), small: true, flat: true });
+  }
+  for (const [tx, ty] of [[6, 27], [13, 27], [27, 27], [33, 27]]) objs.push({ kind: "ripple", x: P(tx) + 16, y: P(ty) + 20, flatY: -998 });
+  m.start = [P(20) + 16, P(22) + 16];
+  m.kind = "town";
+  m.island = "astra";
+  m.safe = true;
+  void ASTRA;
   return m;
 }
 

@@ -18,6 +18,7 @@ const P = {
   royal: { armor: ["#ffd860", "#d0a030", "#a07018", "#60400a"], core: ["#5a0a1a", "#400612", "#28030a"], mark: "#ff2040" },
 };
 import { VERDAN_MONSTERS, VERDAN_BOSSES, VERDAN_ZONES, TOMB_ZONES } from "./verdan.js";
+import { ASTRA_ZONES, ASTRA_BOSSES, astraOf, astraVerdanZone } from "./astra.js";
 const rig = (pal, weapon, head = null, headColor = null, scale = 1) => ({ rig: { ...pal, weapon, head, headColor }, scale });
 const critter = (fx, palette, scale = 1) => ({ critter: fx, palette, scale });
 const GREENS = ["#062010", "#0e4a1e", "#1f8a34", "#4fd060", "#b0ff9a", "#f0fff0"];
@@ -216,6 +217,7 @@ export const DUNGEON2_ZONES = [
 export const DUNGEON2_MAX_FLOOR = 30;
 Object.assign(MONSTERS, VERDAN_MONSTERS);
 Object.assign(BOSSES, VERDAN_BOSSES);
+Object.assign(BOSSES, ASTRA_BOSSES); // 3차: 성좌의 수호성 (베르단 보스의 패턴을 빌림)
 export { VERDAN_ZONES, TOMB_ZONES };
 
 // ── 던전 목록 (2차 업데이트: 섬 두 개 × 던전 두 개)
@@ -225,6 +227,7 @@ export const DUNGEONS = {
   2: { id: 2, island: "erden", name: "제2 던전", title: "심연의 균열", max: 30, zones: DUNGEON2_ZONES },
   3: { id: 3, island: "verdan", name: "베르단 제1 던전", title: "베르단 섬 100층", max: 100, zones: VERDAN_ZONES },
   4: { id: 4, island: "verdan", name: "베르단 제2 던전", title: "기억왕의 지하왕릉", max: 30, zones: TOMB_ZONES },
+  5: { id: 5, island: "astra", name: "성좌의 시련", title: "성좌의 시련", max: 65, zones: ASTRA_ZONES, span: 5 }, // 13성좌 × 5층
 };
 export const normDungeon = (d) => (DUNGEONS[d] ? Number(d) : 1);
 export const dungeonMax = (d) => DUNGEONS[normDungeon(d)].max;
@@ -232,11 +235,12 @@ export const dungeonIsland = (d) => DUNGEONS[normDungeon(d)].island;
 /** 진행도 필드 이름 */
 export const progKeys = (d) => { const n = normDungeon(d); const x = n === 1 ? "" : String(n); return { best: "best" + x, checkpoint: "checkpoint" + x, cleared: "cleared" + x }; };
 export function zoneOf(floor, dungeon = 1) {
-  const list = DUNGEONS[normDungeon(dungeon)].zones;
-  return list[Math.max(0, Math.min(list.length - 1, Math.floor((floor - 1) / 10)))];
+  const D = DUNGEONS[normDungeon(dungeon)], list = D.zones;
+  return list[Math.max(0, Math.min(list.length - 1, Math.floor((floor - 1) / (D.span ?? 10))))];
 }
 /** 층 종류: normal | mid(5의 배수, 10의 배수 제외) | boss(10의 배수) */
-export function floorKind(floor) {
+export function floorKind(floor, dungeon = 1) {
+  if (Number(dungeon) === 5) return (floor - 1) % 5 === 4 ? "boss" : "normal"; // 성좌의 시련: 5단계째가 수호성
   if (floor % 10 === 0) return "boss";
   if (floor % 5 === 0) return "mid";
   return "normal";
@@ -300,7 +304,9 @@ export function erdenBossScale(floor, dungeon = 1) {
 }
 export const d2Level = (floor) => 100 + Math.round((floor * 5) / 3);
 /** 그 층의 실제 레벨 (제1 던전은 층 = 레벨, 왕릉은 Lv.191~220) */
-export const effLevel = (floor, dungeon = 1) => (dungeon === 2 ? d2Level(floor) : dungeon === 3 ? 150 + floor : dungeon === 4 ? 190 + floor : floor);
+export const effLevel = (floor, dungeon = 1) => (dungeon === 2 ? d2Level(floor) : dungeon === 3 ? 150 + floor : dungeon === 4 ? 190 + floor : dungeon === 5 ? 200 + 4 * astraOf(floor).c : floor);
+/** 성좌의 시련 층 → 같은 난이도의 베르단 제1 던전 층 (성좌 1: 약 42~50층 → 성좌 12·13: 92~100층) */
+export const astraF3 = (floor) => { const { c, stage } = astraOf(floor); return c >= 13 ? 90 + stage * 2 : astraVerdanZone(c) * 10 + stage * 2; };
 // 베르단 섬 배율: 에르덴 제2 던전 30층을 기준으로 시작해 층마다 성장.
 //  베르단 제1 던전은 15~25층 구간에 성장 벽이 있다. 기억왕의 지하왕릉은 220레벨 풀세팅 유저 기준으로 별도 완화 배율(TOMB_BALANCE)을 적용한다.
 export const VERDAN_SCALE = {
@@ -321,6 +327,7 @@ export function verdanGrowth(floor, dungeon) {
   return { hp, dmg };
 }
 export function floorScale(floor, dungeon = 1) {
+  if (dungeon === 5) return { ...floorScale(astraF3(floor), 3), level: effLevel(floor, 5) };
   if (dungeon === 3 || dungeon === 4) {
     const b = floorScale(30, 2), g = verdanGrowth(floor, dungeon), L = effLevel(floor, dungeon);
     const rewardLevel = dungeon === 4 ? 252 : L; // 왕릉 레벨 상한은 220으로 낮추되 보상 곡선은 기존 유지
@@ -374,6 +381,7 @@ export const SOLO_HP = 3.5, PARTY_HP = 7.5;
 const hpBoost = (party, floor) => { const max = party > 1 ? PARTY_HP : SOLO_HP; return 1 + (max - 1) * Math.min(1, Math.max(0, (floor - 1) / 9)); };
 /** 층에 맞춘 실제 몬스터 능력치 */
 export function monsterStats(id, floor, party = 1, dungeon = 1) {
+  if (dungeon === 5) return { ...monsterStats(id, astraF3(floor), party, 3), level: effLevel(floor, 5) };
   const def = MONSTERS[id];
   dungeon = normDungeon(dungeon);
   const list = DUNGEONS[dungeon].zones;
@@ -392,6 +400,12 @@ export function monsterStats(id, floor, party = 1, dungeon = 1) {
 }
 /** 보스 능력치: 중간보스는 평균 몬스터의 36배, 주요 보스는 64배 체력 */
 export function bossStats(id, floor, party = 1, dungeon = 1) {
+  if (dungeon === 5) {
+    const d = BOSSES[id];
+    const r = bossStats(d?.astraSrc ?? id, astraF3(floor), party, 3);
+    const big = astraOf(floor).c >= 13 ? 1.3 : 1;
+    return { ...r, hp: Math.round(r.hp * big), level: effLevel(floor, 5) };
+  }
   const def = BOSSES[id];
   dungeon = normDungeon(dungeon);
   const hard = dungeon >= 2;

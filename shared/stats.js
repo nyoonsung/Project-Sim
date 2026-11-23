@@ -1,5 +1,6 @@
 // 레벨·직업·배분 스탯·성장 단계·장비·패시브로 최종 능력치를 계산 (서버가 실제 판정, 클라이언트는 표시용)
 import { CLASS_INFO, STATS, stageOf, stageBonus } from "./classes.js";
+import { blessingMods } from "./astra.js";
 import { BASE_MOVE_SPEED, CRIT } from "./constants.js";
 import { gearTotals } from "./items.js";
 import { passivesOf } from "./skills.js";
@@ -26,6 +27,8 @@ export function passiveMods(ch) {
   for (const s of passivesOf(ch)) {
     if (s.passive?.mods) for (const [k, v] of Object.entries(s.passive.mods)) m[k] = (m[k] ?? 0) + v;
   }
+  // 3차: 성좌의 축복 (PvP용 캐릭터엔 astra가 없어 적용되지 않음)
+  for (const [k, v] of Object.entries(blessingMods(ch))) m[k] = (m[k] ?? 0) + v;
   return m;
 }
 
@@ -60,17 +63,17 @@ export function deriveStats(ch) {
     phys: 1 + g("phys"),
     mag: 1 + g("mag"),
     dmg: gear.dmg + p("dmg"),
-    dr: Math.min(0.4, gear.dr),
+    dr: Math.min(0.4, gear.dr + p("dr")),
     aspd: Math.min(1.6, 1 + g("aspd") + gear.aspd + p("aspd")),
     cast: Math.min(1.5, (info.castMul ?? 1) + g("cast")),
     steady: Math.min(0.6, g("steady")),
     crit: Math.min(CRIT.CHANCE_CAP, CRIT.BASE_CHANCE + g("crit") + gear.crit + p("crit")),
-    critDmg: Math.min(CRIT.DAMAGE_CAP, CRIT.BASE_DAMAGE + gear.critDmg),
-    move: BASE_MOVE_SPEED * (MOVE_MUL[ch.cls] ?? 1) * (1 + Math.min(0.4, g("move") + gear.move)),
+    critDmg: Math.min(CRIT.DAMAGE_CAP, CRIT.BASE_DAMAGE + gear.critDmg + p("critDmg")),
+    move: BASE_MOVE_SPEED * (MOVE_MUL[ch.cls] ?? 1) * (1 + Math.min(0.4, g("move") + gear.move) + p("move")),
     mpRegen: (1.2 + 0.08 * L) * (info.mpRegenMul ?? 1) * (1 + g("mpRegen") + gear.mpRegen),
     hpRegen: gear.hpRegen,
     res: Math.min(0.5, g("res")),
-    heal: 1 + g("heal") + gear.heal,
+    heal: 1 + g("heal") + gear.heal + p("heal"),
     threat: 1 + g("threat"),
     counter: 1 + g("counter"),
     kiGain: 1 + g("kiGain"),

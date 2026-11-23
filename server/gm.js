@@ -148,7 +148,7 @@ export async function handleGm(req, res, path, { readJson, send, isAdmin, ip, ur
         if (b[k] !== undefined && typeof b[k] !== "boolean") return send(res, 400, { error: `${k} 값이 잘못됐어요.` });
         if (b[k] !== undefined) patch[k] = b[k];
       }
-      if (b.island !== undefined && !["erden", "verdan"].includes(b.island)) return send(res, 400, { error: "섬 값이 잘못됐어요." });
+      if (b.island !== undefined && !["erden", "verdan", "astra"].includes(b.island)) return send(res, 400, { error: "섬 값이 잘못됐어요." });
       if (b.cls2 !== undefined && typeof b.cls2 !== "string") return send(res, 400, { error: "2차 직업 값이 잘못됐어요." });
       let why = null;
       const ok = world.gmApplyChar(id, (c) => {
@@ -166,7 +166,8 @@ export async function handleGm(req, res, path, { readJson, send, isAdmin, ip, ur
         }
         Object.assign(c, patch);
         if (b.island !== undefined) c.island = b.island;
-        if (c.island === "verdan") c.verdanPass = true;
+        if (c.island === "verdan" || c.island === "astra") c.verdanPass = true;
+        if (c.island === "astra") { c.astra ??= { pass: true, stars: {}, bless: {}, equip: [], dust: 0, clears: {}, seen: [] }; c.astra.pass = true; }
         if (!c.verdanPass) c.island = "erden";
       });
       if (why) return send(res, 400, { error: why });
@@ -397,8 +398,8 @@ export async function handleGm(req, res, path, { readJson, send, isAdmin, ip, ur
       return send(res, 200, { ok });
     }
     case "warp": {
-      const dg = [1, 2, 3, 4].includes(b.dungeon) ? b.dungeon : 1;
-      const maxF = dg === 2 || dg === 4 ? 30 : 100;
+      const dg = [1, 2, 3, 4, 5].includes(b.dungeon) ? b.dungeon : 1;
+      const maxF = dg === 2 || dg === 4 ? 30 : dg === 5 ? 65 : 100;
       if (!int(b.floor, 1, maxF)) return send(res, 400, { error: `이 던전은 1~${maxF}층이에요.` });
       const ok = world.gmWarp(id, b.floor, dg);
       audit("warp", target, { floor: b.floor, dungeon: dg });

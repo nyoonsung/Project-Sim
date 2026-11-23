@@ -1,5 +1,6 @@
 // 캐릭터 데이터(저장용)와 플레이어 유닛(접속 중)
 import { deriveStats } from "../../shared/stats.js";
+import { ASTRA, CONSTELLATIONS, CONST_BY_KEY, newAstraRecord } from "../../shared/astra.js";
 import { CLASS_INFO, xpToNext, stageOf } from "../../shared/classes.js";
 import { SKILLS, unlockStage, adventurerBasic } from "../../shared/skills.js";
 import { MAX_LEVEL, STAT_POINTS_PER_LEVEL, PLAYER_RADIUS, ITEMS, TITLE_COLORS, TITLE_MAX, INVENTORY_SLOTS, SKILL_SLOTS } from "../../shared/constants.js";
@@ -41,7 +42,22 @@ export function sanitizeChar(c, name) {
   out.best3 = clampInt(out.best3, 0, 100, 0); out.checkpoint3 = clampInt(out.checkpoint3, 1, 100, 1); out.cleared3 = !!out.cleared3;
   out.best4 = clampInt(out.best4, 0, 30, 0); out.checkpoint4 = clampInt(out.checkpoint4, 1, 30, 1); out.cleared4 = !!out.cleared4;
   out.verdanPass = !!out.verdanPass;
-  out.island = out.island === "verdan" && out.verdanPass ? "verdan" : "erden";
+  // 3차: 아스트라엘 (성좌의 시련·축복·별가루)
+  {
+    const src = out.astra && typeof out.astra === "object" ? out.astra : {}, a = newAstraRecord();
+    a.pass = !!src.pass;
+    for (const k of CONSTELLATIONS) {
+      if (src.stars?.[k.key] === true) a.stars[k.key] = true;
+      if (a.stars[k.key] && k.bless) a.bless[k.key] = clampInt(src.bless?.[k.key], 1, ASTRA.blessMax, 1);
+      const n = clampInt(src.clears?.[k.key], 0, 99999, 0); if (n) a.clears[k.key] = n;
+    }
+    a.equip = [...new Set(Array.isArray(src.equip) ? src.equip : [])].filter((k) => a.stars[k] && CONST_BY_KEY[k]?.bless).slice(0, a.stars.ophiuchus ? ASTRA.blessSlotsMax : ASTRA.blessSlots);
+    a.dust = clampInt(src.dust, 0, 999999, 0);
+    a.seen = [...new Set(Array.isArray(src.seen) ? src.seen : [])].filter((n) => Number.isInteger(n) && n >= 0 && n <= 13);
+    out.astra = a;
+  }
+  out.best5 = clampInt(out.best5, 0, 65, 0); out.checkpoint5 = clampInt(out.checkpoint5, 1, 65, 1); out.cleared5 = !!out.cleared5;
+  out.island = out.island === "astra" && out.astra.pass ? "astra" : out.island === "verdan" && out.verdanPass ? "verdan" : "erden";
   if (!PATHS[out.cls2] || PATHS[out.cls2].base !== out.cls || out.level < CLASS2_LEVEL) out.cls2 = null;
   const mats = {};
   for (const m of VMATS) mats[m.id] = clampInt(out.mats?.[m.id], 0, 999999, 0);
@@ -215,6 +231,7 @@ export function refreshStats(u) {
   u.stats = s;
   u.level = ch.level;
   u.cls = ch.cls;
+  u.cls2 = ch.cls2 ?? null; // 2차 전직 (검식·저격 표식 등 유닛 기준 판정에 필요 — 예전엔 비어 있어서 검식이 발동하지 않았음)
   const hpRatio = u.maxHp ? u.hp / u.maxHp : 1;
   u.maxHp = s.maxHp;
   u.maxMp = s.maxMp;

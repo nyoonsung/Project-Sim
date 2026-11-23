@@ -107,7 +107,8 @@ export function castSkill(room, u, slot, ax, ay, tx, now, exp) {
   for (const [k, v] of Object.entries(cost)) if (k !== "gap") u[k] -= v;
   if (sk.hpCost) { const v = Math.round(u.maxHp * sk.hpCost); u.hp = Math.max(1, u.hp - v); room.ev({ e: "dmg", id: u.id, v, c: 0, a: 0, d: 1, p: 1 }); }
   if (sk.path) u.lastPathCast = now;
-  if (ch.cls2 === "swordmaster" && sk.kind !== "basic" && sk.kind !== "passive") {
+  // 검식 형식(일섬·회전연참·쇄도검)을 썼는데 1.25초 안에 아무도 못 맞히면 흐름이 끊김. 다른 스킬(대시·검보·1차 스킬)은 흐름을 끊지 않음
+  if (ch.cls2 === "swordmaster" && SEQ.includes(id)) {
     const token = (u.seqCastToken ?? 0) + 1;
     u.seqCastToken = token;
     u.seqPending = { id, token };
@@ -1117,13 +1118,8 @@ function swordSeq(room, u, t, sk, now) {
   if (u.seqPending?.id === sk.id) u.seqPending = null;
   const P2 = p2of(u);
   const cur = u.seq ?? { n: 0, at: 0, last: null, doneUntil: 0 };
-  if (i < 0) {
-    if (cur.n > 0) {
-      u.seq = { n: 0, at: now, last: sk.id, doneUntil: 0 };
-      u.session.meDirty = true;
-    }
-    return;
-  }
+  // 검식 형식이 아닌 스킬(1차 연계기·검보·대시 등)은 흐름을 끊지 않는다 (예전엔 끊겨서 연계 뒤 검식이 발동하지 않았음)
+  if (i < 0) return;
   if (sk.id === cur.last && now - cur.at < 0.6) return; // 다단히트 한 번의 시전은 한 단계로 계산
   if (i === 0) cur.n = 1;
   else if (i === cur.n && now - cur.at <= 6) cur.n++;

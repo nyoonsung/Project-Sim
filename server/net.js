@@ -31,7 +31,10 @@ const SCHEMA = {
   party: (m) => ["invite", "accept", "decline", "leave", "kick", "promote"].includes(m.op) && (m.name === undefined || isStr(m.name, 12)),
   enter: (m) => isInt(m.floor, 1, 100) && (m.dungeon === undefined || isInt(m.dungeon, 1, 4)),
   vault: () => true, // 심연 보관고 교환 요청
-  boat: (m) => m.to === undefined || m.to === "pay", // 뱃사공 (첫 입도 공물 확인)
+  boat: (m) => m.to === undefined || ["pay", "erden", "verdan", "astra"].includes(m.to), // 뱃사공 (목적지 · 첫 입도 공물 확인)
+  trial: (m) => isInt(m.c, 1, 13), // 3차: 성좌의 시련 입장
+  bless: (m) => ["equip", "unequip", "up"].includes(m.a) && isId(m.key), // 3차: 축복의 제단
+  story: (m) => isInt(m.n, 0, 13), // 3차: 별의 기록 다시 읽기
   class2: (m) => isId(m.path),
   craft: (m) => ["weapon", "offhand", "helmet", "armor", "trinket"].includes(m.slot) && isId(m.vmod) && isInt(m.tier, 0, 4) && (m.heart === undefined || typeof m.heart === "boolean"),
   portal: () => true,

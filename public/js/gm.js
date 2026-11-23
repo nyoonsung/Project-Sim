@@ -42,7 +42,7 @@ const TABS = {
     q.addEventListener("keydown", (e) => { if (e.key === "Enter") { lastQ = q.value.trim(); render(); } });
     island.addEventListener("change", () => { islandFilter = island.value; render(); });
     const rows = list.list.filter((p) => islandFilter === "all" || (islandFilter === "verdan" ? !!p.verdan_pass : !p.verdan_pass));
-    const dungeonName = { 1: "에르덴 제1", 2: "에르덴 제2", 3: "베르단 제1", 4: "기억왕의 지하왕릉" };
+    const dungeonName = { 1: "에르덴 제1", 2: "에르덴 제2", 3: "베르단 제1", 4: "기억왕의 지하왕릉", 5: "성좌의 시련" };
     return [
       h("div", { class: "toolbar" }, q, h("button", { class: "btn small", onclick: () => { lastQ = q.value.trim(); render(); } }, "검색"), island,
         h("span", { class: "note", text: `목록 ${rows.length}명 · 베르단 진행도 포함` })),
@@ -59,7 +59,7 @@ const TABS = {
           h("td", { text: `${p.best3 ?? 0}/100 · CP${p.checkpoint3 ?? 1}${p.cleared3 ? " ✓" : ""}` }),
           h("td", { text: `${p.best4 ?? 0}/30 · CP${p.checkpoint4 ?? 1}${p.cleared4 ? " ✓" : ""}` }),
           h("td", { text: p.verdan_pass ? "베르단" : "에르덴" }),
-          h("td", { text: p.online ? (p.room === "town" ? (p.island === "verdan" ? "베르단 마을" : "에르덴 마을") : `${dungeonName[p.dungeon] ?? "던전"} ${p.floor}층`) : "-" }),
+          h("td", { text: p.online ? (p.room === "town" ? (p.island === "astra" ? "아스트라엘" : p.island === "verdan" ? "베르단 마을" : "에르덴 마을") : `${dungeonName[p.dungeon] ?? "던전"} ${p.floor}층`) : "-" }),
           h("td", { text: fmtT(p.created_at) }),
           h("td", { text: fmtT(p.last_login) }),
           h("td", {}, p.banned_until > Date.now() ? h("span", { class: "badge ban", text: "차단" }) : null, p.muted_until > Date.now() ? h("span", { class: "badge mute", text: "채금" }) : null)))),
@@ -129,7 +129,7 @@ async function openPlayer(id) {
   const banR = h("input", { maxlength: 200, placeholder: "사유" });
   const muteM = h("input", { type: "number", min: 0, value: 30 });
   const warpF = h("input", { type: "number", min: 1, max: 100, value: c?.checkpoint ?? 1 });
-  const warpD = h("select", {}, h("option", { value: 1 }, "에르덴 제1 던전"), h("option", { value: 2 }, "에르덴 제2 던전 (1~30)"), h("option", { value: 3 }, "베르단 제1 던전 (1~100)"), h("option", { value: 4 }, "기억왕의 지하왕릉 (1~30)"));
+  const warpD = h("select", {}, h("option", { value: 1 }, "에르덴 제1 던전"), h("option", { value: 2 }, "에르덴 제2 던전 (1~30)"), h("option", { value: 3 }, "베르단 제1 던전 (1~100)"), h("option", { value: 4 }, "기억왕의 지하왕릉 (1~30)"), h("option", { value: 5 }, "성좌의 시련 (1~65, 5층=별자리 1개)"));
   const mkSelect = (value, options) => h("select", {}, ...options.map(([v, t]) => h("option", { value: String(v), selected: String(value) === String(v) }, t)));
   const cpOptions = (max) => [1, ...Array.from({ length: Math.floor((max - 1) / 10) }, (_, i) => (i + 1) * 10 + 1)].filter((n) => n <= max).map((n) => [n, `${n}층`]);
   const best2 = h("input", { type: "number", min: 0, max: 30, value: c?.best2 ?? 0 });
@@ -142,7 +142,7 @@ async function openPlayer(id) {
   const cp4 = mkSelect(c?.checkpoint4 ?? 1, cpOptions(30));
   const clear4 = mkSelect(String(!!c?.cleared4), [["false", "미정복"], ["true", "정복 완료"]]);
   const pass = mkSelect(String(!!c?.verdanPass), [["false", "미입도"], ["true", "입도 완료"]]);
-  const island = mkSelect(c?.island ?? "erden", [["erden", "에르덴 섬"], ["verdan", "베르단 섬"]]);
+  const island = mkSelect(c?.island ?? "erden", [["erden", "에르덴 섬"], ["verdan", "베르단 섬"], ["astra", "아스트라엘"]]);
   pass.addEventListener("change", () => { island.value = pass.value === "true" ? "verdan" : "erden"; });
   const cls2 = mkSelect(c?.cls2 ?? "", [["", "2차 전직 없음"], ...Object.entries(PATHS).filter(([, p]) => p.base === c?.cls).map(([k, p]) => [k, p.name])]);
   const progressBox = h("div", { class: "box" }, h("h3", { text: "던전·베르단 진행도 관리" }),
@@ -241,7 +241,7 @@ async function openPlayer(id) {
             h("h3", { text: "베르단 섬 진행 현황" }),
             h("div", { class: "gm-island-flags" },
               h("span", { class: "gm-island-flag" + (c.verdanPass ? " active" : ""), text: c.verdanPass ? "⛵ 베르단 입도 완료" : "⛵ 베르단 입도 전" }),
-              h("span", { class: "gm-island-flag" + (c.island === "verdan" ? " active" : ""), text: `현재 섬: ${c.island === "verdan" ? "베르단" : "에르덴"}` }),
+              h("span", { class: "gm-island-flag" + (c.island === "verdan" ? " active" : ""), text: `현재 섬: ${c.island === "astra" ? "아스트라엘" : c.island === "verdan" ? "베르단" : "에르덴"}` }),
               h("span", { class: "gm-island-flag" + (c.cls2 ? " active" : ""), text: `2차 전직: ${PATHS[c.cls2]?.name ?? "미전직"}` })),
             h("div", { class: "gm-progress-list" },
               dungeonProgress("베르단 제1 던전", c.best3, 100, c.checkpoint3, !!c.cleared3),

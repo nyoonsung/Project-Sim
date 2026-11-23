@@ -16,12 +16,14 @@ import { drawTownObject, drawStrings, spawnFolk, tickFolk, folkList, drawFolk, d
 import { beginGlows, addGlow, drawGlows, forEachGlow, forEachChunk, staticList, lightChunks, resetStaticGlows, CH } from "./glow.js";
 import { drawDungeonObject } from "./dungeonart.js";
 import { tickSkillFx, drawSkillFx } from "./skillfx.js";
+import { drawSpectacle } from "./spectacle.js";
 import { shakeEnabled } from "../feel.js";
 import { VIEW_W, VIEW_H, TILE } from "/shared/constants.js";
 // 화면(논리 해상도): 가로 640×360, 휴대폰 세로면 400×(세로 길이에 맞춤)
 let VW = VIEW_W, VH = VIEW_H;
 export const viewSize = () => [VW, VH];
 import { MONSTERS, BOSSES, ZONES } from "/shared/zones.js";
+import { CONSTELLATIONS } from "/shared/astra.js";
 import { SKILLS } from "/shared/skills.js";
 import { CLASS_INFO } from "/shared/classes.js";
 import { RARITY_COLOR } from "/shared/items.js";
@@ -340,7 +342,9 @@ export class Renderer {
     if (G.kind === "town") drawStrings(ctx, cx, cy, t);
     this.drawLighting(ctx, cx, cy, t);
     drawGlows(ctx, cx, cy, VW, VH);
+    if (G.island === "astra" && G.kind === "town" || G.dungeon === 5 && G.kind !== "town" && G.kind !== "pvp") this.drawStarSky(ctx, cx, cy, t);
     drawSkillFx(ctx, cx, cy);
+    drawSpectacle(ctx, cx, cy, VW, VH);
     const wl = G.kind !== "town" && G.zone?.weather && preset().weather ? weatherLoop(G.zone.weather) : null;
     if (wl?.done) {
       // 구워 둔 날씨 프레임을 2배로 늘려 바둑판처럼 깔기 (계산 없음)
@@ -650,22 +654,23 @@ export class Renderer {
 
   /** 마을의 결투장 명예의 전당: 상위 5명을 판자에 크게 표시 */
   drawPvpBoard(ctx, o, x, y, t) {
-    const W = 104, H = 76, top = y - H - 10;
-    ctx.fillStyle = "rgba(0,0,0,0.3)"; ctx.beginPath(); ctx.ellipse(x, y - 2, 54, 8, 0, 0, Math.PI * 2); ctx.fill();
+    const W = 150, H = 90, top = y - H - 10;
+    ctx.fillStyle = "rgba(0,0,0,0.3)"; ctx.beginPath(); ctx.ellipse(x, y - 2, 78, 9, 0, 0, Math.PI * 2); ctx.fill();
     ctx.fillStyle = "#3a2410"; ctx.fillRect(x - W / 2 + 6, top + 10, 5, H + 2); ctx.fillRect(x + W / 2 - 11, top + 10, 5, H + 2);
     ctx.fillStyle = "#6a4422"; ctx.fillRect(x - W / 2, top, W, H);
     ctx.fillStyle = "#1c1410"; ctx.fillRect(x - W / 2 + 4, top + 14, W - 8, H - 18);
     ctx.fillStyle = "#c8a050"; ctx.fillRect(x - W / 2, top, W, 3); ctx.fillRect(x - W / 2, top + H - 3, W, 3);
-    ctx.fillStyle = "#8a1a24"; ctx.fillRect(x - 34, top - 6, 68, 16);
-    ctx.fillStyle = "#ffd35a"; ctx.fillRect(x - 34, top - 6, 68, 2);
+    ctx.fillStyle = "#8a1a24"; ctx.fillRect(x - 56, top - 7, 112, 17);
+    ctx.fillStyle = "#ffd35a"; ctx.fillRect(x - 56, top - 7, 112, 2);
     this.label(ctx, "⚔ 결투장 명예의 전당", x, top + 7, "#ffe08a");
     const list = G.pvpTop ?? [];
     if (!list.length) this.label(ctx, "아직 기록이 없어요", x, top + 44, "#a0a0a0");
     const COL = ["#ffd35a", "#d8e0f0", "#e0a060", "#9ad0ff", "#9ad0ff"];
     for (let i = 0; i < Math.min(5, list.length); i++) {
-      const r = list[i], yy = top + 26 + i * 11;
-      const name = r.n.length > 8 ? r.n.slice(0, 8) + "…" : r.n;
-      this.label(ctx, `${i + 1}. ${name}  ${r.r}`, x, yy, COL[i]);
+      const r = list[i], yy = top + 28 + i * 13;
+      const name = r.n.length > 9 ? r.n.slice(0, 9) + "…" : r.n;
+      this.label(ctx, `${i + 1}. ${name}`, x - 20, yy, COL[i]);
+      this.label(ctx, `${r.r}`, x + 52, yy, COL[i]);
     }
     if (o.glow !== false) addGlow(o.x, o.y - 50, 90, "#ffb050", 0.25 + Math.sin(t * 2) * 0.05, "pvpb|" + o.x);
     const near = G.ents.get(G.you);
@@ -733,6 +738,32 @@ export class Renderer {
         this.label(ctx, o.name, x, y - 46, "#9ef0a0");
         const near = G.ents.get(G.you);
         if (near && Math.hypot(near.rx - o.x, near.ry - o.y) < 70) this.label(ctx, "[G] 대화", x, y - 56, "#ffd35a");
+        break;
+      }
+      case "starchart": {
+        // 아스트라엘 성도 비석: 검은 돌기둥 + 13개 별 고리. 밝힌 별은 그 별자리 색으로 빛남
+        const stars = G.char?.astra?.stars ?? {};
+        this.shadow(ctx, x, y, 18);
+        ctx.fillStyle = "#1a1630"; ctx.fillRect(x - 10, y - 52, 20, 52);
+        ctx.fillStyle = "#2c2650"; ctx.fillRect(x - 10, y - 52, 6, 52);
+        ctx.fillStyle = "#0e0c1c"; ctx.fillRect(x - 14, y - 6, 28, 6);
+        ctx.fillStyle = "#3a3270"; ctx.beginPath(); ctx.moveTo(x - 10, y - 52); ctx.lineTo(x, y - 62); ctx.lineTo(x + 10, y - 52); ctx.fill();
+        const cyy = y - 86, R = 26;
+        let litN = 0;
+        for (let i = 0; i < 13; i++) {
+          const k = CONSTELLATIONS[i], on = !!stars[k.key];
+          const a = -Math.PI / 2 + (i / 13) * Math.PI * 2 + t * 0.15;
+          const sx = Math.round(x + Math.cos(a) * R), sy = Math.round(cyy + Math.sin(a) * R * 0.55);
+          if (on) {
+            litN++;
+            const tw = 0.75 + Math.sin(t * 3 + i) * 0.25;
+            ctx.globalAlpha = tw; ctx.fillStyle = k.color; ctx.fillRect(sx - 2, sy - 2, 5, 5);
+            ctx.fillStyle = "#fff"; ctx.fillRect(sx - 1, sy - 1, 3, 3); ctx.globalAlpha = 1;
+          } else if (!k.hidden) { ctx.fillStyle = "#3a3458"; ctx.fillRect(sx - 1, sy - 1, 3, 3); }
+        }
+        ctx.fillStyle = litN ? "#e8d8ff" : "#6a6090"; ctx.fillRect(x - 2, y - 40, 4, 4);
+        addGlow(o.x, o.y - 70, 120 + litN * 6, "#b890ff", 0.25 + litN * 0.03 + Math.sin(t * 1.5) * 0.04, "starchart|" + o.x);
+        this.label(ctx, `${o.name} (${litN}/13)`, x, y - 122, "#d8c0ff");
         break;
       }
       case "statue": {
@@ -990,9 +1021,41 @@ export class Renderer {
     beams.length = kept;
   }
 
+  /** 아스트라엘의 밤하늘: 반짝이는 별빛 입자 + 가끔 떨어지는 별똥별 (미리 정한 점만 찍어서 가벼움) */
+  drawStarSky(ctx, cx, cy, t) {
+    if (!this.skyStars) {
+      let sd = 7;
+      const r = () => (sd = (sd * 16807) % 2147483647) / 2147483647;
+      this.skyStars = Array.from({ length: 70 }, () => ({ x: r() * 1600, y: r() * 900, p: r() * 6.28, s: r() < 0.15 ? 2 : 1, c: r() < 0.3 ? "#d8c0ff" : r() < 0.5 ? "#ffe8b0" : "#ffffff", z: 0.15 + r() * 0.3 }));
+    }
+    const n = Math.round(this.skyStars.length * (preset().weather ? 1 : 0.4));
+    ctx.save();
+    ctx.globalCompositeOperation = "lighter";
+    for (let i = 0; i < n; i++) {
+      const s = this.skyStars[i];
+      const a = 0.2 + 0.5 * Math.max(0, Math.sin(t * (1.2 + (i % 5) * 0.3) + s.p));
+      if (a < 0.25) continue;
+      const x = (((s.x - cx * s.z) % VW) + VW) % VW, y = (((s.y - cy * s.z) % VH) + VH) % VH;
+      ctx.globalAlpha = a; ctx.fillStyle = s.c; ctx.fillRect(x | 0, y | 0, s.s, s.s);
+      if (s.s === 2 && a > 0.6) { ctx.globalAlpha = a * 0.4; ctx.fillRect((x | 0) - 2, (y | 0) + 0, 6, 1); ctx.fillRect((x | 0), (y | 0) - 2, 1, 6); }
+    }
+    // 별똥별: 7초마다 하나
+    const k = Math.floor(t / 7), ph = t / 7 - k;
+    if (ph < 0.12) {
+      const q = ph / 0.12, sx = ((k * 977) % 600) + 200, sy = ((k * 331) % 120) + 20;
+      const x = sx - q * 220, y = sy + q * 110;
+      const g = ctx.createLinearGradient(x, y, x + 60, y - 30);
+      g.addColorStop(0, "rgba(255,255,255,0.9)"); g.addColorStop(1, "rgba(200,160,255,0)");
+      ctx.globalAlpha = 1 - q * 0.6; ctx.strokeStyle = g; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + 60, y - 30); ctx.stroke();
+    }
+    ctx.restore();
+  }
+
   drawLighting(ctx, cx, cy, t) {
     const town = G.kind === "town";
-    const z = town ? { ambient: 0.4, light: 110 } : G.zone;
+    // 아스트라엘은 늘 밤: 더 어둡게, 별빛·등불이 돋보이게
+    const z = town ? (G.island === "astra" ? { ambient: 0.6, light: 130 } : { ambient: 0.4, light: 110 }) : G.zone;
     // 빛 지도는 절반 해상도라, 화면이 1px 움직일 때마다 빛 구멍이 0.5px씩 번갈아 어긋나 깜박였음
     // → 빛 지도를 '월드의 짝수 좌표'에 고정하고, 그릴 때만 0~1px 밀어서 맞춤
     const icx = Math.round(cx), icy = Math.round(cy);
@@ -1075,6 +1138,9 @@ export class Renderer {
 
   drawOverhead(ctx, cx, cy, t) {
     drawParts(ctx, cx, cy);
+    // 아주 붐빌 때(20명 넘게 보임): 멀리 있는 남의 이름표·칭호는 생략 (겹쳐서 읽을 수도 없고 그리기만 무거움)
+    const me = G.ents.get(G.you), thin = (G.crowdN ?? 0) > 20 && me;
+    const partyNames = thin && G.party?.length ? new Set(G.party.map((m) => m.name)) : null;
     for (const e of G.ents.values()) {
       if (e.k === "d" || e.dead && e.k !== "p") continue;
       const info = e.info ?? {};
@@ -1084,6 +1150,7 @@ export class Renderer {
       if (e.k === "p") {
         const top = y - 48;
         const foeP = isFoeEnt(e);
+        if (thin && e.id !== G.you && !foeP && !partyNames?.has(info.n) && Math.abs(e.rx - me.rx) + Math.abs(e.ry - me.ry) > 150) continue;
         this.label(ctx, info.n, x, top - 4, e.id === G.you ? "#ffffff" : foeP ? "#ff7a7a" : "#8fd0ff");
         // 칭호: 디자인이 있으면 그림(화면 위 또렷한 이미지 층에), 없으면 색 글자
         if (info.tt && titleDesign(info.tt)) (G.titleMarks ??= []).push({ id: e.id, tt: info.tt, x, y: top - 14 });

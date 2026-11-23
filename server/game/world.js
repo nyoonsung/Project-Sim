@@ -8,7 +8,8 @@ import { floorKind, DUNGEON2_MAX_FLOOR, DUNGEONS, normDungeon, dungeonMax, dunge
 import { PATHS, canClass2, CLASS2_LEVEL } from "../../shared/classes2.js";
 import { MAX_LEVEL } from "../../shared/constants.js";
 import { Room } from "./room.js";
-import { makeFloor, makeTown, makeVerdanTown, safeZone } from "./dungeon.js";
+import { makeFloor, makeTown, makeVerdanTown, makeAstraTown, safeZone } from "./dungeon.js";
+import { ASTRA, CONSTELLATIONS, CONST_BY_KEY, STORY, trialFloor, todayConstellation, blessUpCost, blessSlots, newAstraRecord } from "../../shared/astra.js";
 import { newCharacter, sanitizeChar, makePlayerUnit, refreshStats, availableSkills, defaultLoadout, defaultLoadout2, INV_SIZE } from "./player.js";
 import { secureRandom } from "./secure.js";
 import { moveMul } from "./combat.js";
@@ -81,7 +82,9 @@ export class World {
     this.town = this.addRoom(new Room(this, { id: "town", kind: "town", floor: 0, map: makeTown() }));
     // 2차 업데이트: 베르단 섬 마을 (에르덴 마을 아래 선착장의 뱃사공 → 베르단 섬)
     this.town2 = this.addRoom(new Room(this, { id: "town2", kind: "town", floor: 0, map: makeVerdanTown() }));
-    this.town.island = "erden"; this.town2.island = "verdan";
+    // 3차 업데이트: 별무덤 마을 아스트라엘 (뱃사공 → 아스트라엘)
+    this.town3 = this.addRoom(new Room(this, { id: "town3", kind: "town", floor: 0, map: makeAstraTown() }));
+    this.town.island = "erden"; this.town2.island = "verdan"; this.town3.island = "astra";
     this.resumes = new Map(); // 서버 재시작 뒤 던전 복귀: 파티(멤버·층)별로 다시 만든 방
     this.pvpQueue = new Map(); // PvP 대기열: userId → { at(ms), rating }
     this.pvpTop = null;
@@ -114,9 +117,15 @@ export class World {
     this.loop = id;
   }
   addRoom(r) { this.rooms.set(r.id, r); return r; }
-  isTown(r) { return !!r && (r === this.town || r === this.town2); }
+  isTown(r) { return !!r && (r === this.town || r === this.town2 || r === this.town3); }
   /** 캐릭터가 머무는 섬의 마을 */
-  townOf(s) { return s.char.island === "verdan" && s.char.verdanPass ? this.town2 : this.town; }
+  townOf(s) {
+    const c = s.char;
+    if (c.island === "astra" && c.astra?.pass) return this.town3;
+    return c.island === "verdan" && c.verdanPass ? this.town2 : this.town;
+  }
+  /** 오늘의 성좌 (별가루 2배) */
+  todayStar() { return todayConstellation(); }
 
   tick() {
     const t0 = performance.now();
@@ -207,6 +216,7 @@ export class World {
     if (dungeon === 2 && !s.char.cleared) return false;
     if (dungeon >= 3 && !s.char.verdanPass) return false;
     if (dungeon === 4 && !s.char.cleared3) return false;
+    if (dungeon === 5 && !s.char.astra?.pass) return false;
     s.char.island = dungeonIsland(dungeon);
     const ids = [...new Set(r.party ?? [s.userId])].sort((a, b) => a - b);
     const key = `${dungeon}|${r.kind}|${r.floor}|${ids.join(",")}`;
@@ -289,7 +299,7 @@ export class World {
       best3: c.best3 ?? 0, checkpoint3: c.checkpoint3 ?? 1, cleared3: !!c.cleared3, best4: c.best4 ?? 0, checkpoint4: c.checkpoint4 ?? 1, cleared4: !!c.cleared4,
       island: c.island ?? "erden", verdanPass: !!c.verdanPass, cls2: c.cls2 ?? null, mats: c.mats ?? {}, sigils: c.sigils ?? {}, hearts: c.hearts ?? 0, reward250: !!c.reward250,
       kills: c.kills, deaths: c.deaths, prof: c.prof ?? {}, titles: c.titles ?? [], title: c.title ?? null,
-      pvp: c.pvp ?? newPvpRecord(), ...(s.pvpRoom && s.pvpChar ? { skills: s.pvpChar.skills, pvpActive: { level: s.pvpChar.level, stats: s.pvpChar.stats } } : {}) };
+      pvp: c.pvp ?? newPvpRecord(), astra: c.astra ?? newAstraRecord(), today: todayConstellation(), ...(s.pvpRoom && s.pvpChar ? { skills: s.pvpChar.skills, pvpActive: { level: s.pvpChar.level, stats: s.pvpChar.stats } } : {}) };
   }
   sendChar(s) {
     if (s?.isPvpProxy) s = this.sessions.get(s.userId) ?? s;
@@ -363,6 +373,9 @@ export class World {
       case "pvp": this.pvpOp(s, m); break;
       case "retryBoss": this.retryBoss(s); break;
       case "boat": this.travelBoat(s, m.to); break;
+      case "trial": this.enterTrial(s, m.c); break;
+      case "bless": this.blessOp(s, m); break;
+      case "story": this.markStory(s, m.n); break;
       case "class2": this.changeClass2(s, m.path); break;
       case "craft": this.craft(s, m); break;
       case "skills": this.setSkills(s, m.list); break;
@@ -504,8 +517,9 @@ export class World {
     const group = this.groupOf(s);
     if (group.some((g) => g.unit.room !== town)) return s.notice("파티원 모두 같은 마을에 있어야 해요.");
     dungeon = normDungeon(dungeon);
+    if (dungeon === 5) return s.notice("성좌의 시련은 아스트라엘의 별자리 기록관에게서 골라 들어가요.");
     const D = DUNGEONS[dungeon], K = progKeys(dungeon), max = D.max;
-    if (town.island !== D.island) return s.notice(`${D.title}은(는) ${D.island === "verdan" ? "베르단 섬" : "에르덴 섬"}에 있어요.`);
+    if (town.island !== D.island) return s.notice(`${D.title}은(는) ${D.island === "verdan" ? "베르단 섬" : D.island === "astra" ? "아스트라엘" : "에르덴 섬"}에 있어요.`);
     if (dungeon === 2 && !group.every((g) => g.char.cleared)) return s.notice("제2 던전은 제1 던전 100층을 정복한 모험가만 입장할 수 있어요.");
     if (dungeon >= 3 && !group.every((g) => g.char.verdanPass)) return s.notice("베르단 섬 입도를 마친 모험가만 입장할 수 있어요.");
     if (dungeon === 4 && !group.every((g) => g.char.cleared3)) return s.notice("「기억왕의 지하왕릉」은 베르단 제1 던전 100층을 돌파해야 열려요.");
@@ -514,7 +528,7 @@ export class World {
     const best = Math.min(...group.map((g) => g.char[K.best] ?? 0));
     const next = Math.min(max, best + 1);
     const floors = [1]; for (let f = 11; f <= maxCp; f += 10) floors.push(f);
-    const bossAgain = floorKind(floor) !== "normal" && group.every((g) => (g.char[K.best] ?? 0) >= floor);
+    const bossAgain = floorKind(floor, dungeon) !== "normal" && group.every((g) => (g.char[K.best] ?? 0) >= floor);
     if (floor !== 1 && floor !== next && !bossAgain && !floors.includes(floor)) return s.notice(`시작할 수 있는 층은 1층, 이어하기(${next}층), 열린 체크포인트(최대 ${maxCp}층), 또는 모두 깬 보스층이에요.`);
     this.moveGroup(group, floor, "dungeon", { dungeon });
   }
@@ -541,8 +555,9 @@ export class World {
     // 서버가 갑자기 재시작돼도 이 층으로 돌아올 수 있게 기록 (파티원 전원)
     if (!opt.keepResume) { const party = this.partyOf(group[0]); this.markResume(party ? [...party.members].map((id) => this.sessions.get(id)).filter(Boolean) : group, floor, kind, dungeon); }
     if (kind === "dungeon") {
-      const k = floorKind(floor);
-      room.ev({ e: "msg", text: `${dungeon === 1 ? "" : DUNGEONS[dungeon].title + " · "}${floor}층 ${k === "boss" ? "— 주요 보스" : k === "mid" ? "— 중간보스" : ""}`, kind: "floor" });
+      const k = floorKind(floor, dungeon);
+      if (room.astra) room.ev({ e: "msg", text: `${room.astra.sign} ${room.astra.name}의 시련 · ${room.stage}/5단계${k === "boss" ? " — 수호성" : ""}`, kind: "floor" });
+      else room.ev({ e: "msg", text: `${dungeon === 1 ? "" : DUNGEONS[dungeon].title + " · "}${floor}층 ${k === "boss" ? "— 주요 보스" : k === "mid" ? "— 중간보스" : ""}`, kind: "floor" });
     }
     return room;
   }
@@ -564,6 +579,7 @@ export class World {
     } else if (id === "safe") {
       this.moveGroup(group, room.floor, "safe", { dungeon });
     } else if (id === "victory") {
+      if (dungeon === 5) { for (const g of group) this.astraClear(g, room); return; }
       for (const g of group) {
         if (dungeon >= 3) {
           const first = !g.char[K.cleared];
@@ -793,7 +809,8 @@ export class World {
     }
     if (room.ranked) {
       const txt = winner < 0 ? `⚔ 결투장: ${a.name} vs ${b.name} 무승부 (${room.score[0]}:${room.score[1]})`
-        : `⚔ 결투장: ${room.sides[winner].name}님이 ${room.sides[1 - winner].name}님을 ${Math.max(...room.score)}:${Math.min(...room.score)}로 꺾었어요!${why === "forfeit" || why === "leave" || why === "disconnect" ? " (기권승)" : ""}`;
+        : ["forfeit", "leave", "disconnect"].includes(why) ? `⚔ 결투장: ${room.sides[1 - winner].name}님의 기권으로 ${room.sides[winner].name}님이 이겼어요. (${room.score[winner]}:${room.score[1 - winner]})`
+          : `⚔ 결투장: ${room.sides[winner].name}님이 ${room.sides[1 - winner].name}님을 ${Math.max(...room.score)}:${Math.min(...room.score)}로 꺾었어요!`;
       this.broadcastSys(txt, "rank");
       const ws = winner >= 0 ? room.sides[winner] : null;
       if (ws && (ws.char.pvp?.streak ?? 0) >= 3) this.broadcastSys(`🔥 ${ws.name}님 결투장 ${ws.char.pvp.streak}연승 중!`, "rank");
@@ -811,31 +828,143 @@ export class World {
   }
 
   // ── 2차 업데이트: 섬 이동 · 2차 전직 · 베르단 공방 · 250 보상
-  /** 뱃사공: 에르덴 ↔ 베르단. 첫 입도는 레벨 150 + 심연 등급 아이템 1개 공물(소모), 이후엔 자유 왕래 */
+  /** 뱃사공: 세 섬을 잇는 배.
+   *  베르단 첫 입도: 레벨 150 + 심연 등급 아이템 1개 공물(소모). 아스트라엘 첫 입도: 레벨 200 + 베르단 50층 돌파 (공물 없음).
+   *  to: erden / verdan / astra / pay(공물 확인). 목적지가 없으면 갈 수 있는 곳을 물어봄 */
   travelBoat(s, to) {
     const c = s.char, room = s.unit.room;
     if (!this.isTown(room)) return s.notice("배는 마을 선착장에서만 탈 수 있어요.");
-    const npc = room === this.town ? "boatman" : "boatman2";
+    const npc = room === this.town ? "boatman" : room === this.town2 ? "boatman2" : "boatman3";
     if (!this.nearNpc(s, npc, 120)) return s.notice("선착장의 뱃사공 근처에서 이용해 주세요.");
     if (this.partyOf(s)) return s.notice("파티 중에는 섬을 옮길 수 없어요. 파티를 떠난 뒤 이용해 주세요.");
     if (s.trade) return s.notice("거래 중에는 배를 탈 수 없어요.");
-    if (room === this.town2) {
-      c.island = "erden";
-      this.moveToTown(s, this.town, "에르덴 섬으로 돌아왔어요.");
-      return;
+    const here = room.island;
+    const pay = to === "pay";
+    if (pay) to = "verdan";
+    // 예전 화면(목적지 없음): 에르덴 ↔ 베르단 그대로
+    if (to === undefined && here !== "astra") to = here === "erden" ? "verdan" : "erden";
+    if (!["erden", "verdan", "astra"].includes(to) || to === here) {
+      // 목적지 고르기
+      const list = ["erden", "verdan", "astra"].filter((k) => k !== here).map((k) => ({ k, ok: k === "erden" || (k === "verdan" ? true : !!c.astra?.pass || this.astraWhyNot(c) == null), first: k === "verdan" ? !c.verdanPass : k === "astra" ? !c.astra?.pass : false, why: k === "astra" && !c.astra?.pass ? this.astraWhyNot(c) : null }));
+      return s.send({ t: "boatPick", here, list });
     }
-    if (!c.verdanPass) {
-      if (c.level < 150) return s.notice("베르단 섬은 레벨 150 이상만 건널 수 있어요.");
-      const idx = c.inv.findIndex((it) => it && it.rarity === "심연" && !it.locked);
-      if (idx < 0) return s.notice(c.inv.some((it) => it?.rarity === "심연") ? "잠금을 푼 심연 등급 아이템이 가방에 있어야 공물로 바칠 수 있어요." : "공물로 바칠 심연 등급 아이템 1개가 가방에 있어야 해요. (장착 중인 장비는 바칠 수 없어요)");
-      if (to !== "pay") return s.send({ t: "boatAsk", item: { uid: c.inv[idx].uid, name: c.inv[idx].name } });
-      const [it] = c.inv.splice(idx, 1);
-      itemLog(s.userId, "verdan_tribute", { item: it.name, rarity: it.rarity });
-      c.verdanPass = true;
-      this.broadcastSys(`⛵ ${s.name}님이 심연의 공물을 바치고 베르단 섬에 첫발을 디뎠어요!`, "legend");
+    if (to === "erden") { c.island = "erden"; return this.moveToTown(s, this.town, "에르덴 섬으로 돌아왔어요."); }
+    if (to === "verdan") {
+      if (!c.verdanPass) {
+        if (c.level < 150) return s.notice("베르단 섬은 레벨 150 이상만 건널 수 있어요.");
+        const idx = c.inv.findIndex((it) => it && it.rarity === "심연" && !it.locked);
+        if (idx < 0) return s.notice(c.inv.some((it) => it?.rarity === "심연") ? "잠금을 푼 심연 등급 아이템이 가방에 있어야 공물로 바칠 수 있어요." : "공물로 바칠 심연 등급 아이템 1개가 가방에 있어야 해요. (장착 중인 장비는 바칠 수 없어요)");
+        if (!pay) return s.send({ t: "boatAsk", item: { uid: c.inv[idx].uid, name: c.inv[idx].name } });
+        const [it] = c.inv.splice(idx, 1);
+        itemLog(s.userId, "verdan_tribute", { item: it.name, rarity: it.rarity });
+        c.verdanPass = true;
+        this.broadcastSys(`⛵ ${s.name}님이 심연의 공물을 바치고 베르단 섬에 첫발을 디뎠어요!`, "legend");
+      }
+      c.island = "verdan";
+      return this.moveToTown(s, this.town2, "베르단 섬에 도착했어요. 2차 전직소·베르단 공방·두 던전이 기다려요.");
     }
-    c.island = "verdan";
-    this.moveToTown(s, this.town2, "베르단 섬에 도착했어요. 2차 전직소·베르단 공방·두 던전이 기다려요.");
+    // 아스트라엘
+    c.astra ??= newAstraRecord();
+    if (!c.astra.pass) {
+      const why = this.astraWhyNot(c);
+      if (why) return s.notice(why);
+      c.astra.pass = true;
+      this.broadcastSys(`🌌 ${s.name}님이 별이 꺼진 섬, 아스트라엘에 닿았어요!`, "legend");
+    }
+    c.island = "astra";
+    this.moveToTown(s, this.town3, "아스트라엘에 도착했어요. 꺼진 별 열세 개가 당신을 기다려요.");
+    if (!c.astra.seen.includes(0)) this.sendStory(s, 0);
+  }
+  astraWhyNot(c) {
+    if (c.level < ASTRA.needLevel) return `아스트라엘은 레벨 ${ASTRA.needLevel} 이상만 건널 수 있어요.`;
+    if (!c.verdanPass || (c.best3 ?? 0) < ASTRA.needBest3) return `아스트라엘은 「베르단 제1 던전」 ${ASTRA.needBest3}층을 돌파해야 건널 수 있어요.`;
+    return null;
+  }
+  sendStory(s, n, fresh = false) {
+    const st = n === 0 ? STORY.prologue : STORY.chapters[CONSTELLATIONS[n - 1]?.key];
+    if (!st) return;
+    s.send({ t: "story", n, fresh, title: st.title, text: st.text, sign: n ? CONSTELLATIONS[n - 1].sign : "✦", color: n ? CONSTELLATIONS[n - 1].color : "#c8a0ff" });
+  }
+  markStory(s, n) {
+    const a = s.char.astra;
+    if (!a || !Number.isInteger(n) || n < 0 || n > 13) return;
+    if (n > 0 && !a.stars[CONSTELLATIONS[n - 1].key]) return;
+    if (!a.seen.includes(n)) { a.seen.push(n); s.dirty = true; }
+    this.sendStory(s, n);
+  }
+  /** 성좌의 시련 입장 (별자리 기록관). 파티는 모두 아스트라엘 마을에 있어야 함 */
+  enterTrial(s, c) {
+    const town = s.unit.room;
+    if (town !== this.town3) return s.notice("성좌의 시련은 아스트라엘에서만 들어갈 수 있어요.");
+    if (!this.nearNpc(s, "observatory", 140)) return s.notice("별자리 기록관 엘시 근처에서 시련을 고를 수 있어요.");
+    const p = this.partyOf(s);
+    if (p && p.leader !== s.userId) return s.notice("파티장만 시련을 고를 수 있어요.");
+    c = Math.floor(Number(c));
+    const K = CONSTELLATIONS[c - 1];
+    if (!K) return s.notice("고를 수 없는 별자리예요.");
+    const group = this.groupOf(s);
+    if (group.some((g) => g.unit.room !== town)) return s.notice("파티원 모두 아스트라엘 마을에 있어야 해요.");
+    if (!group.every((g) => g.char.astra?.pass)) return s.notice("파티원 모두 아스트라엘 입도를 마쳐야 해요.");
+    if (K.hidden && !group.every((g) => CONSTELLATIONS.slice(0, 12).every((k) => g.char.astra.stars[k.key]))) return s.notice("열두 별을 모두 밝힌 사람만 열세 번째 별자리에 닿을 수 있어요.");
+    this.moveGroup(group, trialFloor(c, 1), "dungeon", { dungeon: 5 });
+  }
+  /** 수호성을 쓰러뜨리고 별을 밝힘 → 마을로 */
+  astraClear(g, room) {
+    const c = g.char;
+    c.astra ??= newAstraRecord();
+    const K = room.astra ?? CONST_BY_KEY[CONSTELLATIONS[Math.min(12, Math.ceil(room.floor / 5) - 1)].key];
+    const a = c.astra;
+    const first = !a.stars[K.key];
+    a.clears[K.key] = Math.min(99999, (a.clears[K.key] ?? 0) + 1);
+    let dust = 20 + 2 * K.id;
+    if (todayConstellation() === K.id) dust *= 2;
+    if (first) {
+      dust += 80;
+      a.stars[K.key] = true;
+      if (K.bless && !a.bless[K.key]) a.bless[K.key] = 1;
+      if (K.bless && a.equip.length < blessSlots(c) && !a.equip.includes(K.key)) a.equip.push(K.key);
+      if (K.hidden) {
+        c.titles ??= [];
+        if (!c.titles.some((t) => t.text === ASTRA.title.text)) {
+          c.titleSeq = Math.max(c.titleSeq ?? 0, 0, ...c.titles.map((t) => t.id)) + 1;
+          c.titles.push({ id: c.titleSeq, text: ASTRA.title.text, color: ASTRA.title.color, at: Date.now() });
+        }
+        this.broadcastSys(`🌌 ${g.name}님이 별을 삼킨 자를 쓰러뜨리고 열세 번째 별을 되찾았어요!`, "legend");
+      } else this.broadcastSys(`✦ ${g.name}님이 ${K.name}(${K.sign})의 별을 밝혔어요!`, "legend");
+    }
+    a.dust = Math.min(999999, (a.dust ?? 0) + dust);
+    c.best5 = Math.max(c.best5 ?? 0, room.floor);
+    c.island = "astra";
+    this.toTown(g, first ? `${K.name}의 별이 다시 빛나요! 별가루 ${dust}개를 얻었어요.` : `${K.name}의 시련을 다시 넘었어요. 별가루 ${dust}개를 얻었어요.`);
+    this.sendChar(g);
+    if (first) this.sendStory(g, K.id, true);
+  }
+  /** 축복의 제단: 밝힌 별자리의 축복을 장착·해제·강화 (별가루) */
+  blessOp(s, m) {
+    if (s.unit.room !== this.town3 || !this.nearNpc(s, "altar", 140)) return s.notice("축복은 아스트라엘 축복의 제단에서 다룰 수 있어요.");
+    const c = s.char, a = (c.astra ??= newAstraRecord());
+    const K = CONST_BY_KEY[m.key];
+    if (!K || !K.bless) return s.notice("알 수 없는 축복이에요.");
+    if (!a.stars[K.key]) return s.notice(`${K.name}의 별을 먼저 밝혀야 해요.`);
+    if (m.a === "equip") {
+      if (a.equip.includes(K.key)) return;
+      if (a.equip.length >= blessSlots(c)) return s.notice(`축복은 최대 ${blessSlots(c)}개까지 품을 수 있어요. 하나를 내려 주세요.`);
+      a.equip.push(K.key);
+    } else if (m.a === "unequip") {
+      a.equip = a.equip.filter((k) => k !== K.key);
+    } else if (m.a === "up") {
+      const lv = a.bless[K.key] ?? 1;
+      if (lv >= ASTRA.blessMax) return s.notice("이미 가장 밝게 빛나는 축복이에요.");
+      const cost = blessUpCost(lv);
+      if ((a.dust ?? 0) < cost) return s.notice(`별가루가 부족해요. (${cost}개 필요, 보유 ${a.dust ?? 0}개)`);
+      a.dust -= cost;
+      a.bless[K.key] = lv + 1;
+      s.notice(`「${K.bless.name}」 축복이 ${lv + 1}단계로 밝아졌어요!`);
+    } else return;
+    refreshStats(s.unit);
+    s.dirty = true;
+    this.sendChar(s);
+    this.saveSoon?.(s);
   }
   moveToTown(s, town, text) {
     const u = s.unit;
@@ -1139,7 +1268,7 @@ export class World {
     const list = [...this.sessions.values()].map((o) => {
       const r = o.unit?.room;
       const dn = r && !this.isTown(r) ? (normDungeon(r.dungeon) === 1 ? "" : DUNGEONS[normDungeon(r.dungeon)].name + " ") : "";
-      const where = !r ? "-" : r === this.town ? "에르덴 마을" : r === this.town2 ? "베르단 마을" : r.map?.safe ? `${dn}${r.floor}층 안전 구역` : `${dn}${r.floor}층`;
+      const where = !r ? "-" : r === this.town ? "에르덴 마을" : r === this.town2 ? "베르단 마을" : r === this.town3 ? "아스트라엘" : r.map?.safe ? `${dn}${r.floor}층 안전 구역` : `${dn}${r.floor}층`;
       const tt = o.char.title != null ? o.char.titles?.find((x) => x.id === o.char.title)?.text ?? null : null;
       return { n: o.name, lv: o.char.level, c: o.char.cls, w: where, tt, p: o.partyId && o.partyId === s.partyId ? 1 : 0, ld: o.linkdead ? 1 : 0 };
     }).sort((a, b) => b.p - a.p || b.lv - a.lv);
@@ -1354,7 +1483,10 @@ export class World {
     const group = this.groupOf(s).filter((g) => g === s || g.unit.room === s.unit.room);
     dungeon = normDungeon(dungeon);
     // 베르단 던전으로 보내면 섬도 베르단으로 (관리자 이동은 입도 조건을 건너뜀)
-    for (const g of group) { g.char.island = dungeonIsland(dungeon); if (dungeon >= 3) g.char.verdanPass = true; }
+    for (const g of group) {
+      g.char.island = dungeonIsland(dungeon); if (dungeon >= 3) g.char.verdanPass = true;
+      if (dungeon === 5) { g.char.astra ??= newAstraRecord(); g.char.astra.pass = true; }
+    }
     this.moveGroup(group, floor, "dungeon", { dungeon });
     s.notice(`관리자가 ${dungeon === 1 ? "" : DUNGEONS[dungeon].title + " "}${floor}층으로 이동시켰어요.`);
     return true;

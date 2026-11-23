@@ -277,7 +277,8 @@ export function drawFolk(ctx, f, cx, cy, t) {
 
 // NPC → 마을 사람 그림
 const NPC_VIL = { shop: "woman", smithy: "master", trainer: "monk", gate: "inspector", gate2: "inspector", vault: "princess", enchanter: "princess",
-  boatman: "oldman2", boatman2: "oldman", class2_master: "noble", vforge: "villager3", gate3: "inspector", gate4: "inspector" };
+  boatman: "oldman2", boatman2: "oldman", class2_master: "noble", vforge: "villager3", gate3: "inspector", gate4: "inspector",
+  boatman3: "villager2", observatory: "villager4", altar: "noble" };
 export function drawTownNpc(ctx, o, x, y, t) {
   const who = NPC_VIL[o.id];
   if (!who || !has(`t:vil_${who}_down_f0`)) return false;

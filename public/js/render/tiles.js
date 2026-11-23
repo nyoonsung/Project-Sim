@@ -51,7 +51,8 @@ export class TileMap {
     this.zone = zone;
     this.town = map.kind === "town";
     // 베르단 섬 마을: 서늘한 청록빛 풀과 회청색 돌길
-    this.tint = map.island === "verdan" ? { m: "#b8dcd4", s: "#0c1a24", sat: 0.8 } : null;
+    // 아스트라엘: 은빛 보랏빛 밤의 섬
+    this.tint = map.island === "verdan" ? { m: "#b8dcd4", s: "#0c1a24", sat: 0.8 } : map.island === "astra" ? { m: "#c4bce8", s: "#120c2a", sat: 0.62 } : null;
     this.chunks = new Map();
     this.doorsOpen = map.doorsOpen;
     this.decos = (map.objects ?? []).filter((o) => o.kind === "deco");
