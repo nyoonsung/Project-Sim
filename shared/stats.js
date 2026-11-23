@@ -8,12 +8,12 @@ import { CLASS2_MUL, PATHS } from "./classes2.js";
 // 직업 피해 배율: 도적 아래 다섯 직업의 피해 기여도를 1.5배 상향한다.
 export const CLASS_DMG = {
   sword: 1.80, // 기존 대비 1.5배
-  archer: 0.475, // 2차 업데이트 전 조정: 딜량 50% (0.95 → 0.475)
+  archer: 0.57, // 현재 대비 피해량 20% 상향 (0.475 → 0.57)
   rogue: 1.30, // 1.62에서 약 20% 하향
   mage: 1.08864, // 기존 대비 1.5배
   priest: 2.025, // 기존 대비 1.5배
-  fist: 6.00, // 기존 대비 1.5배
-  smith: 5.25, // 기존 대비 1.5배
+  fist: 8.10, // 탱커 화력 보강: 기존 대비 35% 상향
+  smith: 7.35, // 탱커 화력 보강: 기존 대비 40% 상향
 };
 const MOVE_MUL = { adventurer: 1, sword: 1, fist: 1.02, archer: 1.02, rogue: 1.12, mage: 1.0, priest: 0.98, smith: 0.92 };
 
