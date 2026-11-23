@@ -30,7 +30,7 @@ assert.equal(sanitizeChar({ ...newCharacter("a"), level: 300 }, "a").level, 250)
 ok("레벨 상한 250 · 210부터 레벨업 둔화");
 
 // ── 사전 밸런스
-assert.equal(CLASS_DMG.archer, 0.57);
+assert.equal(CLASS_DMG.archer, 0.5985);
 {
   const a = deriveStats({ cls: "archer", level: 100, stats: {}, equip: {}, skills: [] });
   const b = Math.round(((5 + 2.2 * 100) * 0.9) * 1.2 * 0.5);
@@ -265,13 +265,13 @@ ok("세이브 호환");
 {
   const { CLASS2_DMG, deriveStats: ds } = await import("../shared/stats.js");
   const { PATH_DMG: PD } = await import("../shared/classes2.js");
-  assert.equal(CLASS2_DMG.priest, 1.36); assert.equal(CLASS2_DMG.fist, 1.2);
+  assert.equal(CLASS2_DMG.priest, 2.47); assert.equal(CLASS2_DMG.fist, 1.61);
   assert.equal(PD.volcano, 0.264); assert.equal(PD.inquisitor, 1.0);
   const base = { level: 200, stats: {}, equip: {}, skills: [] };
-  assert.equal(ds({ ...base, cls: "priest" }).classDmg, 2.025, "1차 전직 성직자 배율은 그대로");
-  assert.ok(Math.abs(ds({ ...base, cls: "priest", cls2: "heretic" }).classDmg - 2.025 * 1.36) < 1e-9);
-  assert.ok(Math.abs(ds({ ...base, cls: "fist", cls2: "striker" }).classDmg - 8.1 * 1.2) < 1e-9);
-  assert.equal(ds({ ...base, cls: "smith", cls2: "volcano" }).classDmg, 7.35);
+  assert.equal(ds({ ...base, cls: "priest" }).classDmg, 2.2275, "1차 전직 성직자 배율");
+  assert.ok(Math.abs(ds({ ...base, cls: "priest", cls2: "heretic" }).classDmg - 2.2275 * 2.47) < 1e-9);
+  assert.ok(Math.abs(ds({ ...base, cls: "fist", cls2: "striker" }).classDmg - 10.53 * 1.61) < 1e-9);
+  assert.equal(ds({ ...base, cls: "smith", cls2: "volcano" }).classDmg, 6.909);
   console.log("✓ 2차 전직 성직자·권투사 피해 보정 / 볼케이노 하향");
 }
 

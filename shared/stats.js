@@ -8,15 +8,15 @@ import { CLASS2_MUL, PATHS } from "./classes2.js";
 // 직업 피해 배율: 도적 아래 다섯 직업의 피해 기여도를 1.5배 상향한다.
 export const CLASS_DMG = {
   sword: 1.80, // 기존 대비 1.5배
-  archer: 0.57, // 현재 대비 피해량 20% 상향 (0.475 → 0.57)
+  archer: 0.5985, // 0.57 → 0.5985 (+5%)
   rogue: 1.30, // 1.62에서 약 20% 하향
   mage: 1.08864, // 기존 대비 1.5배
-  priest: 2.025, // 기존 대비 1.5배
-  fist: 8.10, // 탱커 화력 보강: 기존 대비 35% 상향
-  smith: 7.35, // 탱커 화력 보강: 기존 대비 40% 상향
+  priest: 2.2275, // 2.025 → 2.2275 (+10%)
+  fist: 10.53, // 8.10 → 10.53 (+30%)
+  smith: 6.909, // 7.35 → 6.909 (-6%)
 };
-// 2차 전직 후에만 붙는 직업 피해 보정 (250레벨 DPS 하위권 보강 · 1차 전직 밸런스는 그대로)
-export const CLASS2_DMG = { priest: 1.36, fist: 1.2 };
+// 2차 전직 후에 추가로 붙는 직업 피해 보정 (2차 경로 구성 차이로 벌어진 250레벨 격차 보정)
+export const CLASS2_DMG = { priest: 2.47, fist: 1.61 };
 const MOVE_MUL = { adventurer: 1, sword: 1, fist: 1.02, archer: 1.02, rogue: 1.12, mage: 1.0, priest: 0.98, smith: 0.92 };
 
 /** 해금된 패시브 스킬의 상시 능력치 (스킬칸 장착 불필요) */

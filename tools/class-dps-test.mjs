@@ -226,11 +226,11 @@ try {
   const dpsByClass = Object.fromEntries(rows.map((r) => [r.cls, r.dps]));
   assert.ok(dpsByClass.mage >= dpsByClass.sword * 0.95, "mage should remain near the sword benchmark after its damage is increased by 20%");
   assert.ok(dpsByClass.rogue >= dpsByClass.sword * 1.3, "rogue should remain clearly above the sword benchmark after its major upgrade");
-  assert.ok(dpsByClass.archer >= 47000 && dpsByClass.archer <= 51000, "archer should gain about 20% damage and stay below the top four");
+  assert.ok(dpsByClass.archer >= 49500 && dpsByClass.archer <= 53500, "archer gains about 5% more damage");
   assert.ok(dpsByClass.rogue < 90000, "rogue DPS should remain below its configured ceiling");
-  assert.ok(dpsByClass.fist >= 42000 && dpsByClass.fist < dpsByClass.archer, "fist tank DPS should reach the low 40k range but remain below archer");
-  assert.ok(dpsByClass.smith >= 42000 && dpsByClass.smith < dpsByClass.archer, "smith tank DPS should reach the low 40k range but remain below archer");
-  assert.ok(dpsByClass.priest < dpsByClass.mage, "priest damage should stay below mage after its damage reduction");
+  assert.ok(dpsByClass.fist >= 54000 && dpsByClass.fist < dpsByClass.rogue, "fist DPS raised close to the upper tier");
+  assert.ok(dpsByClass.priest >= 58000 && dpsByClass.priest < dpsByClass.rogue, "priest DPS raised close to the upper tier");
+  assert.ok(dpsByClass.smith >= 38000 && dpsByClass.smith < dpsByClass.archer, "smith tank DPS slightly reduced and below archer");
   console.log("CLASS DPS TESTS: ALL PASS");
 } finally {
   Math.random = originalRandom;

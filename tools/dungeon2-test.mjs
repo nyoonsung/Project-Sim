@@ -288,10 +288,10 @@ ok(true, "제2 던전 드롭 레벨 100 · 소환물 드롭 없음 · 심연 유
 }
 
 // 현재 직업 피해 배율: 탱커 화력 보강 및 궁수 피해량 20% 상향 반영.
-assert.equal(CLASS_DMG.smith, 7.35);
-assert.equal(CLASS_DMG.fist, 8.10);
-assert.equal(CLASS_DMG.priest, 2.025);
-assert.equal(CLASS_DMG.archer, 0.57);
+assert.equal(CLASS_DMG.smith, 6.909);
+assert.equal(CLASS_DMG.fist, 10.53);
+assert.equal(CLASS_DMG.priest, 2.2275);
+assert.equal(CLASS_DMG.archer, 0.5985);
 assert.equal(CLASS_DMG.rogue, 1.30);
 ok(true, "현재 직업 피해 배율 회귀 확인");
 
