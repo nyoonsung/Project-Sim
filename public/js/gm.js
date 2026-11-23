@@ -3,7 +3,7 @@ import { h, $, tipOn } from "./ui/dom.js";
 import { TITLE_DESIGNS } from "/shared/titles.js";
 import { itemTip } from "./ui/windows.js";
 import { itemIcon } from "./ui/icons.js";
-import { CLASS_INFO } from "/shared/classes.js";
+import { CLASS_INFO, STATS } from "/shared/classes.js";
 import { MATERIALS, RARITIES, SLOT_NAME, SLOTS, WEAPON_TYPES, OFFHAND_TYPES, ARMOR_NAMES, VARIANT_TRAITS, RARITY_OPTS, OPTIONS, MYTHIC_EFFECTS, MYTHIC_TITLE_LIST, ENCHANTS, MAX_ENH, makeItem, optionMax, VMATS, SIGIL_NAMES } from "/shared/items.js";
 import { PATHS } from "/shared/classes2.js";
 import { ITEMS, TITLE_COLORS, INVENTORY_SLOTS } from "/shared/constants.js";
@@ -105,6 +105,19 @@ async function openPlayer(id) {
   const pts = h("input", { type: "number", min: 0, step: 1, value: c?.unspent ?? 0 });
   const cp = h("select", {}, ...[1, 11, 21, 31, 41, 51, 61, 71, 81, 91].map((f) => h("option", { value: f, selected: c?.checkpoint === f }, `${f}층`)));
   const cls = h("select", {}, ...Object.entries(CLASS_INFO).map(([k, v]) => h("option", { value: k, selected: c?.cls === k }, v.name)));
+  const statInputs = {};
+  const statForm = h("div", { class: "form" });
+  const drawStatForm = () => {
+    for (const key of Object.keys(statInputs)) delete statInputs[key];
+    const keys = CLASS_INFO[cls.value]?.stats ?? [];
+    statForm.replaceChildren(...keys.flatMap((key) => {
+      const input = h("input", { type: "number", min: 0, max: 1000000, step: 1, value: cls.value === c?.cls ? (c?.stats?.[key] ?? 0) : 0 });
+      statInputs[key] = input;
+      return field(STATS[key].name, input);
+    }));
+  };
+  drawStatForm();
+  cls.addEventListener("change", drawStatForm);
   const cons = Object.fromEntries(Object.keys(ITEMS).map((k) => [k, h("input", { type: "number", min: 0, max: ITEMS[k].max, value: c?.cons?.[k] ?? 0 })]));
   const rar = h("select", {}, ...RARITIES.map((r) => h("option", { value: r }, r)));
   const titleT = h("input", { type: "text", maxlength: 16, placeholder: "예: 던전의 정복자" });
@@ -169,8 +182,16 @@ async function openPlayer(id) {
         h("div", { class: "box" }, h("h3", { text: "캐릭터 수정" }),
           h("div", { class: "form" }, ...field("레벨", lv), ...field("골드", gold), ...field("스탯 포인트", pts), ...field("체크포인트", cp), ...field("직업", cls),
             ...Object.entries(cons).flatMap(([k, el]) => field(ITEMS[k].name, el))),
-          h("div", { class: "note", text: "골드와 미사용 스탯 포인트는 별도 지급 상한이 없어요. 0 이상의 정수로 입력해 주세요. (직업을 바꾸면 투자한 스탯은 미사용 포인트로 돌아가요.)" }),
-          h("button", { class: "btn small primary", onclick: act("edit", () => ({ level: +lv.value, gold: +gold.value, unspent: +pts.value, checkpoint: +cp.value, cls: cls.value, cons: Object.fromEntries(Object.entries(cons).map(([k, el]) => [k, +el.value])) })) }, "저장")),
+          h("h4", { text: "능력치 직접 배분" }),
+          statForm,
+          h("div", { class: "note", text: "각 능력치의 최종 투자 수치를 직접 지정해요. 선택한 직업의 전용 능력치만 입력할 수 있으며, 직업 변경 시 새 직업의 능력치 항목이 표시돼요." }),
+          h("button", { class: "btn small primary", onclick: act("edit", () => ({
+            level: +lv.value, gold: +gold.value,
+            ...(cls.value === c?.cls ? { unspent: +pts.value } : {}),
+            checkpoint: +cp.value, cls: cls.value,
+            stats: Object.fromEntries(Object.entries(statInputs).map(([k, el]) => [k, Number(el.value)])),
+            cons: Object.fromEntries(Object.entries(cons).map(([k, el]) => [k, +el.value])),
+          })) }, "캐릭터·스탯 저장")),
         exactGiveBox(c, act),
         h("div", { class: "box" }, h("h3", { text: "GM 빠른 조치" }),
           h("div", { class: "flexrow" },
