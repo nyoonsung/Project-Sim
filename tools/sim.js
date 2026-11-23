@@ -4,7 +4,7 @@ import { Room } from "../server/game/room.js";
 import { makeFloor } from "../server/game/dungeon.js";
 import { makePlayerUnit, newCharacter, refreshStats, availableSkills } from "../server/game/player.js";
 import { CLASS_INFO, xpToNext } from "../shared/classes.js";
-import { TILE } from "../shared/constants.js";
+import { TILE, SKILL_SLOTS } from "../shared/constants.js";
 import { rollItem } from "../shared/items.js";
 import { floorKind } from "../shared/zones.js";
 
@@ -28,20 +28,23 @@ export function makeChar(cls, L, gearRarity = "희귀", cls2 = null) {
   const av = availableSkills(c);
   const basic = av.find((s) => s.kind === "basic" && s.cls === cls) ?? av.find((s) => s.kind === "basic");
   const order = { 전설: 0, 영웅: 1, 희귀: 2, 일반: 3 };
-  const act = av.filter((s) => s.cls !== "common" && !["basic", "passive"].includes(s.kind) && !s.exclusive && !s.moveSkill && !["sw_block", "fi_counter", "fi_imun", "sm_rivet"].includes(s.id)).sort((x, y) => order[x.grade] - order[y.grade]);
-  const pas = av.filter((s) => s.kind === "passive");
-  c.skills = [basic?.id ?? "c_thrust", ...act.slice(0, 4).map((s) => s.id), "c_firstaid", pas[0]?.id ?? "c_slash", pas[1]?.id ?? null].slice(0, 8);
+  const act = av.filter((s) => s.cls === cls && !s.path && !["basic", "passive"].includes(s.kind) && !s.exclusive && !s.moveSkill && !["sw_block", "fi_counter", "fi_imun", "sm_rivet"].includes(s.id)).sort((x, y) => order[x.grade] - order[y.grade]);
+  const baseSkills = [basic?.id ?? "c_thrust", ...act.slice(0, SKILL_SLOTS - 3).map((s) => s.id)];
   if (cls2) {
-    // 2차 전직: 9등급 기본기 + 열린 2차 액티브(높은 등급 순) + 2차 패시브
+    // 2차 전직: 기본기 + 열린 2차 액티브 우선, 남은 칸은 1차 액티브로 채운다. 패시브는 자동 적용.
     const p2 = av.filter((s) => s.path === cls2).sort((a, b) => a.tier - b.tier);
     const b2 = p2.find((s) => s.kind === "basic") ?? basic;
     const a2 = p2.filter((s) => !["basic", "passive"].includes(s.kind) && !s.moveSkill && !["vj_guardtaunt", "ht_doom", "dk_duskveil"].includes(s.id));
-    const ps2 = p2.filter((s) => s.kind === "passive");
-    c.skills = [b2?.id ?? c.skills[0], ...a2.slice(0, 5).map((s) => s.id), ...ps2.slice(0, 2).map((s) => s.id)];
-    for (const id of [act[0]?.id, "c_firstaid"]) if (c.skills.length < 8 && id && !c.skills.includes(id)) c.skills.push(id);
+    const chosen = [b2?.id ?? baseSkills[0], ...a2.slice(0, SKILL_SLOTS - 3).map((s) => s.id)];
+    for (const id of act.map((s) => s.id)) {
+      if (chosen.length >= SKILL_SLOTS - 2) break;
+      if (!chosen.includes(id)) chosen.push(id);
+    }
+    c.skills = [...chosen, "c_dash", "c_firstaid"].slice(0, SKILL_SLOTS);
+  } else {
+    c.skills = [...baseSkills, "c_dash", "c_firstaid"].slice(0, SKILL_SLOTS);
   }
-  while (c.skills.length < 8) c.skills.push(null);
-  c.skills = c.skills.slice(0, 8);
+  while (c.skills.length < SKILL_SLOTS) c.skills.push(null);
   return c;
 }
 
@@ -89,7 +92,7 @@ export function simulate(cls, L, F, { maxT = 300, rarity = "희귀", log = false
       else if (range > 100 && d < range * 0.5) { mx = -(target.x - u.x) / d; my = -(target.y - u.y) / d; }
       // 예고 장판 피하기
       for (const a of room.areas) if (a.team === "m" && a.shape === "c" && Math.hypot(a.x - u.x, a.y - u.y) < a.r + 10) { const d2 = Math.hypot(u.x - a.x, u.y - a.y) || 1; mx = (u.x - a.x) / d2; my = (u.y - a.y) / d2; }
-      for (let s = 0; s < 8; s++) if (d < range + 60 || RANGE[cls]) room.cast(u, { slot: s, ax, ay, tx: u.id });
+      for (let s = 0; s < SKILL_SLOTS; s++) if (d < range + 60 || RANGE[cls]) room.cast(u, { slot: s, ax, ay, tx: u.id });
     } else if (room.exitOpen && kind === "normal") break;
     room.pushInput(u, { s: ++seq, mx, my, ax, ay });
     if (process.env.SIMDBG && room.tickN % 20 === 0) console.log(t.toFixed(1), Math.round(u.x), Math.round(u.y), room.bossStarted, room.bossId, room.timers.length, mx, my);
