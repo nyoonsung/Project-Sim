@@ -1,5 +1,5 @@
 // 관리 API: 관리자 키로 로그인한 서버 주인만 쓸 수 있고, 모든 변경은 감사 기록에 남긴다
-import { Q, secLog } from "./db.js";
+import { Q, secLog, itemLog } from "./db.js";
 import { defaultLoadout, defaultLoadout2, INV_SIZE } from "./game/player.js";
 import { world } from "./net.js";
 import { rollItem, makeItem, RARITIES, SLOTS, canEquip, VMATS, ensureDur, makeClassRelic } from "../shared/items.js";
@@ -114,6 +114,7 @@ export async function handleGm(req, res, path, { readJson, send, isAdmin, ip, ur
       if (b.cls2 !== undefined && typeof b.cls2 !== "string") return send(res, 400, { error: "2차 직업 값이 잘못됐어요." });
       let why = null;
       const ok = world.gmApplyChar(id, (c) => {
+        if (patch.verdanPass === false && b.island === "verdan") { why = "입도 권한을 해제할 때는 현재 섬을 에르덴으로 선택해 주세요."; return; }
         if (b.cls2) {
           const path = PATHS[b.cls2];
           if (!path || path.base !== c.cls || c.level < CLASS2_LEVEL) { why = "현재 직업과 레벨에 맞는 2차 전직 경로가 아니에요."; return; }
@@ -123,7 +124,6 @@ export async function handleGm(req, res, path, { readJson, send, isAdmin, ip, ur
           c.cls2 = null;
           c.skills = defaultLoadout(c);
         }
-        if (patch.verdanPass === false && b.island === "verdan") { why = "입도 권한을 해제할 때는 현재 섬을 에르덴으로 선택해 주세요."; return; }
         Object.assign(c, patch);
         if (b.island !== undefined) c.island = b.island;
         if (c.island === "verdan") c.verdanPass = true;
@@ -192,6 +192,7 @@ export async function handleGm(req, res, path, { readJson, send, isAdmin, ip, ur
         c.inv.push(made);
       });
       audit("give_class_relic", target, { name: made?.name ?? null, cls: made?.classRelic ?? null });
+      if (made) itemLog(id, "gm_give_class_relic", { name: made.name, rarity: made.rarity, ilvl: made.ilvl });
       if (made) world.sessions.get(id)?.notice(`관리자가 직업 전용 심연 무기 [${made.name}]을(를) 지급했어요.`);
       return send(res, ok && made ? 200 : 400, ok && made ? { ok: true, item: made } : { error: "가방이 가득 찼거나 지급에 실패했어요." });
     }
