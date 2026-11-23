@@ -205,16 +205,17 @@ function normalFloor(floor, seed, party, dungeon = 1) {
     const edge = Math.min(x - ax, ax + iw - 1 - x, y - ay, ay + ih - 1 - y);
     if (edge <= 3 && Math.hypot(x - startX, y - startY) > 8 && (x + y * 3) % 3 === 0) pts.push([px(x), px(y)]);
   }
-  // 층마다 몬스터 수 1.5배 (최대 90)
-  // 베르단 제1 던전 최대 120마리, 지하왕릉 128마리(웨이브 밀도 약 1.07배 + 더 빠른 웨이브)
-  const cap = d4 ? 128 : d3 ? 120 : d2 ? 110 : 90;
-  const total = Math.min(cap, Math.round((30 + lv * 0.45 + (d2 ? 15 : 0)) * (party > 1 ? 1 + (party - 1) * 0.35 : 1)));
-  const elite = d4 ? Math.min(0.5, 0.42 + floor * 0.003) : d3 ? Math.min(0.48, 0.34 + floor * 0.0014) : d2 ? Math.min(0.45, 0.32 + floor * 0.004) : Math.min(0.3, 0.07 + floor * 0.0025);
-  m.waves = { total, waves: Math.max(3, Math.min(d3 ? 8 : d2 ? 7 : 6, 3 + Math.floor(lv / 20))), points: pts, pool: zone.monsters, elite };
+  // 왕릉은 220레벨 풀세팅 솔로 공략을 고려해 일반층 수와 정예 비율을 낮춘다.
+  const rawTotal = Math.round((30 + lv * 0.45 + (d2 ? 15 : 0)) * (party > 1 ? 1 + (party - 1) * 0.35 : 1));
+  const cap = d4 ? 92 : d3 ? 120 : d2 ? 110 : 90;
+  const total = d4 ? Math.min(cap, Math.round(rawTotal * 0.68)) : Math.min(cap, rawTotal);
+  const elite = d4 ? Math.min(0.32, 0.22 + floor * 0.003) : d3 ? Math.min(0.48, 0.34 + floor * 0.0014) : d2 ? Math.min(0.45, 0.32 + floor * 0.004) : Math.min(0.3, 0.07 + floor * 0.0025);
+  const waveCount = d4 ? Math.max(3, Math.min(6, 3 + Math.floor(lv / 30))) : Math.max(3, Math.min(d3 ? 8 : d2 ? 7 : 6, 3 + Math.floor(lv / 20)));
+  m.waves = { total, waves: waveCount, points: pts, pool: zone.monsters, elite };
   // 지하왕릉 1~10층: 석관 — 지나가다 건드리면 열리며 추가 웨이브와 보상
   if (zone.sarco) {
     const spots = [];
-    for (let k = 0; k < 40 && spots.length < 5; k++) {
+    for (let k = 0; k < 40 && spots.length < 3; k++) {
       const x = R.int(ax + 3, ax + iw - 4), y = R.int(ay + 3, ay + ih - 5);
       if (get(m, x, y) !== T.FLOOR || !reach[y * W + x] || Math.hypot(x - startX, y - startY) < 6 || spots.some(([a, b]) => Math.hypot(a - x, b - y) < 5)) continue;
       spots.push([x, y]);
