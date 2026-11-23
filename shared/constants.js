@@ -72,3 +72,6 @@ export const BOSS_HIT = { shrink: 8, proj: 4 }; // 보스 장판은 예고보다
 
 // 직업별 기본 공격 속도 배율 (궁수 1.5배 빠름)
 export const CLASS_ASPD = { archer: 1.5 };
+
+// 보스 한 대가 플레이어에게 줄 수 있는 최대 피해 (최대 체력 대비). 3대는 버티도록 0.3
+export const BOSS_HIT_CAP = 0.3;

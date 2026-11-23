@@ -1,5 +1,5 @@
 // 피해·치유·상태이상·위협 계산 (치명타 규칙은 기획서 4장 표 그대로)
-import { CRIT } from "../../shared/constants.js";
+import { CRIT, BOSS_HIT_CAP } from "../../shared/constants.js";
 import { defReduction } from "../../shared/stats.js";
 import { PATH_DMG } from "../../shared/classes2.js";
 import { wearOnHit } from "./wear.js";
@@ -146,6 +146,8 @@ export function dealDamage(room, src, t, o, now) {
   if (t.team === "p" && room.onPlayerHurt) dmg = room.onPlayerHurt(t, src, dmg, o, now);
   if (o.capPct && t.boss) dmg = Math.min(dmg, t.maxHp * o.capPct * 0.1);
   if (o.capPct && !t.boss) dmg = Math.min(dmg, t.maxHp * o.capPct + 1);
+  // 보스 한 대의 피해 상한: 최대 체력의 30% → 가득 찬 체력이면 보스 공격 3대는 반드시 버틴다
+  if (t.team === "p" && src?.boss && !o.dot) dmg = Math.min(dmg, t.maxHp * BOSS_HIT_CAP);
   dmg = Math.max(1, Math.round(dmg));
   // 보호막
   let absorbed = 0;

@@ -77,16 +77,17 @@ export const D2_BOSS_PATTERN = Object.freeze({
 });
 // 왕릉 보스는 220레벨 솔로 공략을 목표로 패턴 중첩을 줄이고 회피 시간을 넉넉하게 준다.
 export const TOMB_BOSS_PATTERN = Object.freeze({
-  power: 0.68,
+  // 베르단 100층 이후 최종 던전: 예고 시간은 넉넉하게(×1.2) 두되, 패턴 빈도·연계는 베르단 제1 던전보다 촘촘하게
+  power: 0.85,
   telegraph: 1.2,
-  telegraphMin: 0.95,
-  countScale: 0.72,
-  comboPhase2: 0.18,
-  comboPhase3: 0.28,
-  comboDelay: 1.25,
-  intervalPhase1: 4.4,
-  intervalPhase2: 3.7,
-  intervalPhase3: 3.0,
+  telegraphMin: 0.9,
+  countScale: 0.85,
+  comboPhase2: 0.5,
+  comboPhase3: 0.7,
+  comboDelay: 0.9,
+  intervalPhase1: 2.6,
+  intervalPhase2: 2.0,
+  intervalPhase3: 1.55,
 });
 
 // 제2 던전 각 보스의 2·3페이즈 전용 패턴. 같은 난이도라도 보스마다 공략법이 달라진다.
