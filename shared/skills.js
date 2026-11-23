@@ -6,6 +6,8 @@
 // steps의 do 종류는 server/game/skills.js 에 구현.
 
 import { PATH_SKILLS } from "./skills2.js";
+import { CLASS_INFO, stageOf } from "./classes.js";
+import { TIER_LEVEL } from "./classes2.js";
 const S = [];
 const add = (cls, list) => list.forEach((s) => S.push({ cls, ...s }));
 
@@ -628,6 +630,19 @@ export function unlockStage(skill, stagesInClass) {
     stageMaps.set(key, m);
   }
   return m.get(skill.id) ?? 1;
+}
+/** 현재 레벨·직업·2차 경로에서 해금된 패시브. 스킬칸 장착과 무관하게 자동 적용한다. */
+export function passivesOf(ch) {
+  if (!ch || !CLASS_INFO[ch.cls]) return [];
+  const level = Math.max(1, Number(ch.level) || 1);
+  const stage = stageOf(ch.cls, level);
+  const stagesInClass = CLASS_INFO[ch.cls].ranks.length;
+  return S.filter((sk) => {
+    if (sk.kind !== "passive") return false;
+    if (sk.path) return sk.path === ch.cls2 && level >= (TIER_LEVEL[sk.tier] ?? 999);
+    if (sk.cls === "common") return true;
+    return sk.cls === ch.cls && stage >= unlockStage(sk, stagesInClass);
+  });
 }
 /** 직업의 스킬 목록 */
 export function skillsOf(cls) {
