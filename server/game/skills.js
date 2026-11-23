@@ -752,11 +752,16 @@ function triggerPassive(room, u, on, now) {
 export function onPlayerHit(room, u, t, dmg, crit, now, o) {
   if (u.type !== "p") return;
   const ch = u.session.char;
-  if (!t.dummy || true) hit2(room, u, t, dmg, crit, now, o);
+  // 훈련 허수아비도 실제 적중과 동일하게 2차 전직 적중 효과를 반영한다.
+  hit2(room, u, t, dmg, crit, now, o);
   if (t.dummy) {
-    if (!t.dps.total) t.dps.start = now;
-    t.dps.total += dmg;
-    t.dps.last = now;
+    const userId = u.userId ?? u.session?.userId ?? u.id;
+    const byPlayer = t.dpsByPlayer ??= new Map();
+    const dps = byPlayer.get(userId) ?? { total: 0, start: now, last: now };
+    if (!dps.total) dps.start = now;
+    dps.total += dmg;
+    dps.last = now;
+    byPlayer.set(userId, dps);
   }
   u.acuLastHit = now;
   for (const id of ch.skills) {
