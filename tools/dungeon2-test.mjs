@@ -4,6 +4,7 @@ import {
   D1_FINAL_BOSS_DAMAGE_MULTIPLIER, D2_EXTREME_MULTIPLIER, D2_MONSTER_DAMAGE_MULTIPLIER, D2_MONSTER_STAT_MULTIPLIER, D2_BOSS_STAT_MULTIPLIER, D2_BOSS_HP_REDUCTION, D2_BOSS_SPEED_MULTIPLIER,
   DUNGEON2_MAX_FLOOR, DUNGEON2_ZONES, MONSTERS, ZONES,
   bossStats, floorKind, floorScale, monsterStats, zoneOf, effLevel,
+  erdenBossScale,
 } from "../shared/zones.js";
 import { CLASS_DMG } from "../shared/stats.js";
 import { SKILLS } from "../shared/skills.js";
@@ -49,33 +50,38 @@ ok(true, "제2 던전 체력·공격력 기존 수치 대비 각각 정확히 10
   const avgHp = ZONES[0].monsters.reduce((sum, id) => sum + MONSTERS[id].hp, 0) / ZONES[0].monsters.length;
   const avgDmg = ZONES[0].monsters.reduce((sum, id) => sum + MONSTERS[id].dmg, 0) / ZONES[0].monsters.length;
   const soloHpBoost = (floor) => 1 + 2.5 * Math.min(1, Math.max(0, (floor - 1) / 9));
+  const E = erdenBossScale;
+  // 에르덴 보스 완화: 15층 이하는 그대로, 이후 층·제2 던전은 피해·체력이 줄고, 베르단에는 적용되지 않는다
+  assert.deepEqual(E(10, 1), { hp: 1, dmg: 1 });
+  assert.ok(E(20, 1).dmg < 0.6 && E(100, 1).dmg < E(50, 1).dmg && E(30, 2).dmg < E(1, 2).dmg);
+  assert.deepEqual(E(50, 3), { hp: 1, dmg: 1 }); assert.deepEqual(E(20, 4), { hp: 1, dmg: 1 });
   const d1Boss = bossStats("skeleton_lord", 10, 1, 1);
-  assert.equal(d1Boss.hp, Math.round(avgHp * floorScale(10, 1).hp * 64 * soloHpBoost(10) * 11 * 0.9));
-  assert.ok(Math.abs(d1Boss.dmg - avgDmg * floorScale(10, 1).dmg * 1.7 * 10) < 1e-7);
+  assert.equal(d1Boss.hp, Math.round(E(10, 1).hp * avgHp * floorScale(10, 1).hp * 64 * soloHpBoost(10) * 11 * 0.9));
+  assert.ok(Math.abs(d1Boss.dmg - E(10, 1).dmg * avgDmg * floorScale(10, 1).dmg * 1.7 * 10) < 1e-7);
   const midBoss = bossStats(zoneOf(5).mid, 5, 1, 1);
-  assert.equal(midBoss.hp, Math.round(avgHp * floorScale(5, 1).hp * 36 * soloHpBoost(5) * 11 * 0.9));
+  assert.equal(midBoss.hp, Math.round(E(5, 1).hp * avgHp * floorScale(5, 1).hp * 36 * soloHpBoost(5) * 11 * 0.9));
   const finalBoss = bossStats(zoneOf(100).boss, 100, 1, 1);
-  assert.equal(finalBoss.hp, Math.round(avgHp * floorScale(100, 1).hp * 64 * soloHpBoost(100) * 1.5 * 11 * 0.9));
-  assert.ok(Math.abs(finalBoss.dmg - avgDmg * floorScale(100, 1).dmg * 1.7 * 10 * 1.2 * 5) < 1e-7);
+  assert.equal(finalBoss.hp, Math.round(E(100, 1).hp * avgHp * floorScale(100, 1).hp * 64 * soloHpBoost(100) * 1.5 * 11 * 0.9));
+  assert.ok(Math.abs(finalBoss.dmg - E(100, 1).dmg * avgDmg * floorScale(100, 1).dmg * 1.7 * 10 * 1.2 * 5) < 1e-7);
   const d1LateBoss = bossStats(zoneOf(20).boss, 20, 1, 1);
-  assert.ok(Math.abs(d1LateBoss.dmg - avgDmg * floorScale(20, 1).dmg * 1.7 * 10 * 5) < 1e-7);
+  assert.ok(Math.abs(d1LateBoss.dmg - E(20, 1).dmg * avgDmg * floorScale(20, 1).dmg * 1.7 * 10 * 5) < 1e-7);
   const d1LateMid = bossStats(zoneOf(25).mid, 25, 1, 1);
-  assert.ok(Math.abs(d1LateMid.dmg - avgDmg * floorScale(25, 1).dmg * 1.5 * 10 * 5) < 1e-7);
+  assert.ok(Math.abs(d1LateMid.dmg - E(25, 1).dmg * avgDmg * floorScale(25, 1).dmg * 1.5 * 10 * 5) < 1e-7);
   const d2Boss = bossStats("scarlet_regent", 10, 1, 2);
   const d2Scale = floorScale(10, 2);
   assert.equal(D2_BOSS_HP_REDUCTION, 0.5);
-  assert.equal(d2Boss.hp, Math.round(avgHp * d2Scale.hp * 64 * 3.5 * D2_BOSS_STAT_MULTIPLIER * D2_BOSS_HP_REDUCTION));
-  assert.ok(Math.abs(d2Boss.dmg - avgDmg * d2Scale.dmg * 1.7 * D2_BOSS_STAT_MULTIPLIER * 5) < 1e-7);
+  assert.equal(d2Boss.hp, Math.round(E(10, 2).hp * avgHp * d2Scale.hp * 64 * 3.5 * D2_BOSS_STAT_MULTIPLIER * D2_BOSS_HP_REDUCTION));
+  assert.ok(Math.abs(d2Boss.dmg - E(10, 2).dmg * avgDmg * d2Scale.dmg * 1.7 * D2_BOSS_STAT_MULTIPLIER * 5) < 1e-7);
   const d2Mid = bossStats(DUNGEON2_ZONES[0].mid, 5, 1, 2);
   const d2MidScale = floorScale(5, 2);
-  assert.equal(d2Mid.hp, Math.round(avgHp * d2MidScale.hp * 36 * 3.5 * D2_BOSS_STAT_MULTIPLIER * D2_BOSS_HP_REDUCTION));
-  assert.ok(Math.abs(d2Mid.dmg - avgDmg * d2MidScale.dmg * 1.5 * D2_BOSS_STAT_MULTIPLIER * 5) < 1e-7);
+  assert.equal(d2Mid.hp, Math.round(E(5, 2).hp * avgHp * d2MidScale.hp * 36 * 3.5 * D2_BOSS_STAT_MULTIPLIER * D2_BOSS_HP_REDUCTION));
+  assert.ok(Math.abs(d2Mid.dmg - E(5, 2).dmg * avgDmg * d2MidScale.dmg * 1.5 * D2_BOSS_STAT_MULTIPLIER * 5) < 1e-7);
   const d2Final = bossStats(DUNGEON2_ZONES[2].boss, 30, 1, 2);
   const d2FinalScale = floorScale(30, 2);
-  assert.equal(d2Final.hp, Math.round(avgHp * d2FinalScale.hp * 64 * 3.5 * 1.5 * D2_BOSS_STAT_MULTIPLIER * D2_BOSS_HP_REDUCTION));
-  assert.ok(Math.abs(d2Final.dmg - avgDmg * d2FinalScale.dmg * 1.7 * D2_BOSS_STAT_MULTIPLIER * 5) < 1e-7);
+  assert.equal(d2Final.hp, Math.round(E(30, 2).hp * avgHp * d2FinalScale.hp * 64 * 3.5 * 1.5 * D2_BOSS_STAT_MULTIPLIER * D2_BOSS_HP_REDUCTION));
+  assert.ok(Math.abs(d2Final.dmg - E(30, 2).dmg * avgDmg * d2FinalScale.dmg * 1.7 * D2_BOSS_STAT_MULTIPLIER * 5) < 1e-7);
 }
-ok(true, "제1 던전 20층 이상 및 제2 던전 모든 보스 피해량 5배 증가 / 보스 HP 기존 규칙 유지");
+ok(true, "에르덴 보스 기존 배율 × 에르덴 완화 배율 / 베르단 미적용");
 
 // 구역마다 몬스터 구성이 서로 다름 (예전엔 1구역과 3구역이 똑같았음)
 assert.notDeepEqual([...DUNGEON2_ZONES[0].monsters].sort(), [...DUNGEON2_ZONES[2].monsters].sort());
@@ -171,7 +177,7 @@ ok(true, "제2 던전 몬스터·보스 능력치 산출");
   assert.ok(Math.abs(mob.def / oldDef - 1 / 150) < 1e-10);
   assert.equal(mob.speed, def.speed * floorScale(1, 2).speed);
   const d2Boss = bossStats(DUNGEON2_ZONES[0].boss, 10, 1, 2);
-  assert.ok(Math.abs(d2Boss.dmg - d1AvgDmg * floorScale(10, 2).dmg * 1.7 * 0.2 * 5) < 1e-7);
+  assert.ok(Math.abs(d2Boss.dmg - erdenBossScale(10, 2).dmg * d1AvgDmg * floorScale(10, 2).dmg * 1.7 * 0.2 * 5) < 1e-7);
   assert.ok(d2Boss.hp > 0 && d2Boss.dmg > 0);
   const bossRoom = new Room({ clock: 0 }, { id: "d2-boss-def-scale", kind: "dungeon", floor: 10, dungeon: 2, map: makeFloor(10, 778, 1, 2) });
   const bossUnit = bossRoom.spawnBoss(DUNGEON2_ZONES[0].boss, bossRoom.map.bossAt[0], bossRoom.map.bossAt[1]);

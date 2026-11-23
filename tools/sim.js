@@ -60,7 +60,7 @@ export function simulate(cls, L, F, { maxT = 300, rarity = "희귀", log = false
   const map = makeFloor(F, 12345 + F, 1, dungeon);
   const room = new Room(stubWorld, { id: "sim", kind: "dungeon", floor: F, dungeon, map, partySize: 1 });
   room.addPlayer(u);
-  let dmgTaken = 0, potions = 5, t = 0, xp0 = ch.xp + 0;
+  let dmgTaken = 0, maxHit = 0, potions = 5, t = 0, xp0 = ch.xp + 0;
   const range = RANGE[cls] ?? 34;
   const kind = floorKind(F);
   let target = null;
@@ -99,7 +99,7 @@ export function simulate(cls, L, F, { maxT = 300, rarity = "희귀", log = false
     if (u.hp < u.maxHp * 0.35 && potions > 0 && t - (u.potAt ?? -99) > 15) { potions--; u.potAt = t; u.hp = Math.min(u.maxHp, u.hp + u.maxHp * 0.35); }
     room.tick();
     room.events.length = 0;
-    if (u.hp < lastHp) dmgTaken += lastHp - u.hp;
+    if (u.hp < lastHp) { dmgTaken += lastHp - u.hp; maxHit = Math.max(maxHit, (lastHp - u.hp) / u.maxHp); }
     if (immortal) { u.hp = u.maxHp; u.dead = false; }
     lastHp = u.hp;
     t += 0.05;
@@ -114,7 +114,7 @@ export function simulate(cls, L, F, { maxT = 300, rarity = "희귀", log = false
     cls, L, F, kind, t: Math.round(t), dead: u.dead, hpLeft: Math.round((u.hp / u.maxHp) * 100), potionsUsed: 5 - potions,
     killed: room.killed, total, bossHp: boss ? Math.round((boss.hp / boss.maxHp) * 100) : bossDead ? 0 : null,
     xpGain: ch.xp - xp0 + (ch.level > L ? 999999 : 0), xpNeed: xpToNext(L), maxHp: u.maxHp, atk: Math.round(u.stats.atk),
-    hpPerMin: Math.round((dmgTaken / u.maxHp / Math.max(1, t / 60)) * 100) / 100, dmgTaken: Math.round(dmgTaken),
+    hpPerMin: Math.round((dmgTaken / u.maxHp / Math.max(1, t / 60)) * 100) / 100, dmgTaken: Math.round(dmgTaken), maxHit: Math.round(maxHit * 100),
   };
 }
 

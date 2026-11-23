@@ -274,6 +274,26 @@ export const TOMB_BALANCE = Object.freeze({
   finalBossHp: 1.15,
   speed: 0.90,
 });
+// 에르덴 섬 보스 완화(2차 업데이트 이후 패치): 층이 오를수록 보스 피해가 플레이어 체력보다 훨씬 빠르게 커져
+//  20층 이후엔 한 방에 체력의 수 배가 나가던 문제를 바로잡는다. 기준: 제1 던전은 같은 레벨 전설 장비,
+//  제2 던전은 신화 장비에서 보스 한 대가 체력의 약 40~45%. 베르단 섬(3·4)에는 적용하지 않는다.
+export const ERDEN_BOSS_BALANCE = Object.freeze({
+  dmg: { 1: [[15, 1], [20, 0.5], [30, 0.57], [40, 0.43], [50, 0.28], [60, 0.24], [70, 0.17], [80, 0.15], [90, 0.12], [100, 0.1]], 2: [[1, 0.2], [10, 0.12], [20, 0.105], [30, 0.075]] },
+  hp: { 1: [[40, 1], [50, 0.9], [70, 0.8], [100, 0.7]], 2: [[1, 0.75], [30, 0.75]] },
+});
+const logLerp = (table, x) => {
+  if (x <= table[0][0]) return table[0][1];
+  for (let i = 1; i < table.length; i++) {
+    const [x1, y1] = table[i];
+    if (x <= x1) { const [x0, y0] = table[i - 1]; const k = (x - x0) / (x1 - x0); return Math.exp(Math.log(y0) + (Math.log(y1) - Math.log(y0)) * k); }
+  }
+  return table[table.length - 1][1];
+};
+/** 에르덴 보스 체력·피해 완화 배율 (베르단 던전은 1) */
+export function erdenBossScale(floor, dungeon = 1) {
+  if (dungeon !== 1 && dungeon !== 2) return { hp: 1, dmg: 1 };
+  return { hp: logLerp(ERDEN_BOSS_BALANCE.hp[dungeon], floor), dmg: logLerp(ERDEN_BOSS_BALANCE.dmg[dungeon], floor) };
+}
 export const d2Level = (floor) => 100 + Math.round((floor * 5) / 3);
 /** 그 층의 실제 레벨 (제1 던전은 층 = 레벨, 왕릉은 Lv.191~220) */
 export const effLevel = (floor, dungeon = 1) => (dungeon === 2 ? d2Level(floor) : dungeon === 3 ? 150 + floor : dungeon === 4 ? 190 + floor : floor);
@@ -388,9 +408,10 @@ export function bossStats(id, floor, party = 1, dungeon = 1) {
   // 베르단 보스는 층 성장의 제곱근만 체력에 반영(공격력은 0.8제곱): 일반 몹보다 완만하게 → 처치 시간이 에르덴 제2 던전 보스의 1.2~1.4배 수준
   const vg = dungeon >= 3 ? verdanGrowth(floor, dungeon) : null;
   const vHp = vg ? Math.pow(vg.hp / VERDAN_SCALE.hp0, -0.5) : 1, vDmg = vg ? Math.pow(vg.dmg / VERDAN_SCALE.dmg0, -0.2) : 1;
+  const er = erdenBossScale(floor, dungeon);
   return {
-    hp: Math.round(baseHp * hpMul * pScale * capBonus * finalHp * verdanRel * vHp * hpBoost(party, effLevel(floor, dungeon)) * bossHpMultiplier * (hard ? D2_BOSS_STAT_MULTIPLIER * D2_BOSS_HP_REDUCTION : 1) * (dungeon === 4 ? TOMB_BALANCE.bossHp : 1)),
-    dmg: baseDmg * (def.mid ? 1.5 : 1.7) * bossDamageMultiplier * finalBossDamageMultiplier * (hard ? D2_BOSS_STAT_MULTIPLIER : 1) * selectedBossDamageMultiplier * vDmg * (dungeon === 4 ? TOMB_BALANCE.bossDamage : 1),
+    hp: Math.round(er.hp * baseHp * hpMul * pScale * capBonus * finalHp * verdanRel * vHp * hpBoost(party, effLevel(floor, dungeon)) * bossHpMultiplier * (hard ? D2_BOSS_STAT_MULTIPLIER * D2_BOSS_HP_REDUCTION : 1) * (dungeon === 4 ? TOMB_BALANCE.bossHp : 1)),
+    dmg: er.dmg * baseDmg * (def.mid ? 1.5 : 1.7) * bossDamageMultiplier * finalBossDamageMultiplier * (hard ? D2_BOSS_STAT_MULTIPLIER : 1) * selectedBossDamageMultiplier * vDmg * (dungeon === 4 ? TOMB_BALANCE.bossDamage : 1),
     xp: (def.xp ?? 25) * 6 * s.xp,
     level: effLevel(floor, dungeon),
   };
