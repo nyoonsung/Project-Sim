@@ -372,7 +372,7 @@ function held(i) {
 function tryHeldCasts() {
   if (now() < (G.holdPauseUntil ?? 0)) return; // 방금 다른 스킬을 눌렀으면 그 스킬이 먼저
   if (G.typing || G.ui.blockingWindow()) return;
-  for (let i = 0; i < 8; i++) if (held(i)) tryCast(i);
+  for (let i = 0; i < KEYS.slots.length; i++) if (held(i)) tryCast(i);
 }
 /** 스킬 시전. at = { x, y, tx } 를 주면 마우스 대신 그 지점(자동 조준·자동 사용·대시 버튼) */
 export function tryCast(slot, at) {
@@ -458,7 +458,7 @@ function autoTick() {
   const me = G.ents.get(G.you);
   if (!me) return;
   const myHp = G.me.hp / Math.max(1, G.me.mh);
-  for (let i = 0; i < 8; i++) {
+  for (let i = 0; i < KEYS.slots.length; i++) {
     const id = G.char.skills[i], sk = SKILLS[id];
     if (!G.autoSkills.has(id) || !canAuto(sk) || cdLeft(id) > 0.06) continue;
     let at = null;
