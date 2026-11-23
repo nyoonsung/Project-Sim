@@ -265,12 +265,12 @@ export const D2_MONSTER_STAT_MULTIPLIER = 1 / 150;
 export const D2_BOSS_STAT_MULTIPLIER = 0.2;
 export const D2_BOSS_HP_REDUCTION = 0.5; // 제2 던전 중간·주요 보스 HP를 현재의 절반으로
 export const D2_BOSS_SPEED_MULTIPLIER = 0.8;
-/** 왕릉 전용 난이도 보정: 220레벨 풀세팅 솔로 공략을 목표로 한 독립 배율 */
+/** 왕릉 전용 난이도 보정: 220레벨 2차 전직·신화 장비 기준. 보스 한 대 ≈ 체력 25~75%, 솔로 처치 1~7분 (같은 레벨 베르단 제1 던전보다 어렵게) */
 export const TOMB_BALANCE = Object.freeze({
   monsterHp: 0.28,
   monsterDamage: 0.60,
-  bossHp: 0.04,
-  bossDamage: 0.02,
+  bossHp: 0.6,
+  bossDamage: 0.14,
   finalBossHp: 1.15,
   speed: 0.90,
 });
