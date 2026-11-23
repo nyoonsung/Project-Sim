@@ -2,7 +2,7 @@
 // 서버 판정 규칙은 server/game/skills.js 의 2차 전직 부분(strike 추가 옵션·p2 패시브·CUSTOM)에 있다.
 //  스킬 추가 필드: path(경로) tier(등급 9~1) hpCost(최대 HP 비율 소모) cost.r2(2차 자원) elem(원소: fire/ice/bolt) motif(아이콘)
 //  타격 옵션: lifesteal lowHp perDef mark vsMark markBurst vsDot burstDot backstab stealthHit spendR2 r2OnHit pullIn shred curse vsCurse vsAir healAround blinkAtk
-//  패시브: passive.p2 = { … } (서버가 장착 여부로 효과 판정), passive.mods 는 기존처럼 능력치 합산
+//  패시브: 해금된 passive.p2 / passive.mods 는 스킬칸에 장착하지 않아도 자동 적용
 
 // 2차 전직 스킬 등급 표기는 "2차"(색: 청록) + 성장 등급(tier 9~1)
 const GRADE_BY_TIER = { 9: "2차", 8: "2차", 7: "2차", 6: "2차", 5: "2차", 4: "2차", 3: "2차", 2: "2차", 1: "2차" };
