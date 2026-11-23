@@ -116,7 +116,7 @@ for (const [d, max] of [[3, 100], [4, 30]]) for (let f = 1; f <= max; f++) {
   } else assert.ok(BOSSES[m.boss], `D${d} ${f}층 보스`);
   if (d === 4 && f <= 10 && k === "normal") assert.ok(m.objects.some((o) => o.kind === "sarco"), "지하왕릉 석관");
 }
-// 난이도: 베르단 제1 던전 성장과 에르덴 제2 던전 기준, 왕릉은 베르단 100층 이후(Lv.241~270) 최종 던전
+// 난이도: 베르단 제1 던전 성장과 에르덴 제2 던전 기준, 왕릉은 Lv.191~220, 보스는 베르단 100층 이후 수준
 const avgMob = (d, f) => { const z = zoneOf(f, d); return z.monsters.reduce((a, id) => a + monsterStats(id, f, 1, d).hp, 0) / z.monsters.length; };
 assert.ok(avgMob(3, 1) > avgMob(2, 29) * 1.15);
 assert.ok(avgMob(4, 30) < avgMob(3, 99) * 0.4, "왕릉 일반 몬스터 HP는 베르단 제1 던전 후반보다 낮음");
@@ -126,7 +126,7 @@ assert.ok(bossStats("tb_memory_king", 30, 1, 4).hp > bossStats("vb_island_heart"
 assert.ok(bossStats("tb_memory_king", 30, 1, 4).dmg < (bossStats("vb_island_heart", 100, 1, 3).dmg / erdenBossScale(100, 3).dmg) * 0.3, "왕릉 최종 보스 공격력은 보정 전 베르단 100층 대비 낮음");
 assert.ok(erdenBossScale(10, 3).dmg < 0.25 && erdenBossScale(100, 3).dmg < erdenBossScale(10, 3).dmg && erdenBossScale(50, 3).hp === 1, "베르단 제1 던전 보스 피해 보정");
 assert.equal(effLevel(1, 3), 151); assert.equal(effLevel(100, 3), 250);
-assert.equal(effLevel(1, 4), 241); assert.equal(effLevel(30, 4), 270);
+assert.equal(effLevel(1, 4), 191); assert.equal(effLevel(30, 4), 220);
 assert.equal(TOMB_BALANCE.monsterHp, 0.28);
 assert.equal(TOMB_BALANCE.monsterDamage, 0.60);
 assert.equal(TOMB_BALANCE.bossHp, 1.4);
@@ -151,7 +151,7 @@ assert.deepEqual(
   for (let k = 0; k < 3; k++) dealDamage(fakeRoom, boss, pl, { pow: 5 }, 1);
   assert.ok(pl.hp > 0 && pl.hp < 1000 && pl.hp >= 1000 * (1 - 3 * BOSS_HIT_CAP) - 1, `보스 공격 3대를 맞아도 살아남음 (${pl.hp})`);
 }
-ok("베르단 제1 던전 100층 · 왕릉 30층(Lv.241~270) 난이도 · 보스 한 대 30% 상한");
+ok("베르단 제1 던전 100층 · 왕릉 30층(Lv.191~220) 난이도 · 보스 한 대 30% 상한");
 
 // ── 보스 패턴: 26 보스 모두 실제로 패턴을 쓰고 오류 없음
 const used2 = new Set();
