@@ -1,0 +1,21 @@
+name: No-gear DPS benchmark
+on:
+  push:
+    branches: [main]
+    paths:
+      - "tools/class-dps-no-gear-test.mjs"
+      - "shared/**"
+      - "server/game/**"
+      - ".github/workflows/no-gear-dps.yml"
+  workflow_dispatch:
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22.13"
+          cache: npm
+      - run: npm ci
+      - run: node tools/class-dps-no-gear-test.mjs
