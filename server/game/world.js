@@ -709,7 +709,7 @@ export class World {
   // ── 성장: 스탯·스킬·전직
   addStat(s, key, n) {
     const c = s.char;
-    if (!CLASS_INFO[c.cls].stats.includes(key) || !STATS[key]) return;
+    if (!CLASS_INFO[c.cls].stats.includes(key) || !STATS[key] || !Number.isSafeInteger(n) || n <= 0) return;
     n = Math.min(n, c.unspent);
     if (n <= 0) return;
     c.stats[key] = (c.stats[key] ?? 0) + n;
