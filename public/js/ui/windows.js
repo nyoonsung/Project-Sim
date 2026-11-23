@@ -217,7 +217,7 @@ export function openSkills() {
     const n = CLASS_INFO[c.cls].ranks.length;
     const list = [...skillsOf("common"), ...(c.cls === "adventurer" ? [] : skillsOf(c.cls)), ...(c.cls2 ? skillsOfPath(c.cls2) : [])];
     const safe = G.mapKind === "town" || G.mapKind === "safe";
-    const slots = h("div", { class: "flexrow" }, ...c.skills.map((id, i) => {
+    const slots = h("div", { class: "skill-slots" }, ...c.skills.map((id, i) => {
       const sk = id && SKILLS[id];
       const el = h("div", { class: "slot" + (sk ? "" : " empty"), onclick: () => {
         if (!safe) return G.ui.toast("스킬 교체는 마을이나 안전 구역에서만 할 수 있어요.", "info");
@@ -245,19 +245,31 @@ export function openSkills() {
       cards.push(h("div", { class: "skill-list" }, ...items.map((s) => {
         const need = unlockStage(s, n);
         const locked = s.path ? c.level < TIER_LEVEL[s.tier] : s.cls !== "common" && stage < need;
+        const passive = s.kind === "passive";
         const equipped = c.skills.includes(s.id);
         const cost = Object.entries(s.cost ?? {}).map(([k, v]) => `${RES_NAME[k]} ${v}`).join(" ");
-        return h("div", { class: `sk${locked ? " locked" : ""}${selSkill === s.id ? " sel" : ""}${equipped ? " equipped" : ""}`, onclick: () => { if (!locked) { selSkill = selSkill === s.id ? null : s.id; refreshWin("skills"); } } },
-          h("div", { class: "sk-top" }, h("img", { class: "sk-icon", src: skillIconURL(s), alt: "", draggable: "false" }), h("b", { class: "grade-" + s.grade, text: s.name }), " ", h("span", { class: "meta", text: { basic: "기본 공격", active: "액티브", passive: "패시브", ultimate: "궁극기" }[s.kind] }),
+        return h("div", { class: `sk${locked ? " locked" : ""}${selSkill === s.id ? " sel" : ""}${equipped ? " equipped" : ""}${passive ? " passive-auto" : ""}`, onclick: () => { if (passive) return G.ui.toast("패시브는 장착하지 않아도 해금 즉시 자동 적용돼요.", "info"); if (!locked) { selSkill = selSkill === s.id ? null : s.id; refreshWin("skills"); } } },
+          h("div", { class: "sk-top" }, h("img", { class: "sk-icon", src: skillIconURL(s), alt: "", draggable: "false" }), h("b", { class: "grade-" + s.grade, text: s.name }), " ", h("span", { class: "meta", text: { basic: "기본 공격", active: "액티브", passive: "패시브 · 자동 적용", ultimate: "궁극기" }[s.kind] }),
             canAuto(s) && !locked ? h("button", { class: "auto-tg" + (G.autoSkills.has(s.id) ? " on" : ""), title: "자동: 쿨타임이 돌면 가까운 적에게 알아서 사용 (회복은 체력 70% 아래일 때)", onclick: (e) => { e.stopPropagation(); setAuto(s.id, !G.autoSkills.has(s.id)); refreshWin("skills"); } }, G.autoSkills.has(s.id) ? "자동" : "수동") : null),
-          h("div", { class: "meta", text: `${s.kind === "basic" ? `공격 간격 ${basicGap(s)}s` : s.kind === "passive" ? "패시브" : `쿨 ${s.cd}s`}${cost ? " · " + cost : ""}${s.stance ? " · " + s.stance : ""}${locked ? (s.path ? ` · 🔒 ${s.tier}등급 Lv.${TIER_LEVEL[s.tier]} 필요` : ` · 🔒 ${CLASS_INFO[c.cls].ranks[need]} 필요(Lv.${stageLevel(c.cls, need)})`) : s.path ? ` · ${s.tier}등급` : ""}` }),
+          h("div", { class: "meta", text: `${s.kind === "basic" ? `공격 간격 ${basicGap(s)}s` : s.kind === "passive" ? "해금 즉시 자동 적용 · 스킬칸 불필요" : `쿨 ${s.cd}s`}${cost ? " · " + cost : ""}${s.stance ? " · " + s.stance : ""}${locked ? (s.path ? ` · 🔒 ${s.tier}등급 Lv.${TIER_LEVEL[s.tier]} 필요` : ` · 🔒 ${CLASS_INFO[c.cls].ranks[need]} 필요(Lv.${stageLevel(c.cls, need)})`) : s.path ? ` · ${s.tier}등급` : ""}` }),
           h("div", { class: "desc", text: s.desc }),
           s.kind !== "passive" && !locked ? profBlock(s) : null);
       })));
     }
+    const swordGuide = c.cls2 === "swordmaster" ? h("div", { class: "sword-guide" },
+      h("h3", { text: "소드마스터 검식 — 반드시 이 순서로 적중" }),
+      h("div", { class: "sword-guide-steps" },
+        h("div", { class: "sword-guide-step" }, h("b", { text: "1 · 일섬" }), h("span", { text: "적을 향해 돌진해 실제로 타격" })),
+        h("div", { class: "sword-guide-arrow", text: "↓" }),
+        h("div", { class: "sword-guide-step" }, h("b", { text: "2 · 회전연참" }), h("span", { text: "적 가까이에서 사용해 원형 공격을 적중" })),
+        h("div", { class: "sword-guide-arrow", text: "↓" }),
+        h("div", { class: "sword-guide-step" }, h("b", { text: "3 · 쇄도검" }), h("span", { text: "적을 향해 조준하고 좁은 직선 공격을 적중" }))),
+      h("div", { class: "sword-guide-note", text: "세 기술 모두 적중해야 진행돼요. 다음 단계는 6초 안에 이어야 하며, 빗나가거나 다른 공격 기술을 먼저 적중시키면 진행이 초기화돼요. 스킬을 썼는데 빗나간 경우에도 초기화될 수 있어요." }),
+      h("div", { class: "sword-guide-passive", text: "정통 검식 · 검격 받아치기 · 검식 완성 · 무극발도는 해금된 뒤 스킬칸에 넣지 않아도 자동 적용돼요. 진행 상태는 전투 화면의 검식 표시에서 확인할 수 있어요." })) : null;
     return [
-      h("div", { class: "note", text: "공용 스킬을 뺀 스킬은 [수동/자동]을 누르면 자동 사용으로 바꿀 수 있어요. 자동이면 쿨타임이 돌 때 가까운 적에게 알아서 써요. (언제든 바꿀 수 있음)" }),
-      h("div", { class: "note", text: safe ? "스킬을 고른 뒤 아래 칸을 누르면 장착돼요. 장착한 칸을 그냥 누르면 비워요. 종류 구분 없이 8칸에 자유롭게 장착해요." : "⚠ 던전 전투 중에는 스킬을 바꿀 수 없어요. (마을·안전 구역에서 교체)" }),
+      swordGuide,
+      h("div", { class: "note", text: "공용 스킬을 뺀 액티브 스킬은 [수동/자동]을 누르면 자동 사용으로 바꿀 수 있어요. 자동이면 쿨타임이 돌 때 가까운 적에게 알아서 사용해요." }),
+      h("div", { class: "note", text: safe ? `스킬을 고른 뒤 아래 ${SKILL_SLOTS}칸 중 원하는 칸을 누르면 장착돼요. 장착한 칸을 누르면 비워요. 패시브는 장착하지 않고 자동 적용돼요.` : "⚠ 던전 전투 중에는 스킬을 바꿀 수 없어요. (마을·안전 구역에서 교체)" }),
       slots, ...cards,
     ];
   }, { w: 640 });
@@ -753,7 +765,7 @@ export function refreshAll() {
 
 // ───────── 조작 키 설정 (O) ─────────
 export function openKeys() {
-  const names = ["1번 칸 (기본 공격)", "2번 칸", "3번 칸", "4번 칸", "5번 칸", "6번 칸", "7번 칸 (대시)", "8번 칸"];
+  const names = ["1번 칸 (기본 공격)", "2번 칸", "3번 칸", "4번 칸", "5번 칸", "6번 칸", "7번 칸", "8번 칸", "9번 칸 (숫자 4)", "10번 칸 (숫자 5)", "11번 칸 (숫자 6)", "12번 칸 (숫자 7)"];
   const pots = ["체력 물약", "마나 물약", "해독제"];
   const row = (label, kind, i) => {
     const code = KEYS[kind][i];
