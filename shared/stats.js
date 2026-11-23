@@ -15,6 +15,8 @@ export const CLASS_DMG = {
   fist: 8.10, // 탱커 화력 보강: 기존 대비 35% 상향
   smith: 7.35, // 탱커 화력 보강: 기존 대비 40% 상향
 };
+// 2차 전직 후에만 붙는 직업 피해 보정 (250레벨 DPS 하위권 보강 · 1차 전직 밸런스는 그대로)
+export const CLASS2_DMG = { priest: 1.36, fist: 1.2 };
 const MOVE_MUL = { adventurer: 1, sword: 1, fist: 1.02, archer: 1.02, rogue: 1.12, mage: 1.0, priest: 0.98, smith: 0.92 };
 
 /** 해금된 패시브 스킬의 상시 능력치 (스킬칸 장착 불필요) */
@@ -81,7 +83,7 @@ export function deriveStats(ch) {
     vmods: gear.vmods ?? {},
     cls2: c2 ? ch.cls2 : null,
     dmgType: info.dmgType,
-    classDmg: CLASS_DMG[ch.cls] ?? 1,
+    classDmg: (CLASS_DMG[ch.cls] ?? 1) * (c2 ? CLASS2_DMG[ch.cls] ?? 1 : 1),
   };
 }
 

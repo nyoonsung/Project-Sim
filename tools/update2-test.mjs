@@ -261,5 +261,20 @@ ok("선착장 → 베르단 입도(Lv.150+심연 공물 1회) · 2차 전직소 
 }
 ok("세이브 호환");
 
+// 250레벨 DPS 순위 조정: 성직자·권투사는 2차 전직 후에만 피해 보정, 볼케이노 소폭 하향, 인퀴지터 보강
+{
+  const { CLASS2_DMG, deriveStats: ds } = await import("../shared/stats.js");
+  const { PATH_DMG: PD } = await import("../shared/classes2.js");
+  assert.equal(CLASS2_DMG.priest, 1.36); assert.equal(CLASS2_DMG.fist, 1.2);
+  assert.equal(PD.volcano, 0.264); assert.equal(PD.inquisitor, 1.0);
+  const base = { level: 200, stats: {}, equip: {}, skills: [] };
+  assert.equal(ds({ ...base, cls: "priest" }).classDmg, 2.025, "1차 전직 성직자 배율은 그대로");
+  assert.ok(Math.abs(ds({ ...base, cls: "priest", cls2: "heretic" }).classDmg - 2.025 * 1.36) < 1e-9);
+  assert.ok(Math.abs(ds({ ...base, cls: "fist", cls2: "striker" }).classDmg - 8.1 * 1.2) < 1e-9);
+  assert.equal(ds({ ...base, cls: "smith", cls2: "volcano" }).classDmg, 7.35);
+  console.log("✓ 2차 전직 성직자·권투사 피해 보정 / 볼케이노 하향");
+}
+
 console.log("UPDATE 2 TESTS: ALL PASS");
 process.exit(0);
+
