@@ -129,8 +129,15 @@ assert.equal(TOMB_BALANCE.monsterHp, 0.28);
 assert.equal(TOMB_BALANCE.monsterDamage, 0.60);
 assert.equal(TOMB_BALANCE.bossHp, 0.04);
 assert.equal(TOMB_BALANCE.bossDamage, 0.02);
+assert.equal(TOMB_BOSS_PATTERN.power, 0.68);
+assert.equal(TOMB_BOSS_PATTERN.telegraph, 1.2);
+assert.equal(TOMB_BOSS_PATTERN.countScale, 0.72);
 assert.equal(TOMB_BOSS_PATTERN.comboPhase2, 0.18);
 assert.equal(TOMB_BOSS_PATTERN.comboPhase3, 0.28);
+assert.deepEqual(
+  [TOMB_BOSS_PATTERN.intervalPhase1, TOMB_BOSS_PATTERN.intervalPhase2, TOMB_BOSS_PATTERN.intervalPhase3],
+  [4.4, 3.7, 3.0],
+);
 ok("베르단 제1 던전 100층 · 왕릉 30층 · Lv.191~220 완화 난이도 검증");
 
 // ── 보스 패턴: 26 보스 모두 실제로 패턴을 쓰고 오류 없음
