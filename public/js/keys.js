@@ -1,6 +1,6 @@
-// 조작 키 설정: 스킬 8칸 + 물약 3개 + 창 단축키. 브라우저에 저장해 두고 다음 접속에도 그대로
+// 조작 키 설정: 스킬 12칸 + 물약 3개 + 창 단축키. 브라우저에 저장해 두고 다음 접속에도 그대로
 const DEFAULT = {
-  slots: ["Mouse0", "Mouse2", "KeyQ", "KeyE", "KeyR", "KeyF", "ShiftLeft", "KeyV"],
+  slots: ["Mouse0", "Mouse2", "KeyQ", "KeyE", "KeyR", "KeyF", "ShiftLeft", "KeyV", "Digit4", "Digit5", "Digit6", "Digit7"],
   potions: ["Digit1", "Digit2", "Digit3"],
 };
 const STORE = "abyss.keys";
@@ -9,7 +9,10 @@ export const KEYS = load();
 function load() {
   try {
     const o = JSON.parse(localStorage.getItem(STORE) ?? "null");
-    if (o && Array.isArray(o.slots) && o.slots.length === 8 && Array.isArray(o.potions) && o.potions.length === 3) return o;
+    if (o && Array.isArray(o.slots) && Array.isArray(o.potions) && o.potions.length === 3) {
+      if (o.slots.length === 12) return o;
+      if (o.slots.length === 8) return { ...o, slots: [...o.slots, "Digit4", "Digit5", "Digit6", "Digit7"] };
+    }
   } catch {}
   return structuredClone(DEFAULT);
 }
