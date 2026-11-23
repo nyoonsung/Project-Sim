@@ -2,7 +2,7 @@
 import { CLASS_INFO, STATS, stageOf, stageBonus } from "./classes.js";
 import { BASE_MOVE_SPEED, CRIT } from "./constants.js";
 import { gearTotals } from "./items.js";
-import { SKILLS } from "./skills.js";
+import { passivesOf } from "./skills.js";
 import { CLASS2_MUL, PATHS } from "./classes2.js";
 
 // 직업 피해 배율: 도적 아래 다섯 직업의 피해 기여도를 1.5배 상향한다.
@@ -17,12 +17,11 @@ export const CLASS_DMG = {
 };
 const MOVE_MUL = { adventurer: 1, sword: 1, fist: 1.02, archer: 1.02, rogue: 1.12, mage: 1.0, priest: 0.98, smith: 0.92 };
 
-/** 장착한 패시브 스킬의 상시 능력치 */
-export function passiveMods(equipped) {
+/** 해금된 패시브 스킬의 상시 능력치 (스킬칸 장착 불필요) */
+export function passiveMods(ch) {
   const m = {};
-  for (const id of equipped ?? []) {
-    const s = SKILLS[id];
-    if (s?.kind === "passive" && s.passive?.mods) for (const [k, v] of Object.entries(s.passive.mods)) m[k] = (m[k] ?? 0) + v;
+  for (const s of passivesOf(ch)) {
+    if (s.passive?.mods) for (const [k, v] of Object.entries(s.passive.mods)) m[k] = (m[k] ?? 0) + v;
   }
   return m;
 }
@@ -37,7 +36,7 @@ export function deriveStats(ch) {
     for (const [fx, v] of Object.entries(def.fx)) sum[fx] = (sum[fx] ?? 0) + v * pts;
   }
   const gear = gearTotals(ch.equip);
-  const pm = passiveMods(ch.skills);
+  const pm = passiveMods(ch);
   const stage = stageOf(ch.cls, L);
   const sb = stageBonus(ch.cls, stage);
   const g = (k) => sum[k] ?? 0;
