@@ -3,10 +3,11 @@ import { Room } from "../server/game/room.js";
 import { makeFloor } from "../server/game/dungeon.js";
 import { makePlayerUnit, newCharacter, refreshStats } from "../server/game/player.js";
 import { SKILL_LIST } from "../shared/skills.js";
+import { SKILL_SLOTS } from "../shared/constants.js";
 const stub = { pickup: () => true, onBossCleared() {}, usePortal() {}, partyFailed() {}, toTown() {} };
 let errors = 0, used = 0;
 for (const cls of ["adventurer", "sword", "fist", "archer", "rogue", "mage", "priest", "smith"]) {
-  const list = SKILL_LIST.filter((s) => s.cls === cls || s.cls === "common");
+  const list = SKILL_LIST.filter((s) => (s.cls === cls || s.cls === "common") && !s.path && s.kind !== "passive");
   const map = makeFloor(20, 7, 1);
   const room = new Room(stub, { id: "s", kind: "dungeon", floor: 20, map });
   const ch = newCharacter("t"); ch.level = 120; ch.cls = cls;
@@ -16,11 +17,11 @@ for (const cls of ["adventurer", "sword", "fist", "archer", "rogue", "mage", "pr
   // 플레이어 옆에 몬스터 배치
   const mons = [...room.units.values()].filter((m) => m.team === "m").slice(0, 6);
   mons.forEach((m, i) => { m.x = u.x + 40 + i * 6; m.y = u.y + (i - 3) * 8; m.aggro = true; });
-  for (let i = 0; i < list.length; i += 8) {
-    ch.skills = list.slice(i, i + 8).map((s) => s.id);
-    while (ch.skills.length < 8) ch.skills.push(null);
+  for (let i = 0; i < list.length; i += SKILL_SLOTS) {
+    ch.skills = list.slice(i, i + SKILL_SLOTS).map((s) => s.id);
+    while (ch.skills.length < SKILL_SLOTS) ch.skills.push(null);
     refreshStats(u);
-    for (let s = 0; s < 8; s++) {
+    for (let s = 0; s < SKILL_SLOTS; s++) {
       const sk = list[i + s];
       if (!sk || sk.kind === "passive") continue;
       u.mp = u.maxMp; u.ki = 100; u.holy = 100; u.parts = 3; u.gap = 3; u.lockUntil = 0; u.cds.clear(); u.casting = null; u.dash = null; u.channel = null;
