@@ -5,9 +5,11 @@ import { world } from "./net.js";
 import { rollItem, makeItem, RARITIES, SLOTS, canEquip, VMATS, ensureDur, makeClassRelic } from "../shared/items.js";
 import { CLASS_INFO } from "../shared/classes.js";
 import { MAX_LEVEL, ITEMS, TITLE_COLORS, TITLE_MAX } from "../shared/constants.js";
+import { MAX_ENH } from "../shared/items.js";
 import { PATHS, CLASS2_LEVEL } from "../shared/classes2.js";
 import { secureRandom } from "./game/secure.js";
 import { hashPassword } from "./auth.js";
+import { makeMaxAbyssBundle, MAX_ABYSS_BUNDLE_COUNT } from "./gm-items.js";
 
 const int = (v, lo, hi) => Number.isInteger(v) && v >= lo && v <= hi;
 
@@ -206,6 +208,40 @@ export async function handleGm(req, res, path, { readJson, send, isAdmin, ip, ur
       });
       audit("repair_all", target, { count: repaired });
       return send(res, ok ? 200 : 400, ok ? { ok: true, count: repaired } : { error: "장비 수리에 실패했어요." });
+    }
+    case "give-abyss-max-bundle": {
+      if (target.username !== "GM_윤성") return send(res, 403, { error: "이 지급 기능은 GM_윤성 계정 전용이에요." });
+      const row = Q.charByUser.get(id);
+      const live = world.gmFind(id);
+      let existing = null;
+      try { existing = live?.char ?? (row ? JSON.parse(row.data) : null); } catch {}
+      if (existing?.gmAbyssMaxSetV1) return send(res, 409, { error: "심연 풀세트는 이미 지급된 계정이에요." });
+      const made = makeMaxAbyssBundle();
+      if (made.length !== MAX_ABYSS_BUNDLE_COUNT) return send(res, 500, { error: "심연 풀세트 수량 검증에 실패했어요." });
+      let why = null;
+      const ok = world.gmApplyChar(id, (c) => {
+        if (c.gmAbyssMaxSetV1) { why = "심연 풀세트는 이미 지급된 계정이에요."; return; }
+        if (c.inv.length + made.length > INV_SIZE) {
+          why = `가방 공간이 부족해요. ${made.length}칸이 필요하고 현재 ${INV_SIZE - c.inv.length}칸 남았어요.`;
+          return;
+        }
+        for (const it of made) {
+          it.uid = c.nextUid++;
+          c.inv.push(it);
+        }
+        c.gmAbyssMaxSetV1 = true;
+      });
+      if (!ok || why) return send(res, why ? 409 : 400, { error: why ?? "심연 풀세트 지급에 실패했어요." });
+      const detail = {
+        count: made.length, ilvl: MAX_LEVEL, enhancement: MAX_ENH,
+        options: 5, maxOptionRoll: 3, enchant: "dmg", locked: true,
+        relics: made.filter((it) => it.relic).map((it) => it.relic),
+        classRelics: made.filter((it) => it.classRelic).map((it) => it.classRelic),
+      };
+      audit("give_abyss_max_bundle", target, detail);
+      itemLog(id, "gm_abyss_max_bundle", detail);
+      world.sessions.get(id)?.notice(`관리자가 심연 풀세트 ${made.length}개를 지급했어요. 모두 아이템 레벨 250, +99 강화예요.`);
+      return send(res, 200, { ok: true, count: made.length, ilvl: MAX_LEVEL, enhancement: MAX_ENH });
     }
     case "give-class-relic": {
       let made = null;
