@@ -4,7 +4,8 @@ import { TITLE_DESIGNS } from "/shared/titles.js";
 import { itemTip } from "./ui/windows.js";
 import { itemIcon } from "./ui/icons.js";
 import { CLASS_INFO } from "/shared/classes.js";
-import { MATERIALS, RARITIES, SLOT_NAME, SLOTS, WEAPON_TYPES, OFFHAND_TYPES, ARMOR_NAMES, VARIANT_TRAITS, RARITY_OPTS, OPTIONS, MYTHIC_EFFECTS, MYTHIC_TITLE_LIST, ENCHANTS, MAX_ENH, makeItem, optionMax } from "/shared/items.js";
+import { MATERIALS, RARITIES, SLOT_NAME, SLOTS, WEAPON_TYPES, OFFHAND_TYPES, ARMOR_NAMES, VARIANT_TRAITS, RARITY_OPTS, OPTIONS, MYTHIC_EFFECTS, MYTHIC_TITLE_LIST, ENCHANTS, MAX_ENH, makeItem, optionMax, VMATS, SIGIL_NAMES } from "/shared/items.js";
+import { PATHS } from "/shared/classes2.js";
 import { ITEMS, TITLE_COLORS, INVENTORY_SLOTS } from "/shared/constants.js";
 
 const main = $("#gm-main");
@@ -36,15 +37,31 @@ const TABS = {
   },
   async players() {
     const q = h("input", { placeholder: "닉네임 검색", value: lastQ });
+    const island = h("select", {}, ...[["all", "전체"], ["verdan", "베르단 입도"], ["erden", "에르덴만"]].map(([v, t]) => h("option", { value: v, selected: islandFilter === v }, t)));
     const list = await api(`/api/gm/players?q=${encodeURIComponent(lastQ)}`);
     q.addEventListener("keydown", (e) => { if (e.key === "Enter") { lastQ = q.value.trim(); render(); } });
+    island.addEventListener("change", () => { islandFilter = island.value; render(); });
+    const rows = list.list.filter((p) => islandFilter === "all" || (islandFilter === "verdan" ? !!p.verdan_pass : !p.verdan_pass));
+    const dungeonName = { 1: "에르덴 제1", 2: "에르덴 제2", 3: "베르단 제1", 4: "기억왕의 지하왕릉" };
     return [
-      h("div", { class: "toolbar" }, q, h("button", { class: "btn small", onclick: () => { lastQ = q.value.trim(); render(); } }, "검색")),
+      h("div", { class: "toolbar" }, q, h("button", { class: "btn small", onclick: () => { lastQ = q.value.trim(); render(); } }, "검색"), island,
+        h("span", { class: "note", text: `목록 ${rows.length}명 · 베르단 진행도 포함` })),
       h("table", { class: "tbl" },
-        h("tr", {}, ...["", "닉네임", "직업", "Lv", "제1 던전 최고 층", "제2 던전 최고 층", "위치", "가입", "최근 접속", "상태"].map((t) => h("th", { text: t }))),
-        ...list.list.map((p) => h("tr", { class: "click", onclick: () => openPlayer(p.id) },
-          h("td", {}, h("span", { class: "on-dot" + (p.online ? " y" : "") })), h("td", { text: p.username }), h("td", { text: CLASS_INFO[p.cls]?.name ?? "-" }), h("td", { text: p.level ?? "-" }), h("td", { text: p.best_floor ?? "-" }), h("td", { text: p.best2 ?? 0 }),
-          h("td", { text: p.online ? (p.room === "town" ? "마을" : `${p.floor}층`) : "-" }), h("td", { text: fmtT(p.created_at) }), h("td", { text: fmtT(p.last_login) }),
+        h("tr", {}, ...["", "닉네임", "1차 직업", "2차 전직", "Lv", "에르덴1", "에르덴2", "베르단1", "지하왕릉", "섬", "현재 위치", "가입", "최근 접속", "상태"].map((t) => h("th", { text: t }))),
+        ...rows.map((p) => h("tr", { class: "click", onclick: () => openPlayer(p.id) },
+          h("td", {}, h("span", { class: "on-dot" + (p.online ? " y" : "") })),
+          h("td", { text: p.username }),
+          h("td", { text: CLASS_INFO[p.cls]?.name ?? "-" }),
+          h("td", { text: PATHS[p.cls2]?.name ?? "-" }),
+          h("td", { text: p.level ?? "-" }),
+          h("td", { text: p.best_floor ?? 0 }),
+          h("td", { text: p.best2 ?? 0 }),
+          h("td", { text: `${p.best3 ?? 0}/100${p.cleared3 ? " ✓" : ""}` }),
+          h("td", { text: `${p.best4 ?? 0}/30${p.cleared4 ? " ✓" : ""}` }),
+          h("td", { text: p.verdan_pass ? "베르단" : "에르덴" }),
+          h("td", { text: p.online ? (p.room === "town" ? (p.island === "verdan" ? "베르단 마을" : "에르덴 마을") : `${dungeonName[p.dungeon] ?? "던전"} ${p.floor}층`) : "-" }),
+          h("td", { text: fmtT(p.created_at) }),
+          h("td", { text: fmtT(p.last_login) }),
           h("td", {}, p.banned_until > Date.now() ? h("span", { class: "badge ban", text: "차단" }) : null, p.muted_until > Date.now() ? h("span", { class: "badge mute", text: "채금" }) : null)))),
     ];
   },
@@ -72,7 +89,7 @@ const TABS = {
       ...list.map((a) => h("tr", {}, h("td", { text: fmtT(a.at) }), h("td", { text: KIND[a.kind] ?? a.kind }), h("td", { text: a.username ?? "-" }), h("td", { class: "mono", text: a.ip ?? "" }), h("td", { class: "mono", text: a.detail ?? "" }))))];
   },
 };
-let lastQ = "";
+let lastQ = "", islandFilter = "all";
 
 async function openPlayer(id) {
   tab = "player";
@@ -99,7 +116,40 @@ async function openPlayer(id) {
   const banR = h("input", { maxlength: 200, placeholder: "사유" });
   const muteM = h("input", { type: "number", min: 0, value: 30 });
   const warpF = h("input", { type: "number", min: 1, max: 100, value: c?.checkpoint ?? 1 });
-  const warpD = h("select", {}, h("option", { value: 1 }, "에르덴 제1 던전"), h("option", { value: 2 }, "에르덴 제2 던전 (1~30)"), h("option", { value: 3 }, "베르단 제1 던전 (1~100)"), h("option", { value: 4 }, "베르단 제2 던전 (1~30)"));
+  const warpD = h("select", {}, h("option", { value: 1 }, "에르덴 제1 던전"), h("option", { value: 2 }, "에르덴 제2 던전 (1~30)"), h("option", { value: 3 }, "베르단 제1 던전 (1~100)"), h("option", { value: 4 }, "기억왕의 지하왕릉 (1~30)"));
+  const mkSelect = (value, options) => h("select", {}, ...options.map(([v, t]) => h("option", { value: String(v), selected: String(value) === String(v) }, t)));
+  const cpOptions = (max) => [1, ...Array.from({ length: Math.floor((max - 1) / 10) }, (_, i) => (i + 1) * 10 + 1)].filter((n) => n <= max).map((n) => [n, `${n}층`]);
+  const best2 = h("input", { type: "number", min: 0, max: 30, value: c?.best2 ?? 0 });
+  const cp2 = mkSelect(c?.checkpoint2 ?? 1, cpOptions(30));
+  const clear2 = mkSelect(String(!!c?.cleared2), [["false", "미정복"], ["true", "정복 완료"]]);
+  const best3 = h("input", { type: "number", min: 0, max: 100, value: c?.best3 ?? 0 });
+  const cp3 = mkSelect(c?.checkpoint3 ?? 1, cpOptions(100));
+  const clear3 = mkSelect(String(!!c?.cleared3), [["false", "미정복"], ["true", "정복 완료"]]);
+  const best4 = h("input", { type: "number", min: 0, max: 30, value: c?.best4 ?? 0 });
+  const cp4 = mkSelect(c?.checkpoint4 ?? 1, cpOptions(30));
+  const clear4 = mkSelect(String(!!c?.cleared4), [["false", "미정복"], ["true", "정복 완료"]]);
+  const pass = mkSelect(String(!!c?.verdanPass), [["false", "미입도"], ["true", "입도 완료"]]);
+  const island = mkSelect(c?.island ?? "erden", [["erden", "에르덴 섬"], ["verdan", "베르단 섬"]]);
+  pass.addEventListener("change", () => { island.value = pass.value === "true" ? "verdan" : "erden"; });
+  const cls2 = mkSelect(c?.cls2 ?? "", [["", "2차 전직 없음"], ...Object.entries(PATHS).filter(([, p]) => p.base === c?.cls).map(([k, p]) => [k, p.name])]);
+  const progressBox = h("div", { class: "box" }, h("h3", { text: "던전·베르단 진행도 관리" }),
+    h("div", { class: "form" },
+      ...field("에르덴 제2 최고 층", best2), ...field("에르덴 제2 체크포인트", cp2), ...field("에르덴 제2 상태", clear2),
+      ...field("베르단 제1 최고 층", best3), ...field("베르단 제1 체크포인트", cp3), ...field("베르단 제1 상태", clear3),
+      ...field("지하왕릉 최고 층", best4), ...field("지하왕릉 체크포인트", cp4), ...field("지하왕릉 상태", clear4),
+      ...field("베르단 입도", pass), ...field("현재 섬", island), ...field("2차 전직", cls2)),
+    h("div", { class: "note", text: "GM 전용 진행도 조정입니다. 베르단 입도를 완료로 바꾸면 베르단 섬을 이용할 수 있고, 2차 전직은 해당 1차 직업 및 Lv.170 이상이어야 설정할 수 있어요." }),
+    h("button", { class: "btn small primary", onclick: act("progress", () => ({ best2: +best2.value, checkpoint2: +cp2.value, cleared2: clear2.value === "true", best3: +best3.value, checkpoint3: +cp3.value, cleared3: clear3.value === "true", best4: +best4.value, checkpoint4: +cp4.value, cleared4: clear4.value === "true", verdanPass: pass.value === "true", island: island.value, cls2: cls2.value })) }, "진행도 저장"));
+  const matAdds = Object.fromEntries(VMATS.map((m) => [m.id, h("input", { type: "number", min: 0, max: 999999, value: 0 })]));
+  const sigilAdds = Object.fromEntries(SIGIL_NAMES.map((name, i) => [String(i + 1), h("input", { type: "number", min: 0, max: 9999, value: 0 })]));
+  const heartAdd = h("input", { type: "number", min: 0, max: 9999, value: 0 });
+  const resourceBox = h("div", { class: "box" }, h("h3", { text: "베르단 재료·각인 지급" }),
+    h("div", { class: "form" },
+      ...VMATS.flatMap((m) => field(m.name + " 추가", matAdds[m.id])),
+      ...SIGIL_NAMES.flatMap((name, i) => field(`지역 각인 ${i + 1} · ${name}`, sigilAdds[String(i + 1)])),
+      ...field("섬 심장핵 추가", heartAdd)),
+    h("div", { class: "note", text: "입력한 수량만큼 기존 보유량에 더합니다. 0은 그대로 유지돼요." }),
+    h("button", { class: "btn small primary", onclick: act("resources", () => ({ mats: Object.fromEntries(Object.entries(matAdds).map(([k, el]) => [k, +el.value])), sigils: Object.fromEntries(Object.entries(sigilAdds).map(([k, el]) => [k, +el.value])), hearts: +heartAdd.value })) }, "베르단 재화 지급"));
   const itemCell = (it, where) => {
     const cv = document.createElement("canvas"); cv.width = 18; cv.height = 18; cv.getContext("2d").drawImage(itemIcon(it), 0, 0);
     const el = h("div", { class: "cell r-" + it.rarity }, cv, it.enh ? h("span", { class: "enh", text: "+" + it.enh }) : null);
@@ -122,6 +172,12 @@ async function openPlayer(id) {
           h("div", { class: "note", text: "골드와 미사용 스탯 포인트는 별도 지급 상한이 없어요. 0 이상의 정수로 입력해 주세요. (직업을 바꾸면 투자한 스탯은 미사용 포인트로 돌아가요.)" }),
           h("button", { class: "btn small primary", onclick: act("edit", () => ({ level: +lv.value, gold: +gold.value, unspent: +pts.value, checkpoint: +cp.value, cls: cls.value, cons: Object.fromEntries(Object.entries(cons).map(([k, el]) => [k, +el.value])) })) }, "저장")),
         exactGiveBox(c, act),
+        h("div", { class: "box" }, h("h3", { text: "GM 빠른 조치" }),
+          h("div", { class: "flexrow" },
+            h("button", { class: "btn small", onclick: act("restore", () => ({})) }, "즉시 부활·HP/MP 회복"),
+            h("button", { class: "btn small", onclick: act("repair-all", () => ({})) }, "가방·장착 장비 전체 수리"),
+            h("button", { class: "btn small primary", onclick: () => { if (confirm("레벨 250 직업 전용 심연 무기를 지급할까요?")) act("give-class-relic", () => ({}))(); } }, "직업 전용 심연 무기 지급"))),
+        resourceBox,
         h("details", { class: "box" }, h("summary", { text: "무작위 아이템 지급" }), h("div", { class: "form" }, ...field("등급", rar), ...field("아이템 레벨", ilvl), ...field("부위", slot)),
           h("button", { class: "btn small primary", onclick: act("give", () => ({ rarity: rar.value, ilvl: +ilvl.value, slot: slot.value || undefined })) }, "무작위로 지급")),
         h("div", { class: "box" }, h("h3", { text: "칭호 (관리자만 줄 수 있음)" }),
@@ -141,11 +197,19 @@ async function openPlayer(id) {
       ),
       h("div", {},
         c ? h("div", { class: "box" }, h("h3", { text: `${c.name} · Lv.${c.level} ${CLASS_INFO[c.cls]?.name}` }),
-          h("div", { class: "note", text: `경험치 ${c.xp} · 골드 ${c.gold.toLocaleString()} · 제1 던전 최고 ${c.best ?? 0}층 · 제2 던전 최고 ${c.best2 ?? 0}층 · 베르단 ${c.best3 ?? 0}층 · 지하왕릉 ${c.best4 ?? 0}층${c.cls2 ? " · 2차 " + c.cls2 : ""}${c.verdanPass ? " · ⛵입도" : ""} · 체크포인트 ${c.checkpoint}층 · 처치 ${c.kills} · 쓰러짐 ${c.deaths} · 플레이 ${fmtDur(c.playtime)}${c.cleared ? " · 🏆 정복" : ""}` }),
+          h("div", { class: "note", text: `경험치 ${c.xp} · 골드 ${c.gold.toLocaleString()} · 제1 던전 최고 ${c.best ?? 0}층 · 제2 던전 최고 ${c.best2 ?? 0}층 · 베르단 ${c.best3 ?? 0}층 · 지하왕릉 ${c.best4 ?? 0}층${c.cls2 ? " · 2차 " + PATHS[c.cls2]?.name : ""}${c.verdanPass ? " · ⛵입도" : ""} · 체크포인트 ${c.checkpoint}층 · 처치 ${c.kills} · 쓰러짐 ${c.deaths} · 플레이 ${fmtDur(c.playtime)}${c.cleared ? " · 🏆 정복" : ""}` }),
           h("div", { class: "note", text: "스탯: " + JSON.stringify(c.stats) + ` · 남은 ${c.unspent}` }),
           h("div", { class: "note", text: "스킬: " + c.skills.filter(Boolean).join(", ") }),
           h("h4", { text: "장착" }), h("div", { class: "items" }, ...Object.values(c.equip).filter(Boolean).map((it) => itemCell(it, "장착"))),
           h("h4", { text: `가방 ${c.inv.length}/${INVENTORY_SLOTS}` }), h("div", { class: "items" }, ...c.inv.map((it) => itemCell(it, "가방")))) : h("div", { class: "box", text: "캐릭터 없음" }),
+        c ? h("div", { class: "box" }, h("h3", { text: "베르단 섬 진행 현황" }),
+          h("div", { class: "note", text: `현재 섬: ${c.island === "verdan" ? "베르단" : "에르덴"} · 입도: ${c.verdanPass ? "완료" : "미완료"} · 2차 전직: ${PATHS[c.cls2]?.name ?? "없음"}` }),
+          h("div", { class: "note", text: `베르단 제1 던전: ${c.best3 ?? 0}/100층 · 체크포인트 ${c.checkpoint3 ?? 1}층 · ${c.cleared3 ? "정복 완료" : "미정복"}` }),
+          h("div", { class: "note", text: `기억왕의 지하왕릉: ${c.best4 ?? 0}/30층 · 체크포인트 ${c.checkpoint4 ?? 1}층 · ${c.cleared4 ? "정복 완료" : "미정복"}` }),
+          h("div", { class: "note", text: `에르덴 제2 던전: ${c.best2 ?? 0}/30층 · 체크포인트 ${c.checkpoint2 ?? 1}층 · ${c.cleared2 ? "정복 완료" : "미정복"}` }),
+          h("div", { class: "note", text: "베르단 재료: " + VMATS.map((m) => `${m.name} ${c.mats?.[m.id] ?? 0}`).join(" · ") }),
+          h("div", { class: "note", text: "지역 각인: " + SIGIL_NAMES.map((name, i) => `${i + 1}.${c.sigils?.[i + 1] ?? 0}`).join(" · ") + ` · 섬 심장핵 ${c.hearts ?? 0}개` }) : null,
+        c ? progressBox : null,
         h("div", { class: "box" }, h("h3", { text: "계정" }), h("div", { class: "mono", text: `가입 ${fmtT(u.created_at)} · 최근 접속 ${fmtT(u.last_login)} · IP ${u.last_ip ?? "-"}` })),
         h("div", { class: "box" }, h("h3", { text: "아이템·강화 기록" }), h("table", { class: "tbl" }, ...d.items.map((x) => h("tr", {}, h("td", { text: fmtT(x.at) }), h("td", { text: x.kind }), h("td", { class: "mono", text: x.detail }))))),
         h("div", { class: "box" }, h("h3", { text: "보안 기록" }), h("table", { class: "tbl" }, ...d.security.map((x) => h("tr", {}, h("td", { text: fmtT(x.at) }), h("td", { text: x.kind }), h("td", { class: "mono", text: x.detail ?? "" }))))),
@@ -230,7 +294,7 @@ function exactGiveBox(c, act) {
       ["종류", st.slot === "weapon" || st.slot === "offhand" ? sel(st.type, types, (v) => { st.type = v; draw(); }) : sel(st.variant, types, (v) => { st.variant = +v; draw(); })],
       ["재료(이름)", sel(st.mat, [["", "레벨에 맞춤 (자동)"], ...MATERIALS.map((m, i) => [i, `${m} (${i * 10 + 1}~${i * 10 + 10}층 재료)`])], (v) => { st.mat = v; upd(); })],
       ["등급", sel(st.rarity, RARITIES.map((r) => [r, r]), (v) => { st.rarity = v; for (const o of st.opts) o.v = defVal(o.k); draw(); })],
-      ["아이템 레벨", h("input", { type: "number", min: 1, max: 100, value: st.ilvl, onchange: (e) => { st.ilvl = Math.max(1, Math.min(100, +e.target.value || 1)); for (const o of st.opts) o.v = defVal(o.k); draw(); } })],
+      ["아이템 레벨", h("input", { type: "number", min: 1, max: 250, value: st.ilvl, onchange: (e) => { st.ilvl = Math.max(1, Math.min(250, +e.target.value || 1)); for (const o of st.opts) o.v = defVal(o.k); draw(); } })],
       ["강화", num(st.enh, 0, MAX_ENH, (v) => { st.enh = +v || 0; upd(); })],
       ...st.opts.map((o, i) => [`옵션 ${i + 1}`, h("div", { class: "flexrow" },
         sel(o.k, Object.entries(OPTIONS).filter(([k]) => k === o.k || !st.opts.some((x) => x.k === k)).map(([k, v]) => [k, v.name + (isPct(k) ? " (%)" : "")]), (v) => { o.k = v; o.v = defVal(v); draw(); }),
