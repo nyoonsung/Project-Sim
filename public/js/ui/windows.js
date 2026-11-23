@@ -162,8 +162,20 @@ export function openChar() {
     const rank = info.ranks[stage];
     const rows = info.stats.map((k) => {
       const can = c.unspent > 0;
+      const amount = h("input", {
+        type: "number", class: "stat-amount", min: 1, max: Math.min(1000000, c.unspent),
+        step: 1, value: Math.min(10, c.unspent), placeholder: "수량", disabled: !can,
+      });
+      const allocate = () => {
+        const n = Number(amount.value);
+        if (!Number.isSafeInteger(n) || n < 1 || n > 1_000_000 || n > c.unspent) return;
+        send({ t: "stat", key: k, n });
+      };
+      amount.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); allocate(); } });
       return h("div", { class: "statrow" },
         h("span", { class: "sn", text: STATS[k].name }), h("span", { class: "sv", text: c.stats[k] ?? 0 }), h("span", { class: "sd", text: STATS[k].desc }),
+        amount,
+        h("button", { class: "btn small stat-apply", disabled: !can, onclick: allocate }, "분배"),
         h("button", { class: "btn small", disabled: !can, onclick: () => send({ t: "stat", key: k, n: 1 }) }, "+1"),
         h("button", { class: "btn small", disabled: !can, onclick: () => send({ t: "stat", key: k, n: Math.min(10, c.unspent) }) }, "+10"));
     });
@@ -174,6 +186,7 @@ export function openChar() {
       renameRow(),
       h("div", { class: "note", text: c.cls === "adventurer" ? "10층 보스를 처치하면 안전 구역의 전직소에서 전직할 수 있어요. 전직하면 지금까지 투자한 스탯이 전부 돌아와요." : `${info.position} · ${next}` }),
       h("h4", { text: `능력치 (남은 포인트 ${c.unspent})` }),
+      h("div", { class: "note", text: "각 능력치 옆 칸에 투자할 포인트 수를 입력하고 분배를 누르세요. +1·+10 버튼도 계속 사용할 수 있어요." }),
       ...rows,
       h("div", { class: "flexrow" }, h("span", { class: "note", text: "칭호: " }), (() => { const tt = c.titles?.find((x) => x.id === c.title); return tt ? titleTag(tt) : h("span", { class: "note", text: "없음" }); })(), h("button", { class: "btn small", onclick: () => openTitles() }, "칭호 (T)")),
       h("h4", { text: "최종 수치" }),
