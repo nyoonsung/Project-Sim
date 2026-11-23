@@ -141,9 +141,11 @@ export async function handleGm(req, res, path, { readJson, send, isAdmin, ip, ur
         if (b.cls2) {
           const path = PATHS[b.cls2];
           if (!path || path.base !== c.cls || c.level < CLASS2_LEVEL) { why = "현재 직업과 레벨에 맞는 2차 전직 경로가 아니에요."; return; }
-          c.cls2 = b.cls2;
-          c.skills = defaultLoadout2(c);
-        } else if (b.cls2 === "") {
+          if (c.cls2 !== b.cls2) {
+            c.cls2 = b.cls2;
+            c.skills = defaultLoadout2(c);
+          }
+        } else if (b.cls2 === "" && c.cls2) {
           c.cls2 = null;
           c.skills = defaultLoadout(c);
         }
