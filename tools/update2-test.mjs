@@ -7,7 +7,7 @@ import { makePlayerUnit, newCharacter, refreshStats, availableSkills, sanitizeCh
 import { SKILL_LIST, SKILLS } from "../shared/skills.js";
 import { PATHS, TIER_LEVEL, CLASS2_LEVEL, pathsFor } from "../shared/classes2.js";
 import { CLASS_INFO, xpToNext } from "../shared/classes.js";
-import { MAX_LEVEL } from "../shared/constants.js";
+import { MAX_LEVEL, SKILL_SLOTS } from "../shared/constants.js";
 import { deriveStats, CLASS_DMG } from "../shared/stats.js";
 import { MONSTERS, BOSSES, zoneOf, floorKind, monsterStats, bossStats, DUNGEONS, VERDAN_ZONES, TOMB_ZONES, effLevel, TOMB_BALANCE } from "../shared/zones.js";
 import { TOMB_BOSS_PATTERN } from "../server/game/ai.js";
@@ -75,11 +75,11 @@ for (const [path, P] of Object.entries(PATHS)) {
   room.addPlayer(u);
   for (let k = 0; k < 8; k++) room.spawnMonster(zoneOf(20, 3).monsters[k % 5], u.x + 50 + k * 8, u.y - 20 + (k % 3) * 18, false, { aggro: true });
   room.spawnBoss(zoneOf(20, 3).boss, u.x + 90, u.y);
-  for (let i = 0; i < list.length; i += 8) {
-    ch.skills = list.slice(i, i + 8).map((s) => s.id);
-    while (ch.skills.length < 8) ch.skills.push(null);
+  for (let i = 0; i < list.length; i += SKILL_SLOTS) {
+    ch.skills = list.slice(i, i + SKILL_SLOTS).filter((s) => s.kind !== "passive").map((s) => s.id);
+    while (ch.skills.length < SKILL_SLOTS) ch.skills.push(null);
     refreshStats(u);
-    for (let s = 0; s < 8; s++) {
+    for (let s = 0; s < SKILL_SLOTS; s++) {
       const sk = SKILLS[ch.skills[s]];
       if (!sk || sk.kind === "passive") continue;
       u.mp = u.maxMp; u.ki = 100; u.holy = 100; u.parts = 3; u.gap = 3; u.r2 = 100; u.lockUntil = 0; u.cds.clear(); u.casting = null; u.dash = null; u.channel = null; u.moveLock = 0;
