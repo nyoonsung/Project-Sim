@@ -124,10 +124,10 @@ export async function handleGm(req, res, path, { readJson, send, isAdmin, ip, ur
           c.skills = defaultLoadout(c);
         }
         Object.assign(c, patch);
-        if (patch.verdanPass === true && b.island === undefined) c.island = "verdan";
-        if (patch.verdanPass === false) c.island = "erden";
         if (b.island === "verdan") c.verdanPass = true;
         if (b.island !== undefined) c.island = b.island;
+        if (patch.verdanPass === true && b.island === undefined) c.island = "verdan";
+        if (patch.verdanPass === false) c.island = "erden";
       });
       if (why) return send(res, 400, { error: why });
       if (!ok) return send(res, 400, { error: "진행도 수정에 실패했어요." });
