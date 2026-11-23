@@ -14,8 +14,12 @@ function load() {
       if (o.slots.length === 8) {
         // 기존 사용자 키 설정·물약 단축키와 충돌하지 않는 번호키를 새 슬롯에 배정한다.
         const used = new Set([...o.slots, ...o.potions]);
-        const extra = ["Digit4", "Digit5", "Digit6", "Digit7", "Numpad4", "Numpad5", "Numpad6", "Numpad7", "F9", "F10", "F11", "F12"]
-          .filter((code) => !used.has(code)).slice(0, 4);
+        const candidates = [
+          "Digit4", "Digit5", "Digit6", "Digit7", "Digit8", "Digit9",
+          ...Array.from({ length: 10 }, (_, i) => "Numpad" + i),
+          ...Array.from({ length: 24 }, (_, i) => "F" + (i + 1)),
+        ];
+        const extra = candidates.filter((code) => !used.has(code)).slice(0, 4);
         return { ...o, slots: [...o.slots, ...extra] };
       }
     }
