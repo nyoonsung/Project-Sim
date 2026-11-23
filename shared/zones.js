@@ -278,7 +278,7 @@ export const d2Level = (floor) => 100 + Math.round((floor * 5) / 3);
 /** 그 층의 실제 레벨 (제1 던전은 층 = 레벨, 왕릉은 Lv.191~220) */
 export const effLevel = (floor, dungeon = 1) => (dungeon === 2 ? d2Level(floor) : dungeon === 3 ? 150 + floor : dungeon === 4 ? 190 + floor : floor);
 // 베르단 섬 배율: 에르덴 제2 던전 30층을 기준으로 시작해 층마다 성장.
-//  15~25층 사이에 2차 전직(공격력·HP 2배)을 반영한 벽이 있고, 제2 던전(지하왕릉)은 베르단 100층의 약 1.2배 압박(웨이브 밀도·생명력·공격력·패턴).
+//  베르단 제1 던전은 15~25층 구간에 성장 벽이 있다. 기억왕의 지하왕릉은 220레벨 풀세팅 유저 기준으로 별도 완화 배율(TOMB_BALANCE)을 적용한다.
 export const VERDAN_SCALE = {
   hp0: 1.25, hpG: 0.0185, dmg0: 1.18, dmgG: 0.0125, wallHp: 0.55, wallDmg: 0.4, wallFrom: 15, wallTo: 25,
   tombHp: 1.02, tombDmg: 1.02, tombHpG: 0.004, tombDmgG: 0.003,
