@@ -4,7 +4,7 @@ import { makeFloor } from "../server/game/dungeon.js";
 import { makePlayerUnit, newCharacter, refreshStats, defaultLoadout, defaultLoadout2, sanitizeChar } from "../server/game/player.js";
 import { SKILL_LIST, SKILLS, skillReach, passivesOf } from "../shared/skills.js";
 import { CLASS_INFO } from "../shared/classes.js";
-import { CLASS_DMG } from "../shared/stats.js";
+import { CLASS_DMG, deriveStats } from "../shared/stats.js";
 import { TICK_DT, SKILL_SLOTS } from "../shared/constants.js";
 import { moveCircle } from "../shared/move.js";
 import { dealDamage } from "../server/game/combat.js";
