@@ -366,7 +366,7 @@ export class World {
         break;
       }
       case "ping": s.send({ t: "pong", c: m.c, s: Date.now() }); break;
-      case "dummy": break;
+      case "dummy": this.resetDummy(s); break;
     }
     // 아이템·장비가 바뀌는 행동은 바로 저장 (업데이트 배포 등으로 서버가 재시작돼도 신화 장착 같은 게 되돌아가지 않게)
     if (ITEM_OPS.has(m.t) && s.dirty) this.saveSoon(s);
@@ -378,6 +378,16 @@ export class World {
     return r.map.objects.some((o) => o.kind === "npc" && o.id === id && Math.hypot(o.x - u.x, o.y - u.y) < dist);
   }
   inSafe(s) { return !!s.unit.room?.map.safe; }
+
+  resetDummy(s) {
+    const room = s.unit.room;
+    if (!this.isTown(room)) return s.notice("훈련 허수아비는 마을에서만 이용할 수 있어요.");
+    const dummy = [...room.units.values()].find((u) => u.dummy);
+    if (!dummy) return s.notice("이 마을에는 훈련 허수아비가 없어요.");
+    if (Math.hypot(dummy.x - s.unit.x, dummy.y - s.unit.y) > 130) return s.notice("훈련 허수아비 가까이에서 G 키를 눌러 주세요.");
+    dummy.dpsByPlayer?.delete(s.userId);
+    s.notice("내 허수아비 피해 측정 기록을 초기화했어요.");
+  }
 
   chat(s, text) {
     if (s.mutedUntil > Date.now()) return s.notice(`채팅 금지 상태예요. (${new Date(s.mutedUntil).toLocaleString("ko-KR")}까지)`);
