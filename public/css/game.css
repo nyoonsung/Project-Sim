@@ -1002,6 +1002,14 @@ body:not(.touch) #skillbar {
 }
 .sword-guide-passive { border-left-color: #74c7b2; }
 @media (max-width: 700px) {
+  body.touch #sword-seq {
+    position: absolute;
+    left: calc(8px + env(safe-area-inset-left));
+    bottom: calc(238px + env(safe-area-inset-bottom));
+    width: min(46vw, 220px);
+    max-width: 220px;
+    z-index: 14;
+  }
   .skill-slots { grid-template-columns: repeat(4, minmax(0, 1fr)); }
   #sword-seq { width: min(100%, 420px); }
   #sword-seq .seq-step { font-size: 9px; padding: 3px 2px; }
