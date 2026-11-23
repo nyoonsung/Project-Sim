@@ -103,12 +103,15 @@ export function sanitizeChar(c, name) {
       return id;
     });
     const def = out.cls2 ? defaultLoadout2(out) : defaultLoadout(out);
-    out.skills.forEach((id, i) => {
-      if (!id && def[i] && !out.skills.includes(def[i])) {
-        out.skills[i] = def[i];
-        seenSkills.add(def[i]);
-      }
-    });
+    // 빈칸을 위치별로만 채우지 않고, 새 기본 세트의 미장착 액티브를 앞에서부터 추가한다.
+    // 8칸 구형 저장을 12칸으로 옮길 때 새로 열린 스킬 슬롯이 실제로 활용되도록 한다.
+    for (const id of def) {
+      if (!id || seenSkills.has(id)) continue;
+      const slot = out.skills.findIndex((value, index) => index < SKILL_SLOTS - 2 && !value);
+      if (slot < 0) break;
+      out.skills[slot] = id;
+      seenSkills.add(id);
+    }
   } catch {}
   for (const it of out.inv) { ensureAbyss(it); ensureDur(it); upgradeMythic(it); }
   for (const it of Object.values(out.equip)) { ensureAbyss(it); ensureDur(it); upgradeMythic(it); }
