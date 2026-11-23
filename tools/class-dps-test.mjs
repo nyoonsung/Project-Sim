@@ -226,10 +226,10 @@ try {
   const dpsByClass = Object.fromEntries(rows.map((r) => [r.cls, r.dps]));
   assert.ok(dpsByClass.mage >= dpsByClass.sword * 0.95, "mage should remain near the sword benchmark after its damage is increased by 20%");
   assert.ok(dpsByClass.rogue >= dpsByClass.sword * 1.3, "rogue should remain clearly above the sword benchmark after its major upgrade");
-  assert.ok(dpsByClass.archer < 90000, "archer DPS should reflect its further damage reduction");
-  assert.ok(dpsByClass.rogue < 90000, "rogue DPS should reflect its damage reduction");
-  assert.ok(dpsByClass.fist >= 32000, "fist DPS should reflect its major damage increase");
-  assert.ok(dpsByClass.smith >= 27000, "smith DPS should reflect its major damage increase");
+  assert.ok(dpsByClass.archer >= 47000 && dpsByClass.archer <= 51000, "archer should gain about 20% damage and stay below the top four");
+  assert.ok(dpsByClass.rogue < 90000, "rogue DPS should remain below its configured ceiling");
+  assert.ok(dpsByClass.fist >= 42000 && dpsByClass.fist < dpsByClass.archer, "fist tank DPS should reach the low 40k range but remain below archer");
+  assert.ok(dpsByClass.smith >= 42000 && dpsByClass.smith < dpsByClass.archer, "smith tank DPS should reach the low 40k range but remain below archer");
   assert.ok(dpsByClass.priest < dpsByClass.mage, "priest damage should stay below mage after its damage reduction");
   console.log("CLASS DPS TESTS: ALL PASS");
 } finally {
