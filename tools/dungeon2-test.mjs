@@ -11,7 +11,7 @@ import { Room } from "../server/game/room.js";
 import { newCharacter, makePlayerUnit } from "../server/game/player.js";
 import { dealDamage } from "../server/game/combat.js";
 import { rollAbyssRelic } from "../shared/items.js";
-import { makeFloor, mapPayload, makeTown, safeZone } from "../server/game/dungeon.js";
+import { makeFloor, mapPayload, makeTown, makeVerdanTown, safeZone } from "../server/game/dungeon.js";
 import { levelGapXpMultiplier, unitXpMultiplier } from "../server/game/room.js";
 import { World } from "../server/game/world.js";
 import { D2_MOB_PATTERN, D2_BOSS_PATTERN, D2_BOSS_SIGNATURES } from "../server/game/ai.js";
@@ -405,6 +405,40 @@ assert.ok(
   }
   assert.ok(visited.has(ty * town.w + tx), "training dummy must be reachable from the town spawn");
 }
+
+// 베르단 섬 훈련 허수아비: 에르덴과 동일하게 전용 돌바닥·도보 접근·장식물 간격 확인.
+const verdanTown = makeVerdanTown();
+const verdanDummy = verdanTown.objects.find((o) => o.kind === "dummy");
+assert.ok(verdanDummy, "Verdan town must contain a training dummy");
+assert.deepEqual(
+  [Math.floor(verdanDummy.x / TILE), Math.floor(verdanDummy.y / TILE)],
+  [10, 12],
+  "Verdan training dummy must use the dedicated western training pad",
+);
+assert.ok(!circleHitsWall(verdanTown, verdanDummy.x, verdanDummy.y, 9), "Verdan training dummy tile must be walkable");
+for (let y = 11; y <= 13; y++) for (let x = 9; x <= 11; x++) {
+  assert.equal(verdanTown.tiles[y * verdanTown.w + x], 9, "Verdan training pad must stay clear of random foliage and trees");
+}
+assert.ok(
+  !verdanTown.objects.some((o) => o.kind === "prop" && Math.hypot(o.x - verdanDummy.x, o.y - verdanDummy.y) < 48),
+  "Verdan training dummy must not overlap a decorative prop",
+);
+{
+  const canStand = (x, y) => !circleHitsWall(verdanTown, x * TILE + TILE / 2, y * TILE + TILE / 2, 9);
+  const sx = Math.floor(verdanTown.start[0] / TILE), sy = Math.floor(verdanTown.start[1] / TILE);
+  const tx = Math.floor(verdanDummy.x / TILE), ty = Math.floor(verdanDummy.y / TILE);
+  const queue = [[sx, sy]], visited = new Set([sy * verdanTown.w + sx]);
+  for (let i = 0; i < queue.length; i++) {
+    const [x, y] = queue[i];
+    for (const [dx, dy] of [[1,0],[-1,0],[0,1],[0,-1]]) {
+      const nx = x + dx, ny = y + dy, key = ny * verdanTown.w + nx;
+      if (nx < 0 || ny < 0 || nx >= verdanTown.w || ny >= verdanTown.h || visited.has(key) || !canStand(nx, ny)) continue;
+      visited.add(key); queue.push([nx, ny]);
+    }
+  }
+  assert.ok(visited.has(ty * verdanTown.w + tx), "Verdan training dummy must be reachable from the town spawn");
+}
+ok(true, "베르단 훈련 허수아비 위치·접근성·장식물 간섭 회귀 확인");
 
 // 공유 마을에서도 훈련 허수아비의 DPS 기록은 플레이어별로 분리되고, G 키 초기화도 본인 기록만 지운다.
 {
