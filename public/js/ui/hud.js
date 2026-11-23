@@ -19,6 +19,7 @@ const BUFF_NAME = { riposte: "반격 기회", imun: "이문정주", sidestep: "�
   iq_stance: "자세", iq_passion: "수난의 반격", iq_gospel: "복음", ht_doom: "유예된 종말", kg_aid: "응급처치", kg_sense: "야전 감각", kg_fervor: "개척의 열기",
   vm_storm: "폭풍걸음", vm_heart: "심장부", tether_root: "집중", aa_gate_root: "천궁개문" };
 const ST_NAME = { burn: "화상", poison: "중독", bleed: "출혈", slow: "감속", root: "속박", stun: "기절", down: "넘어짐", freeze: "빙결", shock: "감전", weaken: "약화", blind: "실명" };
+const SWORD_SEQUENCE_NAMES = ["일섬", "회전연참", "쇄도검"];
 
 let slotEls = [];
 export function buildHud() {
@@ -146,6 +147,26 @@ export function updateBars() {
     if (G.char.cls === "fist" && m.acu) text += `  · 점혈 ${m.acu}단계`;
     if (r2 && res[0] !== "r2") text += `  · ${r2.name} ${m.r2 ?? 0}`;
     set("#orbs .res", m[res[0]] ?? 0, res[2], text);
+  }
+  // 소드마스터 검식: 실제 적중 서버 판정에 맞춰 3단계 진행을 표시
+  const seqBox = $("#sword-seq");
+  const swordmaster = G.char?.cls2 === "swordmaster";
+  toggle(seqBox, "hidden", !swordmaster);
+  if (swordmaster) {
+    const seq = m.seq ?? {};
+    const elapsed = Math.max(0, performance.now() / 1000 - (G.meAt ?? 0));
+    const left = Math.max(0, (seq.left ?? 0) - elapsed);
+    const done = !!seq.done && left > 0;
+    const count = done ? 3 : left > 0 ? Math.max(0, Math.min(2, seq.n ?? 0)) : 0;
+    const steps = seqBox.querySelectorAll(".seq-step");
+    steps.forEach((el, i) => {
+      toggle(el, "done", i < count);
+      toggle(el, "current", !done && i === count);
+    });
+    const status = done ? "검식 완성!" : count > 0
+      ? `${count}/3 적중 · 다음: ${SWORD_SEQUENCE_NAMES[count]} · ${left.toFixed(1)}초`
+      : "대기 · 1단계 일섬부터 적중";
+    setText(seqBox.querySelector(".seq-status"), status);
   }
   // 버프·상태
   const bf = $("#buffs");
