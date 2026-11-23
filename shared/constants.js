@@ -9,7 +9,7 @@ export const VIEW_H = 360;
 export const MAX_LEVEL = 250; // 2차 업데이트: 150 → 250
 export const MAX_FLOOR = 100;
 export const MAX_PARTY = 4;
-export const SKILL_SLOTS = 8;         // 전체 장착 칸 (종류 구분 없음)
+export const SKILL_SLOTS = 12;        // 전체 장착 칸 (패시브 제외, 종류 구분 없음)
 export const INVENTORY_SLOTS = 100;   // 가방 보관 칸
 export const STAT_POINTS_PER_LEVEL = 3;
 
@@ -46,8 +46,8 @@ export const CRIT = {
 export const GRADES = ["일반", "희귀", "영웅", "전설"];
 export const GRADE_COLOR = { 일반: "#c9d1d9", 희귀: "#58a6ff", 영웅: "#d2a8ff", 전설: "#ffb347", 신화: "#ff5a6e", "2차": "#5af0d0" };
 
-// 키 배치: 장착 칸 1~8
-export const SLOT_KEYS = ["LMB", "RMB", "Q", "E", "R", "F", "SHIFT", "V"];
+// 키 배치: 장착 칸 1~12 (9~12번은 숫자 4~7 기본 배정)
+export const SLOT_KEYS = ["LMB", "RMB", "Q", "E", "R", "F", "SHIFT", "V", "4", "5", "6", "7"];
 
 // 소모품
 export const ITEMS = {
