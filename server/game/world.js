@@ -14,6 +14,8 @@ import { secureRandom } from "./secure.js";
 import { moveMul } from "./combat.js";
 import { USERNAME_RE } from "../auth.js";
 import { tradeOp, endTrade, inOffer } from "./trade.js";
+import { PvpRoom } from "./pvp.js";
+import { PVP, PVP_PRESETS, canPvp, checkPvpStats, eloDelta, pvpTier, newPvpRecord } from "../../shared/pvp.js";
 
 let roomSeq = 1;
 const filterChat = (s) => s.replace(/[\u0000-\u001f\u007f<>]/g, "").replace(/\s+/g, " ").trim().slice(0, 120);
@@ -81,6 +83,8 @@ export class World {
     this.town2 = this.addRoom(new Room(this, { id: "town2", kind: "town", floor: 0, map: makeVerdanTown() }));
     this.town.island = "erden"; this.town2.island = "verdan";
     this.resumes = new Map(); // 서버 재시작 뒤 던전 복귀: 파티(멤버·층)별로 다시 만든 방
+    this.pvpQueue = new Map(); // PvP 대기열: userId → { at(ms), rating }
+    this.pvpTop = null;
     this.announcement = null;
     this.startedAt = Date.now();
     this.tickTimes = [];
@@ -122,6 +126,7 @@ export class World {
     }
     // 30초 넘게 다시 안 들어온 끊긴 플레이어는 정리
     if (this.tickN = (this.tickN ?? 0) + 1, this.tickN % 20 === 0) for (const s of [...this.sessions.values()]) if (s.linkdead && Date.now() - s.linkdead > 30_000) this.finishClose(s);
+    if (this.tickN % 20 === 10 && this.pvpQueue.size >= 2) this.pvpMatchmake();
     for (const r of [...this.rooms.values()]) if (!this.isTown(r) && r.players.size === 0 && Date.now() - r.createdAt > 5000) this.rooms.delete(r.id);
     const dt = performance.now() - t0;
     this.tickTimes.push(dt);
@@ -164,6 +169,7 @@ export class World {
     grantReserved(char, u.username, u.id);
     s.unit = makePlayerUnit(s);
     s.send({ t: "hello", name: u.username, char: this.publicChar(s), announce: this.announcement, serverTime: Date.now() });
+    this.sendPvpTop(s);
     if (!this.tryResume(s)) this.townOf(s).addPlayer(s.unit);
     this.save(s);
     this.broadcastSys(`${u.username}님이 접속했어요.`, "join");
@@ -172,7 +178,8 @@ export class World {
     const s = this.sessions.get(conn.user.id);
     if (!s || s.conn !== conn || s.deleted) return;
     // 던전에서 끊기면 30초 동안 자리 유지(몬스터가 무시, 피해 없음) → 다시 접속하면 그대로 이어감
-    if (s.unit.room && !this.isTown(s.unit.room) && !s.unit.dead) {
+    this.pvpQueue.delete(s.userId);
+    if (s.unit.room && !this.isTown(s.unit.room) && !s.unit.dead && s.unit.room.kind !== "pvp") {
       s.linkdead = Date.now();
       s.conn = { send() {}, close() {}, user: conn.user, ip: conn.ip, dead: true };
       s.unit.ghost = true; s.unit.inputs.length = 0; s.unit.castQ = [];
@@ -243,6 +250,8 @@ export class World {
   }
   /** 바로 저장. 단 메시지를 마구 보내 DB 쓰기를 폭주시키지 못하게: 연속 5번까지는 즉시, 그 뒤로는 초당 2번꼴(남은 건 잠시 뒤 한 번에) */
   saveSoon(s) {
+    if (s?.isPvpProxy) s = this.sessions.get(s.userId);
+    if (!s) return;
     const now = Date.now();
     s.saveTok = Math.min(5, (s.saveTok ?? 5) + ((now - (s.saveTokAt ?? now)) / 1000) * 2);
     s.saveTokAt = now;
@@ -251,7 +260,8 @@ export class World {
     s.saveTimer = setTimeout(() => { s.saveTimer = null; if (this.sessions.get(s.userId) === s && s.dirty) this.save(s); }, 600);
   }
   save(s) {
-    if (s.deleted) return; // 관리자가 지운 계정: 다시 저장하지 않음
+    if (s?.isPvpProxy) s = this.sessions.get(s.userId); // 결투장 대리 세션 → 원래 캐릭터를 저장
+    if (!s || s.deleted) return; // 관리자가 지운 계정: 다시 저장하지 않음
     try { Q.saveChar.run(s.userId, JSON.stringify(s.char), s.char.level, s.char.cls, s.char.best, Date.now()); s.dirty = false; } catch (e) { console.error("save", e); }
   }
   /** 이번 0.25초 차례인 사람만 저장 (한 사람당 10초에 한 번) */
@@ -271,15 +281,18 @@ export class World {
 
 
   publicChar(s) {
+    if (s?.isPvpProxy) s = this.sessions.get(s.userId) ?? s;
     const c = s.char;
     return { name: c.name, level: c.level, xp: c.xp, cls: c.cls, stats: c.stats, unspent: c.unspent, skills: c.skills, equip: c.equip, inv: c.inv, cons: c.cons, gold: c.gold,
       best: c.best, checkpoint: c.checkpoint, cleared: c.cleared,
       best2: c.best2 ?? 0, checkpoint2: c.checkpoint2 ?? 1, cleared2: !!c.cleared2, abyssKeys: c.abyssKeys ?? 0, riftCrystals: c.riftCrystals ?? 0,
       best3: c.best3 ?? 0, checkpoint3: c.checkpoint3 ?? 1, cleared3: !!c.cleared3, best4: c.best4 ?? 0, checkpoint4: c.checkpoint4 ?? 1, cleared4: !!c.cleared4,
       island: c.island ?? "erden", verdanPass: !!c.verdanPass, cls2: c.cls2 ?? null, mats: c.mats ?? {}, sigils: c.sigils ?? {}, hearts: c.hearts ?? 0, reward250: !!c.reward250,
-      kills: c.kills, deaths: c.deaths, prof: c.prof ?? {}, titles: c.titles ?? [], title: c.title ?? null };
+      kills: c.kills, deaths: c.deaths, prof: c.prof ?? {}, titles: c.titles ?? [], title: c.title ?? null,
+      pvp: c.pvp ?? newPvpRecord(), ...(s.pvpRoom && s.pvpChar ? { skills: s.pvpChar.skills, pvpActive: { level: s.pvpChar.level, stats: s.pvpChar.stats } } : {}) };
   }
   sendChar(s) {
+    if (s?.isPvpProxy) s = this.sessions.get(s.userId) ?? s;
     const scaled = syncMythic(s.char) | syncAbyss(s.char);
     if (scaled && s.unit) refreshStats(s.unit); // 신화·심연 장비를 캐릭터 레벨에 맞춤
     // 파티원 정보(레벨·직업·체크포인트)도 최신으로
@@ -346,7 +359,8 @@ export class World {
       case "party": this.partyOp(s, m.op, m.name); break;
       case "enter": this.enterDungeon(s, m.floor, m.dungeon ?? 1); break;
       case "vault": this.openAbyssVault(s); break;
-      case "town": if (room && !this.isTown(room)) this.toTown(s, "마을로 돌아왔어요."); break;
+      case "town": if (room?.kind === "pvp") { room.forfeit(s, "leave"); break; } if (room && !this.isTown(room)) this.toTown(s, "마을로 돌아왔어요."); break;
+      case "pvp": this.pvpOp(s, m); break;
       case "boat": this.travelBoat(s, m.to); break;
       case "class2": this.changeClass2(s, m.path); break;
       case "craft": this.craft(s, m); break;
@@ -617,6 +631,164 @@ export class World {
     this.save(s);
   }
 
+  // ── PvP 결투장 (1대1 · 3판 2선승 · 레이팅 순위)
+  pvpWhyNot(s) {
+    const u = s.unit;
+    if (!canPvp(s.char.cls)) return "1차 전직을 마친 캐릭터만 결투장에 들어갈 수 있어요. (레벨·장비는 결투장에서 똑같이 맞춰져요)";
+    if (s.pvpRoom) return "이미 결투 중이에요.";
+    if (!this.isTown(u.room)) return "결투장은 마을에서 신청할 수 있어요.";
+    if (s.trade) return "거래 중에는 결투를 신청할 수 없어요.";
+    if (s.linkdead || u.dead) return "지금은 결투를 신청할 수 없어요.";
+    return null;
+  }
+  pvpOp(s, m) {
+    const c = s.char;
+    c.pvp ??= newPvpRecord();
+    switch (m.a) {
+      case "queue": {
+        const why = this.pvpWhyNot(s);
+        if (why) return s.notice(why);
+        this.pvpQueue.set(s.userId, { at: Date.now(), rating: c.pvp.rating });
+        s.send({ t: "pvpQ", on: 1, n: this.pvpQueue.size });
+        s.notice("결투 상대를 찾고 있어요… (비슷한 레이팅부터, 오래 기다릴수록 범위가 넓어져요)");
+        if (this.pvpQueue.size >= 2) this.pvpMatchmake();
+        return;
+      }
+      case "leave": this.pvpQueue.delete(s.userId); s.send({ t: "pvpQ", on: 0 }); return;
+      case "save": {
+        if (s.pvpRoom) return s.notice("경기 중에는 결투 세팅을 바꿀 수 없어요.");
+        if (!canPvp(c.cls)) return s.notice("1차 전직을 마친 뒤 결투 세팅을 저장할 수 있어요.");
+        if (m.preset === "custom") {
+          const st = checkPvpStats(c.cls, m.stats);
+          if (typeof st === "string") return s.notice(st);
+          c.pvp.stats = st; c.pvp.preset = "custom";
+        } else if (PVP_PRESETS[m.preset]) c.pvp.preset = m.preset;
+        if (Array.isArray(m.skills)) {
+          const base = { cls: c.cls, cls2: null, level: PVP.level, stats: {}, equip: {}, skills: [] };
+          const ok = new Set(availableSkills(base).filter((x) => x.kind !== "passive" && !x.path).map((x) => x.id));
+          const seen = new Set();
+          const list = m.skills.slice(0, SKILL_SLOTS).map((id) => (typeof id === "string" && ok.has(id) && !seen.has(id) ? (seen.add(id), id) : null));
+          while (list.length < SKILL_SLOTS) list.push(null);
+          if (!list.some((id) => id && SKILLS[id]?.kind === "basic")) return s.notice("기본 공격 스킬을 하나 이상 넣어 주세요.");
+          c.pvp.skills = list;
+        }
+        this.sendChar(s);
+        this.saveSoon(s);
+        return s.notice("결투 세팅을 저장했어요. 다음 경기부터 이 세팅으로 싸워요.");
+      }
+      case "challenge": {
+        const why = this.pvpWhyNot(s);
+        if (why) return s.notice(why);
+        const name = String(m.name ?? "").trim().toLowerCase();
+        const o = [...this.sessions.values()].find((x) => x.name.toLowerCase() === name);
+        if (!o || o === s) return s.notice("결투를 신청할 접속 중인 플레이어를 찾지 못했어요.");
+        const why2 = this.pvpWhyNot(o);
+        if (why2) return s.notice(`${o.name}님은 지금 결투를 받을 수 없어요.`);
+        if ((s.pvpChallengeAt ?? 0) > Date.now()) return s.notice("결투 신청은 잠시 뒤에 다시 보낼 수 있어요.");
+        s.pvpChallengeAt = Date.now() + 5000;
+        o.pvpInvite = { from: s.userId, at: Date.now() };
+        o.send({ t: "pvpInvite", from: s.name, cls: c.cls });
+        return s.notice(`${o.name}님에게 친선 결투를 신청했어요. (순위에는 반영되지 않아요)`);
+      }
+      case "accept": case "decline": {
+        const inv = s.pvpInvite;
+        s.pvpInvite = null;
+        if (!inv || Date.now() - inv.at > 30_000) return s.notice("받은 결투 신청이 없거나 시간이 지났어요.");
+        const o = this.sessions.get(inv.from);
+        if (!o) return s.notice("신청한 플레이어가 접속을 종료했어요.");
+        if (m.a === "decline") { o.notice(`${s.name}님이 결투 신청을 거절했어요.`); return; }
+        const why = this.pvpWhyNot(s) ?? this.pvpWhyNot(o);
+        if (why) return s.notice(why);
+        this.startPvp(o, s, false);
+        return;
+      }
+      case "top": this.sendPvpTop(s); return;
+    }
+  }
+  pvpMatchmake() {
+    const now = Date.now();
+    const list = [...this.pvpQueue.entries()].map(([id, e]) => ({ id, ...e, s: this.sessions.get(id) })).filter((e) => {
+      if (!e.s || this.pvpWhyNot(e.s)) { this.pvpQueue.delete(e.id); e.s?.send({ t: "pvpQ", on: 0 }); return false; }
+      return true;
+    }).sort((a, b) => a.at - b.at);
+    const used = new Set();
+    for (const a of list) {
+      if (used.has(a.id)) continue;
+      let best = null;
+      for (const b of list) {
+        if (b.id === a.id || used.has(b.id)) continue;
+        const wait = Math.max(now - a.at, now - b.at) / 1000;
+        const spread = PVP.queueSpread + wait * PVP.queueSpreadPerSec;
+        const d = Math.abs(a.rating - b.rating);
+        if (d <= spread && (!best || d < best.d)) best = { b, d };
+      }
+      if (!best) continue;
+      used.add(a.id); used.add(best.b.id);
+      this.startPvp(a.s, best.b.s, true);
+    }
+  }
+  startPvp(a, b, ranked) {
+    if (a === b || a.pvpRoom || b.pvpRoom) return null;
+    for (const s of [a, b]) { this.pvpQueue.delete(s.userId); s.send({ t: "pvpQ", on: 0 }); s.pvpInvite = null; if (s.trade) endTrade(s, "결투가 시작돼 거래가 취소됐어요."); }
+    const room = this.addRoom(new PvpRoom(this, { id: "pvp" + roomSeq++, a, b, ranked }));
+    room.begin();
+    for (const [s, o] of [[a, b], [b, a]]) s.send({ t: "pvpStart", opp: o.name, cls: o.char.cls, rating: ranked ? o.char.pvp?.rating ?? PVP.startRating : null, ranked: ranked ? 1 : 0 });
+    return room;
+  }
+  /** 결투장을 떠나는 순간 원래 캐릭터로 되돌림 */
+  pvpRestore(s, u) {
+    u.session = s;
+    delete u.pvp;
+    u.pvpZone = 0; u.ccDr = null; u.ccImmuneUntil = 0;
+    s.pvpRoom = null; s.pvpChar = null;
+    u.dead = false;
+    u.status.clear(); u.buffs.clear(); u.shield = null; u.cds.clear();
+    refreshStats(u);
+    u.hp = u.maxHp; u.mp = u.maxMp;
+    this.sendChar(s);
+  }
+  pvpFinish(room, winner, why) {
+    const [a, b] = room.sides;
+    const res = [winner === 0 ? 1 : winner === 1 ? 0 : 0.5, winner === 1 ? 1 : winner === 0 ? 0 : 0.5];
+    const deltas = [0, 0];
+    if (room.ranked) {
+      const ra = a.char.pvp ?? newPvpRecord(), rb = b.char.pvp ?? newPvpRecord();
+      deltas[0] = eloDelta(ra.rating, rb.rating, res[0], ra.games);
+      deltas[1] = eloDelta(rb.rating, ra.rating, res[1], rb.games);
+      for (const [s, rec, d, r] of [[a, ra, deltas[0], res[0]], [b, rb, deltas[1], res[1]]]) {
+        rec.rating = Math.max(0, rec.rating + d);
+        rec.best = Math.max(rec.best ?? 0, rec.rating);
+        rec.games++;
+        if (r === 1) { rec.w++; rec.streak = Math.max(0, rec.streak) + 1; }
+        else if (r === 0) { rec.l++; rec.streak = Math.min(0, rec.streak) - 1; }
+        else rec.d++;
+        s.char.pvp = rec;
+        this.save(s);
+      }
+    }
+    for (const [i, s] of [[0, a], [1, b]]) {
+      const rec = s.char.pvp ?? newPvpRecord();
+      s.send({ t: "pvpEnd", win: res[i] === 1 ? 1 : res[i] === 0 ? 0 : null, sc: room.score, me: i, opp: room.sides[1 - i].name, ranked: room.ranked ? 1 : 0, delta: deltas[i], rating: rec.rating, tier: pvpTier(rec.rating).name, why, log: room.log });
+    }
+    if (room.ranked) {
+      const txt = winner < 0 ? `⚔ 결투장: ${a.name} vs ${b.name} 무승부 (${room.score[0]}:${room.score[1]})`
+        : `⚔ 결투장: ${room.sides[winner].name}님이 ${room.sides[1 - winner].name}님을 ${Math.max(...room.score)}:${Math.min(...room.score)}로 꺾었어요!${why === "forfeit" || why === "leave" || why === "disconnect" ? " (기권승)" : ""}`;
+      this.broadcastSys(txt, "rank");
+      const ws = winner >= 0 ? room.sides[winner] : null;
+      if (ws && (ws.char.pvp?.streak ?? 0) >= 3) this.broadcastSys(`🔥 ${ws.name}님 결투장 ${ws.char.pvp.streak}연승 중!`, "rank");
+      this.refreshPvpTop(true);
+    }
+    room.schedule(3.5, () => { for (const s of room.sides) if (this.sessions.get(s.userId) === s && s.unit.room === room) this.toTown(s, "결투장에서 마을로 돌아왔어요."); });
+  }
+  refreshPvpTop(broadcast = false) {
+    try { this.pvpTop = Q.pvpTop.all().slice(0, 10).map((r) => ({ n: r.username, c: r.cls, r: r.rating, w: r.w, l: r.l })); } catch { this.pvpTop = []; }
+    if (broadcast) for (const s of this.sessions.values()) s.send({ t: "pvpTop", list: this.pvpTop });
+  }
+  sendPvpTop(s) {
+    if (!this.pvpTop) this.refreshPvpTop();
+    s.send({ t: "pvpTop", list: this.pvpTop });
+  }
+
   // ── 2차 업데이트: 섬 이동 · 2차 전직 · 베르단 공방 · 250 보상
   /** 뱃사공: 에르덴 ↔ 베르단. 첫 입도는 레벨 150 + 심연 등급 아이템 1개 공물(소모), 이후엔 자유 왕래 */
   travelBoat(s, to) {
@@ -828,6 +1000,7 @@ export class World {
     const it = ITEMS[id];
     const u = s.unit;
     if (!it || u.dead || !u.room) return;
+    if (u.room.kind === "pvp") return s.notice("결투장에서는 소모품을 쓸 수 없어요.");
     if ((s.char.cons[id] ?? 0) <= 0) return s.notice(`${it.name}이(가) 없어요.`);
     if ((s.potionCd[id] ?? 0) > Date.now()) return;
     s.potionCd[id] = Date.now() + it.cd * 1000;

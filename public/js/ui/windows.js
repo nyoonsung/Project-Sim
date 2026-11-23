@@ -17,6 +17,7 @@ import { SKILL_SLOTS, SLOT_KEYS, ITEMS, GRADE_COLOR, INVENTORY_SLOTS } from "/sh
 import { optInfo, VMODS, VMATS, SIGIL_NAMES, CRAFT_TIERS, CRAFT_SLOTS, VERDAN_RARITY_WEIGHTS } from "/shared/items.js";
 import { RARITY_COLOR, SLOT_NAME, OPTIONS, MYTHIC_EFFECTS, ABYSS_EFFECTS, WEAPON_TYPES, OFFHAND_TYPES, VARIANT_TRAITS, RARITIES, RARITY_WEIGHTS, RARITY_MUL, MATERIALS, ARMOR_NAMES, repairCost, ENH_PCT, ENCHANTS, enchantOdds, enchantCost, specialRerollCost, enhanceOdds, enhanceCost, enhMul, sellPrice, canEquip, MAX_ENH } from "/shared/items.js";
 import { sprite, playerLook } from "../render/sprites.js";
+import { PVP, PVP_PRESETS, presetStats, pvpTier } from "/shared/pvp.js";
 
 const fmtPct = (v) => (v * 100).toFixed(1) + "%";
 const RES_NAME_BASE = { mp: "MP", ki: "내력", holy: "성광", parts: "부품", gap: "틈" };
@@ -756,11 +757,11 @@ export function openNpc(o) {
     else open();
   };
   ({ gate: openGate, gate2: openGate2, gate3: () => openVerdanGate(3), gate4: () => openVerdanGate(4), vault: openAbyssVault, boatman: openBoat, boatman2: openBoat, class2_master: openClass2, vforge: () => pair(openForge, 460),
-    shop: () => pair(openShop, 440), smithy: () => pair(openSmithy, 420), enchanter: () => pair(openEnchant, 440), trainer: openTrainer, board: openBoard, class_master: openClass })[o.id]?.();
+    shop: () => pair(openShop, 440), smithy: () => pair(openSmithy, 420), enchanter: () => pair(openEnchant, 440), trainer: openTrainer, board: openBoard, class_master: openClass, arena: () => openArena("duel"), pvpboard: () => openArena("rank") })[o.id]?.();
 }
 
 export function refreshAll() {
-  for (const id of ["char", "skills", "inv", "party", "shop", "smithy", "enchant", "class", "gate", "gate2", "gate3", "gate4", "boat", "class2", "forge", "abyss-vault", "trainer", "titles", "trade"]) if (isOpen(id)) refreshWin(id);
+  for (const id of ["char", "skills", "inv", "party", "shop", "smithy", "enchant", "class", "gate", "gate2", "gate3", "gate4", "boat", "class2", "forge", "abyss-vault", "trainer", "titles", "trade", "arena"]) if (isOpen(id)) refreshWin(id);
 }
 
 // ───────── 조작 키 설정 (O) ─────────
@@ -972,4 +973,116 @@ function passwordForm() {
   const btn = h("button", { class: "btn small primary", onclick: (e) => go(e.currentTarget) }, "비밀번호 바꾸기");
   return h("details", { class: "pw-box" }, h("summary", { text: "🔑 비밀번호 바꾸기" }),
     h("div", { class: "pw-form" }, cur, nx, nx2, btn, msg));
+}
+
+// ───────── PvP 결투장 (결투장 관리인 · 명예의 전당) ─────────
+let arenaTab = "duel", arenaDraft = null, arenaSel = null, arenaRank = null;
+function pvpDraftFrom(c) {
+  const pv = c.pvp ?? {};
+  const base = { cls: c.cls, cls2: null, level: PVP.level, stats: {}, equip: {}, skills: [] };
+  const avail = Object.values(SKILLS).filter((s) => (s.cls === c.cls || s.cls === "common") && !s.path && s.kind !== "passive" && !s.weaponBasic && (s.cls === "common" || stageOf(c.cls, PVP.level) >= unlockStage(s, CLASS_INFO[c.cls].ranks.length)));
+  let skills = Array.isArray(pv.skills) && pv.skills.length === SKILL_SLOTS ? pv.skills.slice() : null;
+  if (!skills) {
+    // 저장한 세팅이 없으면: 현재 장착 중인 1차 스킬 → 부족하면 등급 높은 순서로 채움
+    skills = (c.skills ?? []).map((id) => (id && avail.some((s) => s.id === id) ? id : null));
+    while (skills.length < SKILL_SLOTS) skills.push(null);
+    if (!skills.some((id) => id && SKILLS[id].kind === "basic")) skills[0] = avail.find((s) => s.kind === "basic")?.id ?? "c_thrust";
+  }
+  void base;
+  return { preset: pv.preset ?? "bal", stats: pv.stats ? { ...pv.stats } : presetStats(c.cls, "bal"), skills, avail };
+}
+export function openArena(tab) {
+  if (tab) arenaTab = tab;
+  arenaDraft = null; arenaSel = null;
+  if (arenaTab === "rank") loadArenaRank();
+  send({ t: "pvp", a: "top" });
+  openWin("arena", "⚔ 결투장", () => {
+    const c = G.char;
+    if (!c) return [];
+    const pv = c.pvp ?? { rating: PVP.startRating, best: PVP.startRating, w: 0, l: 0, d: 0, streak: 0, games: 0 };
+    const tier = pvpTier(pv.rating);
+    const tabs = h("div", { class: "flexrow arena-tabs" }, ...[["duel", "결투"], ["setup", "결투 세팅"], ["rank", "순위"]].map(([k, n]) =>
+      h("button", { class: "btn small" + (arenaTab === k ? " primary" : ""), onclick: () => { arenaTab = k; if (k === "rank") loadArenaRank(); refreshWin("arena"); } }, n)));
+    const rec = h("div", { class: "pvp-rec" },
+      h("b", { text: tier.name, style: `color:${tier.color}` }), ` 레이팅 ${pv.rating} (최고 ${pv.best}) · ${pv.w}승 ${pv.l}패${pv.d ? ` ${pv.d}무` : ""}${pv.streak >= 2 ? ` · ${pv.streak}연승` : ""}${pv.games < 10 ? ` · 배치 ${pv.games}/10` : ""}`);
+    if (arenaTab === "rank") return [tabs, rec, arenaRankTable()];
+    if (arenaTab === "setup") return [tabs, ...arenaSetup(c)];
+    const can = c.cls !== "adventurer";
+    const inMatch = G.kind === "pvp";
+    let nameIn;
+    return [tabs, rec,
+      h("div", { class: "note", text: `레벨 ${PVP.level}·스탯 ${PVP.points}점·장비 없음으로 모두 같은 조건에서 싸워요. 1차 전직 스킬은 전부 쓸 수 있고, 2차 전직·장비 효과·물약은 결투장에서 꺼져요. 3판 2선승, 한 판 ${PVP.roundTime}초.` }),
+      inMatch ? h("div", {}, h("div", { class: "note warn", text: "지금 결투 중이에요. 나가면 기권패로 처리돼요." }), h("button", { class: "btn danger", onclick: () => { if (confirm("기권하고 마을로 돌아갈까요? (패배로 기록)")) send({ t: "town" }); } }, "기권하고 나가기"))
+        : !can ? h("div", { class: "note warn", text: "1차 전직을 마치면 결투장에 들어갈 수 있어요. (레벨은 상관없어요)" })
+          : h("div", {},
+            h("h4", { text: "순위전" }),
+            G.pvpQ ? h("button", { class: "btn", onclick: () => send({ t: "pvp", a: "leave" }) }, "⏳ 상대 찾는 중… (취소)")
+              : h("button", { class: "btn primary", onclick: () => send({ t: "pvp", a: "queue" }) }, "⚔ 순위전 상대 찾기"),
+            h("div", { class: "note", text: "비슷한 레이팅부터 찾고, 오래 기다릴수록 범위가 넓어져요. 이기면 레이팅이 오르고 마을의 명예의 전당에 이름이 올라가요." }),
+            h("h4", { text: "친선 결투 (순위 미반영)" }),
+            h("div", { class: "flexrow" }, (nameIn = h("input", { type: "text", maxlength: "24", placeholder: "상대 닉네임" })),
+              h("button", { class: "btn small", onclick: () => { const n = nameIn.value.trim(); if (n) send({ t: "pvp", a: "challenge", name: n }); } }, "결투 신청"))),
+      h("h4", { text: "규칙" }),
+      h("div", { class: "note", text: `• ${PVP.zoneAt}초가 지나면 가운데 거점이 열려요. 혼자 점유하면 초당 피해 +${Math.round(PVP.zoneDmgPerSec * 100)}% (최대 +${Math.round(PVP.zoneDmgMax * 100)}%).` }),
+      h("div", { class: "note", text: `• ${PVP.stormAt}초부터는 거점 밖에 있으면 초당 최대 체력 ${Math.round(PVP.stormPerSec * 100)}% 피해. 제한 시간이 끝나면 남은 체력 비율이 높은 쪽이 이겨요.` }),
+      h("div", { class: "note", text: `• 한 대 피해는 최대 체력의 ${Math.round(PVP.hitCap * 100)}%까지. 기절·빙결·속박은 짧아지고, 15초 안에 거듭 걸리면 점점 짧아지다 면역이 돼요. 치유·보호막은 PvP에서 약해져요.` }),
+    ];
+  }, { w: 460 });
+}
+async function loadArenaRank() {
+  try { arenaRank = (await (await fetch("/api/pvp-ranking")).json()).list ?? []; } catch { arenaRank = []; }
+  if (isOpen("arena")) refreshWin("arena");
+}
+function arenaRankTable() {
+  const list = arenaRank ?? [];
+  if (!arenaRank) return h("div", { class: "note", text: "불러오는 중…" });
+  if (!list.length) return h("div", { class: "note", text: "아직 순위전 기록이 없어요. 첫 승자가 되어 보세요!" });
+  return h("table", {}, h("tr", {}, ...["#", "이름", "직업", "등급", "레이팅", "전적"].map((t) => h("td", { text: t }))),
+    ...list.map((r, i) => { const t = pvpTier(r.rating); return h("tr", {}, h("td", { text: i + 1 }), h("td", { text: r.username }), h("td", { text: CLASS_INFO[r.cls]?.name ?? "" }), h("td", { text: t.name, style: `color:${t.color}` }), h("td", { text: r.rating }), h("td", { text: `${r.w}승 ${r.l}패${r.d ? ` ${r.d}무` : ""}` })); }));
+}
+function arenaSetup(c) {
+  if (c.cls === "adventurer") return [h("div", { class: "note warn", text: "1차 전직을 마치면 결투 세팅을 할 수 있어요." })];
+  const D = (arenaDraft ??= pvpDraftFrom(c));
+  const keys = CLASS_INFO[c.cls].stats;
+  const stats = D.preset === "custom" ? D.stats : presetStats(c.cls, D.preset);
+  const sum = keys.reduce((a, k) => a + (stats[k] ?? 0), 0);
+  const presetBtns = h("div", { class: "flexrow" }, ...[...Object.entries(PVP_PRESETS).map(([k, p]) => [k, p.name]), ["custom", "직접 배분"]].map(([k, n]) =>
+    h("button", { class: "btn small" + (D.preset === k ? " primary" : ""), onclick: () => { if (k === "custom" && D.preset !== "custom") D.stats = { ...presetStats(c.cls, D.preset) }; D.preset = k; refreshWin("arena"); } }, n)));
+  const statRows = keys.map((k) => h("div", { class: "statrow" }, h("span", { class: "sn", text: STATS[k]?.name ?? k }),
+    D.preset === "custom"
+      ? h("input", { type: "number", min: "0", max: String(PVP.statMax), value: String(stats[k] ?? 0), style: "width:72px", onchange: (e) => { D.stats[k] = Math.max(0, Math.min(PVP.statMax, Math.floor(Number(e.target.value) || 0))); refreshWin("arena"); } })
+      : h("span", { class: "sd", text: String(stats[k] ?? 0) }),
+    h("span", { class: "sd", text: STATS[k]?.desc ?? "" })));
+  const preview = deriveStats({ cls: c.cls, level: PVP.level, stats, equip: {}, skills: [] });
+  const slots = h("div", { class: "skill-slots" }, ...D.skills.map((id, i) => {
+    const sk = id && SKILLS[id];
+    const el = h("div", { class: "slot" + (sk ? "" : " empty"), onclick: () => {
+      if (arenaSel) { const j = D.skills.indexOf(arenaSel); if (j >= 0) D.skills[j] = null; D.skills[i] = arenaSel; arenaSel = null; }
+      else D.skills[i] = null;
+      refreshWin("arena");
+    } }, h("span", { class: "key", text: keyLabel(KEYS.slots[i]) }), h("span", { class: "nm", text: sk?.name ?? "" }));
+    if (sk) { el.style.borderColor = GRADE_COLOR[sk.grade]; el.prepend(h("img", { class: "ic", src: skillIconURL(sk), alt: "", draggable: "false" })); tipOn(el, () => skillTip(sk)); }
+    return el;
+  }));
+  const list = h("div", { class: "skill-list" }, ...D.avail.map((s) => h("div", { class: `sk${arenaSel === s.id ? " sel" : ""}${D.skills.includes(s.id) ? " equipped" : ""}`, onclick: () => { arenaSel = arenaSel === s.id ? null : s.id; refreshWin("arena"); } },
+    h("div", { class: "sk-top" }, h("img", { class: "sk-icon", src: skillIconURL(s), alt: "", draggable: "false" }), h("b", { class: "grade-" + s.grade, text: s.name }), " ", h("span", { class: "meta", text: { basic: "기본 공격", active: "액티브", ultimate: "궁극기" }[s.kind] ?? "" })))));
+  const inMatch = G.kind === "pvp";
+  return [
+    h("div", { class: "note", text: `결투장에서는 이 세팅만 써요. (레벨 ${PVP.level} · 스탯 ${PVP.points}점 · 한 스탯 최대 ${PVP.statMax}점 · 장비 없음)` }),
+    h("h4", { text: "스탯" }), presetBtns, ...statRows,
+    h("div", { class: "note" + (sum > PVP.points ? " warn" : ""), text: `합계 ${sum} / ${PVP.points}점 → 체력 ${Math.round(preview.maxHp)} · 방어 ${preview.def} · 치명 ${(Math.min(PVP.critCap, preview.crit) * 100).toFixed(1)}%` }),
+    h("h4", { text: "스킬칸 (스킬을 고른 뒤 칸을 누르세요 · 빈 칸을 누르면 비움)" }), slots, list,
+    h("button", { class: "btn primary", disabled: inMatch || sum > PVP.points, onclick: () => send({ t: "pvp", a: "save", preset: D.preset, ...(D.preset === "custom" ? { stats: Object.fromEntries(keys.map((k) => [k, D.stats[k] ?? 0])) } : {}), skills: D.skills }) }, inMatch ? "경기 중에는 바꿀 수 없어요" : "결투 세팅 저장"),
+  ];
+}
+export function openPvpResult(m) {
+  const win = m.win === 1, draw = m.win == null;
+  const whyTxt = { forfeit: "상대 기권", leave: "기권", disconnect: "접속 종료" }[m.why];
+  openWin("pvp-result", draw ? "결투 무승부" : win ? "🏆 결투 승리!" : "결투 패배", () => [
+    h("div", { class: "pvp-big", text: `${m.sc?.[m.me] ?? 0} : ${m.sc?.[1 - m.me] ?? 0}`, style: `color:${draw ? "#c8d0e0" : win ? "#ffd35a" : "#ff7a7a"}` }),
+    h("div", { class: "note", text: `상대: ${m.opp}${whyTxt ? ` · ${whyTxt}` : ""}` }),
+    m.ranked ? h("div", { class: "note", text: `레이팅 ${m.rating} (${m.delta >= 0 ? "+" : ""}${m.delta}) · ${m.tier}` }) : h("div", { class: "note", text: "친선전이라 순위에는 반영되지 않아요." }),
+    ...(m.log ?? []).filter((r) => r.r).map((r) => h("div", { class: "note", text: `${r.r}라운드: ${r.w < 0 ? "무승부" : r.w === m.me ? "승리" : "패배"}${r.why === "time" ? " (시간 종료)" : ""}${r.t ? ` · ${r.t}초` : ""}` })),
+    h("button", { class: "btn primary", onclick: () => closeWin("pvp-result") }, "확인"),
+  ], { w: 320 });
 }

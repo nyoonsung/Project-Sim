@@ -4,7 +4,7 @@
 //  - 첫 칸(기본 공격)은 누르고 있으면 계속 공격
 //  - 오른쪽 대시 버튼: 이동 중인 방향으로 대시
 //  - 위쪽: 물약·메뉴·채팅·전체 화면 버튼
-import { G, tryCast, moveDir, nearestEnemy } from "../game.js";
+import { G, tryCast, moveDir, nearestEnemy, isFoeEnt } from "../game.js";
 import { pixImg } from "./pix.js";
 import { SKILLS } from "/shared/skills.js";
 import { h, $, hideTip, retrigger } from "./dom.js";
@@ -25,7 +25,7 @@ function enemyAhead(me, dir, deg, range = 320) {
   let best = null, bd = range;
   const c = Math.cos((deg * Math.PI) / 180);
   for (const e of G.ents.values()) {
-    if ((e.k !== "m" && e.k !== "b") || e.dead) continue;
+    if (!isFoeEnt(e) || e.dead) continue;
     const dx = e.rx - me.rx, dy = e.ry - me.ry, d = Math.hypot(dx, dy);
     if (d >= bd || (d > 30 && (dx * dir[0] + dy * dir[1]) / d < c)) continue;
     bd = d; best = e;

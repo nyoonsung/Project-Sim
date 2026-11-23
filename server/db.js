@@ -94,6 +94,11 @@ const SQL = {
   ranking: `SELECT u.username, c.level, c.cls, c.best_floor, COALESCE(json_extract(c.data, '$.best2'), 0) AS best2, COALESCE(json_extract(c.data, '$.best3'), 0) AS best3, COALESCE(json_extract(c.data, '$.best4'), 0) AS best4, json_extract(c.data, '$.cls2') AS cls2 FROM characters c JOIN users u ON u.id = c.user_id
             WHERE u.role = 'player' ORDER BY best4 DESC, best3 DESC, c.best_floor DESC, c.level DESC LIMIT 20`,
   trimSec: "DELETE FROM security_log WHERE at < ?",
+  // PvP 결투장 순위: 레이팅 → 승수 순 (1판 이상 치른 플레이어)
+  pvpTop: `SELECT u.username, c.cls, CAST(json_extract(c.data, '$.pvp.rating') AS INTEGER) AS rating, COALESCE(json_extract(c.data, '$.pvp.w'), 0) AS w,
+             COALESCE(json_extract(c.data, '$.pvp.l'), 0) AS l, COALESCE(json_extract(c.data, '$.pvp.d'), 0) AS d, COALESCE(json_extract(c.data, '$.pvp.streak'), 0) AS streak
+           FROM characters c JOIN users u ON u.id = c.user_id
+           WHERE u.role = 'player' AND COALESCE(json_extract(c.data, '$.pvp.games'), 0) > 0 ORDER BY rating DESC, w DESC, l ASC LIMIT 50`,
 };
 
 /** 모든 쿼리 (initDb 후 사용) */

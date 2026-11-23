@@ -111,7 +111,7 @@ const ui = {
   onChar() { HUD.updateSkillbar(); WIN.refreshAll(); },
   onMe() { HUD.updateBars(); },
   onProf() { if (isOpen("skills") && !(G._profRefresh > performance.now())) { G._profRefresh = performance.now() + 500; refreshWin("skills"); } },
-  onMap() { HUD.updateZoneLabel(); WIN.refreshAll(); HUD.toast(G.mapKind === "town" ? (G.island === "verdan" ? "베르단 섬 마을" : "에르덴 섬 · 모험가 마을") : G.mapKind === "safe" ? "안전 구역 — 전직소" : `${DUNGEON_LABEL[G.dungeon] ?? ""}${G.floor}층 · ${G.zone.name}`, "floor"); },
+  onMap() { HUD.updateZoneLabel(); WIN.refreshAll(); HUD.toast(G.mapKind === "town" ? (G.island === "verdan" ? "베르단 섬 마을" : "에르덴 섬 · 모험가 마을") : G.mapKind === "safe" ? "안전 구역 — 전직소" : G.mapKind === "pvp" ? "결투장 — 1대1 결투" : `${DUNGEON_LABEL[G.dungeon] ?? ""}${G.floor}층 · ${G.zone.name}`, "floor"); },
   chat: HUD.chatLine,
   onParty() { HUD.updateParty(); WIN.refreshAll(); },
   invite(from) {
@@ -167,6 +167,21 @@ const ui = {
   onWho() { if (isOpen("who")) refreshWin("who"); },
   onVaultResult(m) { WIN.onAbyssVaultResult(m); },
   onBoatAsk(m) { WIN.onBoatAsk(m); },
+  onPvp() { if (isOpen("arena")) refreshWin("arena"); },
+  onPvpState() { HUD.updatePvp(); },
+  onPvpEnd(m) { WIN.openPvpResult(m); },
+  onPvpInvite(m) {
+    document.querySelector(".invite.pvp-ask")?.remove();
+    const left = h("span", { class: "inv-left", text: "30" });
+    const done = () => { clearInterval(tm); box.remove(); };
+    const answer = (ok) => { send({ t: "pvp", a: ok ? "accept" : "decline" }); done(); };
+    const box = h("div", { class: "invite pvp-ask" }, h("div", { text: `⚔ ${m.from}님이 친선 결투를 신청했어요. (순위 미반영) ` }, left, "초"),
+      h("div", { class: "flexrow" }, h("button", { class: "btn small primary", onclick: () => answer(true) }, G.touch ? "수락" : "수락 (Y)"), h("button", { class: "btn small", onclick: () => answer(false) }, G.touch ? "거절" : "거절 (N)")));
+    box._answer = answer;
+    $("#ui").append(box);
+    let n = 30;
+    const tm = setInterval(() => { n--; left.textContent = String(n); if (n <= 0) done(); }, 1000);
+  },
   onCrafted(m) { this.toast(`제작 완료: [${m.item.name}] (${m.item.rarity})`, m.item.rarity === "신화" ? "mythic" : "legend"); },
   onEnchant(m) { WIN.onEnchant(m); const { ENCHANTS } = WIN; HUD.toast(`인챈트: ✦ ${ENCHANTS[m.ench].name} (${ENCHANTS[m.ench].desc})`, m.ench === "mend" ? "mythic" : "rank"); },
   onSpecialReroll(m) { WIN.onSpecialReroll(m); HUD.toast(`특수 효과 변경: ${m.effectName}`, m.rarity === "심연" ? "abyss" : "mythic"); },

@@ -5,19 +5,19 @@ import { profOf, profLevel, profGain, profPow, profCost, PROF_MAX, isUncapped } 
 import { CLASS_INFO, stageOf } from "../../shared/classes.js";
 import { PATHS, TIER_LEVEL, PATH_DMG } from "../../shared/classes2.js";
 import { moveCircle, circleHitsWall, lineOfSight } from "../../shared/move.js";
-import { dealDamage, heal, giveShield, applyStatus, addGroggy, isHardCC, buffSum, angDiff } from "./combat.js";
+import { dealDamage, heal, giveShield, applyStatus, addGroggy, isHardCC, buffSum, angDiff, foe } from "./combat.js";
 
 import { BASIC_SPEED, PLAYER_HIT, CLASS_ASPD } from "../../shared/constants.js";
 const RES_NAME = { mp: "MP", ki: "내력", holy: "성광", parts: "부품", gap: "틈", r2: "전직 자원" };
 const RES_MAX = { ki: 100, holy: 100, parts: 3, gap: 3 };
 
-const enemies = (room, u) => [...room.units.values()].filter((t) => !t.dead && t.team !== u.team && (t.type !== "d" || t.targetable));
+const enemies = (room, u) => [...room.units.values()].filter((t) => !t.dead && foe(t, u) && (t.type !== "d" || t.targetable));
 const pointSegmentDistance = (px, py, x0, y0, x1, y1) => {
   const dx = x1 - x0, dy = y1 - y0;
   const t = Math.max(0, Math.min(1, ((px - x0) * dx + (py - y0) * dy) / (dx * dx + dy * dy || 1)));
   return Math.hypot(px - x0 - dx * t, py - y0 - dy * t);
 };
-const allies = (room, u) => [...room.players.values()].filter((p) => !p.dead);
+const allies = (room, u) => [...room.players.values()].filter((p) => !p.dead && !foe(p, u));
 const healPower = (u) => u.stats.atk * u.stats.heal * (u.stats.dmgType === "mag" ? u.stats.mag : u.stats.phys) * 0.85;
 const msg = (u, text) => u.session.notice(text);
 
@@ -227,7 +227,7 @@ function clampPoint(room, u, ax, ay, range = 200) {
 function pickAlly(room, u, ctx, range) {
   if (ctx.tx) {
     const t = room.players.get(ctx.tx);
-    if (t && !t.dead && Math.hypot(t.x - u.x, t.y - u.y) <= range + 20) return t;
+    if (t && !t.dead && !foe(t, u) && Math.hypot(t.x - u.x, t.y - u.y) <= range + 20) return t;
   }
   let best = u, bd = Math.hypot(ctx.ax - u.x, ctx.ay - u.y);
   for (const p of allies(room, u)) {
@@ -404,7 +404,7 @@ const STEP = {
       const spread = st.spread ? ((st.spread * Math.PI) / 180) * (n > 1 ? k / (n - 1) - 0.5 : 0) : 0;
       const a = (st.burst ? Math.atan2(ctx.ay - u.y, ctx.ax - u.x) : ctx.aim) + spread + (st.burst && k ? (Math.random() - 0.5) * 0.06 : 0);
       room.addProjectile({
-        team: u.team, src: u.id, x: u.x + Math.cos(a) * 10, y: u.y - 8 + Math.sin(a) * 10, vx: Math.cos(a) * st.speed, vy: Math.sin(a) * st.speed,
+        team: u.team, pvp: u.pvp, src: u.id, x: u.x + Math.cos(a) * 10, y: u.y - 8 + Math.sin(a) * 10, vx: Math.cos(a) * st.speed, vy: Math.sin(a) * st.speed,
         range, r: (st.radius ?? 5) + PLAYER_HIT.proj, pierce: st.pierce ?? 0, fx: ctx.sk.fx?.proj, pal: ctx.sk.fx?.palette ?? null, scale: ctx.sk.fx?.scale ?? null,
         onHit: (t, t1, p) => {
           strike(room, u, t, st, ctx, t1, { travel: p.travelled / p.range });
@@ -424,7 +424,7 @@ const STEP = {
     if (ctx.sk.fx?.pre) room.ev({ e: "fx", fx: ctx.sk.fx.pre, x: u.x | 0, y: u.y | 0, s: 0.6 });
     let first = true;
     room.addArea({
-      team: u.team, shape: "c", x: pt.x, y: pt.y, r: st.radius, tel: st.telegraph ?? 0, ticks: st.ticks ?? 1, interval: st.interval,
+      team: u.team, pvp: u.pvp, shape: "c", x: pt.x, y: pt.y, r: st.radius, tel: st.telegraph ?? 0, ticks: st.ticks ?? 1, interval: st.interval,
       fire: (t0, a) => {
         let cx = a.x, cy = a.y;
         if (st.scatter) { cx += (Math.random() - 0.5) * 2 * st.scatter; cy += (Math.random() - 0.5) * 2 * st.scatter; }
@@ -460,7 +460,7 @@ const STEP = {
     const x0 = u.x, y0 = u.y;
     room.ev({ e: "anim", id: u.id, a: ctx.sk.anim ?? "cast" });
     room.addArea({
-      team: u.team, shape: "r", x: x0, y: y0, ang, l: len, w, tel: st.telegraph ?? 0, ticks: 1,
+      team: u.team, pvp: u.pvp, shape: "r", x: x0, y: y0, ang, l: len, w, tel: st.telegraph ?? 0, ticks: 1,
       fire: (t0) => {
         const steps = 5;
         for (let i = 1; i <= steps; i++) if (ctx.sk.fx?.line) room.ev({ e: "fx", fx: ctx.sk.fx.line, x: (x0 + Math.cos(ang) * (len * i) / steps) | 0, y: (y0 + Math.sin(ang) * (len * i) / steps) | 0, s: 0.35 });
@@ -492,7 +492,7 @@ const STEP = {
           if (hitSet.has(t.id) || pointSegmentDistance(t.x, t.y, fromX, fromY, u.x, u.y) > t.r + u.r + 6) continue;
           hitSet.add(t.id);
           strike(room, u, t, { ...st.hit, cc: st.hit.cc, groggy: st.hit.groggy, threat: st.hit.threat }, ctx, t0, { melee: true });
-          if (st.stopOnHit) { u.dash.stop = true; break; }
+          if (st.stopOnHit && u.dash) { u.dash.stop = true; break; }
         }
       },
       onEnd: () => next(),
@@ -560,7 +560,7 @@ const STEP = {
     room.ev({ e: "anim", id: u.id, a: ctx.sk.anim === "channel" ? "channel" : "cast" });
     const healed = new Map();
     const z = room.addZone({
-      team: u.team, owner: u.id, x: pt.x, y: pt.y, r: st.radius, dur: st.dur, interval: st.interval ?? 1, fx: ctx.sk.fx?.area ?? null, pal: ctx.sk.fx?.palette ?? null,
+      team: u.team, pvp: u.pvp, owner: u.id, x: pt.x, y: pt.y, r: st.radius, dur: st.dur, interval: st.interval ?? 1, fx: ctx.sk.fx?.area ?? null, pal: ctx.sk.fx?.palette ?? null,
       follow: st.follow ? u.id : 0, endOnMove: st.endOnMove, sx: u.x, sy: u.y, charges: st.charges ?? 0, copyMul: st.copyMul ?? 0.4, kind: st.kind,
       tick: (t0, zz) => {
         if (st.pow) for (const t of enemies(room, u).filter((t) => Math.hypot(t.x - zz.x, t.y - zz.y) - t.r <= zz.r).slice(0, st.max ?? 99)) {
@@ -724,8 +724,8 @@ export function onParry(room, u, src, now) {
   // 반격 내부 쿨타임 0.8초
   if (now >= (u.icd.get("counter") ?? 0)) {
     u.icd.set("counter", now + 0.8);
-    let t = src && !src.dead && src.team === "m" && Math.hypot(src.x - u.x, src.y - u.y) < 90 ? src : null;
-    if (!t) t = [...room.units.values()].filter((m) => m.team === "m" && !m.dead && Math.hypot(m.x - u.x, m.y - u.y) < 70).sort((a, b) => Math.hypot(a.x - u.x, a.y - u.y) - Math.hypot(b.x - u.x, b.y - u.y))[0];
+    let t = src && !src.dead && foe(src, u) && Math.hypot(src.x - u.x, src.y - u.y) < 90 ? src : null;
+    if (!t) t = [...room.units.values()].filter((m) => foe(m, u) && m.type !== "d" && !m.dead && Math.hypot(m.x - u.x, m.y - u.y) < 70).sort((a, b) => Math.hypot(a.x - u.x, a.y - u.y) - Math.hypot(b.x - u.x, b.y - u.y))[0];
     if (t && c.pow) {
       dealDamage(room, u, t, { pow: c.pow * u.stats.counter, threat: c.threat ?? 1 }, now);
       room.ev({ e: "anim", id: u.id, a: "slash" });
@@ -1407,7 +1407,7 @@ const CUSTOM2 = {
     for (let k = 0; k < st.shots; k++) room.schedule(k * st.gap, (t0) => {
       if (u.dead) return;
       const a = Math.atan2(ctx.ay - u.y, ctx.ax - u.x) + (Math.random() - 0.5) * 0.08;
-      room.addProjectile({ team: u.team, src: u.id, x: u.x + Math.cos(a) * 10, y: u.y - 8 + Math.sin(a) * 10, vx: Math.cos(a) * 680, vy: Math.sin(a) * 680, range: 360, r: 6 + PLAYER_HIT.proj, pierce: 2, fx: ctx.sk.fx?.proj, pal: ctx.sk.fx?.palette ?? null,
+      room.addProjectile({ team: u.team, pvp: u.pvp, src: u.id, x: u.x + Math.cos(a) * 10, y: u.y - 8 + Math.sin(a) * 10, vx: Math.cos(a) * 680, vy: Math.sin(a) * 680, range: 360, r: 6 + PLAYER_HIT.proj, pierce: 2, fx: ctx.sk.fx?.proj, pal: ctx.sk.fx?.palette ?? null,
         onHit: (t, t1) => { strike(room, u, t, { pow: st.pow }, ctx, t1); if (k % 4 === 3) windBlade(room, u, t, t1, 1.6); } });
     });
     for (let k = 0; k < beats * 2; k++) room.schedule(0.2 + k * 0.18, (t0) => {
@@ -1419,7 +1419,7 @@ const CUSTOM2 = {
     const t = enemies(room, u).filter((t) => Math.hypot(t.x - u.x, t.y - u.y) <= st.range && lineOfSight(room.map, u.x, u.y, t.x, t.y)).sort((a, b) => Math.hypot(a.x - u.x, a.y - u.y) - Math.hypot(b.x - u.x, b.y - u.y))[0];
     if (!t) return;
     const a = Math.atan2(t.y - u.y, t.x - u.x);
-    room.addProjectile({ team: u.team, src: u.id, x: u.x, y: u.y - 8, vx: Math.cos(a) * 760, vy: Math.sin(a) * 760, range: st.range + 20, r: 6 + PLAYER_HIT.proj, pierce: 0, fx: "projectiles/bullet-tracer", onHit: (m, t1) => strike(room, u, m, { pow: st.pow }, ctx, t1) });
+    room.addProjectile({ team: u.team, pvp: u.pvp, src: u.id, x: u.x, y: u.y - 8, vx: Math.cos(a) * 760, vy: Math.sin(a) * 760, range: st.range + 20, r: 6 + PLAYER_HIT.proj, pierce: 0, fx: "projectiles/bullet-tracer", onHit: (m, t1) => strike(room, u, m, { pow: st.pow }, ctx, t1) });
   },
   snipeShot(room, u, ctx, st, now) {
     const spent = Math.min(st.spendR2.max, Math.floor(u.r2 ?? 0));
@@ -1485,7 +1485,7 @@ const CUSTOM2 = {
   },
   boomerang(room, u, ctx, st, now) {
     const a = ctx.aim, hit1 = new Set(), hit2s = new Set();
-    const go = (from, ang, set, t0) => room.addProjectile({ team: u.team, src: u.id, x: from.x, y: from.y - 8, vx: Math.cos(ang) * st.speed, vy: Math.sin(ang) * st.speed, range: st.range, r: st.radius + PLAYER_HIT.proj, pierce: 9, fx: ctx.sk.fx?.proj, scale: ctx.sk.fx?.scale ?? null, pal: ctx.sk.fx?.palette ?? null,
+    const go = (from, ang, set, t0) => room.addProjectile({ team: u.team, pvp: u.pvp, src: u.id, x: from.x, y: from.y - 8, vx: Math.cos(ang) * st.speed, vy: Math.sin(ang) * st.speed, range: st.range, r: st.radius + PLAYER_HIT.proj, pierce: 9, fx: ctx.sk.fx?.proj, scale: ctx.sk.fx?.scale ?? null, pal: ctx.sk.fx?.palette ?? null,
       onHit: (t, t1) => { if (set.has(t.id)) return; set.add(t.id); strike(room, u, t, st, ctx, t1); } });
     go(u, a, hit1, now);
     const end = { x: u.x + Math.cos(a) * st.range, y: u.y + Math.sin(a) * st.range };
@@ -1517,7 +1517,7 @@ const CUSTOM2 = {
     STEP.dash(room, u, ctx, { dist: st.dist, speed: st.speed }, now, () => {});
     room.schedule(st.dist / st.speed + 0.05, (t0) => {
       const len = Math.hypot(u.x - x0, u.y - y0);
-      room.addArea({ team: u.team, shape: "r", x: x0, y: y0, ang: a, l: len, w: st.width, tel: 0.2, ticks: 3, interval: 0.5, fire: (t1) => {
+      room.addArea({ team: u.team, pvp: u.pvp, shape: "r", x: x0, y: y0, ang: a, l: len, w: st.width, tel: 0.2, ticks: 3, interval: 0.5, fire: (t1) => {
         room.ev({ e: "fx", fx: "shadow/shadow-flames", x: (x0 + Math.cos(a) * len / 2) | 0, y: (y0 + Math.sin(a) * len / 2) | 0, s: 0.5 });
         for (const t of enemies(room, u)) {
           const dx = t.x - x0, dy = t.y - y0, along = dx * Math.cos(a) + dy * Math.sin(a), across = Math.abs(-dx * Math.sin(a) + dy * Math.cos(a));
@@ -1528,7 +1528,7 @@ const CUSTOM2 = {
   },
   frontZone(room, u, ctx, st, now) {
     const x = u.x + Math.cos(ctx.aim) * st.dist, y = u.y + Math.sin(ctx.aim) * st.dist;
-    room.addZone({ team: u.team, owner: u.id, x, y, r: st.radius, dur: st.dur, interval: st.interval, fx: "fire/campfire", pal: ctx.sk.fx?.palette ?? null, follow: 0, kind: "lava",
+    room.addZone({ team: u.team, pvp: u.pvp, owner: u.id, x, y, r: st.radius, dur: st.dur, interval: st.interval, fx: "fire/campfire", pal: ctx.sk.fx?.palette ?? null, follow: 0, kind: "lava",
       tick: (t0, zz) => { for (const t of enemies(room, u)) if (Math.hypot(t.x - zz.x, t.y - zz.y) - t.r <= zz.r) strike(room, u, t, { pow: st.pow, status: st.burn ? { type: "burn", dur: 3, pow: p2of(u).riftChase ? 0.45 : 0.3 } : null }, ctx, t0); } });
   },
   leapTo(room, u, ctx, st, now) {

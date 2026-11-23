@@ -58,6 +58,12 @@ const SCHEMA = {
   lock: (m) => isUid(m.uid),
   ping: (m) => isNum(m.c, 0, 1e15),
   dummy: (m) => ["reset"].includes(m.op),
+  // PvP 결투장: 대기열 · 세팅 저장(프리셋/직접 배분 · 스킬칸) · 친선 결투 신청/수락/거절 · 순위
+  pvp: (m) => ["queue", "leave", "save", "challenge", "accept", "decline", "top"].includes(m.a)
+    && (m.preset === undefined || ["atk", "bal", "def", "custom"].includes(m.preset))
+    && (m.stats === undefined || (m.stats && typeof m.stats === "object" && !Array.isArray(m.stats) && Object.keys(m.stats).length <= 6 && Object.entries(m.stats).every(([k, v]) => isId(k) && isInt(v, 0, 1000))))
+    && (m.skills === undefined || (Array.isArray(m.skills) && m.skills.length === SKILL_SLOTS && m.skills.every((x) => x === null || isId(x))))
+    && (m.name === undefined || isStr(m.name, 24)),
 };
 
 export const CLIENT_MESSAGE_TYPES = Object.freeze(Object.keys(SCHEMA));

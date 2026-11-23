@@ -13,7 +13,7 @@ import { skillIconURL } from "./icons.js";
 import { pixImg } from "./pix.js";
 
 const RES = { sword: ["ki", "내력", 100], fist: ["ki", "내력", 100], priest: ["holy", "성광", 100], smith: ["parts", "부품", 3], rogue: ["gap", "틈", 3] };
-const BUFF_NAME = { riposte: "반격 기회", imun: "이문정주", sidestep: "횡이동", dance: "권무", acupoint: "점혈", evasion: "이베이젼", absolute: "앱솔루트", footwork: "발놀림", poison_blade: "독날", afterimage: "잔영", track: "약점 추적", precise: "정밀 시전", echo: "잔향", eo_burst: "어검발산", hymn_atk: "축복(공격)", hymn_def: "축복(방어)", zone_dr: "회랑", circuit: "회로", swift_kill: "질주", m_guard: "가호", flash_edge: "일섬 여진", eo_tempest: "회천 폭풍", king_resolve: "권왕의 결의", night_hunt: "밤의 사냥", forge_oath: "대장간 서약", sword_saint: "검성의 기백", fist_king: "권왕의 기백", heaven_bow: "천궁의 가호", execution_flow: "처형의 흐름", apocalypse_aftershock: "종말의 여진", blink_ward: "차원 보호막",
+const BUFF_NAME = { pvp_zone: "거점 장악", riposte: "반격 기회", imun: "이문정주", sidestep: "횡이동", dance: "권무", acupoint: "점혈", evasion: "이베이젼", absolute: "앱솔루트", footwork: "발놀림", poison_blade: "독날", afterimage: "잔영", track: "약점 추적", precise: "정밀 시전", echo: "잔향", eo_burst: "어검발산", hymn_atk: "축복(공격)", hymn_def: "축복(방어)", zone_dr: "회랑", circuit: "회로", swift_kill: "질주", m_guard: "가호", flash_edge: "일섬 여진", eo_tempest: "회천 폭풍", king_resolve: "권왕의 결의", night_hunt: "밤의 사냥", forge_oath: "대장간 서약", sword_saint: "검성의 기백", fist_king: "권왕의 기백", heaven_bow: "천궁의 가호", execution_flow: "처형의 흐름", apocalypse_aftershock: "종말의 여진", blink_ward: "차원 보호막",
   dk_veil: "황혼의 장막", dusk_veil_drain: "장막 흡혈", dk_eclipse: "피의 월식", sg_flow: "검식", sg_complete: "검식 완성", vj_guard: "호신", vj_form: "금강불괴", st_rush: "전진 보법",
   wl_veil: "그림자 장막", aa_focus: "비전 집중", tr_chase: "독혈 추격", nb_dark: "어둠의 칼날", nb_linger: "그림자 잔류", nb_smoke: "잔영 연막", stealth: "은신", as_behind: "배후",
   iq_stance: "자세", iq_passion: "수난의 반격", iq_gospel: "복음", ht_doom: "유예된 종말", kg_aid: "응급처치", kg_sense: "야전 감각", kg_fervor: "개척의 열기",
@@ -329,7 +329,7 @@ export function interactTarget() {
   if (!me) return null;
   let best = null, bd = 145;
   for (const o of G.objects) {
-    if (o.kind !== "npc" && o.kind !== "dummy") continue;
+    if (o.kind !== "npc" && o.kind !== "dummy" && o.kind !== "pvpboard") continue;
     const d = Math.hypot(o.x - me.rx, o.y - me.ry);
     if (d < bd) { bd = d; best = o; }
   }
@@ -338,7 +338,7 @@ export function interactTarget() {
 export function updateInteract() {
   const t = interactTarget();
   const el = $("#interact-hint");
-  const txt = t ? (t.kind === "dummy" ? "[G] 허수아비 피해 측정 초기화" : `[G] ${t.name}와(과) 대화`) : "";
+  const txt = t ? (t.kind === "dummy" ? "[G] 허수아비 피해 측정 초기화" : t.kind === "pvpboard" ? "[G] 결투장 순위 보기" : `[G] ${t.name}와(과) 대화`) : "";
   if (el._t === txt) return; // 바뀔 때만 화면 갱신
   el._t = txt;
   el.classList.toggle("hidden", !t);
@@ -346,3 +346,20 @@ export function updateInteract() {
 }
 
 export { tryCast };
+// ── PvP 결투장: 화면 위 가운데 점수판 (라운드·점수·남은 시간·거점 상태)
+export function updatePvp() {
+  let el = document.getElementById("pvp-banner");
+  const st = G.pvp;
+  if (!st || G.kind !== "pvp") { el?.remove(); return; }
+  if (!el) { el = h("div", { id: "pvp-banner", class: "pvp-banner" }); $("#ui").append(el); }
+  const me = G.pvpSide ?? 1, opp = 3 - me;
+  const nm = (i) => st.n?.[i - 1] ?? "?", cl = (i) => CLASS_INFO[st.c?.[i - 1]]?.name ?? "";
+  const phase = st.ph === "prep" ? `준비 ${st.t}` : st.ph === "fight" ? `⏱ ${st.t}` : st.ph === "end" ? "라운드 종료" : "경기 종료";
+  el.replaceChildren(
+    h("div", { class: "pvp-row" },
+      h("span", { class: "pvp-me", text: `${nm(me)} (${cl(me)})` }),
+      h("span", { class: "pvp-score", text: `${st.sc?.[me - 1] ?? 0} : ${st.sc?.[opp - 1] ?? 0}` }),
+      h("span", { class: "pvp-opp", text: `${nm(opp)} (${cl(opp)})` })),
+    h("div", { class: "pvp-sub", text: `${st.rk ? "순위전" : "친선전"} · ${st.r}라운드 · ${phase}${st.st ? " · 결계 수축!" : st.z ? " · 거점 열림" : ""}` }),
+  );
+}

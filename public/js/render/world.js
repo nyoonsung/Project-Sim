@@ -1,5 +1,5 @@
 // 월드 렌더러: 타일 → 바닥 표시(예고·구역) → y정렬 유닛/오브젝트 → 투사체 → 이펙트 → 조명 → 날씨 → 머리 위 UI
-import { G, localStep, moveDir, netClock } from "../game.js";
+import { G, localStep, moveDir, netClock, isAllyFx, isFoeEnt } from "../game.js";
 import { titleDesign } from "/shared/titles.js";
 import { tickQuality, preset } from "../quality.js";
 import { frame as dtFrame, drawFoot as drawDTFoot } from "./dt2.js";
@@ -450,8 +450,9 @@ export class Renderer {
     for (const z of G.zones.values()) {
       let x = z.x, y = z.y;
       if (z.fol) { const f = G.ents.get(z.fol); if (f) { x = f.rx; y = f.ry; } }
-      ctx.strokeStyle = z.tm ? "rgba(120,220,255,0.55)" : "rgba(180,60,255,0.6)";
-      ctx.fillStyle = z.tm ? "rgba(120,220,255,0.07)" : "rgba(160,40,200,0.12)";
+      const zAlly = isAllyFx(z);
+      ctx.strokeStyle = zAlly ? "rgba(120,220,255,0.55)" : "rgba(180,60,255,0.6)";
+      ctx.fillStyle = zAlly ? "rgba(120,220,255,0.07)" : "rgba(160,40,200,0.12)";
       ctx.beginPath(); ctx.ellipse(Math.round(x - cx), Math.round(y - cy), z.r, z.r * 0.75, 0, 0, Math.PI * 2); ctx.fill();
       ctx.setLineDash([4, 3]); ctx.lineDashOffset = -t * 12; ctx.stroke(); ctx.setLineDash([]);
     }
@@ -460,7 +461,7 @@ export class Renderer {
   drawTels(ctx, cx, cy, t) {
     for (const s of G.tels.values()) {
       const k = Math.min(1, (t - s.t0) / Math.max(0.05, s.d));
-      const ally = s.tm === 1;
+      const ally = isAllyFx(s);
       // 잔상 재생(gh 1)은 보랏빛, 반복 예고(gh 2)는 주황빛으로 구분
       const edge = ally ? "rgba(120,220,255,0.8)" : s.gh === 1 ? "rgba(200,120,255,0.9)" : s.gh === 2 ? "rgba(255,170,60,0.9)" : "rgba(255,60,60,0.9)";
       const fill = ally ? "rgba(120,220,255,0.10)" : s.gh === 1 ? "rgba(160,80,255,0.2)" : s.gh === 2 ? "rgba(255,150,40,0.2)" : "rgba(255,40,40,0.22)";
@@ -548,7 +549,7 @@ export class Renderer {
     ctx.save();
     ctx.lineWidth = 2;
     for (const s of G.tels.values()) {
-      if (s.tm === 1) continue;
+      if (isAllyFx(s)) continue;
       const k = Math.min(1, (t - s.t0) / Math.max(0.05, s.d));
       if (k >= 1) continue;
       const x = s.x - cx, y = s.y - cy;
@@ -647,8 +648,48 @@ export class Renderer {
     }
   }
 
+  /** 마을의 결투장 명예의 전당: 상위 5명을 판자에 크게 표시 */
+  drawPvpBoard(ctx, o, x, y, t) {
+    const W = 104, H = 76, top = y - H - 10;
+    ctx.fillStyle = "rgba(0,0,0,0.3)"; ctx.beginPath(); ctx.ellipse(x, y - 2, 54, 8, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = "#3a2410"; ctx.fillRect(x - W / 2 + 6, top + 10, 5, H + 2); ctx.fillRect(x + W / 2 - 11, top + 10, 5, H + 2);
+    ctx.fillStyle = "#6a4422"; ctx.fillRect(x - W / 2, top, W, H);
+    ctx.fillStyle = "#1c1410"; ctx.fillRect(x - W / 2 + 4, top + 14, W - 8, H - 18);
+    ctx.fillStyle = "#c8a050"; ctx.fillRect(x - W / 2, top, W, 3); ctx.fillRect(x - W / 2, top + H - 3, W, 3);
+    ctx.fillStyle = "#8a1a24"; ctx.fillRect(x - 34, top - 6, 68, 16);
+    ctx.fillStyle = "#ffd35a"; ctx.fillRect(x - 34, top - 6, 68, 2);
+    this.label(ctx, "⚔ 결투장 명예의 전당", x, top + 7, "#ffe08a");
+    const list = G.pvpTop ?? [];
+    if (!list.length) this.label(ctx, "아직 기록이 없어요", x, top + 44, "#a0a0a0");
+    const COL = ["#ffd35a", "#d8e0f0", "#e0a060", "#9ad0ff", "#9ad0ff"];
+    for (let i = 0; i < Math.min(5, list.length); i++) {
+      const r = list[i], yy = top + 26 + i * 11;
+      const name = r.n.length > 8 ? r.n.slice(0, 8) + "…" : r.n;
+      this.label(ctx, `${i + 1}. ${name}  ${r.r}`, x, yy, COL[i]);
+    }
+    if (o.glow !== false) addGlow(o.x, o.y - 50, 90, "#ffb050", 0.25 + Math.sin(t * 2) * 0.05, "pvpb|" + o.x);
+    const near = G.ents.get(G.you);
+    if (near && Math.hypot(near.rx - o.x, near.ry - o.y) < 90) this.label(ctx, G.touch ? "눌러서 순위 보기" : "[G] 순위 보기", x, top - 14, "#ffd35a");
+  }
+  /** 결투장 중앙 거점: 열리기 전엔 희미하게, 열리면 금빛, 결계가 좁혀지면 붉게 */
+  drawPvpZone(ctx, o, x, y, t) {
+    const st = G.pvp, on = st?.z, storm = st?.st;
+    const r = st?.zr ?? 92;
+    ctx.save();
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = storm ? `rgba(255,70,70,${0.7 + Math.sin(t * 6) * 0.2})` : on ? `rgba(255,210,90,${0.7 + Math.sin(t * 4) * 0.2})` : "rgba(200,200,220,0.25)";
+    ctx.fillStyle = storm ? "rgba(255,60,60,0.10)" : on ? "rgba(255,200,80,0.10)" : "rgba(200,200,220,0.04)";
+    ctx.beginPath(); ctx.ellipse(x, y, r, r * 0.75, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.setLineDash([6, 4]); ctx.lineDashOffset = -t * (on ? 20 : 4); ctx.stroke(); ctx.setLineDash([]);
+    ctx.restore();
+    if (on) this.label(ctx, storm ? "거점 (결계 수축 중)" : "거점", x, y - r * 0.75 - 4, storm ? "#ff8a8a" : "#ffe08a");
+  }
+
   drawObject(ctx, o, cx, cy, t) {
     const x = Math.round(o.x - cx), y = Math.round(o.y - cy);
+    if (o.kind === "pvpboard") return this.drawPvpBoard(ctx, o, x, y, t);
+    if (o.kind === "pvpzone") return this.drawPvpZone(ctx, o, x, y, t);
+    if (G.kind === "pvp" && o.kind === "flag" && drawTownObject(ctx, o, x, y, t)) return;
     if (G.kind === "town" && drawTownObject(ctx, o, x, y, t)) return;
     if (G.kind !== "town" && drawDungeonObject(ctx, o, x, y, t)) return;
     if (o.kind === "npc" && G.kind === "town" && drawTownNpc(ctx, o, x, y, t)) {
@@ -902,7 +943,7 @@ export class Renderer {
         ctx.drawImage(f, Math.round(-b.ox * s), Math.round(-b.oy * s), Math.round(b.w * s), Math.round(b.h * s));
         ctx.restore();
       } else {
-        ctx.fillStyle = p.tm ? "#9ef" : "#f84";
+        ctx.fillStyle = isAllyFx(p) ? "#9ef" : "#f84";
         ctx.fillRect(Math.round(x) - 2, Math.round(y) - 2, 4, 4);
       }
     }
@@ -1042,11 +1083,13 @@ export class Renderer {
       if (x < -60 || x > VW + 60 || y < -40 || y > VH + 80) continue;
       if (e.k === "p") {
         const top = y - 48;
-        this.label(ctx, info.n, x, top - 4, e.id === G.you ? "#ffffff" : "#8fd0ff");
+        const foeP = isFoeEnt(e);
+        this.label(ctx, info.n, x, top - 4, e.id === G.you ? "#ffffff" : foeP ? "#ff7a7a" : "#8fd0ff");
         // 칭호: 디자인이 있으면 그림(화면 위 또렷한 이미지 층에), 없으면 색 글자
         if (info.tt && titleDesign(info.tt)) (G.titleMarks ??= []).push({ id: e.id, tt: info.tt, x, y: top - 14 });
         else if (info.tt) this.label(ctx, `「${info.tt}」`, x, top - 15, info.tc ?? "#ffd35a");
-        if (e.id !== G.you) { ctx.fillStyle = "#000"; ctx.fillRect(x - 13, top, 26, 3); ctx.fillStyle = "#e0424e"; ctx.fillRect(x - 12, top + 1, Math.round(24 * e.hp), 1); }
+        if (e.id !== G.you && foeP) { ctx.fillStyle = "#000"; ctx.fillRect(x - 17, top, 34, 5); ctx.fillStyle = "#ff3a4a"; ctx.fillRect(x - 16, top + 1, Math.round(32 * e.hp), 3); }
+        else if (e.id !== G.you) { ctx.fillStyle = "#000"; ctx.fillRect(x - 13, top, 26, 3); ctx.fillStyle = "#e0424e"; ctx.fillRect(x - 12, top + 1, Math.round(24 * e.hp), 1); }
         if (e.casting) {
           const k = Math.min(1, (t - e.casting.t0) / e.casting.d);
           if (k < 1) { ctx.fillStyle = "#000"; ctx.fillRect(x - 15, y + 6, 30, 4); ctx.fillStyle = "#ffd35a"; ctx.fillRect(x - 14, y + 7, Math.round(28 * k), 2); }

@@ -72,6 +72,7 @@ export async function handleApi(req) {
     if (path === "/api/admin/logout" && method === "POST") return adminLogout(req);
     if (path === "/api/admin/me" && method === "GET") return adminStatus(req);
     if (path === "/api/ranking" && method === "GET") return reply(200, { list: Q.ranking.all() });
+    if (path === "/api/pvp-ranking" && method === "GET") return reply(200, { list: Q.pvpTop.all() });
     // 배포 전에 확인용: 지금 접속자 수와 던전 안에 있는 사람 수 (이름 등 개인 정보 없음)
     if (path === "/api/status" && method === "GET") {
       const w = initWorld(); let online = 0, dungeon = 0;

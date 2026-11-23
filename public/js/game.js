@@ -43,6 +43,12 @@ export function onMessage(m) {
     case "vaultResult": G.ui.onVaultResult?.(m); break;
     case "boatAsk": G.ui.onBoatAsk?.(m); break;
     case "crafted": G.ui.onCrafted?.(m); break;
+    // PvP 결투장
+    case "pvpQ": G.pvpQ = !!m.on; G.ui.onPvp?.(); break;
+    case "pvpTop": G.pvpTop = m.list ?? []; G.ui.onPvp?.(); break;
+    case "pvpInvite": G.ui.onPvpInvite?.(m); break;
+    case "pvpStart": G.pvpMatch = { opp: m.opp, cls: m.cls, rating: m.rating, ranked: !!m.ranked }; G.pvpQ = false; G.ui.center(`결투 상대: ${m.opp}`); G.ui.onPvp?.(); break;
+    case "pvpEnd": G.pvpResult = m; G.ui.onPvpEnd?.(m); break;
     case "me":
       G.me = m; G.meAt = now(); G.ui.onMe();
       if (m.pf && G.char) { G.char.prof ??= {}; for (const [k, v] of Object.entries(m.pf)) { G.char.prof[k] = v; } G.ui.onProf?.(); }
@@ -77,9 +83,10 @@ export function onMessage(m) {
 function onMap(m) {
   G.room = m.room; G.kind = m.map?.kind ?? m.kind; G.floor = m.floor; G.dungeon = m.dungeon ?? 1; G.you = m.you; G.island = m.island ?? (m.kind === "town" ? "erden" : G.island);
   G.dark = null;
+  if (G.kind !== "pvp") { G.pvp = null; G.pvpSide = null; G.ui.onPvpState?.(); }
   if (G.kind === "town") onTown((t) => G.ui?.center(t));
   G.mapKind = m.kind === "town" ? "town" : m.kind === "safe" ? "safe" : m.kind;
-  G.zone = m.floor ? zoneOf(m.floor, G.dungeon) : ZONES[0];
+  G.zone = m.floor ? zoneOf(m.floor, G.dungeon) : m.kind === "pvp" ? (ZONES.find((z) => z.name === "타락한 성역") ?? ZONES[0]) : ZONES[0];
   G.map = new TileMap({ ...m, kind: m.kind === "town" ? "town" : m.kind }, G.zone);
   G.map.doorsOpen = m.doorsOpen;
   G.map.explored.fill(1); // 투기장 한 방이라 지도 전체를 바로 보여 줌
@@ -249,6 +256,7 @@ function onEvent(e) {
     case "bbeam": if (G.beams.length < 48) G.beams.push({ boss: e.id, a: e.a / 1000, rot: e.rot / 1000, d: e.d, w: e.w, l: e.l, at: e.at, fx: e.fx, t0: now() - lag() }); break;
     case "parryup": if (ent) ent.parryUntil = now() + e.d; break;
     case "buff": if (e.id === G.you) G.ui.onMe(); break;
+    case "pvp": G.pvp = { ...e, at: now() }; G.pvpSide = e.ids ? e.ids.indexOf(G.you) + 1 || null : null; G.ui.onPvpState?.(); break;
   }
 }
 
@@ -441,13 +449,17 @@ export function setAuto(id, on) {
 /** 스킬이 닿는 대략의 거리 */
 const reachOf = skillReach;
 const isHeal = (sk) => (sk.steps ?? []).some((st) => st.do === "heal");
+/** 적 유닛인가 (결투장에서는 상대 플레이어도 적) */
+export const isFoeEnt = (e) => e.k === "m" || e.k === "b" || (e.k === "p" && !!G.pvpSide && !!e.info?.sd && e.info.sd !== G.pvpSide);
+/** 예고·투사체·장판이 내 편 것인가 */
+export const isAllyFx = (o) => (o?.sd && G.pvpSide ? o.sd === G.pvpSide : o?.tm === 1);
 /** 가장 가까운 살아 있는 적 */
 export function nearestEnemy(range = 320) {
   const me = G.ents.get(G.you);
   if (!me) return null;
   let best = null, bd = range;
   for (const e of G.ents.values()) {
-    if ((e.k !== "m" && e.k !== "b") || e.dead) continue;
+    if (!isFoeEnt(e) || e.dead) continue;
     const d = Math.hypot(e.rx - me.rx, e.ry - me.ry);
     if (d < bd) { bd = d; best = e; }
   }

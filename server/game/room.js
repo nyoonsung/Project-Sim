@@ -2,11 +2,12 @@
 import { TILE, TICK_DT, PLAYER_RADIUS } from "../../shared/constants.js";
 import { applyInput, moveCircle, circleHitsWall, blocksShot, lineOfSight, tileAt } from "../../shared/move.js";
 import { PATH_DMG } from "../../shared/classes2.js";
+import { PVP } from "../../shared/pvp.js";
 import { MONSTERS, BOSSES, monsterStats, bossStats, floorScale, zoneOf, effLevel, normDungeon, dungeonMax, progKeys, D2_MONSTER_STAT_MULTIPLIER, D2_BOSS_STAT_MULTIPLIER, D2_BOSS_SPEED_MULTIPLIER } from "../../shared/zones.js";
 import { rollItem, rollAbyssRelic, rollVerdanItem, ILVL_CAP, VMATS, vmatTier, SIGIL_NAMES } from "../../shared/items.js";
 import { wearOnDeath } from "./wear.js";
 const KI_BASE = 30; // 내력 기본치
-import { tickStatuses, dealDamage, heal, moveMul, isHardCC, applyStatus, buffSum, giveShield } from "./combat.js";
+import { tickStatuses, dealDamage, heal, moveMul, isHardCC, applyStatus, buffSum, giveShield, foe } from "./combat.js";
 import { newUnitId, gainXp, refreshStats } from "./player.js";
 import { castSkill, onParry as skillOnParry, onPlayerHit as skillOnPlayerHit, tickPlayerSkills, cancelCast, onFrontGuard, playerHurt, playerEvade, skillOnKill, p2of } from "./skills.js";
 import { tickMonster, tickBoss } from "./ai.js";
@@ -155,7 +156,7 @@ export class Room {
   }
   spawnDevice(owner, kind, x, y, o) {
     const d = {
-      id: newUnitId(), team: owner.team, type: "d", kind, owner: owner.id, x, y, r: kind === "golem" ? 14 : kind === "pet" ? (o.skin === "demon" ? 14 : 10) : 8,
+      id: newUnitId(), team: owner.team, pvp: owner.pvp, type: "d", kind, owner: owner.id, x, y, r: kind === "golem" ? 14 : kind === "pet" ? (o.skin === "demon" ? 14 : 10) : 8,
       hp: o.hp ?? 1, maxHp: o.hp ?? 1, until: this.now + o.dur, o, status: new Map(), buffs: new Map(), dead: false, nextHit: 0,
       atk: owner.stats.atk, facing: o.dir ?? 0,
     };
@@ -168,9 +169,9 @@ export class Room {
 
   describe(u) {
     if (u.type === "p") {
-      const ch = u.session.char;
+      const ch = u.session.char, eq = (u.session.realChar ?? ch).equip ?? {};
       const tt = ch.title != null ? ch.titles?.find((x) => x.id === ch.title) : null;
-      return { id: u.id, k: "p", n: u.name, tt: tt?.text ?? null, tc: tt?.color ?? null, c: ch.cls, mh: u.maxHp, lv: ch.level, w: ch.equip.weapon?.type ?? null, o: ch.equip.offhand?.type ?? null, party: this.partyId ? 1 : 0, x: u.x | 0, y: u.y | 0 };
+      return { id: u.id, k: "p", n: u.name, tt: tt?.text ?? null, tc: tt?.color ?? null, c: ch.cls, mh: u.maxHp, lv: ch.level, w: eq.weapon?.type ?? null, o: eq.offhand?.type ?? null, party: this.partyId ? 1 : 0, ...(u.pvp ? { sd: u.pvp } : {}), x: u.x | 0, y: u.y | 0 };
     }
     if (u.type === "m") return { id: u.id, k: "m", n: u.name, m: u.mid, mh: u.maxHp, lv: u.level, el: u.elite ? 1 : 0, x: u.x | 0, y: u.y | 0 };
     if (u.type === "b") return { id: u.id, k: "b", n: u.name, b: u.bid, mh: u.maxHp, lv: u.level, x: u.x | 0, y: u.y | 0 };
@@ -676,7 +677,7 @@ export class Room {
     const s = u.stats;
     // 자원 회복
     u.mp = Math.min(u.maxMp, u.mp + s.mpRegen * TICK_DT * (u.lastHurt && now - u.lastHurt < 3 ? 0.6 : 1));
-    if (s.hpRegen) u.hp = Math.min(u.maxHp, u.hp + s.hpRegen * TICK_DT);
+    if (s.hpRegen) u.hp = Math.min(u.maxHp, u.hp + s.hpRegen * TICK_DT * (this.kind === "pvp" ? PVP.heal : 1));
     if (this.map.safe && !u.lastHurt) u.hp = Math.min(u.maxHp, u.hp + u.maxHp * 0.05 * TICK_DT);
     if (this.map.safe) { u.hp = Math.min(u.maxHp, u.hp + u.maxHp * 0.03 * TICK_DT); u.mp = Math.min(u.maxMp, u.mp + u.maxMp * 0.05 * TICK_DT); }
     if (u.cls === "sword" || u.cls === "fist") {
@@ -744,12 +745,12 @@ export class Room {
     const owner = this.units.get(d.owner);
     if (d.kind === "mine" || d.kind === "wire") {
       for (const m of this.units.values()) {
-        if (m.team !== "m" || m.dead || m.fly || m.dummy) continue;
+        if (!(foe(m, d) && m.type !== "d") || m.dead || m.fly || m.dummy) continue;
         if (Math.hypot(m.x - d.x, m.y - d.y) < (o.trigger ?? 22) + m.r) {
           if (d.kind === "mine") {
             this.ev({ e: "fx", fx: "explosions/dirt-explosion", x: d.x | 0, y: d.y | 0, s: 0.5 });
             for (const t of this.units.values()) {
-              if (t.team !== "m" || t.dead || Math.hypot(t.x - d.x, t.y - d.y) > o.radius + t.r) continue;
+              if (!(foe(t, d) && t.type !== "d") || t.dead || Math.hypot(t.x - d.x, t.y - d.y) > o.radius + t.r) continue;
               if (owner) dealDamage(this, owner, t, { pow: o.pow, threat: 3 }, now);
               applyStatus(this, owner, t, { type: "slow", dur: 3, v: 0.4 }, now);
             }
@@ -767,14 +768,14 @@ export class Room {
       // 수호 골렘 7호: 주인 근처(380 안)의 가장 가까운 적에게 걸어가서 내려찍음. 적이 없으면 주인을 따라다님
       let best = null, bd = 1e9;
       for (const m of this.units.values()) {
-        if (m.team !== "m" || m.dead || m.dummy) continue;
+        if (!(foe(m, d) && m.type !== "d") || m.dead || m.dummy) continue;
         if (Math.hypot(m.x - owner.x, m.y - owner.y) > 380) continue;
         const dist = Math.hypot(m.x - d.x, m.y - d.y);
         if (dist < bd) { bd = dist; best = m; }
       }
       if (now >= (d.nextTaunt ?? 0)) { // 주변 적의 위협을 골렘에게 (1초마다)
         d.nextTaunt = now + 1;
-        for (const m of this.units.values()) if (m.team === "m" && !m.dead && !m.boss && Math.hypot(m.x - d.x, m.y - d.y) < 160) m.tauntBy = { id: d.id, until: now + 1.2 };
+        for (const m of this.units.values()) if ((foe(m, d) && m.type !== "d") && !m.dead && !m.boss && Math.hypot(m.x - d.x, m.y - d.y) < 160) m.tauntBy = { id: d.id, until: now + 1.2 };
       }
       let tx, ty, stopAt;
       if (best) { tx = best.x; ty = best.y; stopAt = d.r + best.r + 8; }
@@ -797,7 +798,7 @@ export class Room {
           const x = tgt.x, y = tgt.y;
           this.ev({ e: "fx", fx: "impacts/ground-slam", x: x | 0, y: y | 0, s: 0.45 });
           if (!tgt.dead) dealDamage(this, owner, tgt, { pow: o.pow, threat: 4, p2: o.p2 }, t0);
-          for (const m of this.units.values()) if (m !== tgt && m.team === "m" && !m.dead && Math.hypot(m.x - x, m.y - y) <= 46 + m.r) dealDamage(this, owner, m, { pow: o.pow * 0.5, threat: 2, p2: o.p2 }, t0);
+          for (const m of this.units.values()) if (m !== tgt && (foe(m, d) && m.type !== "d") && !m.dead && Math.hypot(m.x - x, m.y - y) <= 46 + m.r) dealDamage(this, owner, m, { pow: o.pow * 0.5, threat: 2, p2: o.p2 }, t0);
         });
       }
     } else if (d.kind === "pet" && owner) {
@@ -806,12 +807,12 @@ export class Room {
       if (!best || best.dead) {
         best = null; let bd = 1e9;
         for (const m of this.units.values()) {
-          if (m.team !== "m" || m.dead || m.dummy || Math.hypot(m.x - owner.x, m.y - owner.y) > 420) continue;
+          if (!(foe(m, d) && m.type !== "d") || m.dead || m.dummy || Math.hypot(m.x - owner.x, m.y - owner.y) > 420) continue;
           const dist = Math.hypot(m.x - d.x, m.y - d.y) - (o.preferCurse && m.status.has("curse") ? 200 : 0);
           if (dist < bd) { bd = dist; best = m; }
         }
       }
-      if (o.taunt && now >= (d.nextTaunt ?? 0)) { d.nextTaunt = now + 1; for (const m of this.units.values()) if (m.team === "m" && !m.dead && !m.boss && Math.hypot(m.x - d.x, m.y - d.y) < 120) m.tauntBy = { id: owner.id, until: now + 0.6 }; }
+      if (o.taunt && now >= (d.nextTaunt ?? 0)) { d.nextTaunt = now + 1; for (const m of this.units.values()) if ((foe(m, d) && m.type !== "d") && !m.dead && !m.boss && Math.hypot(m.x - d.x, m.y - d.y) < 120) m.tauntBy = { id: owner.id, until: now + 0.6 }; }
       let tx, ty, stopAt;
       if (best) { tx = best.x; ty = best.y; stopAt = d.r + best.r + 6; }
       else { tx = owner.x - Math.cos(owner.facing ?? 0) * 40; ty = owner.y - Math.sin(owner.facing ?? 0) * 30; stopAt = 18; }
@@ -831,14 +832,14 @@ export class Room {
         if (o.bleed) applyStatus(this, owner, best, { type: "bleed", dur: 4, pow: 0.3, pm: PATH_DMG[owner.cls2] ?? 1 }, now);
         if (o.wave && d.hits % 3 === 0) {
           this.ev({ e: "fx", fx: "shadow/necro-skulls", x: best.x | 0, y: best.y | 0, s: 0.7 });
-          for (const m of this.units.values()) if (m.team === "m" && !m.dead && m !== best && m.status.has("curse") && Math.hypot(m.x - best.x, m.y - best.y) < 140) dealDamage(this, owner, m, { pow: o.wave, noProcs: true, p2: true }, now);
+          for (const m of this.units.values()) if ((foe(m, d) && m.type !== "d") && !m.dead && m !== best && m.status.has("curse") && Math.hypot(m.x - best.x, m.y - best.y) < 140) dealDamage(this, owner, m, { pow: o.wave, noProcs: true, p2: true }, now);
         }
       }
     } else if (d.kind === "turret" && owner) {
       if (now >= d.nextHit) {
         let best = null, bd = o.range ?? 300;
         for (const m of this.units.values()) {
-          if (m.team !== "m" || m.dead || m.dummy) continue;
+          if (!(foe(m, d) && m.type !== "d") || m.dead || m.dummy) continue;
           const dist = Math.hypot(m.x - d.x, m.y - d.y);
           if (dist < bd && lineOfSight(this.map, d.x, d.y, m.x, m.y)) { bd = dist; best = m; }
         }
@@ -846,7 +847,7 @@ export class Room {
           d.nextHit = now + (o.interval ?? 0.5);
           const a = Math.atan2(best.y - d.y, best.x - d.x);
           d.facing = a;
-          this.addProjectile({ team: "p", src: owner.id, x: d.x + Math.cos(a) * 10, y: d.y - 12 + Math.sin(a) * 10, vx: Math.cos(a) * 640, vy: Math.sin(a) * 640, range: (o.range ?? 300) + 20, r: 6, pierce: 0, fx: o.big ? "projectiles/laser-bolt" : "projectiles/bullet-tracer",
+          this.addProjectile({ team: "p", pvp: d.pvp, src: owner.id, x: d.x + Math.cos(a) * 10, y: d.y - 12 + Math.sin(a) * 10, vx: Math.cos(a) * 640, vy: Math.sin(a) * 640, range: (o.range ?? 300) + 20, r: 6, pierce: 0, fx: o.big ? "projectiles/laser-bolt" : "projectiles/bullet-tracer",
             onHit: (t, t1) => dealDamage(this, owner, t, { pow: o.pow ?? 0.7, threat: 2, p2: true }, t1) });
         } else d.nextHit = now + 0.2;
       }
@@ -855,7 +856,7 @@ export class Room {
         d.nextHit = now + 0.5;
         const [a, b] = o.ends;
         for (const m of this.units.values()) {
-          if (m.team !== "m" || m.dead) continue;
+          if (!(foe(m, d) && m.type !== "d") || m.dead) continue;
           if (distToSeg(m.x, m.y, a[0], a[1], b[0], b[1]) < 14 + m.r) {
             dealDamage(this, owner, m, { pow: 0.25, threat: 2 }, now);
             if (!m.boss) applyStatus(this, owner, m, { type: "slow", dur: 1, v: 0.35 }, now);
@@ -895,7 +896,7 @@ export class Room {
     p.hit = new Set();
     p.travelled = 0;
     this.projectiles.push(p);
-    this.ev({ e: "pj", id: p.id, x: p.x | 0, y: p.y | 0, a: Math.round(Math.atan2(p.vy, p.vx) * 1000), v: Math.round(Math.hypot(p.vx, p.vy)), r: Math.round(p.range), fx: p.fx, tm: p.team === "p" ? 1 : 0, pal: p.pal ?? null, s: p.scale ?? null });
+    this.ev({ e: "pj", id: p.id, x: p.x | 0, y: p.y | 0, a: Math.round(Math.atan2(p.vy, p.vx) * 1000), v: Math.round(Math.hypot(p.vx, p.vy)), r: Math.round(p.range), fx: p.fx, tm: p.team === "p" ? 1 : 0, ...(p.pvp ? { sd: p.pvp } : {}), pal: p.pal ?? null, s: p.scale ?? null });
     return p;
   }
   tickProjectiles(now) {
@@ -925,7 +926,7 @@ export class Room {
         }
         if (end) break;
         for (const t of candidates) {
-          if (t.dead || t.team === p.team || p.hit.has(t.id) || (t.type === "d" && !t.targetable)) continue;
+          if (t.dead || !foe(t, p) || p.hit.has(t.id) || (t.type === "d" && !t.targetable)) continue;
           if (Math.hypot(t.x - p.x, t.y - p.y) > (p.team === "m" && t.type === "p" ? t.r * 0.6 : t.r) + p.r) continue; // 적 탄은 플레이어 몸 가운데에 맞아야 함
           p.hit.add(t.id);
           p.onHit?.(t, now, p);
@@ -959,7 +960,7 @@ export class Room {
       log.push({ ...a, at: this.now });
       if (log.length > 24) log.shift();
     }
-    if (a.shape) this.ev({ e: "tel", id: a.id, sh: a.shape, x: a.x | 0, y: a.y | 0, r: a.r ? Math.round(a.r) : 0, r2: a.r2 ? Math.round(a.r2) : 0, a: a.ang != null ? Math.round(a.ang * 1000) : 0, w: a.w ?? 0, l: a.l ?? 0, arc: a.arc ?? 0, d: a.tel ?? 0, tm: a.team === "p" ? 1 : 0, ...(a.g ? { g: a.g } : {}), ...(a.pts ? { pts: a.pts } : {}), ...(a.gh || a.echo ? { gh: a.gh ? 1 : 2 } : {}) });
+    if (a.shape) this.ev({ e: "tel", id: a.id, sh: a.shape, x: a.x | 0, y: a.y | 0, r: a.r ? Math.round(a.r) : 0, r2: a.r2 ? Math.round(a.r2) : 0, a: a.ang != null ? Math.round(a.ang * 1000) : 0, w: a.w ?? 0, l: a.l ?? 0, arc: a.arc ?? 0, d: a.tel ?? 0, tm: a.team === "p" ? 1 : 0, ...(a.pvp ? { sd: a.pvp } : {}), ...(a.g ? { g: a.g } : {}), ...(a.pts ? { pts: a.pts } : {}), ...(a.gh || a.echo ? { gh: a.gh ? 1 : 2 } : {}) });
     return a;
   }
   tickAreas(now) {
@@ -1038,7 +1039,7 @@ export class Room {
     z.until = this.now + z.dur;
     z.next = this.now;
     this.zones.push(z);
-    this.ev({ e: "zone", id: z.id, x: z.x | 0, y: z.y | 0, r: Math.round(z.r), d: z.dur, fx: z.fx ?? null, tm: z.team === "p" ? 1 : 0, fol: z.follow ?? 0, pal: z.pal ?? null, own: z.owner ?? 0 });
+    this.ev({ e: "zone", id: z.id, x: z.x | 0, y: z.y | 0, r: Math.round(z.r), d: z.dur, fx: z.fx ?? null, tm: z.team === "p" ? 1 : 0, ...(z.pvp ? { sd: z.pvp } : {}), fol: z.follow ?? 0, pal: z.pal ?? null, own: z.owner ?? 0 });
     return z;
   }
   tickZones(now) {

@@ -284,6 +284,26 @@ export function safeZone(floor, dungeon = 1) {
   return m;
 }
 
+/** PvP 결투장: 좌우 대칭 투기장. 시야를 가리는 기둥 4개, 가운데 거점 */
+export function makeArena() {
+  const m = grid(30, 22);
+  carveRect(m, 3, 4, 24, 15);
+  // 대칭 엄폐 기둥 (2×2)
+  for (const [x, y] of [[8, 7], [20, 7], [8, 14], [20, 14]]) carveRect(m, x, y, 2, 2, T.WALL);
+  wallUp(m);
+  const cx = px(15) - TILE / 2, cy = px(11) - TILE / 2;
+  m.objects.push({ kind: "pvpzone", x: cx, y: cy, flatY: -999 });
+  for (const [x, y] of [[4, 5], [25, 5], [4, 17], [25, 17]]) m.objects.push({ kind: "torch", fx: "fire/brazier", x: px(x), y: px(y) });
+  m.objects.push({ kind: "flag", c: "flag_red", x: px(3) + 4, y: px(11) }, { kind: "flag", c: "flag_blue", x: px(26) - 4, y: px(11) });
+  const R = rng(9001);
+  addTorches(m, R, { torch: "fire/torch" }, 3);
+  m.spawnsPvp = [[px(5), cy], [px(24), cy]];
+  m.zoneAt = [cx, cy];
+  m.start = m.spawnsPvp[0];
+  m.kind = "pvp";
+  return m;
+}
+
 export function makeFloor(floor, seed, party = 1, dungeon = 1) {
   const kind = floorKind(floor);
   return kind === "normal" ? normalFloor(floor, seed, party, dungeon) : bossFloor(floor, seed, dungeon);
@@ -358,6 +378,10 @@ export function makeTown() {
   objs.push({ kind: "dummy", id: "dummy", x: P(10) + 16, y: P(22) + 16 });
   objs.push({ kind: "npc", id: "board", name: "모험가 게시판", x: P(25) + 16, y: P(14) });
   objs.push({ kind: "npc", id: "enchanter", name: "마법부여사 엘라", x: P(28) + 16, y: P(8) + 8 });
+  // PvP 결투장: 광장 서쪽의 명예의 전당 판자(상위 순위 표시) + 결투장 관리인
+  for (const tx of [15, 16, 17]) set(m, tx, 17, T.WALL);
+  objs.push({ kind: "pvpboard", id: "pvpboard", name: "결투장 명예의 전당", x: P(16) + 16, y: P(17) + 30 });
+  objs.push({ kind: "npc", id: "arena", name: "결투장 관리인 카일", x: P(18) + 4, y: P(18) + 14 });
   // 시장 노점 (광장 아래쪽)
   for (const [tx, goods, win] of [[14, ["bread", "jars", "redjar"], "#ff6ac8"], [23, ["crates", "box", "pack"], "#6ad8ff"]]) {
     set(m, tx, 19, T.WALL); set(m, tx + 1, 19, T.WALL); set(m, tx + 2, 19, T.WALL);
@@ -479,6 +503,10 @@ export function makeVerdanTown() {
   carveRect(m, 9, 11, 3, 3, T.PLAZA);
   objs.push({ kind: "dummy", id: "dummy", x: P(10) + 16, y: P(12) + 16 });
   objs.push({ kind: "npc", id: "board", name: "모험가 게시판", x: P(25) + 16, y: P(13) });
+  // PvP 결투장: 명예의 전당 판자 + 결투장 관리인
+  for (const tx of [16, 17, 18]) set(m, tx, 18, T.WALL);
+  objs.push({ kind: "pvpboard", id: "pvpboard", name: "결투장 명예의 전당", x: P(17) + 16, y: P(18) + 30 });
+  objs.push({ kind: "npc", id: "arena", name: "결투장 관리인 세이라", x: P(19) + 8, y: P(19) + 14 });
   // 선착장
   objs.push({ kind: "boat", x: P(23) + 16, y: P(27) + 20, sail: "#c8e0ff" });
   objs.push({ kind: "npc", id: "boatman2", name: "뱃사공 마레", x: P(18) + 16, y: P(25) + 12 });

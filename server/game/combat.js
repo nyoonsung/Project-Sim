@@ -3,6 +3,12 @@ import { CRIT, BOSS_HIT_CAP } from "../../shared/constants.js";
 import { defReduction } from "../../shared/stats.js";
 import { PATH_DMG } from "../../shared/classes2.js";
 import { wearOnHit } from "./wear.js";
+import { PVP } from "../../shared/pvp.js";
+
+/** PvP 결투장: 서로 다른 편(pvp 1·2)이면 적 */
+export const foe = (a, b) => a.team !== b.team || (a.pvp != null && b.pvp != null && a.pvp !== b.pvp);
+/** 플레이어 편 공격의 주인 (장치·소환수 → 주인) */
+const ownerOf = (room, src) => (src?.type === "d" ? room.units.get(src.owner) ?? src : src);
 
 const DOT_TYPES = new Set(["burn", "poison", "bleed"]);
 const HARD_CC = new Set(["stun", "down", "freeze"]);
@@ -20,7 +26,26 @@ export function buffSum(u, key) {
 export function applyStatus(room, src, t, st, now) {
   if (!t || t.dead) return false;
   const type = st.type;
-  if (t.team === "p" && t.res && HARD_CC.has(type) && Math.random() < t.res) return false;
+  if (t.team === "p" && t.res && HARD_CC.has(type) && Math.random() < (room.kind === "pvp" ? Math.min(PVP.resCap, t.res) : t.res)) return false;
+  // PvP: 제어 지속시간 단축·연속 제어 점감(15초 안 2번째 55%, 3번째 30%, 4번째 면역)·감속 상한
+  if (room.kind === "pvp" && t.type === "p") {
+    if (HARD_CC.has(type) || type === "root") {
+      if (now < (t.ccImmuneUntil ?? 0)) return false;
+      const dr = t.ccDr && now - t.ccDr.at < PVP.ccDrWindow ? t.ccDr : { n: 0, at: now };
+      if (dr.n >= PVP.ccDr.length) { room.ev({ e: "msg", text: `${t.name}: 제어 면역`, kind: "info" }); return false; }
+      const dur = Math.min(st.dur * PVP.ccDur, PVP.ccMax) * PVP.ccDr[dr.n];
+      t.ccDr = { n: dr.n + 1, at: now };
+      t.ccImmuneUntil = now + dur + PVP.ccImmune;
+      t.casting = null; t.channel = null;
+      const until = now + dur;
+      const cur = t.status.get(type);
+      if (cur && cur.until > until) return false;
+      t.status.set(type, { until, v: st.v ?? 0, pow: 0, src: src?.id ?? 0, srcAtk: 0, next: now + 1 });
+      room.ev({ e: "st", id: t.id, s: type, d: Math.round(dur * 100) / 100 });
+      return true;
+    }
+    if (type === "slow") st = { ...st, v: Math.min(st.v ?? 0.3, PVP.slowMax), dur: Math.min(st.dur, PVP.slowDurMax) };
+  }
   if (t.boss && (HARD_CC.has(type) || type === "root" || type === "pull")) {
     addGroggy(room, t, st.groggy ?? 10, now);
     return false;
@@ -84,7 +109,7 @@ export function dealDamage(room, src, t, o, now) {
   if (!o.dot && t.team === "p") {
     if ((t.iframeUntil ?? 0) > now && !o.echo) { room.ev({ e: "miss", id: t.id }); return { dmg: 0, miss: true }; }
     const ev = (t.stats?.evade ?? 0) + buffSum(t, "evade");
-    if (ev > 0 && Math.random() < Math.min(0.6, ev)) {
+    if (ev > 0 && Math.random() < Math.min(room.kind === "pvp" ? PVP.evadeCap : 0.6, ev)) {
       room.ev({ e: "miss", id: t.id });
       room.onPlayerEvade?.(t, src, now);
       return { dmg: 0, miss: true };
@@ -116,10 +141,10 @@ export function dealDamage(room, src, t, o, now) {
     if (!o.dot && src.team === "p" && o.crit !== "none") {
       if (o.crit === "force") { crit = true; dmg *= CRIT.BASE_DAMAGE + (o.critDmg ?? 0); }
       else {
-        const chance = Math.min(CRIT.CHANCE_CAP, src.stats.crit + buffSum(src, "crit") + (o.critBonus ?? 0));
+        const chance = Math.min(room.kind === "pvp" ? PVP.critCap : CRIT.CHANCE_CAP, src.stats.crit + buffSum(src, "crit") + (o.critBonus ?? 0));
         if (Math.random() < chance) {
           crit = true;
-          dmg *= Math.min(CRIT.DAMAGE_CAP + 0.5, Math.min(CRIT.DAMAGE_CAP, src.stats.critDmg + buffSum(src, "critDmg") + (src.abyss?.has("eclipse_focus") ? 0.20 : 0)) + (o.critDmg ?? 0));
+          dmg *= Math.min(room.kind === "pvp" ? PVP.critDmgCap : CRIT.DAMAGE_CAP + 0.5, Math.min(CRIT.DAMAGE_CAP, src.stats.critDmg + buffSum(src, "critDmg") + (src.abyss?.has("eclipse_focus") ? 0.20 : 0)) + (o.critDmg ?? 0));
         }
       }
     }
@@ -148,6 +173,12 @@ export function dealDamage(room, src, t, o, now) {
   if (o.capPct && !t.boss) dmg = Math.min(dmg, t.maxHp * o.capPct + 1);
   // 보스 한 대의 피해 상한: 최대 체력의 30% → 가득 찬 체력이면 보스 공격 3대는 반드시 버틴다
   if (t.team === "p" && src?.boss && !o.dot) dmg = Math.min(dmg, t.maxHp * BOSS_HIT_CAP);
+  // PvP 전용 배율: 전체 피해·직업 보정·거점 점유 보너스, 한 대 상한 (PvE 계수와 분리)
+  if (room.kind === "pvp" && t.type === "p" && src && src.team === "p") {
+    const o2 = ownerOf(room, src);
+    dmg *= PVP.dmg * (PVP.classDmg[o2?.cls] ?? 1) * (1 + (o2?.pvpZone ?? 0));
+    if (!o.dot) dmg = Math.min(dmg, t.maxHp * PVP.hitCap);
+  }
   dmg = Math.max(1, Math.round(dmg));
   // 보호막
   let absorbed = 0;
@@ -185,7 +216,8 @@ export function dealDamage(room, src, t, o, now) {
     if (!t.aggro) t.aggro = true;
   }
   // 시전 중 피격 → 취소 (시전 안정 스탯으로 버팀)
-  if (t.team === "p" && t.casting && t.casting.fragile && !o.dot && Math.random() > (t.stats.steady ?? 0)) room.cancelCast(t, "피격으로 시전이 취소됐어요.");
+  // PvP: 맞을 때마다 시전이 끊기면 시전형 직업이 아무것도 못 하므로 30% 확률로만 끊김 (제어기는 항상 끊음)
+  if (t.team === "p" && t.casting && t.casting.fragile && !o.dot && (room.kind === "pvp" ? Math.random() < 0.3 * (1 - (t.stats.steady ?? 0)) : Math.random() > (t.stats.steady ?? 0))) room.cancelCast(t, "피격으로 시전이 취소됐어요.");
   if (t.team === "p" && t.channel && !o.dot) t.channel.interrupted = true;
   if (src?.team === "p" && !o.dot && !o.noProcs) room.onPlayerHit(src, t, dmg, crit, now, o);
   if (t.hp <= 0) room.kill(t, src, now);
@@ -195,6 +227,7 @@ export function dealDamage(room, src, t, o, now) {
 /** 치유 (치유 치명타 없음) */
 export function heal(room, src, t, amount, now, { noEvent = false } = {}) {
   if (!t || t.dead) return 0;
+  if (room.kind === "pvp") amount *= PVP.heal * (PVP.classHeal[(src?.type === "d" ? room.units.get(src.owner) : src)?.cls ?? t.cls] ?? 1);
   const before = t.hp;
   t.hp = Math.min(t.maxHp, t.hp + Math.round(amount));
   const v = t.hp - before;
@@ -205,7 +238,7 @@ export function heal(room, src, t, amount, now, { noEvent = false } = {}) {
 /** 보호막: 중첩 불가, 더 큰 쪽 유지 */
 export function giveShield(room, t, amount, dur, now) {
   if (!t || t.dead) return;
-  amount = Math.round(amount);
+  amount = Math.round(amount * (room.kind === "pvp" ? PVP.shield : 1));
   if (t.shield && now <= t.shield.until && t.shield.amt >= amount) return;
   t.shield = { amt: amount, max: amount, until: now + dur };
   room.ev({ e: "shield", id: t.id, v: amount, d: dur });

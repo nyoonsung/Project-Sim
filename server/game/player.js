@@ -5,6 +5,7 @@ import { SKILLS, unlockStage, adventurerBasic } from "../../shared/skills.js";
 import { MAX_LEVEL, STAT_POINTS_PER_LEVEL, PLAYER_RADIUS, ITEMS, TITLE_COLORS, TITLE_MAX, INVENTORY_SLOTS, SKILL_SLOTS } from "../../shared/constants.js";
 import { starterGear, ensureDur, upgradeMythic, syncMythic, ensureAbyss, syncAbyss, VMATS } from "../../shared/items.js";
 import { PATHS, TIER_LEVEL, CLASS2_LEVEL } from "../../shared/classes2.js";
+import { newPvpRecord, checkPvpStats, PVP_PRESETS, PVP } from "../../shared/pvp.js";
 
 export const INV_SIZE = INVENTORY_SLOTS;
 
@@ -93,6 +94,22 @@ export function sanitizeChar(c, name) {
   out.titles = (Array.isArray(out.titles) ? out.titles : []).filter((t) => t && Number.isInteger(t.id) && typeof t.text === "string" && t.text.length >= 1 && t.text.length <= TITLE_MAX)
     .map((t) => ({ id: t.id, text: t.text, color: TITLE_COLORS.includes(t.color) ? t.color : TITLE_COLORS[0], at: t.at ?? 0 })).slice(0, 50);
   if (!out.titles.some((t) => t.id === out.title)) out.title = null;
+  // PvP 결투장 기록·세팅
+  {
+    const base = newPvpRecord(), src = out.pvp && typeof out.pvp === "object" ? out.pvp : {};
+    const num = (v, lo, hi, dflt) => (Number.isFinite(v) ? Math.max(lo, Math.min(hi, Math.round(v))) : dflt);
+    const pv = {
+      rating: num(src.rating, 0, 5000, base.rating), best: num(src.best, 0, 5000, base.best),
+      w: num(src.w, 0, 1e6, 0), l: num(src.l, 0, 1e6, 0), d: num(src.d, 0, 1e6, 0), streak: num(src.streak, -1e4, 1e4, 0), games: num(src.games, 0, 1e6, 0),
+      preset: PVP_PRESETS[src.preset] ? src.preset : (src.preset === "custom" ? "custom" : base.preset),
+      stats: null, skills: null,
+    };
+    pv.best = Math.max(pv.best, pv.rating);
+    if (src.stats && out.cls !== "adventurer") { const st = checkPvpStats(out.cls, src.stats); if (typeof st === "object") pv.stats = st; }
+    if (pv.preset === "custom" && !pv.stats) pv.preset = "bal";
+    if (Array.isArray(src.skills) && src.skills.length === SKILL_SLOTS) pv.skills = src.skills.map((id) => (typeof id === "string" && SKILLS[id] && !SKILLS[id].path && SKILLS[id].kind !== "passive" && (SKILLS[id].cls === out.cls || SKILLS[id].cls === "common") ? id : null));
+    out.pvp = pv;
+  }
   // 스킬 해금 단계가 바뀌어 아직 못 쓰는 스킬이 장착돼 있으면 빼고, 빈칸은 기본 스킬로 채움
   try {
     const avail = new Set(availableSkills(out).map((x) => x.id));
@@ -188,6 +205,13 @@ export function makePlayerUnit(session) {
 export function refreshStats(u) {
   const ch = u.session.char;
   const s = deriveStats(ch);
+  // PvP 결투장: 직업별 체력 보정과 능력치 상한
+  if (u.pvp) {
+    s.maxHp = Math.round(s.maxHp * (PVP.classHp[ch.cls] ?? 1));
+    s.evade = Math.min(PVP.evadeCap, s.evade ?? 0);
+    s.crit = Math.min(PVP.critCap, s.crit ?? 0);
+    s.res = Math.min(PVP.resCap, s.res ?? 0);
+  }
   u.stats = s;
   u.level = ch.level;
   u.cls = ch.cls;

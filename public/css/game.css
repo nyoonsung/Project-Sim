@@ -1019,3 +1019,16 @@ body:not(.touch) #skillbar {
   #sword-seq .seq-head { align-items: flex-start; flex-direction: column; gap: 2px; }
   #sword-seq .seq-status { text-align: left; }
 }
+
+/* PvP 결투장 */
+.pvp-banner { position: absolute; top: 8px; left: 50%; transform: translateX(-50%); z-index: 30; pointer-events: none;
+  background: rgba(16, 10, 14, 0.82); border: 1px solid #8a1a24; border-radius: 6px; padding: 4px 14px; text-align: center; min-width: 300px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5); }
+.pvp-banner .pvp-row { display: flex; gap: 12px; align-items: center; justify-content: center; font-size: 13px; }
+.pvp-banner .pvp-me { color: #9ad0ff; }
+.pvp-banner .pvp-opp { color: #ff8a8a; }
+.pvp-banner .pvp-score { color: #ffd35a; font-size: 18px; font-weight: bold; min-width: 56px; }
+.pvp-banner .pvp-sub { color: #c8c0d0; font-size: 11px; }
+.pvp-rec { margin: 6px 0; font-size: 13px; }
+.pvp-big { font-size: 34px; font-weight: bold; text-align: center; margin: 6px 0; }
+.arena-tabs { margin-bottom: 4px; }
