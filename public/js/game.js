@@ -41,6 +41,8 @@ export function onMessage(m) {
     case "s": if (m.v) for (const e of m.v) onEvent(e); onSnapshot(m); break;
     case "ev": for (const e of m.list) onEvent(e); break;
     case "vaultResult": G.ui.onVaultResult?.(m); break;
+    case "boatAsk": G.ui.onBoatAsk?.(m); break;
+    case "crafted": G.ui.onCrafted?.(m); break;
     case "me":
       G.me = m; G.meAt = now(); G.ui.onMe();
       if (m.pf && G.char) { G.char.prof ??= {}; for (const [k, v] of Object.entries(m.pf)) { G.char.prof[k] = v; } G.ui.onProf?.(); }
@@ -73,7 +75,8 @@ export function onMessage(m) {
 }
 
 function onMap(m) {
-  G.room = m.room; G.kind = m.map?.kind ?? m.kind; G.floor = m.floor; G.dungeon = m.dungeon ?? 1; G.you = m.you;
+  G.room = m.room; G.kind = m.map?.kind ?? m.kind; G.floor = m.floor; G.dungeon = m.dungeon ?? 1; G.you = m.you; G.island = m.island ?? (m.kind === "town" ? "erden" : G.island);
+  G.dark = null;
   if (G.kind === "town") onTown((t) => G.ui?.center(t));
   G.mapKind = m.kind === "town" ? "town" : m.kind === "safe" ? "safe" : m.kind;
   G.zone = m.floor ? zoneOf(m.floor, G.dungeon) : ZONES[0];
@@ -226,6 +229,8 @@ function onEvent(e) {
     case "vote": G.ui.showVote?.(e); if (!e.end && !e.yes.includes(G.you)) sfx("wave"); break;
     case "doors": if (G.map) G.map.doorsOpen = !!e.open; break;
     case "obj": G.objects.push(e.o); break;
+    case "sarco": { const o = G.objects.find((x) => x.kind === "sarco" && Math.abs(x.x - e.x) < 2 && Math.abs(x.y - e.y) < 2); if (o) o.opened = true; sfx("item"); break; }
+    case "dark": G.dark = { t0: now(), until: now() + e.d, r: e.v ?? 160 }; break;
     case "spk": (G.spikes ??= [0, 0])[e.p] = e.s; break;
     case "trap": if (e.id === G.you) { const me = G.ents.get(G.you); if (me) floater(me.rx, me.ry - 40, "가시 함정!", "hurt"); } break;
     case "wave": sfx("wave"); G.ui.center(e.n >= e.of ? `마지막 웨이브! (${e.n}/${e.of})` : `웨이브 ${e.n} / ${e.of}`); G.wave = { n: e.n, of: e.of }; break;

@@ -13,6 +13,23 @@ function shadow(ctx, x, y, rx, ry, a = 0.3) { ctx.fillStyle = `rgba(0,0,0,${a})`
 /** 그렸으면 true */
 export function drawDungeonObject(ctx, o, x, y, t) {
   switch (o.kind) {
+    case "sarco": {
+      // 지하왕릉 석관: 닫힘(청록 봉인 룬) / 열림(뚜껑이 밀려남)
+      shadow(ctx, x, y - 2, 22, 6, 0.4);
+      ctx.fillStyle = "#3a3222"; ctx.fillRect(x - 20, y - 22, 40, 20);
+      ctx.fillStyle = "#8a7a50"; ctx.fillRect(x - 19, y - 21, 38, 3);
+      ctx.fillStyle = "#544a2c"; ctx.fillRect(x - 19, y - 18, 38, 15);
+      if (!o.opened) {
+        ctx.fillStyle = "#bca878"; ctx.fillRect(x - 21, y - 28, 42, 8);
+        ctx.fillStyle = "#e8d8b0"; ctx.fillRect(x - 21, y - 28, 42, 2);
+        const p = 0.55 + Math.sin(t * 3 + x) * 0.35;
+        ctx.fillStyle = `rgba(90,255,224,${p})`; ctx.fillRect(x - 2, y - 26, 4, 4); ctx.fillRect(x - 10, y - 24, 3, 2); ctx.fillRect(x + 7, y - 24, 3, 2);
+      } else {
+        ctx.fillStyle = "#1a140c"; ctx.fillRect(x - 17, y - 20, 34, 10);
+        ctx.save(); ctx.translate(x + 8, y - 26); ctx.rotate(0.35); ctx.fillStyle = "#bca878"; ctx.fillRect(-21, -4, 42, 8); ctx.restore();
+      }
+      return true;
+    }
     case "column": {
       shadow(ctx, x, y - 2, 18, 5, 0.35);
       drawFoot(ctx, "coulmn_base", x, y);

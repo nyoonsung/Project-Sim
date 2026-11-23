@@ -18,6 +18,7 @@ import { sprite, playerLook } from "./render/sprites.js";
 import { CLASS_INFO } from "/shared/classes.js";
 import { VIEW_W, VIEW_H, ITEMS } from "/shared/constants.js";
 import { RARITY_COLOR } from "/shared/items.js";
+const DUNGEON_LABEL = { 1: "", 2: "제2 던전 ", 3: "베르단 ", 4: "지하왕릉 " };
 
 // ── 로그인
 async function api(path, body) {
@@ -110,7 +111,7 @@ const ui = {
   onChar() { HUD.updateSkillbar(); WIN.refreshAll(); },
   onMe() { HUD.updateBars(); },
   onProf() { if (isOpen("skills") && !(G._profRefresh > performance.now())) { G._profRefresh = performance.now() + 500; refreshWin("skills"); } },
-  onMap() { HUD.updateZoneLabel(); WIN.refreshAll(); HUD.toast(G.mapKind === "town" ? "모험가 마을" : G.mapKind === "safe" ? "안전 구역 — 전직소" : `${G.dungeon === 2 ? "제2 던전 " : ""}${G.floor}층 · ${G.zone.name}`, "floor"); },
+  onMap() { HUD.updateZoneLabel(); WIN.refreshAll(); HUD.toast(G.mapKind === "town" ? (G.island === "verdan" ? "베르단 섬 마을" : "에르덴 섬 · 모험가 마을") : G.mapKind === "safe" ? "안전 구역 — 전직소" : `${DUNGEON_LABEL[G.dungeon] ?? ""}${G.floor}층 · ${G.zone.name}`, "floor"); },
   chat: HUD.chatLine,
   onParty() { HUD.updateParty(); WIN.refreshAll(); },
   invite(from) {
@@ -165,6 +166,8 @@ const ui = {
   kicked(why) { G.kickedWhy = why; },
   onWho() { if (isOpen("who")) refreshWin("who"); },
   onVaultResult(m) { WIN.onAbyssVaultResult(m); },
+  onBoatAsk(m) { WIN.onBoatAsk(m); },
+  onCrafted(m) { this.toast(`제작 완료: [${m.item.name}] (${m.item.rarity})`, m.item.rarity === "신화" ? "mythic" : "legend"); },
   onEnchant(m) { WIN.onEnchant(m); const { ENCHANTS } = WIN; HUD.toast(`인챈트: ✦ ${ENCHANTS[m.ench].name} (${ENCHANTS[m.ench].desc})`, m.ench === "mend" ? "mythic" : "rank"); },
   onSpecialReroll(m) { WIN.onSpecialReroll(m); HUD.toast(`특수 효과 변경: ${m.effectName}`, m.rarity === "심연" ? "abyss" : "mythic"); },
   onEnhance(m) { WIN.onEnhance(m); HUD.toast(m.result === "success" ? `강화 성공! ${m.name} +${m.enh}` : m.result === "fail" ? `강화 실패 (${m.name} +${m.enh} 유지)` : m.result === "reset" ? `강화 폭발! 상위 등급이라 ${m.name}은(는) 유지되고 +0이 됐어요` : `${m.name}이(가) 파괴됐어요…`, m.rarity === "심연" && m.result === "success" ? "abyss" : m.result === "success" ? "rank" : m.result === "destroy" || m.result === "reset" ? "death" : "info"); },

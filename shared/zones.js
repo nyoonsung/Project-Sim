@@ -17,6 +17,7 @@ const P = {
   void: { armor: ["#6a5a8a", "#4a3e66", "#2e2644", "#1a1428"], core: ["#140c20", "#0c0614", "#06030a"], mark: "#c040ff" },
   royal: { armor: ["#ffd860", "#d0a030", "#a07018", "#60400a"], core: ["#5a0a1a", "#400612", "#28030a"], mark: "#ff2040" },
 };
+import { VERDAN_MONSTERS, VERDAN_BOSSES, VERDAN_ZONES, TOMB_ZONES } from "./verdan.js";
 const rig = (pal, weapon, head = null, headColor = null, scale = 1) => ({ rig: { ...pal, weapon, head, headColor }, scale });
 const critter = (fx, palette, scale = 1) => ({ critter: fx, palette, scale });
 const GREENS = ["#062010", "#0e4a1e", "#1f8a34", "#4fd060", "#b0ff9a", "#f0fff0"];
@@ -213,9 +214,26 @@ export const DUNGEON2_ZONES = [
     monsters: ["void_stalker", "eclipse_cultist", "star_eater", "abyss_mirror", "poison_spore", "resonance_tracker", "shard_golem"], mid: "eclipse_warden", boss: "abyss_watcher", weather: "weather/fog", deco: ["rune", "bones", "crack"] },
 ];
 export const DUNGEON2_MAX_FLOOR = 30;
+Object.assign(MONSTERS, VERDAN_MONSTERS);
+Object.assign(BOSSES, VERDAN_BOSSES);
+export { VERDAN_ZONES, TOMB_ZONES };
+
+// ── 던전 목록 (2차 업데이트: 섬 두 개 × 던전 두 개)
+//  진행도 키: 1 → best/checkpoint/cleared, 2·3·4 → best2/checkpoint2/cleared2 …
+export const DUNGEONS = {
+  1: { id: 1, island: "erden", name: "제1 던전", title: "에르덴 제1 던전", max: 100, zones: ZONES },
+  2: { id: 2, island: "erden", name: "제2 던전", title: "심연의 균열", max: 30, zones: DUNGEON2_ZONES },
+  3: { id: 3, island: "verdan", name: "베르단 제1 던전", title: "베르단 섬 100층", max: 100, zones: VERDAN_ZONES },
+  4: { id: 4, island: "verdan", name: "베르단 제2 던전", title: "기억왕의 지하왕릉", max: 30, zones: TOMB_ZONES },
+};
+export const normDungeon = (d) => (DUNGEONS[d] ? Number(d) : 1);
+export const dungeonMax = (d) => DUNGEONS[normDungeon(d)].max;
+export const dungeonIsland = (d) => DUNGEONS[normDungeon(d)].island;
+/** 진행도 필드 이름 */
+export const progKeys = (d) => { const n = normDungeon(d); const x = n === 1 ? "" : String(n); return { best: "best" + x, checkpoint: "checkpoint" + x, cleared: "cleared" + x }; };
 export function zoneOf(floor, dungeon = 1) {
-  const list = dungeon === 2 ? DUNGEON2_ZONES : ZONES;
-  return list[Math.min(list.length - 1, Math.floor((floor - 1) / 10))];
+  const list = DUNGEONS[normDungeon(dungeon)].zones;
+  return list[Math.max(0, Math.min(list.length - 1, Math.floor((floor - 1) / 10)))];
 }
 /** 층 종류: normal | mid(5의 배수, 10의 배수 제외) | boss(10의 배수) */
 export function floorKind(floor) {
@@ -249,8 +267,38 @@ export const D2_BOSS_HP_REDUCTION = 0.5; // 제2 던전 중간·주요 보스 HP
 export const D2_BOSS_SPEED_MULTIPLIER = 0.8;
 export const d2Level = (floor) => 100 + Math.round((floor * 5) / 3);
 /** 그 층의 실제 레벨 (제1 던전은 층 = 레벨) */
-export const effLevel = (floor, dungeon = 1) => (dungeon === 2 ? d2Level(floor) : floor);
+export const effLevel = (floor, dungeon = 1) => (dungeon === 2 ? d2Level(floor) : dungeon === 3 ? 150 + floor : dungeon === 4 ? 250 + floor : floor);
+// 베르단 섬 배율: 에르덴 제2 던전 30층을 기준으로 시작해 층마다 성장.
+//  15~25층 사이에 2차 전직(공격력·HP 2배)을 반영한 벽이 있고, 제2 던전(지하왕릉)은 베르단 100층의 약 1.2배 압박(웨이브 밀도·생명력·공격력·패턴).
+export const VERDAN_SCALE = {
+  hp0: 1.25, hpG: 0.0185, dmg0: 1.18, dmgG: 0.0125, wallHp: 0.55, wallDmg: 0.4, wallFrom: 15, wallTo: 25,
+  tombHp: 1.07, tombDmg: 1.07, tombHpG: 0.011, tombDmgG: 0.008,
+};
+export function verdanGrowth(floor, dungeon) {
+  const V = VERDAN_SCALE;
+  const f = dungeon === 4 ? 100 : Math.max(1, floor);
+  const w = Math.max(0, Math.min(1, (f - V.wallFrom) / (V.wallTo - V.wallFrom)));
+  let hp = V.hp0 * Math.pow(1 + V.hpG, f - 1) * (1 + V.wallHp * w);
+  let dmg = V.dmg0 * Math.pow(1 + V.dmgG, f - 1) * (1 + V.wallDmg * w);
+  if (dungeon === 4) {
+    const n = Math.max(0, floor - 1);
+    hp *= V.tombHp * Math.pow(1 + V.tombHpG, n);
+    dmg *= V.tombDmg * Math.pow(1 + V.tombDmgG, n);
+  }
+  return { hp, dmg };
+}
 export function floorScale(floor, dungeon = 1) {
+  if (dungeon === 3 || dungeon === 4) {
+    const b = floorScale(30, 2), g = verdanGrowth(floor, dungeon), L = effLevel(floor, dungeon);
+    return {
+      hp: b.hp * g.hp,
+      dmg: b.dmg * g.dmg,
+      speed: b.speed * (dungeon === 4 ? 1.04 : 1.0),
+      xp: Math.pow(1.045, Math.min(L, 252) - 1) * (dungeon === 4 ? 1.9 : 1.6),
+      gold: Math.pow(1.04, Math.min(L, 252) - 1) * (dungeon === 4 ? 1.6 : 1.45),
+      level: L,
+    };
+  }
   if (dungeon === 2) {
     const b = floorScale(100, 1), n = Math.max(0, floor - 1), L = d2Level(floor);
     return {
@@ -281,6 +329,9 @@ const avg = (zi, k, list = ZONES) => {
 const normFor = (list) => list.map((_, zi) => ({ hp: avg(zi, "hp", list) / avg(0, "hp", list), dmg: avg(zi, "dmg", list) / avg(0, "dmg", list) }));
 const NORM = normFor(ZONES);
 const DUNGEON2_NORM = normFor(DUNGEON2_ZONES);
+const NORMS = { 1: NORM, 2: DUNGEON2_NORM, 3: normFor(VERDAN_ZONES), 4: normFor(TOMB_ZONES) };
+const FIXES = { 1: { hp: 1, dmg: 1 }, 2: null, 3: null, 4: null };
+for (const d of [2, 3, 4]) { const list = DUNGEONS[d].zones; FIXES[d] = { hp: avg(0, "hp", ZONES) / avg(0, "hp", list), dmg: avg(0, "dmg", ZONES) / avg(0, "dmg", list) }; }
 // 제2 던전 데이터는 원래 숫자가 커서(평균 체력 약 5배) 그대로 쓰면 난이도가 데이터 크기에 따라 들쭉날쭉 → 제1 던전 기준으로 맞춤
 const D2_FIX = { hp: avg(0, "hp", ZONES) / avg(0, "hp", DUNGEON2_ZONES), dmg: avg(0, "dmg", ZONES) / avg(0, "dmg", DUNGEON2_ZONES) };
 
@@ -290,15 +341,17 @@ const hpBoost = (party, floor) => { const max = party > 1 ? PARTY_HP : SOLO_HP; 
 /** 층에 맞춘 실제 몬스터 능력치 */
 export function monsterStats(id, floor, party = 1, dungeon = 1) {
   const def = MONSTERS[id];
-  const list = dungeon === 2 ? DUNGEON2_ZONES : ZONES;
-  const norm = dungeon === 2 ? DUNGEON2_NORM : NORM;
-  const zi = Math.min(list.length - 1, Math.floor((floor - 1) / 10));
+  dungeon = normDungeon(dungeon);
+  const list = DUNGEONS[dungeon].zones;
+  const norm = NORMS[dungeon];
+  const zi = Math.max(0, Math.min(list.length - 1, Math.floor((floor - 1) / 10)));
   const s = floorScale(floor, dungeon);
   const pScale = 1 + 0.55 * (party - 1);
-  const L = effLevel(floor, dungeon), fx = dungeon === 2 ? D2_FIX : { hp: 1, dmg: 1 };
+  const L = effLevel(floor, dungeon), fx = FIXES[dungeon];
+  const hard = dungeon >= 2; // 제2 던전 이후는 같은 능력치 규칙(심연 배율)을 이어 쓴다
   return {
-    hp: Math.round((def.hp / norm[zi].hp) * fx.hp * s.hp * pScale * hpBoost(party, L) * (dungeon === 2 ? D2_MONSTER_STAT_MULTIPLIER : 1)),
-    dmg: (def.dmg / norm[zi].dmg) * fx.dmg * s.dmg * (dungeon === 2 ? D2_MONSTER_DAMAGE_MULTIPLIER * D2_MONSTER_STAT_MULTIPLIER : 1),
+    hp: Math.round((def.hp / norm[zi].hp) * fx.hp * s.hp * pScale * hpBoost(party, L) * (hard ? D2_MONSTER_STAT_MULTIPLIER : 1)),
+    dmg: (def.dmg / norm[zi].dmg) * fx.dmg * s.dmg * (hard ? D2_MONSTER_DAMAGE_MULTIPLIER * D2_MONSTER_STAT_MULTIPLIER : 1),
     xp: def.xp * 6 * s.xp,
     level: L,
   };
@@ -306,7 +359,8 @@ export function monsterStats(id, floor, party = 1, dungeon = 1) {
 /** 보스 능력치: 중간보스는 평균 몬스터의 36배, 주요 보스는 64배 체력 */
 export function bossStats(id, floor, party = 1, dungeon = 1) {
   const def = BOSSES[id];
-  const list = dungeon === 2 ? DUNGEON2_ZONES : ZONES;
+  dungeon = normDungeon(dungeon);
+  const hard = dungeon >= 2;
   const s = floorScale(floor, dungeon);
   const baseHp = avg(0, "hp", ZONES) * s.hp, baseDmg = avg(0, "dmg", ZONES) * s.dmg; // 두 던전 모두 같은 기준값
   const pScale = 1 + 0.7 * (party - 1);
@@ -315,12 +369,18 @@ export function bossStats(id, floor, party = 1, dungeon = 1) {
   const bossHpMultiplier = dungeon === 1 ? D1_BOSS_HP_MULTIPLIER * D1_BOSS_HP_REDUCTION : 1;
   const bossDamageMultiplier = dungeon === 1 ? D1_BOSS_DAMAGE_MULTIPLIER : 1;
   const finalBossDamageMultiplier = dungeon === 1 && floor === 100 && !def.mid ? D1_FINAL_BOSS_DAMAGE_MULTIPLIER : 1;
-  const selectedBossDamageMultiplier = dungeon === 2 || (dungeon === 1 && floor >= 20)
+  const selectedBossDamageMultiplier = hard || (dungeon === 1 && floor >= 20)
     ? BOSS_DAMAGE_INCREASE_MULTIPLIER
     : 1;
+  const finalHp = hard && floor >= dungeonMax(dungeon) ? 1.5 : 1;
+  // 베르단 보스는 보스 정의의 hp 차이(구역 안 상대값)를 일부 반영한다
+  const verdanRel = dungeon >= 3 ? Math.pow((def.hp ?? 60000) / (def.mid ? 60000 : 120000), 0.35) : 1;
+  // 베르단 보스는 층 성장의 제곱근만 체력에 반영(공격력은 0.8제곱): 일반 몹보다 완만하게 → 처치 시간이 에르덴 제2 던전 보스의 1.2~1.4배 수준
+  const vg = dungeon >= 3 ? verdanGrowth(floor, dungeon) : null;
+  const vHp = vg ? Math.pow(vg.hp / VERDAN_SCALE.hp0, -0.5) : 1, vDmg = vg ? Math.pow(vg.dmg / VERDAN_SCALE.dmg0, -0.2) : 1;
   return {
-    hp: Math.round(baseHp * hpMul * pScale * capBonus * (dungeon === 2 && floor >= DUNGEON2_MAX_FLOOR ? 1.5 : 1) * hpBoost(party, effLevel(floor, dungeon)) * bossHpMultiplier * (dungeon === 2 ? D2_BOSS_STAT_MULTIPLIER * D2_BOSS_HP_REDUCTION : 1)),
-    dmg: baseDmg * (def.mid ? 1.5 : 1.7) * bossDamageMultiplier * finalBossDamageMultiplier * (dungeon === 2 ? D2_BOSS_STAT_MULTIPLIER : 1) * selectedBossDamageMultiplier,
+    hp: Math.round(baseHp * hpMul * pScale * capBonus * finalHp * verdanRel * vHp * hpBoost(party, effLevel(floor, dungeon)) * bossHpMultiplier * (hard ? D2_BOSS_STAT_MULTIPLIER * D2_BOSS_HP_REDUCTION : 1)),
+    dmg: baseDmg * (def.mid ? 1.5 : 1.7) * bossDamageMultiplier * finalBossDamageMultiplier * (hard ? D2_BOSS_STAT_MULTIPLIER : 1) * selectedBossDamageMultiplier * vDmg,
     xp: (def.xp ?? 25) * 6 * s.xp,
     level: effLevel(floor, dungeon),
   };

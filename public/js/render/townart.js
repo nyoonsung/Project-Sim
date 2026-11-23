@@ -47,18 +47,20 @@ function signCanvas(text, color) {
 const BULBS = ["#ff5a7a", "#ffd35a", "#5ad8ff", "#a0ff6a", "#ff8af0", "#ffb04a"];
 
 /** y 정렬 목록에서 호출: 마을 오브젝트 하나 그리기. 그렸으면 true */
-let archTint = null;
-function tintedArch(c) {
-  if (archTint) return archTint;
+const archTints = new Map();
+const ARCH_TINT = { d2: "#b46a9a", d3: "#7aa8d8", d4: "#d8b060" };
+function tintedArch(c, key = "d2") {
+  if (archTints.has(key)) return archTints.get(key);
   const cv = document.createElement("canvas"); cv.width = c.width; cv.height = c.height;
   const g = cv.getContext("2d");
   g.drawImage(c, 0, 0);
-  // 돌 무늬는 살리고 색만 어두운 자줏빛 붉은 돌로 (곱하기)
+  // 돌 무늬는 살리고 색만 바꿈 (곱하기): 제2 던전 자줏빛 붉은 돌, 베르단 제1 던전 푸른 돌, 지하왕릉 금빛 사암
   g.globalCompositeOperation = "multiply";
-  g.fillStyle = "#b46a9a"; g.fillRect(0, 0, cv.width, cv.height);
+  g.fillStyle = ARCH_TINT[key] ?? ARCH_TINT.d2; g.fillRect(0, 0, cv.width, cv.height);
   g.globalCompositeOperation = "destination-in";
   g.drawImage(c, 0, 0);
-  return (archTint = cv);
+  archTints.set(key, cv);
+  return cv;
 }
 export function drawTownObject(ctx, o, x, y, t) {
   switch (o.kind) {
@@ -67,9 +69,9 @@ export function drawTownObject(ctx, o, x, y, t) {
       if (!c) return true;
       if (!o.flat && !o.small) shadow(ctx, x, y - 2, c.width * 0.9, 8, 0.3);
       else if (o.small && !o.flat) shadow(ctx, x, y - 1, 11, 4, 0.25);
-      if (o.tint === "d2") {
-        // 제2 던전 아치: 같은 돌 아치를 붉은 보랏빛으로 물들이고 별빛 룬을 박음
-        const tc = tintedArch(c);
+      if (o.tint && ARCH_TINT[o.tint]) {
+        // 제2 던전 아치: 같은 돌 아치를 붉은 보랏빛으로 물들이고 별빛 룬을 박음 (베르단 관문은 푸른·금빛)
+        const tc = tintedArch(c, o.tint);
         const w = c.width * S, hh = c.height * S;
         ctx.drawImage(tc, Math.round(x - w / 2), Math.round(y - hh), w, hh);
         for (let k = 0; k < 5; k++) {
@@ -93,6 +95,28 @@ export function drawTownObject(ctx, o, x, y, t) {
       }
       if (o.win) addGlow(o.x, o.y - 26, 64, o.win, 0.2, "win|"+o.x+","+o.y);
       if (o.glow) addGlow(o.x, o.y - 50, 140, o.glow, 0.5 + Math.sin(t * 2) * 0.1, "pglow|"+o.x+","+o.y);
+      return true;
+    }
+    case "boat": {
+      // 선착장의 나룻배: 물결에 흔들리는 나무 배 + 돛대 + 등불
+      const bob = Math.round(Math.sin(t * 1.6 + x) * 1.5);
+      const by = y + bob;
+      ctx.fillStyle = "rgba(0,0,0,0.25)"; ctx.beginPath(); ctx.ellipse(x, y + 4, 42, 7, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = "#3a2210"; ctx.beginPath(); ctx.moveTo(x - 44, by - 14); ctx.lineTo(x + 44, by - 14); ctx.lineTo(x + 32, by + 2); ctx.lineTo(x - 32, by + 2); ctx.closePath(); ctx.fill();
+      ctx.fillStyle = "#7a4a22"; ctx.fillRect(x - 40, by - 16, 80, 5);
+      ctx.fillStyle = "#a8703a"; ctx.fillRect(x - 40, by - 16, 80, 2);
+      ctx.fillStyle = "#5a361a"; for (let k = -30; k <= 30; k += 12) ctx.fillRect(x + k, by - 11, 2, 10);
+      ctx.fillStyle = "#4a2e18"; ctx.fillRect(x - 2, by - 64, 4, 50);
+      ctx.fillStyle = o.sail ?? "#e8e0c8"; ctx.beginPath(); ctx.moveTo(x + 2, by - 62); ctx.lineTo(x + 30, by - 24); ctx.lineTo(x + 2, by - 24); ctx.closePath(); ctx.fill();
+      ctx.fillStyle = "rgba(0,0,0,0.12)"; ctx.fillRect(x + 2, by - 30, 26, 6);
+      ctx.fillStyle = "#ffd35a"; ctx.fillRect(x - 36, by - 26, 5, 7);
+      addGlow(o.x - 34, o.y - 22, 60, "#ffd35a", 0.35 + Math.sin(t * 4) * 0.05, "boat|" + o.x);
+      return true;
+    }
+    case "pier": {
+      ctx.fillStyle = "#5a3a1a"; ctx.fillRect(x - 30, y - 30, 60, 30);
+      ctx.fillStyle = "#8a5a2a"; for (let k = 0; k < 5; k++) ctx.fillRect(x - 30, y - 30 + k * 6, 60, 4);
+      ctx.fillStyle = "#3a2410"; ctx.fillRect(x - 30, y - 2, 4, 8); ctx.fillRect(x + 26, y - 2, 4, 8);
       return true;
     }
     case "flag": {
@@ -252,7 +276,8 @@ export function drawFolk(ctx, f, cx, cy, t) {
 }
 
 // NPC → 마을 사람 그림
-const NPC_VIL = { shop: "woman", smithy: "master", trainer: "monk", gate: "inspector", gate2: "inspector", vault: "princess", enchanter: "princess" };
+const NPC_VIL = { shop: "woman", smithy: "master", trainer: "monk", gate: "inspector", gate2: "inspector", vault: "princess", enchanter: "princess",
+  boatman: "oldman2", boatman2: "oldman", class2_master: "noble", vforge: "villager3", gate3: "inspector", gate4: "inspector" };
 export function drawTownNpc(ctx, o, x, y, t) {
   const who = NPC_VIL[o.id];
   if (!who || !has(`t:vil_${who}_down_f0`)) return false;

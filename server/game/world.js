@@ -3,11 +3,13 @@ import { Q, secLog, itemLog } from "../db.js";
 import { TICK_RATE, ITEMS, MAX_PARTY, SKILL_SLOTS } from "../../shared/constants.js";
 import { CLASS_INFO, STATS } from "../../shared/classes.js";
 import { SKILLS, adventurerBasic } from "../../shared/skills.js";
-import { canEquip, enhanceOdds, enhanceCost, sellPrice, MAX_ENH, SLOTS, CLASS_GEAR, baseStats, itemName, ensureDur, repairCost, syncMythic, syncAbyss, enchantCost, rollEnchant, rollAbyssVaultItem, MYTHIC_EFFECTS, ABYSS_EFFECTS, specialRerollCost, rollMythicEffect, rollAbyssEffect } from "../../shared/items.js";
-import { floorKind, DUNGEON2_MAX_FLOOR } from "../../shared/zones.js";
+import { canEquip, enhanceOdds, enhanceCost, sellPrice, MAX_ENH, SLOTS, CLASS_GEAR, baseStats, itemName, ensureDur, repairCost, syncMythic, syncAbyss, enchantCost, rollEnchant, rollAbyssVaultItem, MYTHIC_EFFECTS, ABYSS_EFFECTS, specialRerollCost, rollMythicEffect, rollAbyssEffect, VMATS, VMODS, CRAFT_TIERS, CRAFT_SLOTS, craftVerdanItem, makeClassRelic, ensureAbyss } from "../../shared/items.js";
+import { floorKind, DUNGEON2_MAX_FLOOR, DUNGEONS, normDungeon, dungeonMax, dungeonIsland, progKeys } from "../../shared/zones.js";
+import { PATHS, canClass2, CLASS2_LEVEL } from "../../shared/classes2.js";
+import { MAX_LEVEL } from "../../shared/constants.js";
 import { Room } from "./room.js";
-import { makeFloor, makeTown, safeZone } from "./dungeon.js";
-import { newCharacter, sanitizeChar, makePlayerUnit, refreshStats, availableSkills, defaultLoadout, INV_SIZE } from "./player.js";
+import { makeFloor, makeTown, makeVerdanTown, safeZone } from "./dungeon.js";
+import { newCharacter, sanitizeChar, makePlayerUnit, refreshStats, availableSkills, defaultLoadout, defaultLoadout2, INV_SIZE } from "./player.js";
 import { secureRandom } from "./secure.js";
 import { moveMul } from "./combat.js";
 import { USERNAME_RE } from "../auth.js";
@@ -75,6 +77,9 @@ export class World {
     this.clock = 0; // 월드 시계(초): 모든 방이 공유
     this.parties = new Map();
     this.town = this.addRoom(new Room(this, { id: "town", kind: "town", floor: 0, map: makeTown() }));
+    // 2차 업데이트: 베르단 섬 마을 (에르덴 마을 아래 선착장의 뱃사공 → 베르단 섬)
+    this.town2 = this.addRoom(new Room(this, { id: "town2", kind: "town", floor: 0, map: makeVerdanTown() }));
+    this.town.island = "erden"; this.town2.island = "verdan";
     this.resumes = new Map(); // 서버 재시작 뒤 던전 복귀: 파티(멤버·층)별로 다시 만든 방
     this.announcement = null;
     this.startedAt = Date.now();
@@ -105,6 +110,9 @@ export class World {
     this.loop = id;
   }
   addRoom(r) { this.rooms.set(r.id, r); return r; }
+  isTown(r) { return !!r && (r === this.town || r === this.town2); }
+  /** 캐릭터가 머무는 섬의 마을 */
+  townOf(s) { return s.char.island === "verdan" && s.char.verdanPass ? this.town2 : this.town; }
 
   tick() {
     const t0 = performance.now();
@@ -114,7 +122,7 @@ export class World {
     }
     // 30초 넘게 다시 안 들어온 끊긴 플레이어는 정리
     if (this.tickN = (this.tickN ?? 0) + 1, this.tickN % 20 === 0) for (const s of [...this.sessions.values()]) if (s.linkdead && Date.now() - s.linkdead > 30_000) this.finishClose(s);
-    for (const r of [...this.rooms.values()]) if (r !== this.town && r.players.size === 0 && Date.now() - r.createdAt > 5000) this.rooms.delete(r.id);
+    for (const r of [...this.rooms.values()]) if (!this.isTown(r) && r.players.size === 0 && Date.now() - r.createdAt > 5000) this.rooms.delete(r.id);
     const dt = performance.now() - t0;
     this.tickTimes.push(dt);
     if (this.tickTimes.length > 100) this.tickTimes.shift();
@@ -156,7 +164,7 @@ export class World {
     grantReserved(char, u.username, u.id);
     s.unit = makePlayerUnit(s);
     s.send({ t: "hello", name: u.username, char: this.publicChar(s), announce: this.announcement, serverTime: Date.now() });
-    if (!this.tryResume(s)) this.town.addPlayer(s.unit);
+    if (!this.tryResume(s)) this.townOf(s).addPlayer(s.unit);
     this.save(s);
     this.broadcastSys(`${u.username}님이 접속했어요.`, "join");
   }
@@ -164,7 +172,7 @@ export class World {
     const s = this.sessions.get(conn.user.id);
     if (!s || s.conn !== conn || s.deleted) return;
     // 던전에서 끊기면 30초 동안 자리 유지(몬스터가 무시, 피해 없음) → 다시 접속하면 그대로 이어감
-    if (s.unit.room && s.unit.room !== this.town && !s.unit.dead) {
+    if (s.unit.room && !this.isTown(s.unit.room) && !s.unit.dead) {
       s.linkdead = Date.now();
       s.conn = { send() {}, close() {}, user: conn.user, ip: conn.ip, dead: true };
       s.unit.ghost = true; s.unit.inputs.length = 0; s.unit.castQ = [];
@@ -185,11 +193,14 @@ export class World {
     delete s.char.resume;
     // 저장 기록이 없거나 손상된 경우 속성을 읽기 전에 종료한다.
     if (!r || typeof r !== "object" || !Number.isInteger(r.floor) || !Number.isFinite(r.at)) return false;
-    const dungeon = r.dungeon === 2 ? 2 : 1;
-    const maxFloor = dungeon === 2 ? DUNGEON2_MAX_FLOOR : 100;
+    const dungeon = normDungeon(r.dungeon);
+    const maxFloor = dungeonMax(dungeon);
     const age = Date.now() - r.at;
     if (r.floor < 1 || r.floor > maxFloor || age < 0 || age >= 6 * 3600_000) return false; // 이상하거나 오래된 기록은 무시
     if (dungeon === 2 && !s.char.cleared) return false;
+    if (dungeon >= 3 && !s.char.verdanPass) return false;
+    if (dungeon === 4 && !s.char.cleared3) return false;
+    s.char.island = dungeonIsland(dungeon);
     const ids = [...new Set(r.party ?? [s.userId])].sort((a, b) => a - b);
     const key = `${dungeon}|${r.kind}|${r.floor}|${ids.join(",")}`;
     let e = this.resumes.get(key);
@@ -264,6 +275,8 @@ export class World {
     return { name: c.name, level: c.level, xp: c.xp, cls: c.cls, stats: c.stats, unspent: c.unspent, skills: c.skills, equip: c.equip, inv: c.inv, cons: c.cons, gold: c.gold,
       best: c.best, checkpoint: c.checkpoint, cleared: c.cleared,
       best2: c.best2 ?? 0, checkpoint2: c.checkpoint2 ?? 1, cleared2: !!c.cleared2, abyssKeys: c.abyssKeys ?? 0, riftCrystals: c.riftCrystals ?? 0,
+      best3: c.best3 ?? 0, checkpoint3: c.checkpoint3 ?? 1, cleared3: !!c.cleared3, best4: c.best4 ?? 0, checkpoint4: c.checkpoint4 ?? 1, cleared4: !!c.cleared4,
+      island: c.island ?? "erden", verdanPass: !!c.verdanPass, cls2: c.cls2 ?? null, mats: c.mats ?? {}, sigils: c.sigils ?? {}, hearts: c.hearts ?? 0, reward250: !!c.reward250,
       kills: c.kills, deaths: c.deaths, prof: c.prof ?? {}, titles: c.titles ?? [], title: c.title ?? null };
   }
   sendChar(s) {
@@ -271,7 +284,7 @@ export class World {
     if (scaled && s.unit) refreshStats(s.unit); // 신화·심연 장비를 캐릭터 레벨에 맞춤
     // 파티원 정보(레벨·직업·체크포인트)도 최신으로
     const pp = this.partyOf(s);
-    if (pp) { const k = `${s.char.level}|${s.char.cls}|${s.char.checkpoint}|${s.char.best}|${s.char.cleared}|${s.char.checkpoint2}|${s.char.best2}|${s.char.cleared2}`; if (k !== s.partyKey) { s.partyKey = k; this.sendParty(pp); } }
+    if (pp) { const c = s.char; const k = [c.level, c.cls, c.cls2, c.island, c.verdanPass, c.checkpoint, c.best, c.cleared, c.checkpoint2, c.best2, c.cleared2, c.checkpoint3, c.best3, c.cleared3, c.checkpoint4, c.best4].join("|"); if (k !== s.partyKey) { s.partyKey = k; this.sendParty(pp); } }
     s.dirty = true; s.send({ t: "char", char: this.publicChar(s) });
   }
   sendMe(s) {
@@ -283,11 +296,11 @@ export class World {
     for (const [id, b] of u.buffs) buffs.push([id, Math.round((b.until - now) * 10) / 10, b.n ?? 0]);
     const st = [];
     for (const [id, x] of u.status) st.push([id, Math.round((x.until - now) * 10) / 10]);
-    const o = { t: "me", hp: Math.ceil(u.hp), mh: u.maxHp, mp: Math.floor(u.mp), mm: u.maxMp, ki: Math.floor(u.ki), holy: Math.floor(u.holy), parts: u.parts, gap: u.gap,
+    const o = { t: "me", hp: Math.ceil(u.hp), mh: u.maxHp, mp: Math.floor(u.mp), mm: u.maxMp, ki: Math.floor(u.ki), holy: Math.floor(u.holy), parts: u.parts, gap: u.gap, r2: Math.floor(u.r2 ?? 0),
       sh: u.shield ? Math.round(u.shield.amt) : 0, cds, buffs, st, lv: s.char.level, xp: s.char.xp, gold: s.char.gold, stance: u.stance, acu: u.acupoint ?? 0,
       dead: u.dead ? 1 : 0, cons: s.char.cons, cs: Math.round((u.stats.cast ?? 1) * 100) / 100, spd: Math.round(u.stats.move * moveMul(u) * (u.guarding && now < u.guarding ? 0.35 : 1) * 10) / 10, pcd: Object.fromEntries(Object.entries(s.potionCd).map(([k, v]) => [k, Math.max(0, Math.round((v - Date.now())))])) };
     // 바뀐 게 없으면 보내지 않음 (최대 1초에 한 번은 보냄)
-    const key = JSON.stringify([o.cs, o.hp, o.mh, o.mp, o.mm, o.ki, o.holy, o.parts, o.gap, o.sh, o.lv, o.xp, o.gold, o.stance, o.acu, o.dead, o.cons, o.spd,
+    const key = JSON.stringify([o.cs, o.hp, o.mh, o.mp, o.mm, o.ki, o.holy, o.parts, o.gap, o.r2, o.sh, o.lv, o.xp, o.gold, o.stance, o.acu, o.dead, o.cons, o.spd,
       Object.entries(o.cds).map(([k, v]) => [k, Math.round(now * 10 + v / 100)]), buffs.map((b) => [b[0], Math.round((now + b[1]) * 10), b[2]]), st.map((x) => [x[0], Math.round((now + x[1]) * 10)]), Object.keys(o.pcd).filter((k) => o.pcd[k] > 0)]);
     const tn = Date.now();
     if (s.profOut) { o.pf = s.profOut; s.profOut = null; } // 숙련 경험치 변경분
@@ -325,7 +338,10 @@ export class World {
       case "party": this.partyOp(s, m.op, m.name); break;
       case "enter": this.enterDungeon(s, m.floor, m.dungeon ?? 1); break;
       case "vault": this.openAbyssVault(s); break;
-      case "town": if (room && room !== this.town) this.toTown(s, "마을로 돌아왔어요."); break;
+      case "town": if (room && !this.isTown(room)) this.toTown(s, "마을로 돌아왔어요."); break;
+      case "boat": this.travelBoat(s, m.to); break;
+      case "class2": this.changeClass2(s, m.path); break;
+      case "craft": this.craft(s, m); break;
       case "skills": this.setSkills(s, m.list); break;
       case "stat": this.addStat(s, m.key, m.n); break;
       case "resetStats": this.resetStats(s); break;
@@ -383,7 +399,7 @@ export class World {
   // ── 파티
   partyOf(s) { return s.partyId ? this.parties.get(s.partyId) : null; }
   sendParty(p) {
-    const members = [...p.members].map((id) => { const o = this.sessions.get(id); return o ? { name: o.name, cls: o.char.cls, lv: o.char.level, leader: id === p.leader ? 1 : 0, cp: o.char.checkpoint, best: o.char.best, cp2: o.char.checkpoint2 ?? 1, best2: o.char.best2 ?? 0, cleared: !!o.char.cleared } : null; }).filter(Boolean);
+    const members = [...p.members].map((id) => { const o = this.sessions.get(id); if (!o) return null; const c = o.char; return { name: o.name, cls: c.cls, cls2: c.cls2 ?? null, lv: c.level, leader: id === p.leader ? 1 : 0, cp: c.checkpoint, best: c.best, cp2: c.checkpoint2 ?? 1, best2: c.best2 ?? 0, cleared: !!c.cleared, cp3: c.checkpoint3 ?? 1, best3: c.best3 ?? 0, cleared3: !!c.cleared3, cp4: c.checkpoint4 ?? 1, best4: c.best4 ?? 0, pass: !!c.verdanPass, island: c.island ?? "erden" }; }).filter(Boolean);
     for (const id of p.members) this.sessions.get(id)?.send({ t: "party", members });
   }
   partyOp(s, op, name) {
@@ -393,7 +409,7 @@ export class World {
       if (!o || o === s) return s.notice("그 플레이어를 찾을 수 없어요.");
       if (o.partyId) return s.notice("이미 다른 파티에 있어요.");
       if (p && p.members.size >= MAX_PARTY) return s.notice("파티는 최대 4명이에요.");
-      if (s.unit.room !== this.town || o.unit.room !== this.town) return s.notice("파티 초대는 마을에서만 할 수 있어요.");
+      if (!this.isTown(s.unit.room) || s.unit.room !== o.unit.room) return s.notice("파티 초대는 같은 마을에서만 할 수 있어요.");
       if (p && p.leader !== s.userId) return s.notice("파티장만 초대할 수 있어요.");
       // 같은 사람에게 연달아 초대 금지(5초), 초대는 60초 뒤 만료
       const at = o.inviteAt?.get(s.userId) ?? 0;
@@ -409,7 +425,7 @@ export class World {
       if (Date.now() - (s.inviteAt?.get(from.userId) ?? 0) > 60_000) return s.notice("초대가 만료됐어요. (60초)");
       if (op === "decline") return from.notice(`${s.name}님이 초대를 거절했어요.`);
       if (s.partyId) return s.notice("이미 파티에 있어요.");
-      if (s.unit.room !== this.town || from.unit.room !== this.town) return s.notice("마을에서만 파티에 들어갈 수 있어요.");
+      if (!this.isTown(s.unit.room) || s.unit.room !== from.unit.room) return s.notice("같은 마을에서만 파티에 들어갈 수 있어요.");
       let party = this.partyOf(from);
       if (!party) { party = { id: "p" + roomSeq++, leader: from.userId, members: new Set([from.userId]) }; this.parties.set(party.id, party); from.partyId = party.id; }
       if (party.members.size >= MAX_PARTY) return s.notice("파티가 가득 찼어요.");
@@ -439,7 +455,7 @@ export class World {
       this.parties.delete(p.id);
     } else this.sendParty(p);
     // 던전 안에서 파티를 떠나면 마을로
-    if (!disconnect && s.unit.room && s.unit.room !== this.town) this.toTown(s, "파티를 떠나 마을로 돌아왔어요.");
+    if (!disconnect && s.unit.room && !this.isTown(s.unit.room)) this.toTown(s, "파티를 떠나 마을로 돌아왔어요.");
   }
 
   // ── 던전 이동
@@ -448,33 +464,31 @@ export class World {
     return p ? [...p.members].map((id) => this.sessions.get(id)).filter(Boolean) : [s];
   }
   enterDungeon(s, floor, dungeon = 1) {
-    if (s.unit.room !== this.town) return s.notice("던전은 마을에서 들어갈 수 있어요.");
+    const town = s.unit.room;
+    if (!this.isTown(town)) return s.notice("던전은 마을에서 들어갈 수 있어요.");
     const p = this.partyOf(s);
     if (p && p.leader !== s.userId) return s.notice("파티장만 던전 입장을 할 수 있어요.");
     const group = this.groupOf(s);
-    if (group.some((g) => g.unit.room !== this.town)) return s.notice("파티원 모두 마을에 있어야 해요.");
-    dungeon = dungeon === 2 ? 2 : 1;
-    if (dungeon === 2) {
-      if (!group.every((g) => g.char.cleared)) return s.notice("제2 던전은 제1 던전 100층을 정복한 모험가만 입장할 수 있어요.");
-      floor = Math.max(1, Math.min(DUNGEON2_MAX_FLOOR, Math.floor(Number(floor) || 1)));
-      const maxCp = Math.min(...group.map((g) => g.char.checkpoint2 ?? 1));
-      const best = Math.min(...group.map((g) => g.char.best2 ?? 0));
-      const next = Math.min(DUNGEON2_MAX_FLOOR, best + 1);
-      const floors = [1]; for (let f = 11; f <= maxCp; f += 10) floors.push(f);
-      const bossAgain = floorKind(floor) !== "normal" && group.every((g) => (g.char.best2 ?? 0) >= floor);
-      if (floor !== 1 && floor !== next && !bossAgain && !floors.includes(floor)) return s.notice(`시작할 수 있는 층은 1층, 이어하기(${next}층), 열린 체크포인트, 또는 모두 깬 보스층이에요.`);
-    } else {
-      const maxCp = Math.min(...group.map((g) => g.char.checkpoint));
-      const bossAgain = floorKind(floor) !== "normal" && group.every((g) => g.char.best >= floor);
-      const next = Math.min(100, Math.min(...group.map((g) => g.char.best ?? 0)) + 1);
-      if (floor !== 1 && floor !== next && !bossAgain && (floor > maxCp || (floor - 1) % 10 !== 0)) return s.notice(`시작할 수 있는 층은 1층, 이어하기(${next}층), 열린 체크포인트(최대 ${maxCp}층), 또는 모두 깬 보스층이에요.`);
-    }
+    if (group.some((g) => g.unit.room !== town)) return s.notice("파티원 모두 같은 마을에 있어야 해요.");
+    dungeon = normDungeon(dungeon);
+    const D = DUNGEONS[dungeon], K = progKeys(dungeon), max = D.max;
+    if (town.island !== D.island) return s.notice(`${D.title}은(는) ${D.island === "verdan" ? "베르단 섬" : "에르덴 섬"}에 있어요.`);
+    if (dungeon === 2 && !group.every((g) => g.char.cleared)) return s.notice("제2 던전은 제1 던전 100층을 정복한 모험가만 입장할 수 있어요.");
+    if (dungeon >= 3 && !group.every((g) => g.char.verdanPass)) return s.notice("베르단 섬 입도를 마친 모험가만 입장할 수 있어요.");
+    if (dungeon === 4 && !group.every((g) => g.char.cleared3)) return s.notice("「기억왕의 지하왕릉」은 베르단 제1 던전 100층을 돌파해야 열려요.");
+    floor = Math.max(1, Math.min(max, Math.floor(Number(floor) || 1)));
+    const maxCp = Math.min(...group.map((g) => g.char[K.checkpoint] ?? 1));
+    const best = Math.min(...group.map((g) => g.char[K.best] ?? 0));
+    const next = Math.min(max, best + 1);
+    const floors = [1]; for (let f = 11; f <= maxCp; f += 10) floors.push(f);
+    const bossAgain = floorKind(floor) !== "normal" && group.every((g) => (g.char[K.best] ?? 0) >= floor);
+    if (floor !== 1 && floor !== next && !bossAgain && !floors.includes(floor)) return s.notice(`시작할 수 있는 층은 1층, 이어하기(${next}층), 열린 체크포인트(최대 ${maxCp}층), 또는 모두 깬 보스층이에요.`);
     this.moveGroup(group, floor, "dungeon", { dungeon });
   }
   moveGroup(group, floor, kind, opt = {}) {
     const seed = (secureRandom() * 2 ** 31) | 0;
     const size = opt.partySize ?? group.length;
-    const dungeon = opt.dungeon === 2 ? 2 : 1;
+    const dungeon = normDungeon(opt.dungeon);
     const map = kind === "safe" ? safeZone(floor, dungeon) : makeFloor(floor, seed, size, dungeon);
     const room = this.addRoom(new Room(this, { id: "r" + roomSeq++, kind, floor, dungeon, map, partyId: group[0].partyId, partySize: size }));
     for (const g of group) {
@@ -495,31 +509,37 @@ export class World {
     if (!opt.keepResume) { const party = this.partyOf(group[0]); this.markResume(party ? [...party.members].map((id) => this.sessions.get(id)).filter(Boolean) : group, floor, kind, dungeon); }
     if (kind === "dungeon") {
       const k = floorKind(floor);
-      room.ev({ e: "msg", text: `${dungeon === 2 ? "심연의 균열 · " : ""}${floor}층 ${k === "boss" ? "— 주요 보스" : k === "mid" ? "— 중간보스" : ""}`, kind: "floor" });
+      room.ev({ e: "msg", text: `${dungeon === 1 ? "" : DUNGEONS[dungeon].title + " · "}${floor}층 ${k === "boss" ? "— 주요 보스" : k === "mid" ? "— 중간보스" : ""}`, kind: "floor" });
     }
     return room;
   }
   usePortal(room, id) {
     const group = [...room.players.values()].map((p) => p.session);
     if (!group.length) return;
-    if (room.kind === "town" && (id === "dungeon" || id === "dungeon2")) {
+    const GATES = { dungeon: 1, dungeon2: 2, dungeon3: 3, dungeon4: 4 };
+    if (room.kind === "town" && GATES[id]) {
       const leader = group.find((g) => this.partyOf(g)?.leader === g.userId) ?? group[0];
-      this.enterDungeon(leader, 1, id === "dungeon2" ? 2 : 1);
+      this.enterDungeon(leader, 1, GATES[id]);
       return;
     }
-    const dungeon = room.dungeon === 2 ? 2 : 1;
+    const dungeon = normDungeon(room.dungeon);
+    const K = progKeys(dungeon);
     if (id === "exit" || id === "next") {
       const f = room.floor + 1;
-      for (const g of group) {
-        if (dungeon === 2) g.char.best2 = Math.max(g.char.best2 ?? 0, room.floor);
-        else g.char.best = Math.max(g.char.best, room.floor);
-      }
+      for (const g of group) g.char[K.best] = Math.max(g.char[K.best] ?? 0, room.floor);
       this.moveGroup(group, f, "dungeon", { dungeon });
     } else if (id === "safe") {
       this.moveGroup(group, room.floor, "safe", { dungeon });
     } else if (id === "victory") {
       for (const g of group) {
-        if (dungeon === 2) {
+        if (dungeon >= 3) {
+          const first = !g.char[K.cleared];
+          g.char[K.cleared] = true;
+          g.char[K.best] = Math.max(g.char[K.best] ?? 0, room.floor);
+          if (first) this.broadcastSys(dungeon === 3 ? `🏆 ${g.name}님이 베르단 섬 100층을 돌파했어요! 「기억왕의 지하왕릉」이 열렸어요.` : `🏆 ${g.name}님이 기억왕의 지하왕릉을 정복했어요!`, "legend");
+          this.toTown(g, dungeon === 3 ? "베르단의 심장을 쓰러뜨렸어요! 지하왕릉이 열렸어요." : "기억왕의 잔영을 쓰러뜨렸어요! 지하왕릉을 정복했어요!");
+          this.sendChar(g);
+        } else if (dungeon === 2) {
           if (!g.char.cleared2) this.broadcastSys(`🏆 ${g.name}님이 심연의 균열 30층을 정복했어요!`, "legend");
           g.char.cleared2 = true;
           this.toTown(g, "심연의 감시자를 쓰러뜨렸어요! 심연의 균열을 정복했어요!");
@@ -534,16 +554,12 @@ export class World {
     }
   }
   onBossCleared(room, isMain) {
-    const dungeon = room.dungeon === 2 ? 2 : 1;
+    const dungeon = normDungeon(room.dungeon);
+    const K = progKeys(dungeon), max = dungeonMax(dungeon);
     for (const p of room.players.values()) {
       const c = p.session.char;
-      if (dungeon === 2) {
-        c.best2 = Math.max(c.best2 ?? 0, room.floor);
-        if (isMain && room.floor < DUNGEON2_MAX_FLOOR) c.checkpoint2 = Math.max(c.checkpoint2 ?? 1, room.floor + 1);
-      } else {
-        c.best = Math.max(c.best, room.floor);
-        if (isMain && room.floor < 100) c.checkpoint = Math.max(c.checkpoint, room.floor + 1);
-      }
+      c[K.best] = Math.max(c[K.best] ?? 0, room.floor);
+      if (isMain && room.floor < max) c[K.checkpoint] = Math.max(c[K.checkpoint] ?? 1, room.floor + 1);
       this.save(p.session);
       this.sendChar(p.session);
     }
@@ -554,7 +570,7 @@ export class World {
   openAbyssVault(s) {
     const fail = (text) => { this.vaultReply(s, false, text); };
     // 보관고 창은 관문지기 창에서도 열 수 있으므로 마을 안이면 이용할 수 있다.
-    if (s.unit.room !== this.town) return fail("심연 보관고는 마을에서만 이용할 수 있어요.");
+    if (s.unit.room !== this.town) return fail("심연 보관고는 에르덴 마을에서만 이용할 수 있어요.");
     const c = s.char;
     if ((c.abyssKeys ?? 0) < 1) return fail("심연의 열쇠가 필요해요. 심연의 감시자를 처치해 얻을 수 있어요.");
     if ((c.riftCrystals ?? 0) < 5) return fail(`균열 결정이 부족해요. 5개가 필요해요. (보유: ${c.riftCrystals ?? 0}개)`);
@@ -578,8 +594,105 @@ export class World {
     if (u.dead) u.dead = false;
     u.hp = Math.max(u.hp, Math.round(u.maxHp * 0.6));
     u.status.clear(); u.buffs.clear(); u.shield = null;
-    this.town.addPlayer(u);
+    this.townOf(s).addPlayer(u);
     if (text) s.notice(text);
+    this.save(s);
+  }
+
+  // ── 2차 업데이트: 섬 이동 · 2차 전직 · 베르단 공방 · 250 보상
+  /** 뱃사공: 에르덴 ↔ 베르단. 첫 입도는 레벨 150 + 심연 등급 아이템 1개 공물(소모), 이후엔 자유 왕래 */
+  travelBoat(s, to) {
+    const c = s.char, room = s.unit.room;
+    if (!this.isTown(room)) return s.notice("배는 마을 선착장에서만 탈 수 있어요.");
+    const npc = room === this.town ? "boatman" : "boatman2";
+    if (!this.nearNpc(s, npc, 120)) return s.notice("선착장의 뱃사공 근처에서 이용해 주세요.");
+    if (this.partyOf(s)) return s.notice("파티 중에는 섬을 옮길 수 없어요. 파티를 떠난 뒤 이용해 주세요.");
+    if (s.trade) return s.notice("거래 중에는 배를 탈 수 없어요.");
+    if (room === this.town2) {
+      c.island = "erden";
+      this.moveToTown(s, this.town, "에르덴 섬으로 돌아왔어요.");
+      return;
+    }
+    if (!c.verdanPass) {
+      if (c.level < 150) return s.notice("베르단 섬은 레벨 150 이상만 건널 수 있어요.");
+      const idx = c.inv.findIndex((it) => it && it.rarity === "심연" && !it.locked);
+      if (idx < 0) return s.notice(c.inv.some((it) => it?.rarity === "심연") ? "잠금을 푼 심연 등급 아이템이 가방에 있어야 공물로 바칠 수 있어요." : "공물로 바칠 심연 등급 아이템 1개가 가방에 있어야 해요. (장착 중인 장비는 바칠 수 없어요)");
+      if (to !== "pay") return s.send({ t: "boatAsk", item: { uid: c.inv[idx].uid, name: c.inv[idx].name } });
+      const [it] = c.inv.splice(idx, 1);
+      itemLog(s.userId, "verdan_tribute", { item: it.name, rarity: it.rarity });
+      c.verdanPass = true;
+      this.broadcastSys(`⛵ ${s.name}님이 심연의 공물을 바치고 베르단 섬에 첫발을 디뎠어요!`, "legend");
+    }
+    c.island = "verdan";
+    this.moveToTown(s, this.town2, "베르단 섬에 도착했어요. 2차 전직소·베르단 공방·두 던전이 기다려요.");
+  }
+  moveToTown(s, town, text) {
+    const u = s.unit;
+    u.room?.removePlayer(u);
+    if (u.dead) u.dead = false;
+    u.status.clear(); u.buffs.clear(); u.shield = null;
+    town.addPlayer(u);
+    if (text) s.notice(text);
+    this.sendChar(s);
+    this.save(s);
+  }
+  changeClass2(s, path) {
+    const c = s.char;
+    if (s.unit.room !== this.town2 || !this.nearNpc(s, "class2_master", 120)) return s.notice("2차 전직은 베르단 섬 2차 전직소에서만 할 수 있어요.");
+    const why = canClass2(c, path);
+    if (why) return s.notice(why);
+    c.cls2 = path;
+    c.skills = defaultLoadout2(c);
+    s.unit.r2 = 0;
+    refreshStats(s.unit);
+    s.unit.hp = s.unit.maxHp;
+    this.sendChar(s);
+    s.unit.room.ev({ e: "fx", fx: "ui/level-up", x: s.unit.x | 0, y: s.unit.y | 0, at: s.unit.id });
+    s.unit.room.ev({ e: "fx", fx: "holy/resurrection", x: s.unit.x | 0, y: s.unit.y | 0 });
+    s.unit.room.ev({ e: "add", ...s.unit.room.describe(s.unit) });
+    this.broadcastSys(`✨ ${s.name}님이 ${PATHS[path].name}(으)로 2차 전직했어요!`, "rank");
+    itemLog(s.userId, "class2_change", { path });
+    this.save(s);
+  }
+  /** 베르단 공방: 재료 30 + 지역 각인 1 + 골드 → 원하는 부위·수식어의 전설 장비 (섬 심장핵을 더하면 신화) */
+  craft(s, m) {
+    const c = s.char;
+    if (s.unit.room !== this.town2 || !this.nearNpc(s, "vforge", 120)) return s.notice("베르단 공방 장인 근처에서 제작할 수 있어요.");
+    const tier = Math.floor(Number(m.tier));
+    const T = CRAFT_TIERS[tier];
+    const vmod = String(m.vmod ?? "");
+    if (!T || !CRAFT_SLOTS.includes(m.slot) || !VMODS[vmod]) return s.notice("제작 정보를 다시 골라 주세요.");
+    const zone = VMODS[vmod].zone, mat = VMATS[tier];
+    const heart = !!m.heart;
+    if ((c.mats?.[mat.id] ?? 0) < T.mat) return s.notice(`${mat.name}이(가) 부족해요. (${c.mats?.[mat.id] ?? 0}/${T.mat})`);
+    if ((c.sigils?.[zone] ?? 0) < 1) return s.notice(`「${VMODS[vmod].name}」 수식어에는 해당 지역 각인이 필요해요.`);
+    if (heart && (c.hearts ?? 0) < 1) return s.notice("섬 심장핵이 없어요.");
+    if (c.gold < T.gold) return s.notice(`골드가 부족해요. (${T.gold.toLocaleString()}G 필요)`);
+    if (c.inv.length >= INV_SIZE) return s.notice("가방이 가득 찼어요.");
+    const it = craftVerdanItem(secureRandom, { slot: m.slot, vmod, tier, cls: c.cls, level: c.level, heart });
+    if (!it) return s.notice("제작에 실패했어요. 다시 시도해 주세요.");
+    c.mats[mat.id] -= T.mat; c.sigils[zone] -= 1; c.gold -= T.gold; if (heart) c.hearts -= 1;
+    ensureDur(it);
+    if (!this.pickup(s.unit, it)) { c.mats[mat.id] += T.mat; c.sigils[zone] += 1; c.gold += T.gold; if (heart) c.hearts += 1; return s.notice("가방에 넣지 못했어요."); }
+    itemLog(s.userId, "verdan_craft", { item: it.name, rarity: it.rarity, vmod, tier });
+    s.send({ t: "crafted", item: { name: it.name, rarity: it.rarity } });
+    if (heart) this.broadcastSys(`🔨 ${s.name}님이 섬 심장핵으로 신화 장비 [${it.name}]을(를) 벼려 냈어요!`, "mythic");
+    this.sendChar(s);
+    this.save(s);
+  }
+  /** 레벨 250: 현재 직업 전용 아이템 1개 (가방이 가득하면 비울 때까지 보류) */
+  grantReward250(s) {
+    const c = s.char;
+    if (c.reward250 || c.level < MAX_LEVEL) return;
+    if (c.inv.length >= INV_SIZE) { if (!s.reward250Warned) { s.reward250Warned = true; s.notice("레벨 250 보상을 받으려면 가방을 한 칸 비워 주세요. 마을에 돌아가면 다시 지급돼요."); } return; }
+    const it = makeClassRelic(c.cls, MAX_LEVEL);
+    if (!it) return;
+    ensureAbyss(it); ensureDur(it);
+    if (!this.pickup(s.unit, it)) return;
+    c.reward250 = true;
+    itemLog(s.userId, "reward250", { item: it.name, cls: c.cls });
+    this.broadcastSys(`👑 ${s.name}님이 레벨 250에 도달해 [${it.name}]을(를) 받았어요!`, "legend");
+    this.sendChar(s);
     this.save(s);
   }
 
@@ -597,7 +710,7 @@ export class World {
   resetStats(s) {
     // 스탯 재분배는 기획서상 전직 때 1회. 그 외에는 골드를 받고 마을에서만 허용
     const c = s.char;
-    if (s.unit.room !== this.town) return s.notice("스탯 초기화는 마을 훈련 교관에게서만 할 수 있어요.");
+    if (!this.isTown(s.unit.room)) return s.notice("스탯 초기화는 마을 훈련 교관에게서만 할 수 있어요.");
     if (!this.nearNpc(s, "trainer")) return s.notice("훈련 교관 근처에서 해 주세요.");
     const cost = 200 + c.level * 40;
     if (c.gold < cost) return s.notice(`골드가 부족해요. (${cost}G 필요)`);
@@ -809,7 +922,8 @@ export class World {
     s.whoAt = t;
     const list = [...this.sessions.values()].map((o) => {
       const r = o.unit?.room;
-      const where = !r ? "-" : r === this.town ? "마을" : r.map?.safe ? `${r.floor}층 안전 구역` : `${r.floor}층`;
+      const dn = r && !this.isTown(r) ? (normDungeon(r.dungeon) === 1 ? "" : DUNGEONS[normDungeon(r.dungeon)].name + " ") : "";
+      const where = !r ? "-" : r === this.town ? "에르덴 마을" : r === this.town2 ? "베르단 마을" : r.map?.safe ? `${dn}${r.floor}층 안전 구역` : `${dn}${r.floor}층`;
       const tt = o.char.title != null ? o.char.titles?.find((x) => x.id === o.char.title)?.text ?? null : null;
       return { n: o.name, lv: o.char.level, c: o.char.cls, w: where, tt, p: o.partyId && o.partyId === s.partyId ? 1 : 0, ld: o.linkdead ? 1 : 0 };
     }).sort((a, b) => b.p - a.p || b.lv - a.lv);
@@ -1022,8 +1136,11 @@ export class World {
     const s = this.sessions.get(userId);
     if (!s) return false;
     const group = this.groupOf(s).filter((g) => g === s || g.unit.room === s.unit.room);
+    dungeon = normDungeon(dungeon);
+    // 베르단 던전으로 보내면 섬도 베르단으로 (관리자 이동은 입도 조건을 건너뜀)
+    for (const g of group) { g.char.island = dungeonIsland(dungeon); if (dungeon >= 3) g.char.verdanPass = true; }
     this.moveGroup(group, floor, "dungeon", { dungeon });
-    s.notice(`관리자가 ${dungeon === 2 ? "제2 던전 " : ""}${floor}층으로 이동시켰어요.`);
+    s.notice(`관리자가 ${dungeon === 1 ? "" : DUNGEONS[dungeon].title + " "}${floor}층으로 이동시켰어요.`);
     return true;
   }
   gmTeleportTown(userId) {

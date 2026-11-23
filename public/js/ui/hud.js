@@ -6,12 +6,18 @@ import { h, $, tipOn, retrigger } from "./dom.js";
 import { SKILLS } from "/shared/skills.js";
 import { SLOT_KEYS, ITEMS, TILE, T, GRADE_COLOR } from "/shared/constants.js";
 import { xpToNext, CLASS_INFO } from "/shared/classes.js";
+import { PATHS } from "/shared/classes2.js";
+const DNAME = { 1: "제1 던전", 2: "제2 던전", 3: "베르단 제1 던전", 4: "기억왕의 지하왕릉" };
 import { skillTip } from "./windows.js";
 import { skillIconURL } from "./icons.js";
 import { pixImg } from "./pix.js";
 
 const RES = { sword: ["ki", "내력", 100], fist: ["ki", "내력", 100], priest: ["holy", "성광", 100], smith: ["parts", "부품", 3], rogue: ["gap", "틈", 3] };
-const BUFF_NAME = { riposte: "반격 기회", imun: "이문정주", sidestep: "횡이동", dance: "권무", acupoint: "점혈", evasion: "이베이젼", absolute: "앱솔루트", footwork: "발놀림", poison_blade: "독날", afterimage: "잔영", track: "약점 추적", precise: "정밀 시전", echo: "잔향", eo_burst: "어검발산", hymn_atk: "축복(공격)", hymn_def: "축복(방어)", zone_dr: "회랑", circuit: "회로", swift_kill: "질주", m_guard: "가호", flash_edge: "일섬 여진", eo_tempest: "회천 폭풍", king_resolve: "권왕의 결의", night_hunt: "밤의 사냥", forge_oath: "대장간 서약", sword_saint: "검성의 기백", fist_king: "권왕의 기백", heaven_bow: "천궁의 가호", execution_flow: "처형의 흐름", apocalypse_aftershock: "종말의 여진", blink_ward: "차원 보호막" };
+const BUFF_NAME = { riposte: "반격 기회", imun: "이문정주", sidestep: "횡이동", dance: "권무", acupoint: "점혈", evasion: "이베이젼", absolute: "앱솔루트", footwork: "발놀림", poison_blade: "독날", afterimage: "잔영", track: "약점 추적", precise: "정밀 시전", echo: "잔향", eo_burst: "어검발산", hymn_atk: "축복(공격)", hymn_def: "축복(방어)", zone_dr: "회랑", circuit: "회로", swift_kill: "질주", m_guard: "가호", flash_edge: "일섬 여진", eo_tempest: "회천 폭풍", king_resolve: "권왕의 결의", night_hunt: "밤의 사냥", forge_oath: "대장간 서약", sword_saint: "검성의 기백", fist_king: "권왕의 기백", heaven_bow: "천궁의 가호", execution_flow: "처형의 흐름", apocalypse_aftershock: "종말의 여진", blink_ward: "차원 보호막",
+  dk_veil: "황혼의 장막", dusk_veil_drain: "장막 흡혈", dk_eclipse: "피의 월식", sg_flow: "검식", sg_complete: "검식 완성", vj_guard: "호신", vj_form: "금강불괴", st_rush: "전진 보법",
+  wl_veil: "그림자 장막", aa_focus: "비전 집중", tr_chase: "독혈 추격", nb_dark: "어둠의 칼날", nb_linger: "그림자 잔류", nb_smoke: "잔영 연막", stealth: "은신", as_behind: "배후",
+  iq_stance: "자세", iq_passion: "수난의 반격", iq_gospel: "복음", ht_doom: "유예된 종말", kg_aid: "응급처치", kg_sense: "야전 감각", kg_fervor: "개척의 열기",
+  vm_storm: "폭풍걸음", vm_heart: "심장부", tether_root: "집중", aa_gate_root: "천궁개문" };
 const ST_NAME = { burn: "화상", poison: "중독", bleed: "출혈", slow: "감속", root: "속박", stun: "기절", down: "넘어짐", freeze: "빙결", shock: "감전", weaken: "약화", blind: "실명" };
 
 let slotEls = [];
@@ -129,14 +135,17 @@ export function updateBars() {
   void c;
   const we = $("#wallet");
   if (we._t !== w) { we._t = w; we.textContent = w; }
-  const res = RES[G.char?.cls];
+  // 2차 전직 자원(호흡·바람의 박자·조준 에너지·예언의 잔향·증기 압력·개척의 기세)
+  const r2 = PATHS[G.char?.cls2]?.res2 ?? null;
+  const res = RES[G.char?.cls] ?? (r2 ? ["r2", r2.name, r2.max] : null);
   const rb = $("#orbs .res");
   if (rb._hid !== !res) { rb._hid = !res; rb.classList.toggle("hidden", !res); }
   if (res) {
-    let text = `${res[1]} ${m[res[0]]} / ${res[2]}`;
+    let text = `${res[1]} ${m[res[0]] ?? 0} / ${res[2]}`;
     if (G.char.cls === "sword") text += `  · ${m.stance} 자세`;
     if (G.char.cls === "fist" && m.acu) text += `  · 점혈 ${m.acu}단계`;
-    set("#orbs .res", m[res[0]], res[2], text);
+    if (r2 && res[0] !== "r2") text += `  · ${r2.name} ${m.r2 ?? 0}`;
+    set("#orbs .res", m[res[0]] ?? 0, res[2], text);
   }
   // 버프·상태
   const bf = $("#buffs");
@@ -210,9 +219,9 @@ export function updateBoss() {
 
 export function updateZoneLabel() {
   const z = $("#zone-label");
-  if (G.kind === "town" || G.mapKind === "town") z.textContent = "모험가 마을";
-  else if (G.mapKind === "safe") z.textContent = `${G.dungeon === 2 ? "제2 던전 " : ""}${G.floor}층 안전 구역 · 전직소`;
-  else z.textContent = `제${G.dungeon === 2 ? "2" : "1"} 던전 · ${G.floor}층 · ${G.zone?.name ?? ""}`;
+  if (G.kind === "town" || G.mapKind === "town") z.textContent = G.island === "verdan" ? "베르단 섬 마을" : "에르덴 섬 · 모험가 마을";
+  else if (G.mapKind === "safe") z.textContent = `${G.dungeon === 1 ? "" : DNAME[G.dungeon] + " "}${G.floor}층 안전 구역 · 전직소`;
+  else z.textContent = `${DNAME[G.dungeon] ?? "제1 던전"} · ${G.floor}층 · ${G.zone?.name ?? ""}`;
 }
 
 let partyKey = "";
@@ -289,7 +298,7 @@ function drawMapOn(cv, maxS, big) {
     g.fillStyle = "#000"; g.fillText(text, cv.width / 2 + 1, cv.height - 2);
     g.fillStyle = G.exitOpen ? "#7ff0ff" : "#ffd35a"; g.fillText(text, cv.width / 2, cv.height - 3);
   }
-  if (big) { g.font = "16px Galmuri11"; g.textAlign = "center"; g.textBaseline = "top"; g.fillStyle = "#ffd35a"; g.fillText(G.mapKind === "town" ? "모험가 마을" : `${G.dungeon === 2 ? "제2 던전 " : ""}${G.floor}층 · ${G.zone?.name ?? ""}`, cv.width / 2, 8); }
+  if (big) { g.font = "16px Galmuri11"; g.textAlign = "center"; g.textBaseline = "top"; g.fillStyle = "#ffd35a"; g.fillText(G.mapKind === "town" ? (G.island === "verdan" ? "베르단 섬 마을" : "모험가 마을") : `${G.dungeon === 1 ? "" : DNAME[G.dungeon] + " "}${G.floor}층 · ${G.zone?.name ?? ""}`, cv.width / 2, 8); }
 }
 
 // 상호작용 안내

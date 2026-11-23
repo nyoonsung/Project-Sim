@@ -4,12 +4,12 @@ const pct = (v) => `${Math.round(v * 100)}%`;
 const sec = (v) => `${+(+v).toFixed(2)}초`;
 const STATUS = {
   burn: "화상", shock: "감전", weaken: "약화(방어력 감소)", slow: "둔화", blind: "실명(적 공격 빗나감)", vitalmark: "급소 표식",
-  stun: "기절", freeze: "빙결", root: "속박", poison: "중독", down: "넘어뜨림", huntmark: "사냥 표식",
+  stun: "기절", freeze: "빙결", root: "속박", poison: "중독", down: "넘어뜨림", huntmark: "사냥 표식", bleed: "출혈", curse: "저주",
 };
 const MODS = {
   dmg: "주는 피해", dr: "받는 피해 감소", aspd: "공격 속도", move: "이동 속도", crit: "치명타 확률", critDmg: "치명타 피해",
   atkPct: "공격력", defPct: "방어력", hpPct: "최대 HP", heal: "치유량", pen: "방어 관통", range: "사거리", mpRegen: "MP 회복",
-  evade: "회피", steady: "시전 안정", threat: "위협", kiGain: "내력 획득", res: "상태이상 저항", cast: "시전 속도",
+  evade: "회피", steady: "시전 안정", threat: "위협", kiGain: "내력 획득", res: "상태이상 저항", cast: "시전 속도", defToAtk: "방어력→공격력 환산",
 };
 function statusText(s) {
   if (!s) return null;
@@ -28,6 +28,25 @@ function ccText(st) {
   if (st.groggy) out.push(`그로기 게이지 +${st.groggy}`);
   if (st.interrupt) out.push("시전 끊기");
   if (st.pull) out.push("끌어당김");
+  // 2차 전직 타격 옵션
+  if (st.lifesteal) out.push(`흡혈 ${pct(st.lifesteal)}`);
+  if (st.lowHp) out.push(`생명력이 낮을수록 최대 +${pct(st.lowHp)}`);
+  if (st.perDef) out.push("방어력 비례 강화");
+  if (st.mark) out.push(`표식 +${st.mark.n ?? 1}(최대 ${st.mark.max ?? 5})`);
+  if (st.vsMark) out.push(`표식 1당 +${pct(st.vsMark)}`);
+  if (st.markBurst) out.push(`표식 폭발(1당 공격력 ${pct(st.markBurst.pow)})`);
+  if (st.vsDot) out.push(`지속 피해 대상 +${pct(st.vsDot)}`);
+  if (st.burstDot) out.push("지속 피해 즉시 폭발");
+  if (st.backstab) out.push(`배후 +${pct(st.backstab)}`);
+  if (st.stealthHit) out.push(`은신 중 +${pct(st.stealthHit)}`);
+  if (st.spendR2) out.push(`전직 자원 최대 ${st.spendR2.max} 소모(1당 +${pct(st.spendR2.per)})`);
+  if (st.spendKi) out.push(`내력 최대 ${st.spendKi.max} 추가 소모(1당 +${pct(st.spendKi.per)})`);
+  if (st.pullIn) out.push("끌어당김");
+  if (st.curse) out.push(`저주 ${sec(st.curse)}`);
+  if (st.vsCurse) out.push(`저주 대상 +${pct(st.vsCurse)}`);
+  if (st.vsAir) out.push(`공중 대상 +${pct(st.vsAir)}`);
+  if (st.vsShred) out.push(`파쇄 중첩당 +${pct(st.vsShred)}`);
+  if (st.pen) out.push(`방어 관통 ${pct(st.pen)}`);
   return out.filter(Boolean);
 }
 
@@ -54,7 +73,7 @@ function stepLine(st) {
     case "taunt": return `반경 ${st.radius} 적을 ${sec(st.dur)} 동안 도발`;
     case "channel": return `${sec(st.dur)} 동안 집중(움직이면 끊김)${st.mpPct ? ` · 초당 MP ${pct(st.mpPct)} 소모` : ""}`;
     case "device": return `${{ mine: "지뢰", drone: "드론", turret: "포탑", wall: "방벽", golem: "골렘", moth: "기계 나방" }[st.kind] ?? "장치"} 설치 (${sec(st.dur)}${st.pow ? `, 공격력 ${pct(st.pow)}` : ""}${st.hp ? `, 내구 ${st.hp}` : ""})`;
-    case "custom": return st.pow ? `특수 효과: 공격력 ${pct(st.pow)}${st.dur ? `, ${sec(st.dur)}` : ""}` : "특수 효과";
+    case "custom": return st.pow ? `특수 효과: 공격력 ${pct(st.pow)}${st.ticks ? ` × ${st.ticks}회` : st.n ? ` × ${st.n}회` : ""}${st.final ? ` + 마무리 ${pct(st.final)}` : ""}${st.dur ? `, ${sec(st.dur)}` : ""}${tail}` : st.dur ? `특수 효과 ${sec(st.dur)}` : "특수 효과";
     default: return null;
   }
 }
@@ -66,6 +85,7 @@ export function skillDetails(sk) {
   if (sk.kind === "passive") {
     if (sk.passive?.mods) lines.push(`상시: ${modsText(sk.passive.mods)}`);
     if (sk.passive?.trigger) lines.push(`조건부 발동${sk.passive.trigger.icd ? ` (내부 쿨타임 ${sec(sk.passive.trigger.icd)})` : ""}`);
+    if (sk.passive?.p2) lines.push("2차 전직 패시브 — 장착하면 효과 발동");
     return lines;
   }
   const head = [];
@@ -75,6 +95,7 @@ export function skillDetails(sk) {
   else if (sk.aim === "dir") head.push("조준 방향");
   else if (sk.aim === "point") head.push("지정 위치");
   if (sk.cast) head.push(`시전 ${sec(sk.cast)}`);
+  if (sk.hpCost) head.push(`생명력 ${pct(sk.hpCost)} 소모`);
   if (sk.moveSkill) head.push("이동기");
   if (head.length) lines.push(head.join(" · "));
   for (const st of sk.steps ?? []) { const l = stepLine(st); if (l) lines.push("• " + l); }

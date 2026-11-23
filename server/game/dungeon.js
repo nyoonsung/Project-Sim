@@ -132,7 +132,7 @@ function normalFloor(floor, seed, party, dungeon = 1) {
   const R = rng(seed);
   const zone = zoneOf(floor, dungeon);
   // 제2 던전은 층 번호(1~30)가 아니라 실제 레벨(102~150)로 크기·몬스터 수·정예 비율을 정함 (예전엔 1~30층처럼 몬스터가 적었음)
-  const lv = effLevel(floor, dungeon), d2 = dungeon === 2;
+  const lv = effLevel(floor, dungeon), d2 = dungeon >= 2, d3 = dungeon >= 3, d4 = dungeon === 4;
   const iw = Math.min(40, 30 + Math.floor(lv / 10)), ih = Math.min(28, 20 + Math.floor(lv / 14));
   const W = iw + 6, H = ih + 7;
   const m = grid(W, H);
@@ -206,14 +206,27 @@ function normalFloor(floor, seed, party, dungeon = 1) {
     if (edge <= 3 && Math.hypot(x - startX, y - startY) > 8 && (x + y * 3) % 3 === 0) pts.push([px(x), px(y)]);
   }
   // 층마다 몬스터 수 1.5배 (최대 90)
-  const total = Math.min(d2 ? 110 : 90, Math.round((30 + lv * 0.45 + (d2 ? 15 : 0)) * (party > 1 ? 1 + (party - 1) * 0.35 : 1)));
-  m.waves = { total, waves: Math.max(3, Math.min(d2 ? 7 : 6, 3 + Math.floor(lv / 20))), points: pts, pool: zone.monsters, elite: d2 ? Math.min(0.45, 0.32 + floor * 0.004) : Math.min(0.3, 0.07 + floor * 0.0025) };
+  // 베르단 제1 던전 최대 120마리, 지하왕릉 128마리(웨이브 밀도 약 1.07배 + 더 빠른 웨이브)
+  const cap = d4 ? 128 : d3 ? 120 : d2 ? 110 : 90;
+  const total = Math.min(cap, Math.round((30 + lv * 0.45 + (d2 ? 15 : 0)) * (party > 1 ? 1 + (party - 1) * 0.35 : 1)));
+  const elite = d4 ? Math.min(0.5, 0.42 + floor * 0.003) : d3 ? Math.min(0.48, 0.34 + floor * 0.0014) : d2 ? Math.min(0.45, 0.32 + floor * 0.004) : Math.min(0.3, 0.07 + floor * 0.0025);
+  m.waves = { total, waves: Math.max(3, Math.min(d3 ? 8 : d2 ? 7 : 6, 3 + Math.floor(lv / 20))), points: pts, pool: zone.monsters, elite };
+  // 지하왕릉 1~10층: 석관 — 지나가다 건드리면 열리며 추가 웨이브와 보상
+  if (zone.sarco) {
+    const spots = [];
+    for (let k = 0; k < 40 && spots.length < 5; k++) {
+      const x = R.int(ax + 3, ax + iw - 4), y = R.int(ay + 3, ay + ih - 5);
+      if (get(m, x, y) !== T.FLOOR || !reach[y * W + x] || Math.hypot(x - startX, y - startY) < 6 || spots.some(([a, b]) => Math.hypot(a - x, b - y) < 5)) continue;
+      spots.push([x, y]);
+    }
+    for (const [x, y] of spots) m.objects.push({ kind: "sarco", id: "sarco", x: px(x), y: px(y), label: "봉인된 석관" });
+  }
   m.style = style;
   m.spawns = [];
   addTorches(m, R, zone, 5);
   addDeco(m, R, zone, Math.round(W * H / 45));
   m.objects = m.objects.filter((o) => o.kind !== "deco" || reach[Math.floor(o.y / TILE) * W + Math.floor(o.x / TILE)]);
-  decorate(m, R, zone, { cx: px(cx), cy: px(cy), traps: lv < 3 ? 0 : Math.min(d2 ? 8 : 6, 2 + Math.floor(lv / 15)), start: m.start });
+  decorate(m, R, zone, { cx: px(cx), cy: px(cy), traps: lv < 3 ? 0 : Math.min(d3 ? 9 : d2 ? 8 : 6, 2 + Math.floor(lv / 15)), start: m.start });
   m.kind = "normal";
   return m;
 }
@@ -295,6 +308,9 @@ export function makeTown() {
   carveRect(m, 18, 21, 4, 1, T.PATH);
   // 연못 (왼쪽 아래)
   carveRect(m, 2, 25, 6, 3, T.WATER); carveRect(m, 3, 24, 4, 1, T.WATER);
+  // 2차 업데이트: 마을 아래쪽 선착장 (뱃사공 → 베르단 섬)
+  carveRect(m, 16, 27, 8, 2, T.WATER);
+  carveRect(m, 19, 27, 2, 2, T.PATH);
   const objs = m.objects;
   // 건물: s=그림, tx·ty=왼쪽 위 칸, w·h=칸 수 → 아래 2줄 막음
   const bld = (s, tx, ty, w, h, extra = {}) => {
@@ -354,6 +370,9 @@ export function makeTown() {
     objs.push({ kind: "prop", s, x: P(tx) + 16, y: P(ty) + 24, small: true });
   }
   objs.push({ kind: "watermill", x: P(8) + 8, y: P(27) + 8 });
+  objs.push({ kind: "boat", x: P(22) + 16, y: P(28) + 20 });
+  objs.push({ kind: "npc", id: "boatman", name: "뱃사공 노아", x: P(18) + 16, y: P(26) + 12 });
+  objs.push({ kind: "prop", s: "signboard", x: P(21) + 20, y: P(26) + 22, small: true });
   // 연못: 물결·연잎
   for (const [tx, ty] of [[3, 25], [5, 26], [6, 25], [4, 27]]) objs.push({ kind: "ripple", x: P(tx) + 16, y: P(ty) + 20, flatY: -998 });
   // 줄 전구 (기둥 꼭대기 좌표들을 차례로 잇는다)
@@ -395,11 +414,116 @@ export function makeTown() {
   return m;
 }
 
+/** 베르단 섬 마을 (2차 업데이트): 위쪽 베르단 제1 던전 관문, 오른쪽 기억왕의 지하왕릉, 왼쪽 2차 전직소, 오른쪽 위 베르단 공방, 아래 선착장 */
+export function makeVerdanTown() {
+  const W = 40, H = 30;
+  const m = grid(W, H, T.GRASS);
+  const R = rng(7331);
+  const P = (tx) => tx * TILE;
+  for (let x = 0; x < W; x++) { set(m, x, 0, T.WALL); set(m, x, 1, T.WALL); set(m, x, H - 1, T.WALL); }
+  for (let y = 0; y < H; y++) { set(m, 0, y, T.WALL); set(m, W - 1, y, T.WALL); }
+  carveRect(m, 13, 11, 14, 9, T.PLAZA);
+  carveRect(m, 15, 2, 10, 5, T.PLAZA);
+  carveRect(m, 18, 7, 4, 4, T.PATH);
+  carveRect(m, 18, 20, 4, 6, T.PATH);
+  carveRect(m, 1, 14, 12, 3, T.PATH);
+  carveRect(m, 27, 14, 6, 3, T.PATH);
+  carveRect(m, 26, 7, 8, 2, T.PATH);
+  // 해안: 아래쪽이 바다, 가운데 나무 잔교
+  carveRect(m, 1, 26, 38, 3, T.WATER);
+  carveRect(m, 19, 26, 2, 3, T.PATH);
+  const objs = m.objects;
+  const bld = (sp, tx, ty, w, h, extra = {}) => {
+    for (let y = ty + h - 2; y < ty + h; y++) for (let x = tx; x < tx + w; x++) set(m, x, y, T.WALL);
+    objs.push({ kind: "prop", s: sp, x: P(tx) + (w * TILE) / 2, y: P(ty + h), ...extra });
+  };
+  bld("lodge", 3, 4, 4, 7, { sign: { text: "2차 전직소", color: "#ffd35a" }, win: "#fff0b0" });
+  bld("h_red", 30, 3, 4, 3, { sign: { text: "베르단 공방", color: "#ff9a5a" }, win: "#ffb070" });
+  bld("h_food", 8, 20, 3, 3, { sign: { text: "잡화점", color: "#ffd35a" }, win: "#ffcf7a" });
+  bld("h_beige", 27, 20, 4, 3, { sign: { text: "대장간", color: "#ff7a4a" }, win: "#ff9a5a" });
+  bld("h_green", 3, 19, 4, 3, { sign: { text: "마법부여", color: "#c8a0ff" }, win: "#e0c8ff" });
+  bld("h_tall", 10, 4, 3, 3, { win: "#a8d8ff" });
+  bld("h_round", 24, 3, 3, 3, { mill: true, win: "#a8d8ff" });
+  bld("lodge2", 33, 20, 4, 5, { sign: { text: "여관", color: "#ff8ad8" }, win: "#ffd08a" });
+  // 베르단 제1 던전 관문 (푸른 돌 아치)
+  set(m, 18, 3, T.WALL); set(m, 18, 4, T.WALL); set(m, 21, 3, T.WALL); set(m, 21, 4, T.WALL);
+  objs.push({ kind: "prop", s: "arch", x: P(20) + 16, y: P(5), glow: "#7ad8ff", tint: "d3" });
+  objs.push({ kind: "portal", id: "dungeon3", x: P(20), y: P(4) + 12, label: "베르단 제1 던전", color: "dungeon3" });
+  for (const tx of [15, 23]) { bld("statue", tx, 2, 2, 2); objs[objs.length - 1].glow = "#7ad8ff"; }
+  for (const tx of [17, 22]) objs.push({ kind: "flag", c: tx === 17 ? "flag_blue" : "flag_green", x: P(tx) + 16, y: P(7) });
+  objs.push({ kind: "npc", id: "gate3", name: "베르단 관문지기", x: P(17) + 16, y: P(6) + 8 });
+  // 기억왕의 지하왕릉 (금빛 사암 아치)
+  carveRect(m, 33, 10, 6, 8, T.PLAZA);
+  set(m, 34, 10, T.WALL); set(m, 34, 11, T.WALL); set(m, 37, 10, T.WALL); set(m, 37, 11, T.WALL);
+  objs.push({ kind: "prop", s: "arch", x: P(36) + 16, y: P(12), glow: "#ffd860", tint: "d4" });
+  objs.push({ kind: "portal", id: "dungeon4", x: P(36), y: P(11) + 12, label: "기억왕의 지하왕릉", color: "dungeon4" });
+  for (const ty of [13, 16]) objs.push({ kind: "flag", c: "flag_yellow", x: P(38) + 4, y: P(ty) });
+  objs.push({ kind: "npc", id: "gate4", name: "왕릉 문지기", x: P(33) + 16, y: P(13) + 20 });
+  // 광장: 섬의 심장 결정 기념비
+  set(m, 19, 15, T.WALL); set(m, 20, 15, T.WALL);
+  objs.push({ kind: "fountain", fx: "water/fountain", x: P(20), y: P(16) - 4 });
+  objs.push({ kind: "mosaic", x: P(20), y: P(15) + 8, flatY: -999 });
+  for (const [tx, ty, c] of [[15, 12, "crystal0"], [24, 12, "crystal1"], [15, 18, "crystal2"], [24, 18, "crystal3"]]) { set(m, tx, ty, T.WALL); objs.push({ kind: "prop", s: c, x: P(tx) + 16, y: P(ty) + 28, glow: "#8ae0ff" }); }
+  // NPC
+  objs.push({ kind: "npc", id: "class2_master", name: "2차 전직관 아르테아", x: P(5) + 16, y: P(11) + 12 });
+  objs.push({ kind: "npc", id: "vforge", name: "베르단 공방장 하겐", x: P(31) + 16, y: P(6) + 12 });
+  objs.push({ kind: "campfire", fx: "fire/campfire", x: P(29) + 16, y: P(7) + 4 });
+  objs.push({ kind: "npc", id: "shop", name: "잡화 상인 세나", x: P(9) + 16, y: P(23) + 12 });
+  objs.push({ kind: "npc", id: "smithy", name: "대장장이 그론", x: P(28) + 16, y: P(23) + 12 });
+  objs.push({ kind: "npc", id: "enchanter", name: "마법부여사 리엔", x: P(5) + 16, y: P(22) + 12 });
+  objs.push({ kind: "npc", id: "trainer", name: "훈련 교관", x: P(11) + 16, y: P(17) + 16 });
+  objs.push({ kind: "dummy", id: "dummy", x: P(10) + 16, y: P(12) + 8 });
+  objs.push({ kind: "npc", id: "board", name: "모험가 게시판", x: P(25) + 16, y: P(13) });
+  // 선착장
+  objs.push({ kind: "boat", x: P(23) + 16, y: P(27) + 20, sail: "#c8e0ff" });
+  objs.push({ kind: "npc", id: "boatman2", name: "뱃사공 마레", x: P(18) + 16, y: P(25) + 12 });
+  objs.push({ kind: "prop", s: "signboard", x: P(21) + 20, y: P(25) + 22, small: true });
+  // 소품
+  for (const [sp, tx, ty] of [["crate", 9, 9], ["jars", 12, 9], ["box", 34, 8], ["chest", 35, 18], ["cauldron", 29, 9], ["rock_big", 2, 13], ["boulder", 37, 25], ["stump", 12, 23], ["crates", 26, 23], ["bucket", 16, 23], ["redjar", 31, 18], ["banner2", 7, 11], ["banner4", 30, 11]]) {
+    if (get(m, tx, ty) === T.WALL) continue;
+    objs.push({ kind: "prop", s: sp, x: P(tx) + 16, y: P(ty) + 24, small: true });
+  }
+  objs.push({ kind: "prop", s: "torii", x: P(20) + 16, y: P(21) + 8 });
+  const pole = (tx, ty) => [P(tx) + 16, P(ty) + 16];
+  objs.push({ kind: "lights", pts: [pole(13, 11), pole(17, 11)] });
+  objs.push({ kind: "lights", pts: [pole(22, 11), pole(26, 11)] });
+  objs.push({ kind: "lights", pts: [pole(17, 21), pole(17, 24)] });
+  objs.push({ kind: "lights", pts: [pole(22, 21), pole(22, 24)] });
+  objs.push({ kind: "lights", pts: [pole(2, 13), pole(6, 13), pole(10, 13)] });
+  for (const [tx, ty] of [[13, 11], [17, 11], [22, 11], [26, 11], [17, 21], [17, 24], [22, 21], [22, 24], [2, 13], [6, 13], [10, 13]])
+    objs.push({ kind: "lamp", x: P(tx) + 16, y: P(ty) + 30, post: true });
+  const free = (tx, ty, r = 0) => { for (let y = ty - r; y <= ty + r; y++) for (let x = tx - r; x <= tx + r; x++) if (get(m, x, y) !== T.GRASS) return false; return true; };
+  const groves = ["grove_pine", "grove_green", "grove_pine", "grove_lime"];
+  for (let x = 1; x < W - 1; x += 3) objs.push({ kind: "prop", s: R.pick(groves), x: P(x) + 16, y: P(2) - 4, border: true });
+  for (let y = 3; y < H - 4; y += 2) { objs.push({ kind: "prop", s: R.pick(["tree_pine", "tree_white", "tree_green_s"]), x: 14, y: P(y) + 24, border: true }); objs.push({ kind: "prop", s: R.pick(["tree_pine", "tree_white", "tree_pink_s"]), x: P(W) - 14, y: P(y) + 24, border: true }); }
+  const trees = ["tree_white", "tree_pine", "tree_white", "tree_round", "tree_green"];
+  let n = 0;
+  for (let i = 0; i < 400 && n < 12; i++) {
+    const tx = R.int(2, W - 3), ty = R.int(3, H - 6);
+    if (!free(tx, ty, 1) || !free(tx, ty + 1, 0)) continue;
+    if (objs.some((o) => Math.hypot(o.x - P(tx), o.y - P(ty)) < 70)) continue;
+    objs.push({ kind: "prop", s: R.pick(trees), x: P(tx) + 16, y: P(ty) + 30 });
+    set(m, tx, ty, T.WALL);
+    n++;
+  }
+  for (let i = 0; i < 80; i++) {
+    const tx = R.int(1, W - 2), ty = R.int(2, H - 5);
+    if (get(m, tx, ty) !== T.GRASS) continue;
+    objs.push({ kind: "prop", s: R.pick(["bush0", "bush1", "bush3", "bush5", "flower1", "flower2", "flower3", "rock_s"]), x: P(tx) + R.int(4, 28), y: P(ty) + R.int(16, 30), small: true, flat: true });
+  }
+  for (const [tx, ty] of [[6, 27], [13, 27], [27, 27], [33, 27]]) objs.push({ kind: "ripple", x: P(tx) + 16, y: P(ty) + 20, flatY: -998 });
+  m.start = [P(20) + 16, P(22) + 16];
+  m.kind = "town";
+  m.island = "verdan";
+  m.safe = true;
+  return m;
+}
+
 const toB64 = (u8) => (typeof Buffer !== "undefined" ? Buffer.from(u8).toString("base64") : btoa(String.fromCharCode(...u8)));
 /** 지도를 클라이언트로 보낼 형태로 */
 export function mapPayload(m, extra = {}) {
   return {
     w: m.w, h: m.h, tiles: toB64(m.tiles), kind: m.kind, doorsOpen: !!m.doorsOpen,
-    objects: m.objects, start: m.start, arena: m.arena ?? null, ...extra,
+    objects: m.objects, start: m.start, arena: m.arena ?? null, island: m.island ?? null, ...extra,
   };
 }

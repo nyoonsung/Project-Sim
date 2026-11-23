@@ -75,7 +75,7 @@ export async function handleApi(req) {
     // 배포 전에 확인용: 지금 접속자 수와 던전 안에 있는 사람 수 (이름 등 개인 정보 없음)
     if (path === "/api/status" && method === "GET") {
       const w = initWorld(); let online = 0, dungeon = 0;
-      for (const s of w.sessions.values()) { online++; if (s.unit.room && s.unit.room !== w.town) dungeon++; }
+      for (const s of w.sessions.values()) { online++; if (s.unit.room && !w.isTown(s.unit.room)) dungeon++; }
       return reply(200, { online, dungeon });
     }
     if (path.startsWith("/api/gm/")) return await handleGm(req, null, path, { readJson: () => req.readJson(), send: (_res, s, b, h) => reply(s, b, h), isAdmin, ip, url: req.url });

@@ -1,13 +1,14 @@
 // 방(마을·던전 한 층·안전 구역) 시뮬레이션: 서버가 모든 판정을 한다
 import { TILE, TICK_DT, PLAYER_RADIUS } from "../../shared/constants.js";
 import { applyInput, moveCircle, circleHitsWall, blocksShot, lineOfSight, tileAt } from "../../shared/move.js";
-import { MONSTERS, BOSSES, monsterStats, bossStats, floorScale, zoneOf, effLevel, D2_MONSTER_STAT_MULTIPLIER, D2_BOSS_STAT_MULTIPLIER, D2_BOSS_SPEED_MULTIPLIER } from "../../shared/zones.js";
-import { rollItem, rollAbyssRelic } from "../../shared/items.js";
+import { PATH_DMG } from "../../shared/classes2.js";
+import { MONSTERS, BOSSES, monsterStats, bossStats, floorScale, zoneOf, effLevel, normDungeon, dungeonMax, progKeys, D2_MONSTER_STAT_MULTIPLIER, D2_BOSS_STAT_MULTIPLIER, D2_BOSS_SPEED_MULTIPLIER } from "../../shared/zones.js";
+import { rollItem, rollAbyssRelic, rollVerdanItem, ILVL_CAP, VMATS, vmatTier, SIGIL_NAMES } from "../../shared/items.js";
 import { wearOnDeath } from "./wear.js";
 const KI_BASE = 30; // 내력 기본치
 import { tickStatuses, dealDamage, heal, moveMul, isHardCC, applyStatus, buffSum, giveShield } from "./combat.js";
 import { newUnitId, gainXp, refreshStats } from "./player.js";
-import { castSkill, onParry as skillOnParry, onPlayerHit as skillOnPlayerHit, tickPlayerSkills, cancelCast, onFrontGuard } from "./skills.js";
+import { castSkill, onParry as skillOnParry, onPlayerHit as skillOnPlayerHit, tickPlayerSkills, cancelCast, onFrontGuard, playerHurt, playerEvade, skillOnKill, p2of } from "./skills.js";
 import { tickMonster, tickBoss } from "./ai.js";
 import { mapPayload } from "./dungeon.js";
 import { secureRandom } from "./secure.js";
@@ -19,9 +20,15 @@ const NEAR_ONLY = new Set(["fx", "anim", "cast", "casting", "cx", "st", "stx", "
 const EV_RANGE_X = 1000, EV_RANGE_Y = 760, CROWD_EV_CAP = 24;
 
 const XP_RATE = 0.4; // 경험치 배율 (성장 속도)
+// 마을 관문 포탈 → 던전 번호
+export const TOWN_GATES = { dungeon: 1, dungeon2: 2, dungeon3: 3, dungeon4: 4 };
 /** 제2 던전은 캐릭터 레벨과 층 차이에 따른 경험치 감소를 적용하지 않는다. */
 export function levelGapXpMultiplier(level, floor, dungeon = 1) {
-  if (dungeon === 2 || level <= floor + 5) return 1;
+  // 에르덴 제2 던전: 레벨 180부터 경험치 획득량 감소 (180 → 95%, 190 → 45%, 197+ → 10%)
+  if (dungeon === 2) return level < 180 ? 1 : Math.max(0.1, 1 - (level - 179) * 0.05);
+  // 베르단 던전: 실제 몬스터 레벨보다 6레벨 이상 높으면 레벨당 8%씩 감소
+  if (dungeon >= 3) { const L = effLevel(floor, dungeon); return level <= L + 5 ? 1 : Math.max(0.1, 1 - (level - L - 5) * 0.08); }
+  if (level <= floor + 5) return 1;
   return Math.max(0.05, 1 - (level - floor - 5) * 0.15);
 }
 /** 제1 던전 100층 최종 보스는 캐릭터 레벨 차이와 관계없이 경험치를 온전히 지급한다. */
@@ -43,9 +50,11 @@ function clearPath(map, m, t) {
 }
 export class Room {
   constructor(world, { id, kind, floor = 0, dungeon = 1, map, partyId = null, partySize = 1 }) {
-    Object.assign(this, { world, id, kind, floor, dungeon: dungeon === 2 ? 2 : 1, map, partyId, partySize });
+    Object.assign(this, { world, id, kind, floor, dungeon: normDungeon(dungeon), map, partyId, partySize });
     // 실제 레벨: 제1 던전은 층 그대로, 제2 던전은 102~150 (방어력·드롭 아이템 레벨·골드 계산에 사용)
     this.lvl = effLevel(Math.max(1, floor), this.dungeon);
+    // 지하왕릉 11~20층: 예고 공격 지연·반복
+    this.echoTele = this.dungeon === 4 && kind === "dungeon" && !!zoneOf(Math.max(1, floor), 4).echoTele;
     this.units = new Map();
     this.players = new Map();
     this.projectiles = [];
@@ -109,7 +118,7 @@ export class Room {
     const st = monsterStats(mid, Math.max(1, this.floor), this.partySize, this.dungeon);
     const m = {
       id: newUnitId(), team: "m", type: "m", mid, name: (elite ? "정예 " : "") + def.name, x, y, r: 11 * (def.look.scale ?? 1) * (elite ? 1.2 : 1),
-      hp: Math.round(st.hp * (elite ? 3 : 1)), maxHp: Math.round(st.hp * (elite ? 3 : 1)), atk: st.dmg * (elite ? 1.5 : 1), def: (def.ai === "guard" ? 12 + this.lvl * 1.2 : 2 + this.lvl * 1.6) * (elite ? 1.5 : 1) * (this.dungeon === 2 ? D2_MONSTER_STAT_MULTIPLIER : 1),
+      hp: Math.round(st.hp * (elite ? 3 : 1)), maxHp: Math.round(st.hp * (elite ? 3 : 1)), atk: st.dmg * (elite ? 1.5 : 1), def: (def.ai === "guard" ? 12 + this.lvl * 1.2 : 2 + this.lvl * 1.6) * (elite ? 1.5 : 1) * (this.dungeon === 2 ? D2_MONSTER_STAT_MULTIPLIER : this.dungeon >= 3 ? 0.6 : 1),
       level: st.level, xp: st.xp * (elite ? 3 : 1), speed: def.speed * (elite ? 1.08 : 1) * floorScale(this.floor, this.dungeon).speed, elite, ai: def.ai, def_: def,
       status: new Map(), buffs: new Map(), threat: new Map(), facing: Math.PI / 2, aggro: !!opts.aggro, home: [x, y],
       atkReady: 0, windup: null, dead: false, fly: !!def.fly, summoned: !!opts.summoned,
@@ -123,7 +132,7 @@ export class Room {
     const st = bossStats(bid, this.floor, this.partySize, this.dungeon);
     const b = {
       id: newUnitId(), team: "m", type: "b", bid, name: def.name, x, y, r: 14 * Math.min(2.2, def.look.scale ?? 1),
-      hp: st.hp, maxHp: st.hp, atk: st.dmg, def: (6 + this.lvl * 2.2) * (this.dungeon === 2 ? D2_BOSS_STAT_MULTIPLIER : 1), level: st.level, xp: st.xp, speed: def.speed * (this.dungeon === 2 ? D2_BOSS_SPEED_MULTIPLIER : 1),
+      hp: st.hp, maxHp: st.hp, atk: st.dmg, def: (6 + this.lvl * 2.2) * (this.dungeon === 2 ? D2_BOSS_STAT_MULTIPLIER : this.dungeon >= 3 ? 0.6 : 1), level: st.level, xp: st.xp, speed: def.speed * (this.dungeon === 2 ? D2_BOSS_SPEED_MULTIPLIER : this.dungeon >= 3 ? 0.85 : 1),
       boss: true, mid: def.mid, def_: def, dungeon: this.dungeon, status: new Map(), buffs: new Map(), threat: new Map(), facing: Math.PI / 2,
       aggro: true, patternAt: 2, pattern: null, phase: 1, groggyGauge: 0, dead: false, fly: !!def.fly, patIdx: 0,
     };
@@ -144,7 +153,7 @@ export class Room {
   }
   spawnDevice(owner, kind, x, y, o) {
     const d = {
-      id: newUnitId(), team: owner.team, type: "d", kind, owner: owner.id, x, y, r: kind === "golem" ? 14 : 8,
+      id: newUnitId(), team: owner.team, type: "d", kind, owner: owner.id, x, y, r: kind === "golem" ? 14 : kind === "pet" ? (o.skin === "demon" ? 14 : 10) : 8,
       hp: o.hp ?? 1, maxHp: o.hp ?? 1, until: this.now + o.dur, o, status: new Map(), buffs: new Map(), dead: false, nextHit: 0,
       atk: owner.stats.atk, facing: o.dir ?? 0,
     };
@@ -163,7 +172,7 @@ export class Room {
     }
     if (u.type === "m") return { id: u.id, k: "m", n: u.name, m: u.mid, mh: u.maxHp, lv: u.level, el: u.elite ? 1 : 0, x: u.x | 0, y: u.y | 0 };
     if (u.type === "b") return { id: u.id, k: "b", n: u.name, b: u.bid, mh: u.maxHp, lv: u.level, x: u.x | 0, y: u.y | 0 };
-    if (u.type === "d") return { id: u.id, k: "d", d: u.kind, own: u.owner, mh: u.maxHp, x: u.x | 0, y: u.y | 0, f: Math.round(u.facing * 100), dur: u.o.dur };
+    if (u.type === "d") return { id: u.id, k: "d", d: u.kind, own: u.owner, mh: u.maxHp, x: u.x | 0, y: u.y | 0, f: Math.round(u.facing * 100), dur: u.o.dur, ...(u.o.skin ? { sk: u.o.skin } : {}), ...(u.o.big ? { big: 1 } : {}) };
     return { id: u.id };
   }
 
@@ -234,6 +243,8 @@ export class Room {
   onParry(u, src, now) { skillOnParry(this, u, src, now); }
   onFrontGuard(u, now) { onFrontGuard(this, u, now); }
   onPlayerHit(u, t, dmg, crit, now, o) { skillOnPlayerHit(this, u, t, dmg, crit, now, o); }
+  onPlayerHurt(t, src, dmg, o, now) { return playerHurt(this, t, src, dmg, o, now); }
+  onPlayerEvade(t, src, now) { playerEvade(this, t, src, now); }
 
   // ── 웨이브: 남은 적이 줄거나 제한 시간이 지나면 다음 무리가 가장자리 소환진에서 나타남
   tickWaves(now) {
@@ -247,7 +258,7 @@ export class Room {
     const lowCount = alive <= Math.max(2, Math.floor(per * 0.35));
     const timedRelease = now >= (st.forceAt ?? 0);
     // 기존 층은 몬스터 수가 줄어야 다음 웨이브, D2는 22초 뒤 전투가 정체되지 않게 합류.
-    if (st.n > 0 && !lowCount && (this.dungeon !== 2 || !timedRelease)) return;
+    if (st.n > 0 && !lowCount && (this.dungeon < 2 || !timedRelease)) return;
 
     // 데이터가 비거나 막힌 소환 좌표가 있어도 빈 배열 인덱싱으로 틱이 중단되지 않게 한다.
     let pts = (Array.isArray(W.points) ? W.points : []).filter(([x, y]) =>
@@ -281,8 +292,8 @@ export class Room {
     st.n++;
     const n = Math.min(per, W.total - st.spawned);
     st.spawned += n;
-    st.nextAt = now + (this.dungeon === 2 ? 1.8 : 3);
-    st.forceAt = now + (this.dungeon === 2 ? 22 : 22);
+    st.nextAt = now + (this.dungeon === 4 ? 1.5 : this.dungeon >= 2 ? 1.8 : 3);
+    st.forceAt = now + (this.dungeon === 4 ? 19 : 22);
     this.ev({ e: "wave", n: st.n, of: W.waves });
     for (let i = pts.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [pts[i], pts[j]] = [pts[j], pts[i]]; }
     for (let i = 0; i < n; i++) {
@@ -411,6 +422,7 @@ export class Room {
     this.killed++;
     // 보상: 파티원 각자(개인 드롭)
     const killer = src?.team === "p" ? (src.type === "d" ? this.units.get(src.owner) : src) : null;
+    if (killer) skillOnKill(this, killer, t, now);
     for (const p of this.players.values()) {
       if (p.dead || Math.hypot(p.x - t.x, p.y - t.y) > 700) continue;
       const ch = p.session.char;
@@ -438,8 +450,8 @@ export class Room {
       // 층을 깬 순간 '깬 층'으로 기록 → 마을로 나갔다 와도 다음 층부터 이어서 도전 가능
       for (const p of this.players.values()) {
         const c = p.session.char;
-        if (this.dungeon === 2) c.best2 = Math.max(c.best2 ?? 0, this.floor);
-        else c.best = Math.max(c.best, this.floor);
+        const K = progKeys(this.dungeon);
+        c[K.best] = Math.max(c[K.best] ?? 0, this.floor);
         this.world.save?.(p.session); this.world.sendChar?.(p.session);
       }
       this.ev({ e: "exit", open: 1 });
@@ -479,7 +491,7 @@ export class Room {
       if (p.dead || c.opened.has(p.userId) || Math.hypot(p.x - c.x, p.y - c.y) > 34) continue;
       c.opened.add(p.userId);
       const s = p.session, ch = s.char;
-      const gold = Math.round((12 + this.lvl * 6 + Math.random() * this.lvl * 3) * (this.dungeon === 2 ? 1.3 : 1));
+      const gold = Math.round((12 + this.lvl * 6 + Math.random() * this.lvl * 3) * (this.dungeon === 2 ? 1.3 : this.dungeon >= 3 ? 1.6 : 1));
       ch.gold += gold; s.meDirty = true; s.dirty = true;
       const n = 1 + (Math.random() < 0.35 ? 1 : 0);
       const names = [];
@@ -492,6 +504,7 @@ export class Room {
         this.world.sendChar?.(s);
         s.send({ t: "ev", list: [{ e: "msg", text: "균열 결정 1개를 획득했어요.", kind: "legend" }] });
       }
+      if (this.dungeon >= 3) this.grantMats(p, 2 + (Math.random() < 0.5 ? 1 : 0));
       if (Math.random() < 0.5) this.world.pickup(p, { cons: Math.random() < 0.6 ? "hp_potion" : "mp_potion", n: 1 });
       s.send({ t: "ev", list: [{ e: "chestopen", id: "reward", x: c.x, y: c.y, gold }, { e: "msg", text: `보상 상자: ${gold}G${names.length ? " + " + names.join(", ") : ""}`, kind: "legend" }] });
       this.ev({ e: "fx", fx: "holy/blessing", x: c.x | 0, y: (c.y - 8) | 0, s: 0.7 });
@@ -500,6 +513,8 @@ export class Room {
 
   /** 이 층의 장비 드롭. 제2 던전은 아이템 레벨 100(최고) + 한 단계 좋은 등급표 (예전엔 1~30레벨짜리가 나왔음) */
   rollGear(cls, tier) {
+    // 베르단 섬: 전설 3.5% · 신화 1.5% · 심연 0.5%, 아이템 레벨 = 실제 몬스터 레벨(151~250)
+    if (this.dungeon >= 3) return rollVerdanItem(secureRandom, { ilvl: Math.min(ILVL_CAP, this.lvl), cls, tier, zone: this.dungeon === 3 ? Math.floor((this.floor - 1) / 10) + 1 : 10 });
     if (this.dungeon !== 2) return rollItem(secureRandom, { ilvl: Math.max(1, this.floor), cls, tier });
     const up = { normal: "elite", elite: "boss", boss: "boss" }[tier] ?? tier;
     return rollItem(secureRandom, { ilvl: Math.min(100, this.lvl), cls, tier: up });
@@ -513,6 +528,7 @@ export class Room {
       this.world.sendChar?.(p.session);
       p.session.send({ t: "ev", list: [{ e: "msg", text: "균열 결정 1개를 획득했어요.", kind: "legend" }] });
     }
+    if (this.dungeon >= 3) this.verdanDrops(p, t);
     const n = t.boss ? (t.mid ? 1 + (Math.random() < 0.5) : 2 + (Math.random() < 0.5)) : Math.random() < (t.elite ? 0.35 : 0.07) ? 1 : 0;
     for (let i = 0; i < n; i++) {
       const it = this.rollGear(p.session.char.cls, tier);
@@ -520,6 +536,37 @@ export class Room {
     }
     // 소모품 소량
     if (Math.random() < (t.boss ? 1 : 0.04)) this.dropLoot(p.userId, { cons: "hp_potion", n: t.boss ? 2 : 1 }, t.x + (Math.random() * 30 - 15), t.y + 10);
+  }
+  /** 베르단 재료(20층 단위 5단계) · 지역 각인(10층 주요 보스) · 섬 심장핵(100층) */
+  grantMats(p, n) {
+    const ch = p.session.char;
+    const tier = this.dungeon === 4 ? 4 : vmatTier(this.floor);
+    const id = VMATS[tier].id;
+    ch.mats ??= {};
+    ch.mats[id] = Math.min(999999, (ch.mats[id] ?? 0) + n);
+    p.session.dirty = true;
+    p.session.matsOut = (p.session.matsOut ?? 0) + n;
+    return VMATS[tier];
+  }
+  verdanDrops(p, t) {
+    const ch = p.session.char;
+    let text = null;
+    if (t.boss && !t.mid) {
+      const m = this.grantMats(p, 12);
+      const zone = this.dungeon === 3 ? Math.floor((this.floor - 1) / 10) + 1 : 10;
+      ch.sigils ??= {};
+      ch.sigils[zone] = Math.min(9999, (ch.sigils[zone] ?? 0) + 1);
+      text = `${m.name} 12개와 「${SIGIL_NAMES[zone - 1]}의 각인」을 얻었어요.`;
+      if ((this.dungeon === 3 && this.floor >= 100) || (this.dungeon === 4 && this.floor >= 30)) { ch.hearts = Math.min(9999, (ch.hearts ?? 0) + 1); text += " 「섬 심장핵」도 얻었어요!"; }
+      else if (this.dungeon === 4 && Math.random() < 0.25) { ch.hearts = Math.min(9999, (ch.hearts ?? 0) + 1); text += " 「섬 심장핵」도 얻었어요!"; }
+    } else if (t.boss) {
+      const m = this.grantMats(p, 6); // 중간보스: 정제 재료
+      text = `${m.name} 6개를 얻었어요.`;
+    } else if (Math.random() < (t.elite ? 0.5 : 0.08)) {
+      this.grantMats(p, t.elite ? 2 : 1);
+    }
+    if (text) { p.session.send({ t: "ev", list: [{ e: "msg", text, kind: "legend" }] }); this.world.sendChar?.(p.session); }
+    else if (p.session.matsOut >= 5) { p.session.matsOut = 0; this.world.sendChar?.(p.session); }
   }
   dropLoot(userId, item, x, y) {
     if (circleHitsWall(this.map, x, y, 4)) { x = Math.round(x / TILE) * TILE; }
@@ -548,9 +595,10 @@ export class Room {
     this.exitOpen = true;
     this.schedule(2.0, () => this.collectAll()); // 보스가 떨어뜨린 아이템도 자동으로
     const isMain = !b.mid;
-    const finalFloor = this.dungeon === 2 ? 30 : 100;
+    const finalFloor = dungeonMax(this.dungeon);
     const isFinal = isMain && this.floor >= finalFloor;
-    const portal = { kind: "portal", id: isFinal ? "victory" : isMain ? "safe" : "exit", x: b.x, y: b.y, label: isFinal ? (this.dungeon === 2 ? "마을로 (심연 정복!)" : "마을로 (던전 정복!)") : isMain ? "안전 구역으로" : `${this.floor + 1}층으로` };
+    const VICTORY = { 1: "마을로 (던전 정복!)", 2: "마을로 (심연 정복!)", 3: "마을로 (베르단 정복!)", 4: "마을로 (지하왕릉 정복!)" };
+    const portal = { kind: "portal", id: isFinal ? "victory" : isMain ? "safe" : "exit", x: b.x, y: b.y, label: isFinal ? VICTORY[this.dungeon] : isMain ? "안전 구역으로" : `${this.floor + 1}층으로` };
     if (this.dungeon === 2 && isFinal) {
       for (const p of this.players.values()) {
         const ch = p.session.char;
@@ -582,6 +630,7 @@ export class Room {
     }
     if (now >= this.flowAt) { this.updateFlow(); this.flowAt = now + (this.units.size > 24 ? 0.65 : 0.5); }
     if (this.wave) this.tickWaves(now);
+    if (this.dungeon === 4 && this.kind === "dungeon") this.tickTomb(now);
     if (this.wave && this.wave.spawned >= this.total && !this.exitOpen && now >= (this.rescueAt ?? 0)) { this.rescueAt = now + 8; this.rescueStragglers(); }
     if (this.map.traps?.length) this.tickTraps(now);
     for (const u of this.players.values()) this.tickPlayer(u, now);
@@ -744,9 +793,59 @@ export class Room {
           if (d.dead || !this.units.has(d.id)) return;
           const x = tgt.x, y = tgt.y;
           this.ev({ e: "fx", fx: "impacts/ground-slam", x: x | 0, y: y | 0, s: 0.45 });
-          if (!tgt.dead) dealDamage(this, owner, tgt, { pow: o.pow, threat: 4 }, t0);
-          for (const m of this.units.values()) if (m !== tgt && m.team === "m" && !m.dead && Math.hypot(m.x - x, m.y - y) <= 46 + m.r) dealDamage(this, owner, m, { pow: o.pow * 0.5, threat: 2 }, t0);
+          if (!tgt.dead) dealDamage(this, owner, tgt, { pow: o.pow, threat: 4, p2: o.p2 }, t0);
+          for (const m of this.units.values()) if (m !== tgt && m.team === "m" && !m.dead && Math.hypot(m.x - x, m.y - y) <= 46 + m.r) dealDamage(this, owner, m, { pow: o.pow * 0.5, threat: 2, p2: o.p2 }, t0);
         });
+      }
+    } else if (d.kind === "pet" && owner) {
+      // 2차 전직 소환수 (지옥사냥개·악마 군주·망령·그림자 분신): 표적(지정 > 저주 > 가까운 적)을 쫓아 공격
+      let best = o.focus ? this.units.get(o.focus) : null;
+      if (!best || best.dead) {
+        best = null; let bd = 1e9;
+        for (const m of this.units.values()) {
+          if (m.team !== "m" || m.dead || m.dummy || Math.hypot(m.x - owner.x, m.y - owner.y) > 420) continue;
+          const dist = Math.hypot(m.x - d.x, m.y - d.y) - (o.preferCurse && m.status.has("curse") ? 200 : 0);
+          if (dist < bd) { bd = dist; best = m; }
+        }
+      }
+      if (o.taunt && now >= (d.nextTaunt ?? 0)) { d.nextTaunt = now + 1; for (const m of this.units.values()) if (m.team === "m" && !m.dead && !m.boss && Math.hypot(m.x - d.x, m.y - d.y) < 120) m.tauntBy = { id: owner.id, until: now + 0.6 }; }
+      let tx, ty, stopAt;
+      if (best) { tx = best.x; ty = best.y; stopAt = d.r + best.r + 6; }
+      else { tx = owner.x - Math.cos(owner.facing ?? 0) * 40; ty = owner.y - Math.sin(owner.facing ?? 0) * 30; stopAt = 18; }
+      const dx = tx - d.x, dy = ty - d.y, dist = Math.hypot(dx, dy);
+      if (dist > stopAt) {
+        const step = Math.min((o.speed ?? 150) * TICK_DT * (dist > 300 ? 1.8 : 1), dist - stopAt);
+        [d.x, d.y] = moveCircle(this.map, d.x, d.y, (dx / dist) * step, (dy / dist) * step, d.r);
+        d.facing = Math.atan2(dy, dx);
+      }
+      if (best && dist <= stopAt + 14 && now >= d.nextHit) {
+        d.nextHit = now + (o.interval ?? 0.8);
+        d.hits = (d.hits ?? 0) + 1;
+        this.ev({ e: "anim", id: d.id, a: "slash" });
+        const P2 = p2of(owner);
+        const bonus = P2.curseAmp && best.status.has("curse") ? P2.curseAmp : 0;
+        dealDamage(this, owner, best, { pow: o.pow ?? 1, bonus, threat: 2, p2: true }, now);
+        if (o.bleed) applyStatus(this, owner, best, { type: "bleed", dur: 4, pow: 0.3, pm: PATH_DMG[owner.cls2] ?? 1 }, now);
+        if (o.wave && d.hits % 3 === 0) {
+          this.ev({ e: "fx", fx: "shadow/necro-skulls", x: best.x | 0, y: best.y | 0, s: 0.7 });
+          for (const m of this.units.values()) if (m.team === "m" && !m.dead && m !== best && m.status.has("curse") && Math.hypot(m.x - best.x, m.y - best.y) < 140) dealDamage(this, owner, m, { pow: o.wave, noProcs: true, p2: true }, now);
+        }
+      }
+    } else if (d.kind === "turret" && owner) {
+      if (now >= d.nextHit) {
+        let best = null, bd = o.range ?? 300;
+        for (const m of this.units.values()) {
+          if (m.team !== "m" || m.dead || m.dummy) continue;
+          const dist = Math.hypot(m.x - d.x, m.y - d.y);
+          if (dist < bd && lineOfSight(this.map, d.x, d.y, m.x, m.y)) { bd = dist; best = m; }
+        }
+        if (best) {
+          d.nextHit = now + (o.interval ?? 0.5);
+          const a = Math.atan2(best.y - d.y, best.x - d.x);
+          d.facing = a;
+          this.addProjectile({ team: "p", src: owner.id, x: d.x + Math.cos(a) * 10, y: d.y - 12 + Math.sin(a) * 10, vx: Math.cos(a) * 640, vy: Math.sin(a) * 640, range: (o.range ?? 300) + 20, r: 6, pierce: 0, fx: o.big ? "projectiles/laser-bolt" : "projectiles/bullet-tracer",
+            onHit: (t, t1) => dealDamage(this, owner, t, { pow: o.pow ?? 0.7, threat: 2, p2: true }, t1) });
+        } else d.nextHit = now + 0.2;
       }
     } else if (d.kind === "circuit" && owner) {
       if (now >= d.nextHit) {
@@ -775,7 +874,7 @@ export class Room {
   // ── 투사체
   addProjectile(p) {
     // 심연 보스의 중첩 탄막과 구형 공허 탄환이 화면·서버에 무한히 쌓이지 않게 방별 상한을 둔다.
-    if (this.dungeon === 2 && p.team === "m") {
+    if (this.dungeon >= 2 && p.team === "m") {
       const enemyCount = this.projectiles.reduce((n, q) => n + (q.team === "m"), 0);
       if (enemyCount >= 48) return null;
       if (p.fx === "shadow/void-orb") {
@@ -839,7 +938,19 @@ export class Room {
     a.fireAt = this.now + (a.tel ?? 0);
     a.ticksLeft = a.ticks ?? 1;
     this.areas.push(a);
-    if (a.shape) this.ev({ e: "tel", id: a.id, sh: a.shape, x: a.x | 0, y: a.y | 0, r: a.r ? Math.round(a.r) : 0, r2: a.r2 ? Math.round(a.r2) : 0, a: a.ang != null ? Math.round(a.ang * 1000) : 0, w: a.w ?? 0, l: a.l ?? 0, arc: a.arc ?? 0, d: a.tel ?? 0, tm: a.team === "p" ? 1 : 0 });
+    // 지하왕릉 11~20층: 적의 예고 공격이 한 번 더(0.9초 뒤 같은 자리) 반복된다
+    if (a.team === "m" && a.shape && !a.echo && this.echoTele && a.r2 !== 1400) {
+      const copy = { ...a, echo: true, tel: 0.9 };
+      delete copy.id;
+      this.schedule((a.tel ?? 0) + 0.05, () => this.areas.length < 160 && this.addArea(copy));
+    }
+    // 보스 예고 기록 (80층 잔상 재생·심장부의 수식어 회피 판정용)
+    if (a.team === "m" && a.shape && this.bossId && !a.replay) {
+      const log = (this.areaLog ??= []);
+      log.push({ ...a, at: this.now });
+      if (log.length > 24) log.shift();
+    }
+    if (a.shape) this.ev({ e: "tel", id: a.id, sh: a.shape, x: a.x | 0, y: a.y | 0, r: a.r ? Math.round(a.r) : 0, r2: a.r2 ? Math.round(a.r2) : 0, a: a.ang != null ? Math.round(a.ang * 1000) : 0, w: a.w ?? 0, l: a.l ?? 0, arc: a.arc ?? 0, d: a.tel ?? 0, tm: a.team === "p" ? 1 : 0, ...(a.g ? { g: a.g } : {}), ...(a.pts ? { pts: a.pts } : {}), ...(a.gh || a.echo ? { gh: a.gh ? 1 : 2 } : {}) });
     return a;
   }
   tickAreas(now) {
@@ -847,11 +958,70 @@ export class Room {
     for (const a of this.areas) {
       if (now >= a.fireAt) {
         a.fire(now, a);
+        if (a.team === "m" && this.bossId && a.shape && a.ticksLeft === (a.ticks ?? 1)) this.heartcoreCheck(a, now);
         a.ticksLeft--;
         if (a.ticksLeft > 0) { a.fireAt = now + (a.interval ?? 0.5); keep.push(a); }
       } else keep.push(a);
     }
     this.areas = keep;
+  }
+  /** 심장부의 수식어: 보스 예고 공격을 아슬아슬하게 피하면 다음 공격 강화 */
+  heartcoreCheck(a, now) {
+    const R = Math.max(a.r ?? 0, a.l ?? 0, 40);
+    for (const p of this.players.values()) {
+      const v = p.stats?.vmods?.vm_heartcore;
+      if (!v || p.dead || (p.lastHurt ?? -9) >= a.fireAt - 0.05 || now < (p.icd.get("vm_heart") ?? 0)) continue;
+      if (a.r2 === 1400 || Math.hypot(p.x - a.x, p.y - a.y) > R + 90) continue;
+      p.icd.set("vm_heart", now + 8);
+      p.buffs.set("vm_heart", { until: now + 4, mods: {}, nextHit: { pow: v } });
+      this.ev({ e: "buff", id: p.id, b: "vm_heart", d: 4 });
+    }
+  }
+  /** 지하왕릉 층 기믹: 1~10 석관 / 21~29 역상 문양 */
+  tickTomb(now) {
+    const zone = zoneOf(this.floor, 4);
+    if (zone.sarco) for (const o of this.map.objects) {
+      if (o.kind !== "sarco" || o.opened) continue;
+      for (const p of this.players.values()) {
+        if (p.dead || Math.hypot(p.x - o.x, p.y - o.y) > 34) continue;
+        o.opened = true;
+        this.ev({ e: "sarco", x: o.x | 0, y: o.y | 0 });
+        this.ev({ e: "msg", text: "석관이 열렸어요! 봉인됐던 망자들이 깨어납니다.", kind: "warn" });
+        this.ev({ e: "fx", fx: "spawn/soul-rise", x: o.x | 0, y: o.y | 0, s: 0.9 });
+        const n = 3 + Math.floor(Math.random() * 3);
+        for (let k = 0; k < n; k++) {
+          const a = (k / n) * Math.PI * 2, x = o.x + Math.cos(a) * 46, y = o.y + Math.sin(a) * 34;
+          if (circleHitsWall(this.map, x, y, 10)) continue;
+          const mid = zone.monsters[Math.floor(Math.random() * zone.monsters.length)];
+          this.schedule(0.6 + k * 0.1, () => this.spawnMonster(mid, x, y, Math.random() < 0.4, { aggro: true, summoned: true }));
+        }
+        // 보상: 석관 속 유물(골드·재료) — 위험을 감수한 대가
+        for (const q of this.players.values()) {
+          if (q.dead) continue;
+          const gold = Math.round(floorScale(this.floor, 4).gold * (20 + Math.random() * 20));
+          q.session.char.gold += gold; q.session.meDirty = true;
+          this.grantMats(q, 3);
+          this.ev({ e: "gold", id: q.id, v: gold, x: o.x | 0, y: o.y | 0, own: q.id });
+        }
+        break;
+      }
+    }
+    if (zone.glyphs && this.map.kind === "normal" && now >= (this.glyphAt ??= now + 8)) {
+      this.glyphAt = now + 9 + Math.random() * 3;
+      const atk = monsterStats(zone.monsters[0], this.floor, this.partySize, 4).dmg;
+      this.ev({ e: "msg", text: "바닥의 역상 문양이 뒤집힙니다!", kind: "warn" });
+      for (const p of this.players.values()) {
+        if (p.dead) continue;
+        for (let k = 0; k < 3; k++) {
+          const a = Math.random() * Math.PI * 2, d = k === 0 ? 0 : 70 + Math.random() * 60;
+          const x = p.x + Math.cos(a) * d, y = p.y + Math.sin(a) * d * 0.75;
+          this.addArea({ team: "m", shape: "c", x, y, r: 58, tel: 1.3 + k * 0.25, fire: (t0) => {
+            this.ev({ e: "fx", fx: "arcane/rune-circle", x: x | 0, y: y | 0, s: 0.8 });
+            for (const q of this.players.values()) if (!q.dead && Math.hypot(q.x - x, (q.y - y) / 0.75) <= 54) dealDamage(this, { team: "m", id: 0, status: new Map(), buffs: new Map(), stats: {}, atk, level: effLevel(this.floor, 4) }, q, { pow: 1.6, unblockable: true }, t0);
+          } });
+        }
+      }
+    }
   }
   // ── 지속 구역
   addZone(z) {
@@ -1055,11 +1225,11 @@ export class Room {
         continue;
       }
       // 마을은 전체 이용자가 같은 방을 공유하므로, 관문을 밟은 사람의 파티만 입장시킨다.
-      if (this.kind === "town" && (o.id === "dungeon" || o.id === "dungeon2")) {
+      if (this.kind === "town" && TOWN_GATES[o.id]) {
         const trigger = on[0];
         if (now >= (trigger.gateAt ?? 0)) {
           trigger.gateAt = now + 1.5;
-          this.world.enterDungeon(trigger.session, 1, o.id === "dungeon2" ? 2 : 1);
+          this.world.enterDungeon(trigger.session, 1, TOWN_GATES[o.id]);
         }
         continue;
       }

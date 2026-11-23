@@ -3,11 +3,12 @@ import { CLASS_INFO, STATS, stageOf, stageBonus } from "./classes.js";
 import { BASE_MOVE_SPEED, CRIT } from "./constants.js";
 import { gearTotals } from "./items.js";
 import { SKILLS } from "./skills.js";
+import { CLASS2_MUL, PATHS } from "./classes2.js";
 
 // 직업 피해 배율: 도적 아래 다섯 직업의 피해 기여도를 1.5배 상향한다.
 export const CLASS_DMG = {
   sword: 1.80, // 기존 대비 1.5배
-  archer: 0.95, // 추가 하향
+  archer: 0.475, // 2차 업데이트 전 조정: 딜량 50% (0.95 → 0.475)
   rogue: 1.30, // 1.62에서 약 20% 하향
   mage: 1.08864, // 기존 대비 1.5배
   priest: 2.025, // 기존 대비 1.5배
@@ -41,15 +42,19 @@ export function deriveStats(ch) {
   const sb = stageBonus(ch.cls, stage);
   const g = (k) => sum[k] ?? 0;
   const p = (k) => pm[k] ?? 0;
-  const maxHp = Math.round((((120 + 22 * L) * info.hpMul + g("hp")) * (1 + (sb - 1) * 0.5) + gear.hp) * (1 + p("hpPct") + gear.hpPct));
-  const def = Math.round((((5 + 2.2 * L) * info.defMul + g("def")) * (1 + (sb - 1) * 0.5) + gear.def) * (1 + p("defPct") + gear.defPct));
+  // 2차 전직: 1차 전직 때보다 2배 강하게 (공격력·HP ×2, 방어 ×1.5)
+  const c2 = ch.cls2 && PATHS[ch.cls2] ? CLASS2_MUL : null;
+  const maxHp = Math.round((((120 + 22 * L) * info.hpMul + g("hp")) * (1 + (sb - 1) * 0.5) + gear.hp) * (1 + p("hpPct") + gear.hpPct) * (c2?.hp ?? 1));
+  const def = Math.round((((5 + 2.2 * L) * info.defMul + g("def")) * (1 + (sb - 1) * 0.5) + gear.def) * Math.max(0.2, 1 + p("defPct") + gear.defPct) * (info.defFinal ?? 1) * (c2?.def ?? 1));
+  // 철골단련(금강무사): 방어력 일부를 공격력으로 환산
+  const defToAtk = pm.defToAtk ?? 0;
   return {
     stage,
     stageBonus: sb,
     maxHp,
     maxMp: Math.round(info.mpBase + 3 * L + g("mp") + gear.mp),
     def,
-    atk: ((12 + 3.2 * L) * sb + gear.atk) * (1 + gear.atkPct),
+    atk: (((12 + 3.2 * L) * sb + gear.atk) * (1 + gear.atkPct) + def * defToAtk) * (c2?.atk ?? 1),
     phys: 1 + g("phys"),
     mag: 1 + g("mag"),
     dmg: gear.dmg + p("dmg"),
@@ -74,6 +79,8 @@ export function deriveStats(ch) {
     shield: 1 + g("shield"),
     mythic: gear.mythic,
     abyssEffects: gear.abyssEffects,
+    vmods: gear.vmods ?? {},
+    cls2: c2 ? ch.cls2 : null,
     dmgType: info.dmgType,
     classDmg: CLASS_DMG[ch.cls] ?? 1,
   };

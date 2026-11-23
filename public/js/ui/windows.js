@@ -10,14 +10,17 @@ import { profLevel, profPow, profCost, isUncapped } from "/shared/prof.js";
 import { h, openWin, refreshWin, closeWin, isOpen, tipOn } from "./dom.js";
 import { itemIcon, skillIconURL, materialAccent } from "./icons.js";
 import { CLASS_INFO, STATS, stageOf, stageLevel, xpToNext } from "/shared/classes.js";
-import { SKILLS, skillsOf, unlockStage } from "/shared/skills.js";
+import { SKILLS, skillsOf, skillsOfPath, unlockStage } from "/shared/skills.js";
+import { PATHS, pathsFor, canClass2, TIER_LEVEL, CLASS2_LEVEL, CLASS2_MUL } from "/shared/classes2.js";
 import { deriveStats, defReduction } from "/shared/stats.js";
 import { SKILL_SLOTS, SLOT_KEYS, ITEMS, GRADE_COLOR, INVENTORY_SLOTS } from "/shared/constants.js";
+import { optInfo, VMODS, VMATS, SIGIL_NAMES, CRAFT_TIERS, CRAFT_SLOTS, VERDAN_RARITY_WEIGHTS } from "/shared/items.js";
 import { RARITY_COLOR, SLOT_NAME, OPTIONS, MYTHIC_EFFECTS, ABYSS_EFFECTS, WEAPON_TYPES, OFFHAND_TYPES, VARIANT_TRAITS, RARITIES, RARITY_WEIGHTS, RARITY_MUL, MATERIALS, ARMOR_NAMES, repairCost, ENH_PCT, ENCHANTS, enchantOdds, enchantCost, specialRerollCost, enhanceOdds, enhanceCost, enhMul, sellPrice, canEquip, MAX_ENH } from "/shared/items.js";
 import { sprite, playerLook } from "../render/sprites.js";
 
 const fmtPct = (v) => (v * 100).toFixed(1) + "%";
-const RES_NAME = { mp: "MP", ki: "내력", holy: "성광", parts: "부품", gap: "틈" };
+const RES_NAME_BASE = { mp: "MP", ki: "내력", holy: "성광", parts: "부품", gap: "틈" };
+const RES_NAME = new Proxy(RES_NAME_BASE, { get: (o, k) => (k === "r2" ? PATHS[G.char?.cls2]?.res2?.name ?? "전직 자원" : o[k]) });
 
 // 직업별 유지력의 특징. 수치 비교와 달리 스킬 운용에 따라 체감이 달라지는 부분.
 const CLASS_SURVIVAL = {
@@ -84,10 +87,10 @@ export function skillTip(sk) {
   const kind = { basic: "기본 공격", active: "액티브", passive: "패시브", ultimate: "궁극기" }[sk.kind];
   const el = h("div", {},
     h("div", { class: "tt-name", text: sk.name }),
-    h("div", { class: "tt-sub" }, h("span", { class: "grade-" + sk.grade, text: sk.grade }), ` · ${kind} · ${cd}${cost ? " · " + cost : ""}${sk.cast ? ` · 시전 ${sk.cast}초` : ""}${sk.stance ? ` · ${sk.stance} 자세` : ""}`),
+    h("div", { class: "tt-sub" }, h("span", { class: "grade-" + sk.grade, text: sk.path ? `${PATHS[sk.path]?.name} ${sk.tier}등급` : sk.grade }), ` · ${kind} · ${cd}${cost ? " · " + cost : ""}${sk.cast ? ` · 시전 ${sk.cast}초` : ""}${sk.stance ? ` · ${sk.stance} 자세` : ""}${sk.hpCost ? ` · 생명력 ${Math.round(sk.hpCost * 1000) / 10}%` : ""}${sk.path ? ` · Lv.${TIER_LEVEL[sk.tier]} 해금` : ""}`),
     h("div", { text: sk.desc }),
     h("div", { class: "tt-detail" }, ...skillDetails(sk).map((l) => h("div", { text: l }))),
-    h("div", { class: "tt-sub", text: "제한: " + sk.limit }),
+    sk.limit ? h("div", { class: "tt-sub", text: "제한: " + sk.limit }) : null,
     sk.kind !== "passive" ? profBlock(sk, true) : null);
   return [el];
 }
@@ -122,7 +125,8 @@ export function itemTip(it, compare) {
   if (it.ench && ENCHANTS[it.ench]) els.push(h("div", { class: "tt-ench" + (it.ench === "mend" ? " mend" : "") + (broken && it.ench !== "mend" ? " off" : ""), text: `✦ 인챈트 · ${ENCHANTS[it.ench].name}: ${ENCHANTS[it.ench].desc}` }));
   const ep = ENH_PCT[it.slot];
   if (ep && it.enh) els.push(h("div", { class: "tt-opt" + (broken ? " off" : ""), text: `강화 보너스 · ${ep.name} +${it.enh}%${broken ? " (부서져서 꺼짐)" : ""}` }));
-  for (const o of it.opts) els.push(h("div", { class: "tt-opt", text: `${OPTIONS[o.k].name} ${OPTIONS[o.k].fmt(o.v)}` }));
+  for (const o of it.opts) { const oi = optInfo(o.k); if (oi) els.push(h("div", { class: "tt-opt" + (oi.vmod ? " tt-vmod" : ""), text: oi.vmod ? `❖ ${oi.name} · ${oi.fmt(o.v)}` : `${oi.name} ${oi.fmt(o.v)}` })); }
+  if (it.crafted) els.push(h("div", { class: "tt-sub", text: "베르단 공방 제작품" }));
   if (it.mythic && MYTHIC_EFFECTS[it.mythic]) els.push(h("div", { class: "tt-myth", text: `◆ ${MYTHIC_EFFECTS[it.mythic].name}: ${MYTHIC_EFFECTS[it.mythic].desc}` }));
   for (const key of it.abyssEffects ?? []) {
     const effect = ABYSS_EFFECTS[key];
@@ -165,7 +169,8 @@ export function openChar() {
     });
     const next = stage + 1 < info.ranks.length ? `다음 단계 ${info.ranks[stage + 1]}: Lv.${stageLevel(c.cls, stage + 1)}` : "최종 단계";
     return [
-      h("div", { class: "flexrow" }, h("b", { text: `${c.name}` }), h("span", { text: `Lv.${c.level} ${info.name}` }), h("span", { class: "grade-영웅", text: c.cls === "adventurer" ? "" : `· ${rank}` })),
+      h("div", { class: "flexrow" }, h("b", { text: `${c.name}` }), h("span", { text: `Lv.${c.level} ${c.cls2 ? PATHS[c.cls2].name : info.name}` }), h("span", { class: "grade-영웅", text: c.cls2 ? `· ${info.name} 2차 전직` : c.cls === "adventurer" ? "" : `· ${rank}` })),
+      c.cls2 ? h("div", { class: "note", text: `2차 전직 보너스: 공격력 ×${CLASS2_MUL.atk} · 최대 HP ×${CLASS2_MUL.hp} · 방어력 ×${CLASS2_MUL.def} · ${PATHS[c.cls2].role}` }) : null,
       renameRow(),
       h("div", { class: "note", text: c.cls === "adventurer" ? "10층 보스를 처치하면 안전 구역의 전직소에서 전직할 수 있어요. 전직하면 지금까지 투자한 스탯이 전부 돌아와요." : `${info.position} · ${next}` }),
       h("h4", { text: `능력치 (남은 포인트 ${c.unspent})` }),
@@ -183,6 +188,8 @@ export function openChar() {
       ].map(([a, b]) => h("tr", {}, h("td", { text: a }), h("td", { text: b })))),
       h("div", { class: "note", text: "실효 HP는 동레벨의 일반 직접 공격 기준 예상치예요. 액티브 회피·방어 버프, 회복·보호막과 지속 피해는 제외돼요." }),
       h("div", { class: "note", text: `최고 층 ${c.best} · 체크포인트 ${c.checkpoint}층 · 처치 ${c.kills} · 쓰러짐 ${c.deaths}${c.cleared ? " · 🏆 던전 정복" : ""}` }),
+      h("div", { class: "note", text: `에르덴 제2 던전 ${c.best2 ?? 0}/30층${c.verdanPass ? ` · 베르단 제1 던전 ${c.best3 ?? 0}/100층 · 지하왕릉 ${c.best4 ?? 0}/30층` : " · 베르단 섬 미입도 (Lv.150 + 심연 공물)"}` }),
+      c.verdanPass ? h("div", { class: "note", text: `베르단 재료: ${VMATS.map((m) => `${m.name} ${c.mats?.[m.id] ?? 0}`).join(" · ")} · 섬 심장핵 ${c.hearts ?? 0}` }) : null,
     ];
   }, { w: 420 });
 }
@@ -195,7 +202,7 @@ export function openSkills() {
     if (!c) return [];
     const stage = stageOf(c.cls, c.level);
     const n = CLASS_INFO[c.cls].ranks.length;
-    const list = [...skillsOf("common"), ...(c.cls === "adventurer" ? [] : skillsOf(c.cls))];
+    const list = [...skillsOf("common"), ...(c.cls === "adventurer" ? [] : skillsOf(c.cls)), ...(c.cls2 ? skillsOfPath(c.cls2) : [])];
     const safe = G.mapKind === "town" || G.mapKind === "safe";
     const slots = h("div", { class: "flexrow" }, ...c.skills.map((id, i) => {
       const sk = id && SKILLS[id];
@@ -216,21 +223,21 @@ export function openSkills() {
       }
       return el;
     }));
-    const groups = ["기본", "일반", "희귀", "영웅", "전설", "신화"];
+    const groups = ["2차", "기본", "일반", "희귀", "영웅", "전설", "신화"];
     const cards = [];
     for (const gname of groups) {
-      const items = list.filter((s) => (gname === "기본" ? s.cls === "common" : s.cls !== "common" && s.grade === gname));
+      const items = list.filter((s) => (gname === "2차" ? !!s.path : gname === "기본" ? s.cls === "common" : s.cls !== "common" && !s.path && s.grade === gname));
       if (!items.length) continue;
-      cards.push(h("h4", { text: gname === "기본" ? "공용 스킬 (모험가 기본기)" : gname === "신화" ? "신화 스킬 (최종 단계)" : `${gname} 스킬` }));
+      cards.push(h("h4", { text: gname === "2차" ? `2차 전직 — ${PATHS[c.cls2]?.name} (9등급 Lv.170 → 1등급 Lv.218)` : gname === "기본" ? "공용 스킬 (모험가 기본기)" : gname === "신화" ? "신화 스킬 (최종 단계)" : `${gname} 스킬` }));
       cards.push(h("div", { class: "skill-list" }, ...items.map((s) => {
         const need = unlockStage(s, n);
-        const locked = s.cls !== "common" && stage < need;
+        const locked = s.path ? c.level < TIER_LEVEL[s.tier] : s.cls !== "common" && stage < need;
         const equipped = c.skills.includes(s.id);
         const cost = Object.entries(s.cost ?? {}).map(([k, v]) => `${RES_NAME[k]} ${v}`).join(" ");
         return h("div", { class: `sk${locked ? " locked" : ""}${selSkill === s.id ? " sel" : ""}${equipped ? " equipped" : ""}`, onclick: () => { if (!locked) { selSkill = selSkill === s.id ? null : s.id; refreshWin("skills"); } } },
           h("div", { class: "sk-top" }, h("img", { class: "sk-icon", src: skillIconURL(s), alt: "", draggable: "false" }), h("b", { class: "grade-" + s.grade, text: s.name }), " ", h("span", { class: "meta", text: { basic: "기본 공격", active: "액티브", passive: "패시브", ultimate: "궁극기" }[s.kind] }),
             canAuto(s) && !locked ? h("button", { class: "auto-tg" + (G.autoSkills.has(s.id) ? " on" : ""), title: "자동: 쿨타임이 돌면 가까운 적에게 알아서 사용 (회복은 체력 70% 아래일 때)", onclick: (e) => { e.stopPropagation(); setAuto(s.id, !G.autoSkills.has(s.id)); refreshWin("skills"); } }, G.autoSkills.has(s.id) ? "자동" : "수동") : null),
-          h("div", { class: "meta", text: `${s.kind === "basic" ? `공격 간격 ${basicGap(s)}s` : s.kind === "passive" ? "패시브" : `쿨 ${s.cd}s`}${cost ? " · " + cost : ""}${s.stance ? " · " + s.stance : ""}${locked ? ` · 🔒 ${CLASS_INFO[c.cls].ranks[need]} 필요(Lv.${stageLevel(c.cls, need)})` : ""}` }),
+          h("div", { class: "meta", text: `${s.kind === "basic" ? `공격 간격 ${basicGap(s)}s` : s.kind === "passive" ? "패시브" : `쿨 ${s.cd}s`}${cost ? " · " + cost : ""}${s.stance ? " · " + s.stance : ""}${locked ? (s.path ? ` · 🔒 ${s.tier}등급 Lv.${TIER_LEVEL[s.tier]} 필요` : ` · 🔒 ${CLASS_INFO[c.cls].ranks[need]} 필요(Lv.${stageLevel(c.cls, need)})`) : s.path ? ` · ${s.tier}등급` : ""}` }),
           h("div", { class: "desc", text: s.desc }),
           s.kind !== "passive" && !locked ? profBlock(s) : null);
       })));
@@ -346,6 +353,8 @@ export function openHelp() {
     h("div", { class: "note", text: "등급: 일반 < 희귀 < 영웅 < 전설 < 신화(드롭 0.5%). 쿨타임 감소 효과는 없어요. 강화는 최대 +99, +n→+n+1 성공 확률 (99−n)%, 파괴 확률은 항상 1%예요(신화는 사라지지 않고 +0으로). 실패하면 단계가 그대로예요." }),
     h("h4", { text: "전직" }),
     h("div", { class: "note", text: "모험가로 시작해 10층 전직소에서 검사·권투사·궁수·도적·마법사·성직자·대장장이 중 하나를 고르거나 보류할 수 있어요. 첫 전직을 확정하면 직업이 고정돼요." }),
+    h("h4", { text: "베르단 섬 (2차 업데이트)" }),
+    h("div", { class: "note", text: "최대 레벨 250 (210부터 레벨업이 더뎌져요). 에르덴 마을 아래 선착장의 뱃사공에게 레벨 150 이상 + 심연 등급 아이템 1개를 공물로 바치면 베르단 섬으로 건너가요(처음 한 번만). 베르단 섬: 레벨 170부터 2차 전직(직업별 2~3갈래, 모험가로 에르덴을 돌파했다면 「모험가의 왕」), 100층 베르단 제1 던전, 그 100층을 깨면 열리는 30층 「기억왕의 지하왕릉」, 재료·지역 각인으로 원하는 부위와 수식어를 고르는 베르단 공방. 레벨 250에는 직업 전용 아이템을 받아요. 에르덴 제2 던전은 레벨 180부터 경험치가 줄어요." }),
     h("div", { class: "flexrow" }, h("button", { class: "btn small danger", onclick: () => G.ui.logout() }, "로그아웃 · 다른 계정으로")),
   ], { w: 460 });
 }
@@ -592,13 +601,113 @@ export function openAbyssVault() {
   }, { w: 360 });
 }
 
+// ── 2차 업데이트: 베르단 섬
+/** 베르단 던전 관문 (3: 베르단 제1 던전 100층, 4: 기억왕의 지하왕릉 30층) */
+export function openVerdanGate(d) {
+  const id = "gate" + d, max = d === 3 ? 100 : 30, x = String(d);
+  openWin(id, d === 3 ? "베르단 제1 던전 — 100층" : "기억왕의 지하왕릉 — 30층", () => {
+    const leaderName = G.party.find((m) => m.leader)?.name;
+    const isLeader = !G.party.length || leaderName === G.name;
+    const unlocked = d === 3 ? true : !!G.char.cleared3 && G.party.every((m) => m.cleared3);
+    const cp = Math.min(G.char["checkpoint" + x] ?? 1, ...G.party.map((m) => m["cp" + x] ?? 1));
+    const best = Math.min(G.char["best" + x] ?? 0, ...G.party.map((m) => m["best" + x] ?? 0));
+    const next = Math.min(max, best + 1);
+    const floors = [1]; for (let f = 11; f <= cp; f += 10) floors.push(f);
+    const bosses = []; for (let f = 5; f <= Math.min(max, best); f += 5) bosses.push(f);
+    const go = (f) => () => { send({ t: "enter", dungeon: d, floor: f }); closeWin(id); };
+    return [
+      h("div", { class: "note", text: G.party.length ? `파티 ${G.party.length}명 · 파티장 ${leaderName}` : "혼자 입장해요." }),
+      h("div", { class: "note", text: d === 3 ? "에르덴 제2 던전보다 어려운 10개 지역. 5층마다 중간보스가 지역 기믹을 가르치고, 10층 주요 보스가 기믹을 조합해요. 권장: 2차 전직(Lv.170) 이후 20층부터." : unlocked ? "하나의 왕릉 안에서 전투 규칙이 바뀌는 엔드게임. 1~10층 석관(건드리면 추가 웨이브·보상), 11~20층 예고 공격 반복, 21~30층 역상 문양과 이동하는 안전 지대." : "잠김 — 파티원 전원이 베르단 제1 던전 100층을 돌파해야 해요." }),
+      h("div", { class: "note", text: `등급 확률: 전설 ${VERDAN_RARITY_WEIGHTS.normal[3]}% · 신화 ${VERDAN_RARITY_WEIGHTS.normal[4]}% · 심연 ${VERDAN_RARITY_WEIGHTS.normal[5]}% · 희귀 이상은 35% 확률로 베르단 수식어` }),
+      best >= 1 && !floors.includes(next) ? h("button", { class: "btn primary continue-btn", disabled: !isLeader || !unlocked, onclick: go(next) }, `▶ 이어하기: ${next}층부터`) : null,
+      h("h4", { text: "시작 층" }),
+      h("div", { class: "floors" }, ...floors.map((f) => h("button", { class: "btn small primary", disabled: !isLeader || !unlocked, onclick: go(f) }, `${f}층`))),
+      bosses.length ? h("h4", { text: "보스 재도전" }) : null,
+      bosses.length ? h("div", { class: "floors" }, ...bosses.map((f) => h("button", { class: "btn small" + (f % 10 === 0 ? " boss" : ""), disabled: !isLeader || !unlocked, onclick: go(f) }, `${f}층 ${f % 10 === 0 ? "보스" : "중보"}`))) : null,
+      h("div", { class: "note", text: `최고 기록 ${best}/${max}층` }),
+      !isLeader ? h("div", { class: "note", text: "파티장만 입장할 수 있어요." }) : null,
+    ];
+  }, { w: 400 });
+}
+let boatAsk = null;
+export function onBoatAsk(m) { boatAsk = m.item; openBoat(); }
+/** 뱃사공 */
+export function openBoat() {
+  openWin("boat", G.char?.island === "verdan" ? "뱃사공 마레 — 에르덴행" : "뱃사공 노아 — 베르단행", () => {
+    const c = G.char;
+    if (c.island === "verdan") return [
+      h("div", { class: "note", text: "에르덴 섬으로 돌아가는 배예요. 한 번 입도했으니 언제든 다시 건너올 수 있어요." }),
+      h("button", { class: "btn primary", onclick: () => { send({ t: "boat" }); closeWin("boat"); } }, "⛵ 에르덴 섬으로"),
+    ];
+    if (c.verdanPass) return [
+      h("div", { class: "note", text: "이미 공물을 바쳤으니 자유롭게 건널 수 있어요." }),
+      h("button", { class: "btn primary", onclick: () => { send({ t: "boat" }); closeWin("boat"); } }, "⛵ 베르단 섬으로"),
+    ];
+    const abyss = c.inv.filter((it) => it.rarity === "심연");
+    return [
+      h("div", { class: "note", text: "베르단 섬으로 건너려면 레벨 150 이상이어야 하고, 심연 등급 아이템 1개를 공물로 바쳐야 해요. (처음 한 번만 · 아이템은 사라져요)" }),
+      h("div", { class: "note", text: `레벨 ${c.level}/150 ${c.level >= 150 ? "✓" : "✗"} · 가방의 심연 아이템 ${abyss.length}개 ${abyss.length ? "✓" : "✗"}` }),
+      boatAsk ? h("div", { class: "note warn", text: `공물로 바칠 아이템: [${boatAsk.name}] — 확인을 누르면 사라져요.` }) : null,
+      boatAsk ? h("button", { class: "btn primary", onclick: () => { send({ t: "boat", to: "pay" }); boatAsk = null; closeWin("boat"); } }, "공물을 바치고 출항") :
+        h("button", { class: "btn primary", disabled: c.level < 150 || !abyss.length, onclick: () => send({ t: "boat" }) }, "⛵ 베르단 섬으로 (공물 확인)"),
+    ];
+  }, { w: 380 });
+}
+/** 2차 전직소 */
+export function openClass2() {
+  openWin("class2", "베르단 2차 전직소", () => {
+    const c = G.char;
+    if (c.cls2) return [h("div", { text: `이미 ${PATHS[c.cls2].name}(으)로 2차 전직했어요. 9등급(Lv.170)부터 1등급(Lv.218)까지 6레벨마다 새 스킬이 열려요.` })];
+    const opts = pathsFor(c.cls);
+    if (!opts.length) return [h("div", { class: "note", text: "이 직업은 2차 전직이 없어요." })];
+    const cards = opts.map((id) => {
+      const P = PATHS[id];
+      const why = canClass2(c, id);
+      const sk = skillsOfPath(id);
+      return h("div", { class: "cc" + (why ? " locked" : ""), onclick: () => { if (why) return G.ui.toast(why, "info"); if (confirmClass(P.name)) send({ t: "class2", path: id }); } },
+        h("b", { style: { color: P.color }, text: `${P.name} / ${P.sub}` }), h("div", { class: "role", text: P.role }), h("p", { text: P.desc }),
+        P.res2 ? h("p", { class: "role", text: `전직 자원: ${P.res2.name}` }) : null,
+        h("p", { class: "desc", text: sk.map((x) => `${x.tier}등급 ${x.name}`).join(" · ") }),
+        why ? h("p", { class: "note", text: "🔒 " + why }) : null);
+    });
+    return [
+      h("div", { class: "note", text: `레벨 ${CLASS2_LEVEL}부터 2차 전직을 할 수 있어요. 2차 전직을 하면 공격력·최대 HP 2배, 방어력 1.5배가 되고, 1차 직업 스킬은 그대로 쓸 수 있어요. 스킬 칸은 고정되지 않아 열린 스킬 중 자유롭게 장착해요.` }),
+      h("div", { class: "class-cards" }, ...cards),
+    ];
+  }, { w: 680 });
+}
+/** 베르단 공방 (제작) */
+let forgeSel = { slot: "weapon", vmod: "vm_erosion", tier: 0, heart: false };
+export function openForge(pos = {}) {
+  openWin("forge", "베르단 공방장 하겐 — 장비 제작", () => {
+    const c = G.char;
+    const T = CRAFT_TIERS[forgeSel.tier], mat = VMATS[forgeSel.tier], zone = VMODS[forgeSel.vmod].zone;
+    const have = c.mats?.[mat.id] ?? 0, sig = c.sigils?.[zone] ?? 0;
+    const ok = have >= T.mat && sig >= 1 && c.gold >= T.gold && (!forgeSel.heart || (c.hearts ?? 0) >= 1);
+    const pick = (k, v) => () => { forgeSel = { ...forgeSel, [k]: v }; refreshWin("forge"); };
+    return [
+      h("div", { class: "note", text: "재료 30개 + 지역 각인 1개 + 골드로 원하는 부위·수식어의 전설 장비를 벼려요. 섬 심장핵을 더하면 신화 등급(옵션 4 + 고유 효과)이 돼요. 아이템 레벨은 재료 단계와 캐릭터 레벨 중 낮은 쪽." }),
+      h("h4", { text: "부위" }),
+      h("div", { class: "floors" }, ...CRAFT_SLOTS.map((sl) => h("button", { class: "btn small" + (forgeSel.slot === sl ? " primary" : ""), onclick: pick("slot", sl) }, SLOT_NAME[sl]))),
+      h("h4", { text: "재료 단계" }),
+      h("div", { class: "floors" }, ...VMATS.map((m, i) => h("button", { class: "btn small" + (forgeSel.tier === i ? " primary" : ""), onclick: pick("tier", i), title: `${m.floors[0]}~${m.floors[1]}층` }, `${m.name} (${c.mats?.[m.id] ?? 0}) · iLv ${CRAFT_TIERS[i].ilvl}`))),
+      h("h4", { text: "수식어 (지역 각인)" }),
+      h("div", { class: "forge-mods" }, ...Object.entries(VMODS).map(([k, v]) => h("button", { class: "btn small" + (forgeSel.vmod === k ? " primary" : ""), onclick: pick("vmod", k), title: v.desc(v.roll(() => 0.5)) }, `${v.name} · ${SIGIL_NAMES[v.zone - 1]} 각인 ${c.sigils?.[v.zone] ?? 0}`))),
+      h("div", { class: "note", text: VMODS[forgeSel.vmod].desc(VMODS[forgeSel.vmod].roll(() => 0.5)) }),
+      h("label", { class: "flexrow" }, h("input", { type: "checkbox", checked: forgeSel.heart, disabled: (c.hearts ?? 0) < 1, onchange: (e) => { forgeSel.heart = e.target.checked; refreshWin("forge"); } }), h("span", { text: `섬 심장핵 사용 → 신화 (보유 ${c.hearts ?? 0})` })),
+      h("div", { class: "note", text: `비용: ${mat.name} ${T.mat}개 (보유 ${have}) · 각인 1개 (보유 ${sig}) · ${T.gold.toLocaleString()}G (보유 ${c.gold.toLocaleString()}G)` }),
+      h("button", { class: "btn primary", disabled: !ok, onclick: () => send({ t: "craft", ...forgeSel }) }, "🔨 제작하기"),
+    ];
+  }, { w: 460, ...pos });
+}
+
 export async function openBoard() {
   let list = [];
   try { list = (await (await fetch("/api/ranking")).json()).list ?? []; } catch {}
   openWin("board", "모험가 게시판 — 랭킹", () => [
-    h("table", {}, h("tr", {}, h("td", { text: "#" }), h("td", { text: "이름" }), h("td", { text: "직업" }), h("td", { text: "Lv" }), h("td", { text: "제1 던전 최고 층" }), h("td", { text: "제2 던전 최고 층" })),
-      ...list.map((r, i) => h("tr", {}, h("td", { text: i + 1 }), h("td", { text: r.username }), h("td", { text: CLASS_INFO[r.cls]?.name ?? "" }), h("td", { text: r.level }), h("td", { text: r.best_floor }), h("td", { text: r.best2 ?? 0 })))),
-  ], { w: 520 });
+    h("table", {}, h("tr", {}, h("td", { text: "#" }), h("td", { text: "이름" }), h("td", { text: "직업" }), h("td", { text: "Lv" }), h("td", { text: "에르덴 1" }), h("td", { text: "에르덴 2" }), h("td", { text: "베르단 1" }), h("td", { text: "지하왕릉" })),
+      ...list.map((r, i) => h("tr", {}, h("td", { text: i + 1 }), h("td", { text: r.username }), h("td", { text: (r.cls2 && PATHS[r.cls2]?.name) || (CLASS_INFO[r.cls]?.name ?? "") }), h("td", { text: r.level }), h("td", { text: r.best_floor }), h("td", { text: r.best2 ?? 0 }), h("td", { text: r.best3 ?? 0 }), h("td", { text: r.best4 ?? 0 })))),
+  ], { w: 600 });
 }
 
 export function openTrainer() {
@@ -621,11 +730,12 @@ export function openNpc(o) {
     if (two) { const x0 = Math.max(8, (W - (w + 420 + 12)) / 2); open({ x: x0 }); openInv({ x: x0 + w + 12 }); }
     else open();
   };
-  ({ gate: openGate, gate2: openGate2, vault: openAbyssVault, shop: () => pair(openShop, 440), smithy: () => pair(openSmithy, 420), enchanter: () => pair(openEnchant, 440), trainer: openTrainer, board: openBoard, class_master: openClass })[o.id]?.();
+  ({ gate: openGate, gate2: openGate2, gate3: () => openVerdanGate(3), gate4: () => openVerdanGate(4), vault: openAbyssVault, boatman: openBoat, boatman2: openBoat, class2_master: openClass2, vforge: () => pair(openForge, 460),
+    shop: () => pair(openShop, 440), smithy: () => pair(openSmithy, 420), enchanter: () => pair(openEnchant, 440), trainer: openTrainer, board: openBoard, class_master: openClass })[o.id]?.();
 }
 
 export function refreshAll() {
-  for (const id of ["char", "skills", "inv", "party", "shop", "smithy", "enchant", "class", "gate", "gate2", "abyss-vault", "trainer", "titles", "trade"]) if (isOpen(id)) refreshWin(id);
+  for (const id of ["char", "skills", "inv", "party", "shop", "smithy", "enchant", "class", "gate", "gate2", "gate3", "gate4", "boat", "class2", "forge", "abyss-vault", "trainer", "titles", "trade"]) if (isOpen(id)) refreshWin(id);
 }
 
 // ───────── 조작 키 설정 (O) ─────────

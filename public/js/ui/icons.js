@@ -204,7 +204,7 @@ export function itemIcon(it) {
 // ── 스킬 아이콘: 스킬 종류(근접·투사체·범위·버프·회복·이동…)로 모양, 이펙트 속성(불·얼음·신성…)으로 색
 // ── 스킬 아이콘 v2: 직업·행동·원소별 고유 실루엣을 가진 32px 픽셀풍 엠블럼
 const urls = new Map();
-const GRADE_TINT = { 일반: "#b9c4d4", 희귀: "#62b9ff", 영웅: "#c18aff", 전설: "#ffbf59", 신화: "#ff617f" };
+const GRADE_TINT = { 일반: "#b9c4d4", 희귀: "#62b9ff", 영웅: "#c18aff", 전설: "#ffbf59", 신화: "#ff617f", "2차": "#5af0d0" };
 const CLASS_TINT = {
   sword: ["#b84b54", "#ffb08c", "#571d36"],
   fist: ["#e36c32", "#ffd18a", "#5c281b"],
@@ -244,6 +244,7 @@ const ICON_MOTIF = {
   sm_hammer:"forge", sm_rivet:"shield", sm_armor:"shield", sm_taunt:"crest", sm_mine:"trap", sm_drone:"orbit", sm_repair:"heart", sm_wall:"shield", sm_moth:"orbit", sm_circuit:"lightning", sm_rivetgun:"ray", sm_overload:"forge", sm_final:"forge",
 };
 function motifOf(sk) {
+  if (sk.motif) return sk.motif; // 2차 전직 스킬은 데이터에 아이콘 모티프를 직접 지정
   const id = sk.id ?? "", name = sk.name ?? "";
   if (ICON_MOTIF[id]) return ICON_MOTIF[id];
   const source = String(id) + " " + String(name) + " " + JSON.stringify(sk.fx ?? {});
@@ -509,8 +510,8 @@ function skillArt(sk) {
   }
   g.restore();
 
-  const grade = ["일반","희귀","영웅","전설","신화"].indexOf(sk.grade);
-  const rim = grade >= 3 ? (sk.grade === "신화" ? "#ff607c" : "#ffc45e") : grade === 2 ? "#b58aff" : grade === 1 ? "#5fbaff" : "#687487";
+  const grade = sk.path ? (sk.tier <= 3 ? 4 : 3) : ["일반","희귀","영웅","전설","신화"].indexOf(sk.grade);
+  const rim = sk.path ? (sk.tier <= 2 ? "#ffe9a0" : "#5af0d0") : grade >= 3 ? (sk.grade === "신화" ? "#ff607c" : "#ffc45e") : grade === 2 ? "#b58aff" : grade === 1 ? "#5fbaff" : "#687487";
   g.strokeStyle="#03040a";g.lineWidth=2;g.strokeRect(1,1,30,30);
   g.strokeStyle=rim;g.lineWidth=1;g.strokeRect(2.5,2.5,27,27);
   line([[3,7],[3,3],[7,3]],hi,1);line([[25,3],[29,3],[29,7]],rim,1);

@@ -11,9 +11,9 @@ import { floorKind } from "../shared/zones.js";
 const PRI = { sword: ["str2", "vit2"], fist: ["str2", "tough"], archer: ["agi2", "vit3"], rogue: ["agi3", "surv"], mage: ["int2", "spi2"], priest: ["faith", "vit2"], smith: ["str2", "dura"], adventurer: ["str", "vit"] };
 const RANGE = { archer: 200, mage: 190, priest: 180 };
 
-function makeChar(cls, L, gearRarity = "희귀") {
+export function makeChar(cls, L, gearRarity = "희귀", cls2 = null) {
   const c = newCharacter("sim");
-  c.level = L; c.cls = cls;
+  c.level = L; c.cls = cls; c.cls2 = cls2;
   const pts = (L - 1) * 3;
   const [a, b] = PRI[cls];
   c.stats = { [a]: Math.ceil(pts * 0.6), [b]: Math.floor(pts * 0.4) };
@@ -31,14 +31,24 @@ function makeChar(cls, L, gearRarity = "희귀") {
   const act = av.filter((s) => s.cls !== "common" && !["basic", "passive"].includes(s.kind) && !s.exclusive && !s.moveSkill && !["sw_block", "fi_counter", "fi_imun", "sm_rivet"].includes(s.id)).sort((x, y) => order[x.grade] - order[y.grade]);
   const pas = av.filter((s) => s.kind === "passive");
   c.skills = [basic?.id ?? "c_thrust", ...act.slice(0, 4).map((s) => s.id), "c_firstaid", pas[0]?.id ?? "c_slash", pas[1]?.id ?? null].slice(0, 8);
+  if (cls2) {
+    // 2차 전직: 9등급 기본기 + 열린 2차 액티브(높은 등급 순) + 2차 패시브
+    const p2 = av.filter((s) => s.path === cls2).sort((a, b) => a.tier - b.tier);
+    const b2 = p2.find((s) => s.kind === "basic") ?? basic;
+    const a2 = p2.filter((s) => !["basic", "passive"].includes(s.kind) && !s.moveSkill && !["vj_guardtaunt", "ht_doom", "dk_duskveil"].includes(s.id));
+    const ps2 = p2.filter((s) => s.kind === "passive");
+    c.skills = [b2?.id ?? c.skills[0], ...a2.slice(0, 5).map((s) => s.id), ...ps2.slice(0, 2).map((s) => s.id)];
+    for (const id of [act[0]?.id, "c_firstaid"]) if (c.skills.length < 8 && id && !c.skills.includes(id)) c.skills.push(id);
+  }
   while (c.skills.length < 8) c.skills.push(null);
+  c.skills = c.skills.slice(0, 8);
   return c;
 }
 
 const stubWorld = { pickup: () => true, onBossCleared() {}, usePortal() {}, partyFailed() {}, toTown() {} };
 
-export function simulate(cls, L, F, { maxT = 300, rarity = "희귀", log = false, dungeon = 1, immortal = false } = {}) {
-  const ch = makeChar(cls, L, rarity);
+export function simulate(cls, L, F, { maxT = 300, rarity = "희귀", log = false, dungeon = 1, immortal = false, cls2 = null } = {}) {
+  const ch = makeChar(cls, L, rarity, cls2);
   const session = { userId: 1, role: "player", char: ch, send() {}, notice() {}, sendMe() {}, meDirty: false };
   const u = makePlayerUnit(session);
   session.unit = u;
@@ -86,8 +96,8 @@ export function simulate(cls, L, F, { maxT = 300, rarity = "희귀", log = false
     if (u.hp < u.maxHp * 0.35 && potions > 0 && t - (u.potAt ?? -99) > 15) { potions--; u.potAt = t; u.hp = Math.min(u.maxHp, u.hp + u.maxHp * 0.35); }
     room.tick();
     room.events.length = 0;
-    if (immortal) { u.hp = u.maxHp; u.dead = false; }
     if (u.hp < lastHp) dmgTaken += lastHp - u.hp;
+    if (immortal) { u.hp = u.maxHp; u.dead = false; }
     lastHp = u.hp;
     t += 0.05;
     if (u.dead) break;
@@ -101,6 +111,7 @@ export function simulate(cls, L, F, { maxT = 300, rarity = "희귀", log = false
     cls, L, F, kind, t: Math.round(t), dead: u.dead, hpLeft: Math.round((u.hp / u.maxHp) * 100), potionsUsed: 5 - potions,
     killed: room.killed, total, bossHp: boss ? Math.round((boss.hp / boss.maxHp) * 100) : bossDead ? 0 : null,
     xpGain: ch.xp - xp0 + (ch.level > L ? 999999 : 0), xpNeed: xpToNext(L), maxHp: u.maxHp, atk: Math.round(u.stats.atk),
+    hpPerMin: Math.round((dmgTaken / u.maxHp / Math.max(1, t / 60)) * 100) / 100, dmgTaken: Math.round(dmgTaken),
   };
 }
 

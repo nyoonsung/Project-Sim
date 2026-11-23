@@ -3,7 +3,8 @@ import { deriveStats } from "../../shared/stats.js";
 import { CLASS_INFO, xpToNext, stageOf } from "../../shared/classes.js";
 import { SKILLS, unlockStage, adventurerBasic } from "../../shared/skills.js";
 import { MAX_LEVEL, STAT_POINTS_PER_LEVEL, PLAYER_RADIUS, ITEMS, TITLE_COLORS, TITLE_MAX, INVENTORY_SLOTS } from "../../shared/constants.js";
-import { starterGear, ensureDur, upgradeMythic, syncMythic, ensureAbyss, syncAbyss } from "../../shared/items.js";
+import { starterGear, ensureDur, upgradeMythic, syncMythic, ensureAbyss, syncAbyss, VMATS } from "../../shared/items.js";
+import { PATHS, TIER_LEVEL, CLASS2_LEVEL } from "../../shared/classes2.js";
 
 export const INV_SIZE = INVENTORY_SLOTS;
 
@@ -16,6 +17,10 @@ export function newCharacter(name) {
     inv: [], nextUid: 3, cons: { hp_potion: 5, antidote: 2, mp_potion: 2 }, gold: 100,
     best: 0, checkpoint: 1, cleared: false,
     best2: 0, checkpoint2: 1, cleared2: false, abyssKeys: 0, riftCrystals: 0,
+    // 2차 업데이트: 섬·베르단 던전 진행도·2차 전직·베르단 재료
+    island: "erden", verdanPass: false, cls2: null,
+    best3: 0, checkpoint3: 1, cleared3: false, best4: 0, checkpoint4: 1, cleared4: false,
+    mats: {}, sigils: {}, hearts: 0, reward250: false,
     kills: 0, deaths: 0, playtime: 0, created: Date.now(),
   };
 }
@@ -31,6 +36,20 @@ export function sanitizeChar(c, name) {
   out.best2 = Math.max(0, Math.min(30, Number.isFinite(out.best2) ? out.best2 | 0 : 0));
   out.checkpoint2 = Math.max(1, Math.min(30, Number.isFinite(out.checkpoint2) ? out.checkpoint2 | 0 : 1));
   out.cleared2 = !!out.cleared2;
+  const clampInt = (v, lo, hi, dflt) => Math.max(lo, Math.min(hi, Number.isFinite(v) ? v | 0 : dflt));
+  out.best3 = clampInt(out.best3, 0, 100, 0); out.checkpoint3 = clampInt(out.checkpoint3, 1, 100, 1); out.cleared3 = !!out.cleared3;
+  out.best4 = clampInt(out.best4, 0, 30, 0); out.checkpoint4 = clampInt(out.checkpoint4, 1, 30, 1); out.cleared4 = !!out.cleared4;
+  out.verdanPass = !!out.verdanPass;
+  out.island = out.island === "verdan" && out.verdanPass ? "verdan" : "erden";
+  if (!PATHS[out.cls2] || PATHS[out.cls2].base !== out.cls || out.level < CLASS2_LEVEL) out.cls2 = null;
+  const mats = {};
+  for (const m of VMATS) mats[m.id] = clampInt(out.mats?.[m.id], 0, 999999, 0);
+  out.mats = mats;
+  const sig = {};
+  for (let z = 1; z <= 10; z++) sig[z] = clampInt(out.sigils?.[z], 0, 9999, 0);
+  out.sigils = sig;
+  out.hearts = clampInt(out.hearts, 0, 9999, 0);
+  out.reward250 = !!out.reward250;
   out.abyssKeys = Math.max(0, Math.min(9999, Number.isFinite(out.abyssKeys) ? out.abyssKeys | 0 : 0));
   out.riftCrystals = Math.max(0, Math.min(999999, Number.isFinite(out.riftCrystals) ? out.riftCrystals | 0 : 0));
   if (!Array.isArray(out.skills) || out.skills.length !== 8) out.skills = d.skills;
@@ -101,11 +120,27 @@ export function defaultLoadout(ch) {
   return out;
 }
 
-/** 이 캐릭터가 지금 쓸 수 있는 스킬 */
+/** 이 캐릭터가 지금 쓸 수 있는 스킬 (2차 전직 스킬은 경로·등급 레벨이 맞아야) */
 export function availableSkills(ch) {
   const stage = stageOf(ch.cls, ch.level);
   const n = CLASS_INFO[ch.cls].ranks.length;
-  return Object.values(SKILLS).filter((s) => s.cls === "common" || (s.cls === ch.cls && stage >= unlockStage(s, n)));
+  return Object.values(SKILLS).filter((s) => s.cls === "common" || (s.path ? ch.cls2 === s.path && ch.level >= (TIER_LEVEL[s.tier] ?? 999) : s.cls === ch.cls && stage >= unlockStage(s, n)));
+}
+/** 2차 전직 직후 기본 스킬 세트: 1번 9등급 기본기, 2~6번 열린 2차 스킬(등급 높은 순), 7번 대시, 8번 응급처치 */
+export function defaultLoadout2(ch) {
+  const avail = availableSkills(ch).filter((s) => s.path === ch.cls2);
+  const basic = avail.find((s) => s.kind === "basic");
+  const out = [basic?.id ?? defaultLoadout(ch)[0]];
+  for (const s of avail.sort((a, b) => a.tier - b.tier)) { // 1등급 → 9등급
+    if (out.length >= 6) break;
+    if (out.includes(s.id) || s.kind === "basic") continue;
+    out.push(s.id);
+  }
+  const base = defaultLoadout(ch);
+  for (const id of base.slice(1, 6)) { if (out.length >= 6) break; if (id && !out.includes(id)) out.push(id); }
+  while (out.length < 6) out.push(null);
+  out.push("c_dash", "c_firstaid");
+  return out;
 }
 
 let nextUnitId = 1;
@@ -159,6 +194,13 @@ export function gainXp(room, u, amount) {
     ch.level++;
     ch.unspent += STAT_POINTS_PER_LEVEL;
     leveled = true;
+    if (ch.cls2) {
+      const tier = Object.entries(TIER_LEVEL).find(([, lv]) => lv === ch.level)?.[0];
+      if (tier) {
+        const sk = Object.values(SKILLS).find((x) => x.path === ch.cls2 && x.tier === Number(tier));
+        if (sk) u.session.notice(`${PATHS[ch.cls2].name} ${tier}등급 스킬 [${sk.name}]이(가) 열렸어요! 스킬 창(K)에서 장착하세요.`);
+      }
+    }
     const prevStage = stageOf(ch.cls, ch.level - 1), stage = stageOf(ch.cls, ch.level);
     if (stage > prevStage) {
       room.ev({ e: "msg", text: `${ch.name}님이 ${CLASS_INFO[ch.cls].ranks[stage]}(으)로 성장했어요!`, kind: "rank" });
@@ -174,6 +216,7 @@ export function gainXp(room, u, amount) {
     u.mp = u.maxMp;
     room.ev({ e: "lvl", id: u.id, l: ch.level });
     u.session.dirty = true;
+    if (ch.level >= MAX_LEVEL && !ch.reward250) room.world?.grantReward250?.(u.session);
   }
   u.session.meDirty = true;
 }

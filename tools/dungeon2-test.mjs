@@ -81,12 +81,18 @@ ok(true, "제2 던전 1·3구역 몬스터 구성이 다름");
 
 // 제2 던전에서는 캐릭터 레벨이 층보다 아무리 높아도 레벨 차이 경험치 페널티가 없다.
 // 제1 던전은 기존 감소 규칙을 그대로 유지한다.
+// 2차 업데이트: 에르덴 제2 던전은 레벨 180부터 경험치 획득량이 줄어든다 (180 → 95%, 레벨당 -5%, 최저 10%).
 for (const floor of [1, 10, 30]) {
-  assert.equal(levelGapXpMultiplier(250, floor, 2), 1);
+  assert.equal(levelGapXpMultiplier(179, floor, 2), 1);
+  assert.ok(levelGapXpMultiplier(180, floor, 2) < 1 && levelGapXpMultiplier(180, floor, 2) > 0.9);
+  assert.equal(levelGapXpMultiplier(250, floor, 2), 0.1);
   assert.equal(levelGapXpMultiplier(floor + 5, floor, 1), 1);
   assert.ok(levelGapXpMultiplier(floor + 6, floor, 1) < 1);
 }
-assert.equal(levelGapXpMultiplier(250, 30, 2), 1);
+// 베르단 던전: 실제 몬스터 레벨(150+층) 기준 6레벨 이상 높으면 감소
+assert.equal(levelGapXpMultiplier(155, 1, 3), 1);
+assert.ok(levelGapXpMultiplier(200, 1, 3) < 1);
+assert.equal(levelGapXpMultiplier(250, 100, 3), 1);
 assert.equal(unitXpMultiplier(250, 100, 1, { boss: true, mid: false }), 1, "D1 floor-100 final boss XP must ignore level-gap reduction");
 assert.ok(unitXpMultiplier(250, 100, 1, { boss: false }) < 1, "D1 floor-100 normal mobs keep level-gap reduction");
 assert.ok(unitXpMultiplier(250, 90, 1, { boss: true, mid: false }) < 1, "other D1 bosses keep level-gap reduction");
@@ -277,7 +283,7 @@ ok(true, "제2 던전 드롭 레벨 100 · 소환물 드롭 없음 · 심연 유
 assert.equal(CLASS_DMG.smith, 5.25);
 assert.equal(CLASS_DMG.fist, 6.00);
 assert.equal(CLASS_DMG.priest, 2.025);
-assert.equal(CLASS_DMG.archer, 0.95);
+assert.equal(CLASS_DMG.archer, 0.475); // 2차 업데이트 전 조정: 궁수 딜량 50%
 assert.equal(CLASS_DMG.rogue, 1.30);
 ok(true, "도적 아래 다섯 직업 피해 배율 1.5배 상향");
 

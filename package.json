@@ -10,7 +10,7 @@
   "scripts": {
     "start": "node --disable-warning=ExperimentalWarning server/main.js",
     "dev": "node --disable-warning=ExperimentalWarning --watch server/main.js",
-    "test": "node tools/protocol-test.mjs && node tools/sell-test.mjs && node tools/perf-test.mjs && node tools/abyss-vault-test.mjs && node tools/netclock-test.mjs && node tools/boss-hitbox-test.mjs && node --disable-warning=ExperimentalWarning tools/bot-test.js && node --disable-warning=ExperimentalWarning tools/trade-test.mjs && node --disable-warning=ExperimentalWarning tools/resume-test.mjs && node --disable-warning=ExperimentalWarning tools/dungeon2-test.mjs && node tools/skill-regression-test.mjs && node tools/durability-test.mjs && node tools/class-dps-test.mjs",
+    "test": "node tools/protocol-test.mjs && node tools/sell-test.mjs && node tools/perf-test.mjs && node tools/abyss-vault-test.mjs && node tools/netclock-test.mjs && node tools/boss-hitbox-test.mjs && node --disable-warning=ExperimentalWarning tools/bot-test.js && node --disable-warning=ExperimentalWarning tools/trade-test.mjs && node --disable-warning=ExperimentalWarning tools/resume-test.mjs && node --disable-warning=ExperimentalWarning tools/dungeon2-test.mjs && node tools/skill-regression-test.mjs && node tools/durability-test.mjs && node tools/class-dps-test.mjs && node --disable-warning=ExperimentalWarning tools/update2-test.mjs",
     "build:demo": "node demo/build.mjs",
     "new-admin-key": "node tools/new-admin-key.js",
     "build:cf": "node tools/build-cf.mjs",

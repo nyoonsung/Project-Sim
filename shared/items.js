@@ -8,6 +8,12 @@ export const RARITY_WEIGHTS = {
   elite: [40, 38, 16, 5.5, 0.5],
   boss: [22, 42, 26, 9.5, 0.5],
 };
+// 베르단 섬 던전 등급 확률(2차 업데이트 7장): 전설 3.5% · 신화 1.5% · 심연 0.5%, 나머지 94.5%는 일반~영웅
+export const VERDAN_RARITY_WEIGHTS = {
+  normal: [52, 30, 12.5, 3.5, 1.5, 0.5],
+  elite: [36, 38, 20.5, 3.5, 1.5, 0.5],
+  boss: [16, 46, 32.5, 3.5, 1.5, 0.5],
+};
 export const RARITY_MUL = [1, 1.12, 1.26, 1.42, 3.7, 5.22]; // 기존 심연 깡스탯 대비 1.2배 상향
 export const MYTHIC_OPT_MUL = 2;                              // 신화 추가 옵션 값 2배
 const MYTHIC_V = 3;                                           // 신화 성능 버전 (옛 신화를 한 번만 올려 주기용)
@@ -48,7 +54,11 @@ export const CLASS_GEAR = {
 };
 
 // 구역별 재료 이름 (아이템 레벨 = 드롭 층)
-export const MATERIALS = ["나무", "청동", "철", "강철", "미스릴", "흑철", "아다만", "용골", "성은", "혼돈"];
+export const MATERIALS = ["나무", "청동", "철", "강철", "미스릴", "흑철", "아다만", "용골", "성은", "혼돈",
+  // 101~150: 심연 성장 구간, 151~250: 베르단 재료 (20레벨씩)
+  "심연", "심연", "심연", "심연", "심연", "침식 흑철", "침식 흑철", "봉인 아다만", "봉인 아다만", "유리수림", "유리수림", "폭풍시계강", "폭풍시계강", "혼돈 심장석", "혼돈 심장석"];
+/** 아이템 레벨 상한: 2차 업데이트로 250까지 (베르단 장비·신화/심연 성장) */
+export const ILVL_CAP = 250;
 export const ARMOR_NAMES = { helmet: ["두건", "투구", "철모", "면갑"], armor: ["가죽 갑옷", "사슬 갑옷", "판금 갑옷", "전투복"], trinket: ["반지", "목걸이", "부적", "귀걸이"] };
 
 // 추가 옵션 (쿨타임 감소 없음). v(ilvl, rarityIndex) → 값
@@ -69,9 +79,33 @@ export const OPTIONS = {
   heal: { name: "치유량", fmt: (v) => `+${(v * 100).toFixed(1)}%`, roll: (l, r, R) => +(0.03 + R() * 0.04).toFixed(3) },
 };
 const OPTION_KEYS = Object.keys(OPTIONS);
+
+// 베르단 수식어 (2차 업데이트 8.2): 인챈트와 별개, 추가 옵션 칸을 하나 쓴다. 지역 각인 번호(1~10)와 1:1
+//  v는 효과 크기. 상한·내부 쿨타임은 서버 판정(server/game/skills.js · combat.js)에서 적용
+export const VMODS = {
+  vm_erosion: { name: "침식의", zone: 1, desc: (v) => `지속 피해에 걸린 적에게 주는 피해 +${(v * 100).toFixed(1)}% (보스 상대 상한 15%)`, roll: (R) => +(0.10 + R() * 0.08).toFixed(3) },
+  vm_oblivion: { name: "망각의", zone: 2, desc: (v) => `감속·속박·기절 등 제어된 적에게 주는 피해 +${(v * 100).toFixed(1)}% (보스는 그로기 중에만)`, roll: (R) => +(0.10 + R() * 0.08).toFixed(3) },
+  vm_constellation: { name: "성좌의", zone: 3, desc: (v) => `표식이 새겨진 정예·보스에게 치명타 피해 +${(v * 100).toFixed(1)}%p`, roll: (R) => +(0.15 + R() * 0.15).toFixed(3) },
+  vm_trench: { name: "해구의", zone: 4, desc: (v) => `회피·막기 성공 시 최대 HP ${(v * 100).toFixed(1)}% 보호막 (재사용 6초)`, roll: (R) => +(0.06 + R() * 0.04).toFixed(3) },
+  vm_glassblade: { name: "유리칼날의", zone: 5, desc: (v) => `치명타 피해 +${(v * 100).toFixed(1)}%p, 방어력 -${(v * 40).toFixed(1)}%`, roll: (R) => +(0.20 + R() * 0.15).toFixed(3) },
+  vm_primeval: { name: "원시림의", zone: 6, desc: (v) => `연속 타격 중 적중마다 최대 HP ${(v * 100).toFixed(2)}% 회복 (0.5초마다, 초당 최대 2%)`, roll: (R) => +(0.004 + R() * 0.004).toFixed(4) },
+  vm_stormstep: { name: "폭풍걸음의", zone: 7, desc: (v) => `이동기 사용 후 2.5초간 이동 속도 +${(v * 100).toFixed(1)}%, 공격 속도 +${(v * 50).toFixed(1)}% (재사용 6초)`, roll: (R) => +(0.10 + R() * 0.08).toFixed(3) },
+  vm_clockwork: { name: "시계태엽의", zone: 8, desc: (v) => `회피·막기 성공 시 모든 스킬 재사용 대기 ${v.toFixed(2)}초 감소 (재사용 5초)`, roll: (R) => +(0.5 + R() * 0.5).toFixed(2) },
+  vm_lightless: { name: "무광의", zone: 9, desc: (v) => `약화·표식 상태의 적에게 주는 피해 +${(v * 100).toFixed(1)}% (침식·성좌와 합산 상한 35%)`, roll: (R) => +(0.10 + R() * 0.08).toFixed(3) },
+  vm_heartcore: { name: "심장부의", zone: 10, desc: (v) => `보스의 예고 공격을 피하면 4초 안의 다음 공격 피해 +${(v * 100).toFixed(1)}% (재사용 8초)`, roll: (R) => +(0.20 + R() * 0.15).toFixed(3) },
+};
+export const VMOD_KEYS = Object.keys(VMODS);
+/** 옵션 정보 (일반 옵션 또는 베르단 수식어) */
+export function optInfo(k) {
+  if (OPTIONS[k]) return OPTIONS[k];
+  const m = VMODS[k];
+  return m ? { name: m.name + " 수식어", fmt: (v) => m.desc(v), vmod: true } : null;
+}
+/** 지역 번호(1~10) → 수식어 키 */
+export const VMOD_BY_ZONE = Object.fromEntries(VMOD_KEYS.map((k) => [VMODS[k].zone, k]));
 function rollOptions(R, ilvl, rarityIndex, existing = []) {
   const out = Array.isArray(existing)
-    ? existing.filter((o) => o && OPTIONS[o.k] && Number.isFinite(o.v)).slice(0, RARITY_OPTS[rarityIndex])
+    ? existing.filter((o) => o && (OPTIONS[o.k] || VMODS[o.k]) && Number.isFinite(o.v)).slice(0, RARITY_OPTS[rarityIndex])
     : [];
   const used = new Set(out.map((o) => o.k));
   const keys = OPTION_KEYS.filter((k) => !used.has(k));
@@ -236,7 +270,7 @@ export function makeItem(spec) {
   const slot = SLOTS.includes(spec.slot) ? spec.slot : null;
   if (!slot) return null;
   const ri = Math.max(0, RARITIES.indexOf(spec.rarity));
-  const ilvlCap = spec.rarity === "심연" ? 150 : 100;
+  const ilvlCap = spec.ilvlCap ?? ILVL_CAP;
   const ilvl = Math.max(1, Math.min(ilvlCap, Math.floor(Number(spec.ilvl) || 1)));
   let type = null, variant = 0;
   if (slot === "weapon") { type = WEAPON_TYPES[spec.type] ? spec.type : "sword"; }
@@ -248,8 +282,9 @@ export function makeItem(spec) {
   // 추가 옵션: 같은 옵션 중복 없이, 등급별 개수까지, 값은 0 ~ 일반 최대치의 3배
   const seen = new Set();
   for (const o of Array.isArray(spec.opts) ? spec.opts : []) {
-    if (!o || !OPTIONS[o.k] || seen.has(o.k) || it.opts.length >= RARITY_OPTS[ri]) continue;
-    const max = Math.abs(optionMax(o.k, ilvl, ri)) * 3 * (ri === 4 ? MYTHIC_OPT_MUL : 1);
+    if (!o || !(OPTIONS[o.k] || VMODS[o.k]) || seen.has(o.k) || it.opts.length >= RARITY_OPTS[ri]) continue;
+    if (VMODS[o.k] && it.opts.some((x) => VMODS[x.k])) continue; // 수식어는 장비 하나에 하나
+    const max = VMODS[o.k] ? VMODS[o.k].roll(() => 0.999) : Math.abs(optionMax(o.k, ilvl, ri)) * 3 * (ri === 4 ? MYTHIC_OPT_MUL : 1);
     const v = Number(o.v);
     if (!Number.isFinite(v)) continue;
     seen.add(o.k);
@@ -287,7 +322,7 @@ const ABYSS_RELICS = [
 export function rollAbyssRelic(R, { ilvl, cls = "adventurer" } = {}) {
   const gear = CLASS_GEAR[cls] ?? CLASS_GEAR.adventurer;
   const relic = pick(R, ABYSS_RELICS);
-  const level = Math.max(1, Math.min(150, Math.floor(ilvl || 1)));
+  const level = Math.max(1, Math.min(ILVL_CAP, Math.floor(ilvl || 1)));
   const type = relic.slot === "weapon" ? pick(R, gear.w) : relic.slot === "offhand" ? pick(R, gear.o) : undefined;
   const variant = ["helmet", "armor", "trinket"].includes(relic.slot) ? Math.floor(R() * 4) : 0;
   const it = makeItem({ slot: relic.slot, type, variant, rarity: "심연", ilvl: level, abyssEffects: relic.effects, opts: rollOptions(R, level, 5) });
@@ -355,7 +390,7 @@ export function syncAbyss(ch) {
   for (const it of [...Object.values(ch?.equip ?? {}), ...(ch?.inv ?? [])]) {
     if (!it || it.rarity !== "심연") continue;
     if ((it.ilvl ?? 1) >= targetLevel) continue;
-    it.ilvl = Math.min(150, targetLevel);
+    it.ilvl = Math.min(ILVL_CAP, targetLevel);
     it.base = baseStats(it.slot, it.type, it.ilvl, 5, it.variant ?? 1);
     if (it.slot === "weapon") Object.assign(it.base, ABYSS_WEAPON_BONUS);
     const relic = ABYSS_RELICS.find((r) => r.id === it.relic);
@@ -396,8 +431,9 @@ export function syncMythic(ch) {
   for (const it of [...Object.values(ch.equip ?? {}), ...(ch.inv ?? [])]) {
     if (!it || it.rarity !== "신화") continue;
     if ((it.mythicV ?? 0) < MYTHIC_V) { upgradeMythic(it); changed = true; }
-    if (it.ilvl === ch.level) continue;
-    it.ilvl = Math.max(1, ch.level);
+    const lv = Math.max(1, Math.min(ILVL_CAP, ch.level));
+    if (it.ilvl === lv) continue;
+    it.ilvl = lv;
     it.base = baseStats(it.slot, it.type, it.ilvl, 4, it.variant ?? 1);
     if (it.slot === "weapon") Object.assign(it.base, MYTHIC_WEAPON_BONUS);
     it.name = itemName(it);
@@ -497,7 +533,7 @@ export function enchantCost(it) {
 }
 /** 신화·심연 고유 효과 리롤 비용: 아이템 레벨에 따라 1만~5만 골드 */
 export function specialRerollCost(it) {
-  const maxLevel = it?.rarity === "심연" ? 150 : 100;
+  const maxLevel = it?.rarity === "심연" ? 150 : 100; // 레벨 150(신화 100)부터는 최대 비용 5만 골드로 고정
   const level = Math.max(1, Math.min(maxLevel, Math.floor(Number(it?.ilvl) || 1)));
   return Math.round((10_000 + ((level - 1) / (maxLevel - 1)) * 40_000) / 1_000) * 1_000;
 }
@@ -524,7 +560,7 @@ export function sellPrice(it) {
 const PCT_KEYS = new Set(["crit", "aspd", "move", "dr", "atkPct", "critDmg", "mpRegen", "dmg", "heal", "hpPct", "defPct"]);
 /** 장착 장비 전체 합산 (서버 판정·클라이언트 표시 공용) */
 export function gearTotals(equip) {
-  const t = { atk: 0, atkPct: 0, def: 0, hp: 0, mp: 0, crit: 0, critDmg: 0, aspd: 0, move: 0, dmg: 0, dr: 0, hpRegen: 0, mpRegen: 0, heal: 0, hpPct: 0, defPct: 0, mythic: [], abyssEffects: [] };
+  const t = { atk: 0, atkPct: 0, def: 0, hp: 0, mp: 0, crit: 0, critDmg: 0, aspd: 0, move: 0, dmg: 0, dr: 0, hpRegen: 0, mpRegen: 0, heal: 0, hpPct: 0, defPct: 0, mythic: [], abyssEffects: [], vmods: {} };
   for (const it of Object.values(equip ?? {})) {
     if (!it) continue;
     // 부서진 장비(내구도 0)는 기본 능력치 30%만, 강화 보너스 없음
@@ -535,10 +571,90 @@ export function gearTotals(equip) {
     if (ep && it.enh && !broken) t[ep.k] += it.enh * ENH_PCT_PER;
     const en = it.ench && ENCHANTS[it.ench];
     if (en && !broken) for (const [k, v] of Object.entries(en.mods)) t[k] += v;
-    for (const o of it.opts) t[o.k] += o.v;
+    for (const o of it.opts) {
+      if (VMODS[o.k]) {
+        if (broken) continue;
+        t.vmods[o.k] = (t.vmods[o.k] ?? 0) + o.v;
+        if (o.k === "vm_glassblade") { t.critDmg += o.v; t.defPct -= o.v * 0.4; }
+      } else if (o.k in t) t[o.k] += o.v;
+    }
     if (it.mythic) t.mythic.push(it.mythic);
     if (Array.isArray(it.abyssEffects)) for (const k of it.abyssEffects) if (ABYSS_EFFECTS[k]) t.abyssEffects.push(k);
   }
   t.atk = Math.round(t.atk); t.def = Math.round(t.def); t.hp = Math.round(t.hp); t.mp = Math.round(t.mp);
   return t;
+}
+
+// ───────────────────────── 베르단 섬 (2차 업데이트) ─────────────────────────
+/** 베르단 제작 재료 5단계 (20층 단위) + 지역 각인(10층 보스) + 섬 심장핵(100층) */
+export const VMATS = [
+  { id: "m_erosion", name: "침식 흑철", floors: [1, 20], color: "#8a7a8e" },
+  { id: "m_adamant", name: "봉인 아다만", floors: [21, 40], color: "#6ab0d8" },
+  { id: "m_glass", name: "유리수림 합금", floors: [41, 60], color: "#8ae0b0" },
+  { id: "m_storm", name: "폭풍시계강", floors: [61, 80], color: "#e8d070" },
+  { id: "m_chaos", name: "혼돈 심장석", floors: [81, 100], color: "#ff6a8a" },
+];
+export const SIGIL_NAMES = ["침식된 변경", "망각의 설원", "봉인된 천문대", "가라앉은 항구", "유리 사막", "잠든 원시림", "폭풍의 첨탑", "뒤틀린 시계", "별빛 없는 심연", "섬의 심장부"];
+/** 층 → 재료 단계(0~4) */
+export const vmatTier = (floor) => Math.max(0, Math.min(4, Math.floor((Math.max(1, floor) - 1) / 20)));
+/** 제작 단계별: 재료 소모량, 아이템 레벨 상한, 골드 */
+export const CRAFT_TIERS = [
+  { mat: 30, ilvl: 170, gold: 60_000 },
+  { mat: 30, ilvl: 190, gold: 110_000 },
+  { mat: 30, ilvl: 210, gold: 180_000 },
+  { mat: 30, ilvl: 230, gold: 270_000 },
+  { mat: 30, ilvl: 250, gold: 400_000 },
+];
+export const CRAFT_SLOTS = ["weapon", "offhand", "helmet", "armor", "trinket"];
+
+/** 베르단 던전 드롭: 등급 확률표가 다르고, 희귀 이상은 35% 확률로 옵션 한 칸이 베르단 수식어 */
+export function rollVerdanItem(R, { ilvl, cls = "adventurer", tier = "normal", zone = null }) {
+  const ri = pickW(R, VERDAN_RARITY_WEIGHTS[tier] ?? VERDAN_RARITY_WEIGHTS.normal);
+  const it = rollItem(R, { ilvl: Math.max(1, Math.min(ILVL_CAP, ilvl)), cls, tier, rarity: RARITIES[ri] });
+  if (ri >= 1 && it.opts.length && R() < 0.35) {
+    const key = zone && VMOD_BY_ZONE[zone] && R() < 0.6 ? VMOD_BY_ZONE[zone] : VMOD_KEYS[Math.floor(R() * VMOD_KEYS.length)];
+    it.opts[Math.floor(R() * it.opts.length)] = { k: key, v: VMODS[key].roll(R) };
+  }
+  return it;
+}
+
+/**
+ * 베르단 공방 제작: 원하는 부위 + 원하는 지역 각인의 수식어를 확정으로 단다.
+ * tier: 재료 단계(0~4). heart: 섬 심장핵을 쓰면 신화 등급(옵션 4 + 고유 효과).
+ */
+export function craftVerdanItem(R, { slot, vmod, tier, cls = "adventurer", level = 150, heart = false }) {
+  const T = CRAFT_TIERS[tier];
+  if (!T || !CRAFT_SLOTS.includes(slot) || !VMODS[vmod]) return null;
+  const ilvl = Math.max(151, Math.min(T.ilvl, level, ILVL_CAP));
+  const rarity = heart ? "신화" : "전설";
+  let it = null;
+  for (let k = 0; k < 80 && (!it || it.slot !== slot); k++) it = rollItem(R, { ilvl, cls, rarity });
+  if (!it || it.slot !== slot) return null;
+  // 무기·보조장비는 직업 주무기로 (제작은 원하는 것을 얻는 통로)
+  const gear = CLASS_GEAR[cls] ?? CLASS_GEAR.adventurer;
+  if (slot === "weapon" && !gear.w.includes(it.type)) { it.type = gear.w[0]; it.base = baseStats("weapon", it.type, ilvl, RARITIES.indexOf(rarity)); if (rarity === "신화") Object.assign(it.base, MYTHIC_WEAPON_BONUS); }
+  if (slot === "offhand" && !gear.o.includes(it.type)) { it.type = gear.o[0]; it.base = baseStats("offhand", it.type, ilvl, RARITIES.indexOf(rarity)); }
+  it.opts[0] = { k: vmod, v: +Math.max(VMODS[vmod].roll(R), VMODS[vmod].roll(() => 0.5)).toFixed(4) };
+  it.crafted = true;
+  it.name = itemName(it);
+  return it;
+}
+
+// ── 레벨 250 직업 전용 아이템 (2차 업데이트 1장): 현재 직업에 맞는 고유 심연 무기 1개
+const CLASS_RELIC_NAME = {
+  adventurer: "개척왕의 이정표", sword: "황혼을 가르는 검", fist: "금강의 권갑", archer: "하늘문 장궁", rogue: "그림자 군주의 송곳니",
+  mage: "삼원의 성좌 지팡이", priest: "최후 복음의 메이스", smith: "화산심장 워해머",
+};
+export function makeClassRelic(cls, level = 250) {
+  const gear = CLASS_GEAR[cls] ?? CLASS_GEAR.adventurer;
+  const type = cls === "adventurer" ? "sword" : gear.w[0];
+  const it = makeItem({ slot: "weapon", type, rarity: "심연", ilvl: Math.min(ILVL_CAP, level), abyssEffects: ["rift_surge", "eclipse_focus"] });
+  if (!it) return null;
+  it.relic = "class250";
+  it.relicName = CLASS_RELIC_NAME[cls] ?? "정점의 증표";
+  it.relicColor = "#ffe9a0";
+  it.classRelic = cls;
+  Object.assign(it.base, { dmg: (it.base.dmg ?? 0) + 0.3, crit: (it.base.crit ?? 0) + 0.05, critDmg: (it.base.critDmg ?? 0) + 0.2 });
+  it.name = it.relicName;
+  return it;
 }

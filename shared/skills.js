@@ -5,6 +5,7 @@
 // pow : 공격력(atk) 대비 계수. 치유·보호막은 치유력 대비 계수.
 // steps의 do 종류는 server/game/skills.js 에 구현.
 
+import { PATH_SKILLS } from "./skills2.js";
 const S = [];
 const add = (cls, list) => list.forEach((s) => S.push({ cls, ...s }));
 
@@ -604,6 +605,8 @@ add("smith", [{ id: "sm_final", name: "천공의 망치", grade: "신화", kind:
   limit: "부품 3개를 소모하는 대규모 파티 보호·제압 기술.",
   fx: { area: "melee/hammer-smash", self: "holy/divine-shield" },
   steps: [{ do: "shield", target: "party", radius: 260, pow: 4.0, dur: 9 }, { do: "area", radius: 150, pow: 8.2, telegraph: 0.55, max: 16, cc: { type: "stun", dur: 1.8 }, groggy: 70 }] }]);
+// 2차 전직 스킬 (17경로 × 9)
+for (const sk of PATH_SKILLS) S.push(sk);
 export const SKILLS = Object.fromEntries(S.map((s) => [s.id, s]));
 export const SKILL_LIST = S;
 
@@ -612,12 +615,13 @@ export const SKILL_LIST = S;
 const GRADE_ORDER = ["일반", "희귀", "영웅", "전설", "신화"];
 const stageMaps = new Map();
 export function unlockStage(skill, stagesInClass) {
+  if (skill.path) return 0; // 2차 전직 스킬은 등급 레벨(TIER_LEVEL)로 따로 판정
   if (skill.cls === "common" || skill.grade === "일반" || stagesInClass <= 1) return 0;
   if (skill.grade === "신화") return stagesInClass - 1;
   const key = skill.cls + "|" + stagesInClass;
   let m = stageMaps.get(key);
   if (!m) {
-    const list = S.filter((s) => s.cls === skill.cls && !s.weaponBasic && s.grade !== "일반" && s.grade !== "신화")
+    const list = S.filter((s) => s.cls === skill.cls && !s.path && !s.weaponBasic && s.grade !== "일반" && s.grade !== "신화")
       .sort((a, b) => GRADE_ORDER.indexOf(a.grade) - GRADE_ORDER.indexOf(b.grade));
     const span = Math.max(1, stagesInClass - 2);
     m = new Map(list.map((s, i) => [s.id, 1 + Math.floor((i * span) / list.length)]));
@@ -627,7 +631,11 @@ export function unlockStage(skill, stagesInClass) {
 }
 /** 직업의 스킬 목록 */
 export function skillsOf(cls) {
-  return S.filter((s) => s.cls === cls && !s.weaponBasic);
+  return S.filter((s) => s.cls === cls && !s.weaponBasic && !s.path);
+}
+/** 2차 전직 경로의 스킬 (9등급 → 1등급) */
+export function skillsOfPath(path) {
+  return S.filter((s) => s.path === path).sort((a, b) => b.tier - a.tier);
 }
 /** 모험가 기본 공격: 든 무기에 따라 달라짐 (장검·맨손 → 찌르기) */
 export const WEAPON_BASIC = { bow: "c_shot", staff: "c_bolt", club: "c_bash", mace: "c_smite", knuckle: "c_jab", dagger: "c_stab", hammer: "c_pound", sword: "c_thrust" };

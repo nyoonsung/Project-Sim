@@ -28,8 +28,11 @@ const SCHEMA = {
   use: (m) => isId(m.item),
   chat: (m) => isStr(m.text, 120) && m.text.trim().length > 0,
   party: (m) => ["invite", "accept", "decline", "leave", "kick", "promote"].includes(m.op) && (m.name === undefined || isStr(m.name, 12)),
-  enter: (m) => isInt(m.floor, 1, 100),
+  enter: (m) => isInt(m.floor, 1, 100) && (m.dungeon === undefined || isInt(m.dungeon, 1, 4)),
   vault: () => true, // 심연 보관고 교환 요청
+  boat: (m) => m.to === undefined || m.to === "pay", // 뱃사공 (첫 입도 공물 확인)
+  class2: (m) => isId(m.path),
+  craft: (m) => ["weapon", "offhand", "helmet", "armor", "trinket"].includes(m.slot) && isId(m.vmod) && isInt(m.tier, 0, 4) && (m.heart === undefined || typeof m.heart === "boolean"),
   portal: () => true,
   vote: (m) => typeof m.ok === "boolean",
   town: () => true,

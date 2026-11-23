@@ -9,7 +9,7 @@ import { INV_SIZE } from "./player.js";
 
 const MAX_ITEMS = 12, REQ_TTL = 60_000;
 const byName = (world, name) => [...world.sessions.values()].find((x) => x.name.toLowerCase() === String(name ?? "").toLowerCase());
-const inTown = (world, s) => s.unit.room === world.town && !s.linkdead;
+const inTown = (world, s) => (world.isTown ? world.isTown(s.unit.room) : s.unit.room === world.town) && !s.linkdead;
 const snap = (it) => JSON.stringify(it);
 const uidToken = (value) => {
   if (typeof value === "string" && !/^\d{1,10}$/.test(value)) return null;
@@ -45,7 +45,7 @@ export function tradeOp(world, s, m) {
     case "request": {
       const o = byName(world, m.name);
       if (!o || o === s) return s.notice("그 플레이어를 찾을 수 없어요.");
-      if (!inTown(world, s) || !inTown(world, o)) return s.notice("거래는 둘 다 마을에 있을 때만 할 수 있어요.");
+      if (!inTown(world, s) || !inTown(world, o) || s.unit.room !== o.unit.room) return s.notice("거래는 둘 다 같은 마을에 있을 때만 할 수 있어요.");
       if (s.trade) return s.notice("이미 거래 중이에요.");
       if (o.trade) return s.notice(`${o.name}님은 다른 사람과 거래 중이에요.`);
       const at = o.tradeReqs?.get(s.userId) ?? 0;
@@ -61,7 +61,7 @@ export function tradeOp(world, s, m) {
       s.tradeReqs.delete(from.userId);
       if (Date.now() - at > REQ_TTL) return s.notice("거래 신청이 만료됐어요. (60초)");
       if (m.op === "decline") return from.notice(`${s.name}님이 거래를 거절했어요.`);
-      if (!inTown(world, s) || !inTown(world, from)) return s.notice("거래는 둘 다 마을에 있을 때만 할 수 있어요.");
+      if (!inTown(world, s) || !inTown(world, from) || s.unit.room !== from.unit.room) return s.notice("거래는 둘 다 같은 마을에 있을 때만 할 수 있어요.");
       if (s.trade || from.trade) return s.notice("둘 중 한 명이 이미 거래 중이에요.");
       const NT = { ver: 1, a: from, b: s, sides: new Map([[from.userId, { uids: [], snaps: [], gold: 0, ready: false, ok: false }], [s.userId, { uids: [], snaps: [], gold: 0, ready: false, ok: false }]]) };
       from.trade = s.trade = NT;
@@ -70,7 +70,7 @@ export function tradeOp(world, s, m) {
   }
   if (!T) return s.notice("거래 중이 아니에요.");
   const me = side(T, s), o = other(T, s);
-  if (!inTown(world, s) || !inTown(world, o)) return endTrade(s, "한 명이 마을을 떠나서 거래가 취소됐어요.");
+  if (!inTown(world, s) || !inTown(world, o) || s.unit.room !== o.unit.room) return endTrade(s, "한 명이 마을을 떠나서 거래가 취소됐어요.");
   switch (m.op) {
     case "set": {
       const requested = m.uids ?? me.uids;

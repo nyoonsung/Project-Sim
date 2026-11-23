@@ -1,6 +1,7 @@
 // 피해·치유·상태이상·위협 계산 (치명타 규칙은 기획서 4장 표 그대로)
 import { CRIT } from "../../shared/constants.js";
 import { defReduction } from "../../shared/stats.js";
+import { PATH_DMG } from "../../shared/classes2.js";
 import { wearOnHit } from "./wear.js";
 
 const DOT_TYPES = new Set(["burn", "poison", "bleed"]);
@@ -40,7 +41,7 @@ export function applyStatus(room, src, t, st, now) {
   if (cur && cur.until > until && !DOT_TYPES.has(type)) return false;
   const sourceAtk = src?.stats?.atk ?? src?.atk ?? 0;
   const sourceClassDamage = src?.team === "p" ? (src.stats?.classDmg ?? 1) : 1;
-  t.status.set(type, { until, v: st.v ?? 0, pow: st.pow ?? 0, src: src?.id ?? 0, srcAtk: sourceAtk * sourceClassDamage, next: now + 1 });
+  t.status.set(type, { until, v: st.v ?? 0, pow: st.pow ?? 0, src: src?.id ?? 0, srcAtk: sourceAtk * sourceClassDamage * (st.pm ?? 1), next: now + 1 });
   room.ev({ e: "st", id: t.id, s: type, d: st.dur });
   return true;
 }
@@ -79,11 +80,13 @@ export function dealDamage(room, src, t, o, now) {
     const ang = Math.atan2(src.y - t.y, src.x - t.x);
     if (angDiff(ang, t.frontGuard.dir) <= (t.frontGuard.arc * Math.PI) / 360) { frontDr = t.frontGuard.dr; room.onFrontGuard?.(t, now); }
   }
-  // 회피
+  // 회피 (무적 시간 포함)
   if (!o.dot && t.team === "p") {
+    if ((t.iframeUntil ?? 0) > now && !o.echo) { room.ev({ e: "miss", id: t.id }); return { dmg: 0, miss: true }; }
     const ev = (t.stats?.evade ?? 0) + buffSum(t, "evade");
     if (ev > 0 && Math.random() < Math.min(0.6, ev)) {
       room.ev({ e: "miss", id: t.id });
+      room.onPlayerEvade?.(t, src, now);
       return { dmg: 0, miss: true };
     }
   }
@@ -108,15 +111,15 @@ export function dealDamage(room, src, t, o, now) {
     }
     if (t.status.has("shock")) mul += 0.08;
     if (t.status.has("groggy")) mul += 0.25;
-    dmg = atk * (o.pow ?? 1) * typeMul * mul * (src.team === "p" ? src.stats.classDmg ?? 1 : 1);
+    dmg = atk * (o.pow ?? 1) * typeMul * mul * (src.team === "p" ? (src.stats.classDmg ?? 1) * (src.stats.cls2 && (o.path || o.p2) ? PATH_DMG[src.stats.cls2] ?? 1 : 1) : 1);
     // 치명타: 직접 공격만 (지속 피해·독·화상 제외)
     if (!o.dot && src.team === "p" && o.crit !== "none") {
-      if (o.crit === "force") { crit = true; dmg *= CRIT.BASE_DAMAGE; }
+      if (o.crit === "force") { crit = true; dmg *= CRIT.BASE_DAMAGE + (o.critDmg ?? 0); }
       else {
         const chance = Math.min(CRIT.CHANCE_CAP, src.stats.crit + buffSum(src, "crit") + (o.critBonus ?? 0));
         if (Math.random() < chance) {
           crit = true;
-          dmg *= Math.min(CRIT.DAMAGE_CAP, src.stats.critDmg + buffSum(src, "critDmg") + (src.abyss?.has("eclipse_focus") ? 0.20 : 0));
+          dmg *= Math.min(CRIT.DAMAGE_CAP + 0.5, Math.min(CRIT.DAMAGE_CAP, src.stats.critDmg + buffSum(src, "critDmg") + (src.abyss?.has("eclipse_focus") ? 0.20 : 0)) + (o.critDmg ?? 0));
         }
       }
     }
@@ -139,6 +142,8 @@ export function dealDamage(room, src, t, o, now) {
     dmg *= 1 - Math.min(0.6, dr);
     dmg *= 1 - frontDr;
   }
+  // 2차 전직 방어 효과 (장막·호흡·받아치기·유예·피해 분담)
+  if (t.team === "p" && room.onPlayerHurt) dmg = room.onPlayerHurt(t, src, dmg, o, now);
   if (o.capPct && t.boss) dmg = Math.min(dmg, t.maxHp * o.capPct * 0.1);
   if (o.capPct && !t.boss) dmg = Math.min(dmg, t.maxHp * o.capPct + 1);
   dmg = Math.max(1, Math.round(dmg));

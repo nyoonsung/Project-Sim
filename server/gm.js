@@ -92,7 +92,7 @@ export async function handleGm(req, res, path, { readJson, send, isAdmin, ip, ur
     }
     case "give": {
       const rarity = RARITIES.includes(b.rarity) ? b.rarity : "일반";
-      const ilvl = int(b.ilvl, 1, 100) ? b.ilvl : 1;
+      const ilvl = int(b.ilvl, 1, 250) ? b.ilvl : 1;
       let made = null;
       const ok = world.gmApplyChar(id, (c) => {
         if (c.inv.length >= INV_SIZE) return;
@@ -217,8 +217,9 @@ export async function handleGm(req, res, path, { readJson, send, isAdmin, ip, ur
       return send(res, 200, { ok });
     }
     case "warp": {
-      const dg = b.dungeon === 2 ? 2 : 1;
-      if (!int(b.floor, 1, dg === 2 ? 30 : 100)) return send(res, 400, { error: dg === 2 ? "제2 던전은 1~30층이에요." : "층은 1~100이에요." });
+      const dg = [1, 2, 3, 4].includes(b.dungeon) ? b.dungeon : 1;
+      const maxF = dg === 2 || dg === 4 ? 30 : 100;
+      if (!int(b.floor, 1, maxF)) return send(res, 400, { error: `이 던전은 1~${maxF}층이에요.` });
       const ok = world.gmWarp(id, b.floor, dg);
       audit("warp", target, { floor: b.floor, dungeon: dg });
       return send(res, ok ? 200 : 400, ok ? { ok: true } : { error: "접속 중인 플레이어만 이동시킬 수 있어요." });

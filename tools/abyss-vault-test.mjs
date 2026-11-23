@@ -36,8 +36,10 @@ for (const [slot, type, variant] of comparable) {
 }
 const cappedMythic = makeItem({ slot: "weapon", type: "sword", rarity: "신화", ilvl: 150 });
 const highAbyss = makeItem({ slot: "weapon", type: "sword", rarity: "심연", ilvl: 150 });
-assert.equal(cappedMythic.ilvl, 100, "ordinary/Mythic item creation retains the existing level cap");
+// 2차 업데이트: 신화·심연 모두 같은 성장 곡선으로 250까지 (베르단 장비도 151~250)
+assert.equal(cappedMythic.ilvl, 150, "Mythic item creation supports levels above 100 after the 2nd update");
 assert.equal(highAbyss.ilvl, 150, "Abyss item creation supports the character level cap");
+assert.equal(makeItem({ slot: "weapon", type: "sword", rarity: "신화", ilvl: 400 }).ilvl, 250, "item level is capped at 250");
 
 const random = rng();
 const names = new Map();

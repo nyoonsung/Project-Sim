@@ -882,3 +882,10 @@ body:not(.touch) #skillbar .slot.empty::before { display: none; }
 .cell.r-심연 { border-color: #70f4e8 !important; box-shadow: 0 0 9px #70f4e855, inset 0 0 9px #70f4e822; }
 .cell.r-심연.mat-cell { background: linear-gradient(145deg, #70f4e81c, transparent 58%), radial-gradient(circle at 50% 42%, #123338, #090f14); }
 @media (prefers-reduced-motion: reduce) { body:not(.touch) #skillbar .slot { transition: none; } }
+
+/* 2차 업데이트: 베르단 수식어·공방 */
+#tooltip .tt-vmod { color: #7af0d8; }
+.forge-mods { display: flex; flex-wrap: wrap; gap: 4px; }
+.class-cards .cc.locked { opacity: 0.55; }
+.note.warn { color: #ffb070; }
+.grade-2차 { color: #5af0d0; text-shadow: 0 0 6px #5af0d044; }

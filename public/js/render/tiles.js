@@ -50,6 +50,8 @@ export class TileMap {
     this.tiles = Uint8Array.from(atob(map.tiles), (c) => c.charCodeAt(0));
     this.zone = zone;
     this.town = map.kind === "town";
+    // 베르단 섬 마을: 서늘한 청록빛 풀과 회청색 돌길
+    this.tint = map.island === "verdan" ? { m: "#b8dcd4", s: "#0c1a24", sat: 0.8 } : null;
     this.chunks = new Map();
     this.doorsOpen = map.doorsOpen;
     this.decos = (map.objects ?? []).filter((o) => o.kind === "deco");
@@ -196,7 +198,7 @@ export class TileMap {
   drawTownTile(g, t, x, y, px, py, r, below, above) {
     // 마을 땅: 풀(밝은 연두) · 흙길 · 돌 광장(0x72 석판에 따뜻한 색) · 물. 건물 밑 벽칸은 주변 땅으로 칠한다(그림이 덮음)
     const P = TOWN;
-    const put = (name, tint = null) => { const c = frame(name, tint); if (c) { g.drawImage(c, px, py, TILE, TILE); return true; } return false; };
+    const put = (name, tint = this.tint) => { const c = frame(name, tint); if (c) { g.drawImage(c, px, py, TILE, TILE); return true; } return false; };
     const ground = (tt) => {
       if (tt === T.PLAZA) { cobble(g, x, y, px, py); return; }
       if (tt === T.PATH) { if (!put("t:dirt" + Math.floor(hash(x, y, 4) * 4))) { g.fillStyle = P.path[0]; g.fillRect(px, py, TILE, TILE); } return; }

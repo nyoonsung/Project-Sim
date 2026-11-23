@@ -83,7 +83,7 @@ async function openPlayer(id) {
   const msg = h("div");
   const act = (path, body, after) => async () => { try { const r = await api(`/api/gm/player/${id}/${path}`, body()); flash(msg, true, r.tempPassword ? `임시 비밀번호: ${r.tempPassword}  (플레이어에게 알려 주세요)` : "완료했어요." + (r.item ? ` (${r.item.name})` : "")); if (r.tempPassword) return; after?.(); setTimeout(() => openPlayer(id), 400); } catch (e) { flash(msg, false, e.message); } };
   const field = (lbl, el) => [h("span", { text: lbl }), el];
-  const lv = h("input", { type: "number", min: 1, max: 150, value: c?.level ?? 1 });
+  const lv = h("input", { type: "number", min: 1, max: 250, value: c?.level ?? 1 });
   const gold = h("input", { type: "number", min: 0, step: 1, value: c?.gold ?? 0 });
   const pts = h("input", { type: "number", min: 0, step: 1, value: c?.unspent ?? 0 });
   const cp = h("select", {}, ...[1, 11, 21, 31, 41, 51, 61, 71, 81, 91].map((f) => h("option", { value: f, selected: c?.checkpoint === f }, `${f}층`)));
@@ -93,13 +93,13 @@ async function openPlayer(id) {
   const titleT = h("input", { type: "text", maxlength: 16, placeholder: "예: 던전의 정복자" });
   const titleD = h("select", { onchange: () => { if (titleD.value) titleT.value = titleD.value; } }, h("option", { value: "" }, "디자인 없음(글자)"), ...Object.keys(TITLE_DESIGNS).map((k) => h("option", { value: k }, `🎨 ${k}`)));
   const titleC = { v: TITLE_COLORS[0] };
-  const ilvl = h("input", { type: "number", min: 1, max: 100, value: Math.max(1, c?.best || 1) });
+  const ilvl = h("input", { type: "number", min: 1, max: 250, value: Math.max(1, c?.best || 1) });
   const slot = h("select", {}, h("option", { value: "" }, "무작위"), ...Object.entries(SLOT_NAME).map(([k, v]) => h("option", { value: k }, v)));
   const banH = h("input", { type: "number", min: 0, value: 24 });
   const banR = h("input", { maxlength: 200, placeholder: "사유" });
   const muteM = h("input", { type: "number", min: 0, value: 30 });
   const warpF = h("input", { type: "number", min: 1, max: 100, value: c?.checkpoint ?? 1 });
-  const warpD = h("select", {}, h("option", { value: 1 }, "제1 던전"), h("option", { value: 2 }, "제2 던전 (1~30)"));
+  const warpD = h("select", {}, h("option", { value: 1 }, "에르덴 제1 던전"), h("option", { value: 2 }, "에르덴 제2 던전 (1~30)"), h("option", { value: 3 }, "베르단 제1 던전 (1~100)"), h("option", { value: 4 }, "베르단 제2 던전 (1~30)"));
   const itemCell = (it, where) => {
     const cv = document.createElement("canvas"); cv.width = 18; cv.height = 18; cv.getContext("2d").drawImage(itemIcon(it), 0, 0);
     const el = h("div", { class: "cell r-" + it.rarity }, cv, it.enh ? h("span", { class: "enh", text: "+" + it.enh }) : null);
@@ -141,7 +141,7 @@ async function openPlayer(id) {
       ),
       h("div", {},
         c ? h("div", { class: "box" }, h("h3", { text: `${c.name} · Lv.${c.level} ${CLASS_INFO[c.cls]?.name}` }),
-          h("div", { class: "note", text: `경험치 ${c.xp} · 골드 ${c.gold.toLocaleString()} · 제1 던전 최고 ${c.best ?? 0}층 · 제2 던전 최고 ${c.best2 ?? 0}층 · 체크포인트 ${c.checkpoint}층 · 처치 ${c.kills} · 쓰러짐 ${c.deaths} · 플레이 ${fmtDur(c.playtime)}${c.cleared ? " · 🏆 정복" : ""}` }),
+          h("div", { class: "note", text: `경험치 ${c.xp} · 골드 ${c.gold.toLocaleString()} · 제1 던전 최고 ${c.best ?? 0}층 · 제2 던전 최고 ${c.best2 ?? 0}층 · 베르단 ${c.best3 ?? 0}층 · 지하왕릉 ${c.best4 ?? 0}층${c.cls2 ? " · 2차 " + c.cls2 : ""}${c.verdanPass ? " · ⛵입도" : ""} · 체크포인트 ${c.checkpoint}층 · 처치 ${c.kills} · 쓰러짐 ${c.deaths} · 플레이 ${fmtDur(c.playtime)}${c.cleared ? " · 🏆 정복" : ""}` }),
           h("div", { class: "note", text: "스탯: " + JSON.stringify(c.stats) + ` · 남은 ${c.unspent}` }),
           h("div", { class: "note", text: "스킬: " + c.skills.filter(Boolean).join(", ") }),
           h("h4", { text: "장착" }), h("div", { class: "items" }, ...Object.values(c.equip).filter(Boolean).map((it) => itemCell(it, "장착"))),

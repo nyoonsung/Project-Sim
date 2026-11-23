@@ -30,7 +30,8 @@ import { FxLayer, loadFx, preloadFx, baked_, bakedFrame, orient, prebake } from 
 
 const now = () => performance.now() / 1000;
 const GROUND_FX = new Set(["holy/heal-aoe", "nature/toxic-puddle", "nature/poison-cloud", "arcane/rune-circle", "arcane/magic-circle-cast", "shadow/hex-sigil", "fire/fire-ring", "nature/quake", "impacts/ground-slam", "scifi/laser-grid", "nature/root-snare", "holy/sunburst", "shadow/black-hole", "arcane/portal", "fire/campfire", "shadow/shadow-flames"]);
-const STATUS_FX = { burn: "status/burning", poison: "status/poisoned", freeze: "status/frozen", stun: "status/stunned", down: "status/stunned", slow: "status/slowed", shock: "lightning/electrified", weaken: "status/cursed", bleed: "status/bleeding", groggy: "status/stunned", root: "nature/root-snare", vitalmark: "shadow/hex-sigil", huntmark: "shadow/hex-sigil", blind: "status/confused" };
+const STATUS_FX = { burn: "status/burning", poison: "status/poisoned", freeze: "status/frozen", stun: "status/stunned", down: "status/stunned", slow: "status/slowed", shock: "lightning/electrified", weaken: "status/cursed", bleed: "status/bleeding", groggy: "status/stunned", root: "nature/root-snare", vitalmark: "shadow/hex-sigil", huntmark: "shadow/hex-sigil", blind: "status/confused",
+  curse: "status/cursed", mark2: "shadow/hex-sigil", judged: "shadow/hex-sigil", judgebrand: "holy/halo", hawk: "shadow/hex-sigil", elemmark: "arcane/rune-circle" };
 
 // NPC 생김새
 const NPC_LOOK = {
@@ -231,7 +232,8 @@ export class Renderer {
         if (sm) { if (sm.look.critter) ids.push(sm.look.critter); if (sm.proj) ids.push(sm.proj); if (sm.aoe) ids.push(sm.aoe); }
       }
       // 제2 던전 전용 행동·보스 페이즈 이펙트 (순간이동·소환문·분노 등)
-      if (G.dungeon === 2) ids.push("spawn/spawn-portal", "status/rage", "shadow/void-orb", "shadow/shadow-flames", "shadow/dark-explosion", "impacts/ground-slam", "arcane/blink-in", "arcane/blink-out", "nature/spore-burst", "explosions/small-explosion");
+      if (G.dungeon >= 3) ids.push("explosions/dirt-explosion", "ice/frost-nova", "ice/ice-shatter", "water/wave-crash", "nature/root-snare", "nature/boulder", "lightning/lightning-strike", "arcane/time-stop", "fire/fire-ring", "fire/meteor", "arcane/rune-circle", "spawn/soul-rise", "shadow/eclipse");
+      if (G.dungeon >= 2) ids.push("spawn/spawn-portal", "status/rage", "shadow/void-orb", "shadow/shadow-flames", "shadow/dark-explosion", "impacts/ground-slam", "arcane/blink-in", "arcane/blink-out", "nature/spore-burst", "explosions/small-explosion");
       for (const b of [z.mid, z.boss]) { const d = BOSSES[b]; if (d.look.critter) ids.push(d.look.critter); for (const p of d.patterns) if (p.fx) ids.push(p.fx); }
       if (G.mapKind === "boss" || G.floor % 5 === 0) ids.push("impacts/ground-slam", "melee/spear-sweep", "lightning/zap-hit", "arcane/arcane-orb", "shadow/dark-explosion"); // 공용 고급 보스 패턴
       if (z.weather) ids.push(z.weather);
@@ -370,6 +372,7 @@ export class Renderer {
       }
       ctx.globalAlpha = 1;
     }
+    this.drawDarkness(ctx, cx, cy, t);
     this.drawTelsOver(ctx, cx, cy, t);
     if (G.titleMarks) G.titleMarks.length = 0; else G.titleMarks = [];
     this.drawOverhead(ctx, cx, cy, t);
@@ -458,9 +461,10 @@ export class Renderer {
     for (const s of G.tels.values()) {
       const k = Math.min(1, (t - s.t0) / Math.max(0.05, s.d));
       const ally = s.tm === 1;
-      const edge = ally ? "rgba(120,220,255,0.8)" : "rgba(255,60,60,0.9)";
-      const fill = ally ? "rgba(120,220,255,0.10)" : "rgba(255,40,40,0.22)";
-      const prog = ally ? "rgba(120,220,255,0.18)" : "rgba(255,70,40,0.42)";
+      // 잔상 재생(gh 1)은 보랏빛, 반복 예고(gh 2)는 주황빛으로 구분
+      const edge = ally ? "rgba(120,220,255,0.8)" : s.gh === 1 ? "rgba(200,120,255,0.9)" : s.gh === 2 ? "rgba(255,170,60,0.9)" : "rgba(255,60,60,0.9)";
+      const fill = ally ? "rgba(120,220,255,0.10)" : s.gh === 1 ? "rgba(160,80,255,0.2)" : s.gh === 2 ? "rgba(255,150,40,0.2)" : "rgba(255,40,40,0.22)";
+      const prog = ally ? "rgba(120,220,255,0.18)" : s.gh === 1 ? "rgba(180,100,255,0.4)" : s.gh === 2 ? "rgba(255,160,50,0.4)" : "rgba(255,70,40,0.42)";
       const x = s.x - cx, y = s.y - cy;
       ctx.lineWidth = 1;
       ctx.strokeStyle = edge;
@@ -484,8 +488,58 @@ export class Renderer {
         ctx.fillStyle = fill; ctx.fillRect(0, -s.w / 2, s.l, s.w); ctx.strokeRect(0, -s.w / 2, s.l, s.w);
         ctx.fillStyle = prog; ctx.fillRect(0, -s.w / 2, s.l * k, s.w);
         ctx.restore();
+      } else if (s.sh === "safe") {
+        // 가짜 안전 지대: 안전 원처럼 보이지만 금 간 붉은 문양
+        ctx.setLineDash([4, 4]); ctx.strokeStyle = "rgba(120,255,140,0.8)";
+        ctx.beginPath(); ctx.ellipse(x, y, s.r, s.r * 0.75, 0, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]);
+      } else if (s.sh === "flood") {
+        // 수위: 투기장 전체가 물빛으로 차오르고, 발판(원)만 비어 있음
+        const W = s.l, H = s.w;
+        ctx.save();
+        ctx.beginPath(); ctx.rect(x, y, W, H);
+        for (const [px, py, pr] of s.pts ?? []) { ctx.moveTo(px - cx + pr, py - cy); ctx.ellipse(px - cx, py - cy, pr, pr * 0.75, 0, 0, Math.PI * 2, true); }
+        ctx.fillStyle = `rgba(40,140,255,${0.12 + 0.22 * k})`; ctx.fill("evenodd");
+        ctx.restore();
+        ctx.strokeStyle = "rgba(160,255,220,0.95)"; ctx.setLineDash([5, 3]);
+        for (const [px, py, pr] of s.pts ?? []) { ctx.beginPath(); ctx.ellipse(px - cx, py - cy, pr, pr * 0.75, 0, 0, Math.PI * 2); ctx.stroke(); }
+        ctx.setLineDash([]);
       }
+      if (s.g) this.drawGlyph(ctx, x, y, s.g, t, s.r);
     }
+  }
+  /** 안전 지대 바닥 문양: 1 진짜(금빛 별 문양) · 2 가짜(금 간 붉은 문양) */
+  drawGlyph(ctx, x, y, g, t, r = 50) {
+    const s = Math.max(10, Math.min(26, r * 0.4));
+    ctx.save(); ctx.translate(x, y); ctx.scale(1, 0.75);
+    if (g === 1) {
+      ctx.strokeStyle = `rgba(255,220,90,${0.75 + Math.sin(t * 6) * 0.2})`; ctx.lineWidth = 2;
+      ctx.beginPath(); for (let i = 0; i < 5; i++) { const a = -Math.PI / 2 + (i * 4 * Math.PI) / 5; ctx[i ? "lineTo" : "moveTo"](Math.cos(a) * s, Math.sin(a) * s); } ctx.closePath(); ctx.stroke();
+      ctx.beginPath(); ctx.arc(0, 0, s * 1.25, 0, Math.PI * 2); ctx.stroke();
+    } else {
+      ctx.strokeStyle = "rgba(255,70,70,0.85)"; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(0, 0, s, 0, Math.PI * 2); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(-s, -s * 0.2); ctx.lineTo(-s * 0.2, s * 0.3); ctx.lineTo(s * 0.3, -s * 0.4); ctx.lineTo(s, s * 0.2); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(-s * 0.4, -s); ctx.lineTo(0, -s * 0.1); ctx.lineTo(s * 0.2, s); ctx.stroke();
+    }
+    ctx.restore(); ctx.lineWidth = 1;
+  }
+  /** 시야 제한(90층 보스): 내 주변만 보이고 나머지는 어둠. 예고 테두리는 그 위에 다시 그려져 보인다 */
+  drawDarkness(ctx, cx, cy, t) {
+    const D = G.dark;
+    if (!D) return;
+    if (t > D.until) { G.dark = null; return; }
+    const me = G.ents.get(G.you);
+    if (!me) return;
+    const fade = Math.min(1, (t - D.t0) / 0.4, (D.until - t) / 0.4);
+    const x = me.rx - cx, y = me.ry - cy - 12, r = D.r;
+    const gr = ctx.createRadialGradient(x, y, r * 0.45, x, y, r);
+    gr.addColorStop(0, "rgba(0,0,0,0)"); gr.addColorStop(1, `rgba(2,0,8,${0.94 * fade})`);
+    ctx.fillStyle = gr; ctx.fillRect(0, 0, VW, VH);
+    ctx.fillStyle = `rgba(2,0,8,${0.94 * fade})`;
+    ctx.fillRect(0, 0, VW, Math.max(0, y - r)); ctx.fillRect(0, y + r, VW, VH);
+    ctx.fillRect(0, Math.max(0, y - r), Math.max(0, x - r), r * 2); ctx.fillRect(x + r, Math.max(0, y - r), VW, r * 2);
+    // 보스 실루엣은 희미하게
+    if (G.boss) { const b = G.ents.get(G.boss.id ?? G.boss); if (b) { ctx.fillStyle = "rgba(200,80,255,0.25)"; ctx.beginPath(); ctx.ellipse(b.rx - cx, b.ry - cy - 20, 22, 30, 0, 0, Math.PI * 2); ctx.fill(); } }
   }
 
   /** 보스·몬스터 공격 예고를 어둠·이펙트 위에 한 번 더: 굵은 테두리(곧 터지면 깜빡임), 화면 밖 예고는 가장자리 화살표, 보스 패턴 이름 */
@@ -506,6 +560,8 @@ export class Renderer {
       else if (s.sh === "ring") { ctx.beginPath(); ctx.ellipse(x, y, s.r2, s.r2 * 0.75, 0, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([4, 4]); ctx.strokeStyle = "rgba(120,255,140,0.9)"; ctx.beginPath(); ctx.ellipse(x, y, s.r, s.r * 0.75, 0, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]); }
       else if (s.sh === "cone") { const half = (s.arc * Math.PI) / 360; ctx.save(); ctx.translate(x, y); ctx.scale(1, 0.75); ctx.beginPath(); ctx.moveTo(0, 0); ctx.arc(0, 0, s.r, s.a - half, s.a + half); ctx.closePath(); ctx.restore(); ctx.stroke(); }
       else if (s.sh === "r") { ctx.save(); ctx.translate(x, y); ctx.rotate(s.a); ctx.strokeRect(0, -s.w / 2, s.l, s.w); ctx.restore(); }
+      else if (s.sh === "flood") { for (const [px, py, pr] of s.pts ?? []) { ctx.strokeStyle = "rgba(160,255,220,0.95)"; ctx.beginPath(); ctx.ellipse(px - cx, py - cy, pr, pr * 0.75, 0, 0, Math.PI * 2); ctx.stroke(); } }
+      if (s.g) this.drawGlyph(ctx, x, y, s.g, t, s.r);
     }
     // 보스 광선: 돌아갈 범위(부채꼴)를 미리 보여 줌
     for (const b of G.beams) {
@@ -616,10 +672,10 @@ export class Renderer {
       }
       case "portal": {
         const locked = o.id === "exit" && !G.exitOpen;
-        const pal = o.color === "town" ? ["#062010", "#0e4a1e", "#1f8a34", "#4fd060", "#b0ff9a", "#f0fff0"] : o.id === "safe" || o.id === "victory" ? ["#201808", "#806018", "#d0a830", "#ffe080", "#fff8d0", "#ffffff"] : o.color === "dungeon2" ? ["#140410", "#50102e", "#b02060", "#ff5a9a", "#ffd0e8", "#ffffff"] : null;
+        const pal = o.color === "town" ? ["#062010", "#0e4a1e", "#1f8a34", "#4fd060", "#b0ff9a", "#f0fff0"] : o.id === "safe" || o.id === "victory" ? ["#201808", "#806018", "#d0a830", "#ffe080", "#fff8d0", "#ffffff"] : o.color === "dungeon2" ? ["#140410", "#50102e", "#b02060", "#ff5a9a", "#ffd0e8", "#ffffff"] : o.color === "dungeon3" ? ["#041420", "#0e3a5a", "#2080c0", "#6ad8ff", "#d8f4ff", "#ffffff"] : o.color === "dungeon4" ? ["#181004", "#4a3410", "#a07a20", "#ffd860", "#fff4c0", "#ffffff"] : null;
         const b = baked_("arcane/portal", pal);
         const f = bakedFrame(b, t);
-        if (!locked) addGlow(o.x, o.y - 20, 120, pal ? (o.color === "town" ? "#6aff7a" : o.color === "dungeon2" ? "#ff4a8a" : "#ffd35a") : "#b07aff", 0.5, o);
+        if (!locked) addGlow(o.x, o.y - 20, 120, pal ? (o.color === "town" ? "#6aff7a" : o.color === "dungeon2" ? "#ff4a8a" : o.color === "dungeon3" ? "#5ad0ff" : o.color === "dungeon4" ? "#ffd35a" : "#ffd35a") : "#b07aff", 0.5, o);
         if (f) { ctx.globalAlpha = locked ? 0.25 : 1; const s = 0.55; ctx.drawImage(f, Math.round(x - b.ox * s), Math.round(y - b.oy * s), Math.round(b.w * s), Math.round(b.h * s)); ctx.globalAlpha = 1; }
         if (o.label || locked) this.label(ctx, locked ? "출구 (몬스터를 모두 처치하면 열림)" : o.label, x, y - 44, locked ? "#888" : "#ffe08a");
         break;
@@ -806,6 +862,27 @@ export class Renderer {
       ctx.fillStyle = "#3a2410"; ctx.fillRect(gx - dir * 10 - 2, gy - 38, 4, 1); ctx.fillRect(gx - dir * 10 + 1, gy - 37, 1, 2); ctx.fillRect(gx - dir * 10, gy - 35, 1, 2);
       if (slam > 0.45 && slam < 0.7) { ctx.fillStyle = "rgba(255,240,200,0.5)"; ctx.fillRect(gx + dir * 14 - 6, gy - 2, 12, 2); }
     } else if (d === "circuit") { /* 빔으로 그림 */ }
+    else if (d === "turret") {
+      // 메카닉 자동 포탑: 삼각대 + 회전 포신
+      const big = e.info.big;
+      this.shadow(ctx, x, y, big ? 14 : 11);
+      ctx.fillStyle = "#2a3a48"; ctx.fillRect(x - 9, y - 4, 3, 6); ctx.fillRect(x + 6, y - 4, 3, 6); ctx.fillRect(x - 1, y - 3, 3, 6);
+      ctx.fillStyle = big ? "#5a8ab8" : "#4a6a88"; ctx.fillRect(x - 8, y - 16, 16, 12);
+      ctx.fillStyle = "#8ad0ff"; ctx.fillRect(x - 3, y - 13, 6, 5);
+      ctx.save(); ctx.translate(x, y - 11); ctx.rotate(e.facing);
+      ctx.fillStyle = "#c8d8e8"; ctx.fillRect(0, -2, big ? 16 : 12, 4);
+      ctx.restore();
+      addGlow(e.rx, e.ry - 12, 36, "#60c8ff", 0.25, "tur" + e.id);
+    } else if (d === "pet") {
+      const skin = e.info.sk ?? "hound";
+      const SK = { hound: ["chort", { m: "#ff9070", s: "#200404" }, 1.6], demon: ["big_demon", { m: "#c070ff", s: "#100018" }, 1.7], wraith: ["necromancer", { m: "#b0a0ff", s: "#06021a" }, 1.6], clone: ["elf_m", { m: "#5a4a70", s: "#000000", sat: 0.3 }, 1.8] }[skin] ?? ["chort", null, 1.6];
+      if (e._gx !== e.x || e._gy !== e.y) { e._gx = e.x; e._gy = e.y; e._gMove = t; }
+      const moving = t - (e._gMove ?? -9) < 0.15;
+      this.shadow(ctx, x, y, skin === "demon" ? 16 : 11);
+      if (skin === "clone") ctx.globalAlpha = 0.6;
+      drawDTFoot(ctx, `${SK[0]}_${moving ? "run" : "idle"}_anim_f${Math.floor(t * (moving ? 9 : 5)) % 4}`, Math.round(x), Math.round(y), { tint: SK[1], scale: SK[2], flip: Math.cos(e.facing) < 0 });
+      ctx.globalAlpha = 1;
+    }
   }
 
   drawProjectiles(ctx, cx, cy, t) {
@@ -861,7 +938,7 @@ export class Renderer {
       if (age > b.d) continue;
       const x0 = b.x0 - cx, y0 = b.y0 - cy - 14, x1 = b.x1 - cx, y1 = b.y1 - cy - 14;
       if (Math.max(x0, x1) < -100 || Math.max(y0, y1) < -100 || Math.min(x0, x1) > VW + 100 || Math.min(y0, y1) > VH + 100) { beams[kept++] = b; continue; }
-      const col = b.fx === "circuit" ? "#ffb040" : "#bfe8ff";
+      const col = b.fx === "circuit" ? "#ffb040" : b.fx === "wind" ? "#70ffd0" : b.fx === "curse" ? "#c070ff" : b.fx === "snipe" ? "#fff0a0" : "#bfe8ff";
       ctx.strokeStyle = col; ctx.lineWidth = b.fx === "circuit" ? 1 : 2;
       ctx.beginPath(); ctx.moveTo(x0, y0);
       const n = 6;

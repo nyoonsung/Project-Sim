@@ -52,7 +52,7 @@ export const CLASS_INFO = {
     name: "권투사", role: "탱커", position: "반격·위협 탱커",
     desc: "반격·방어·위협 관리로 적을 붙잡고, 콤보와 상태이상 연계로 꾸준히 공격.",
     stats: ["str2", "tough", "grit", "crit"],
-    hpMul: 1.4, defMul: 1.35, mpBase: 40, dmgType: "phys", resource: "ki",
+    hpMul: 1.75, defMul: 1.7, mpBase: 40, dmgType: "phys", resource: "ki", // 2차 업데이트 전 조정: 체력 +25%·방어 +26%
     ranks: [...tiers3(["입문 권투사", "정식 권투사"]), "권사", "권성", "권왕"],
     look: { armor: ["#f2c79b", "#d49a6a", "#a8704a", "#6e452c"], core: ["#b8322a", "#86221c", "#561410"], mark: "#ffcc40", weapon: null, head: "band", headColor: "#e33b2e" },
   },
@@ -60,7 +60,7 @@ export const CLASS_INFO = {
     name: "궁수", role: "원거리 딜러", position: "원거리 딜러",
     desc: "활 연사, 약점 저격, 속박. 거리 유지와 지속 화력.",
     stats: ["agi2", "prec", "vit3", "crit"],
-    hpMul: 0.96, defMul: 0.9, mpBase: 90, dmgType: "phys", resource: null,
+    hpMul: 0.96, defMul: 0.9, defFinal: 0.5, mpBase: 90, dmgType: "phys", resource: null, // defFinal: 최종 방어력 50%
     ranks: tiers3(["아처 러너", "아처 유저", "아처 익스퍼트", "아처 마스터"]),
     look: { armor: ["#c3d98a", "#93ad5c", "#667d3c", "#435427"], core: ["#7a5a32", "#5a4024", "#3a2814"], mark: "#e8f080", weapon: "bow", head: "hood", headColor: "#4f6b2c" },
   },
@@ -123,7 +123,10 @@ export function stageBonus(cls, stage) {
 }
 
 /** 레벨업에 필요한 경험치 */
+export const XP_SLOW_LEVEL = 210; // 2차 업데이트: 210레벨부터 레벨업이 더뎌짐
 export function xpToNext(level) {
   // 레벨 ≈ 층 × 0.8 정도로 따라가도록 (층당 경험치 곡선에 맞춤)
-  return Math.round((130 + 12 * level) * Math.pow(1.045, level - 1));
+  const base = Math.round((130 + 12 * level) * Math.pow(1.045, level - 1));
+  // 210레벨부터 레벨마다 필요 경험치가 5%씩 추가로 늘어남 (249레벨에서 약 7배)
+  return level < XP_SLOW_LEVEL ? base : Math.round(base * Math.pow(1.05, level - XP_SLOW_LEVEL + 1));
 }
