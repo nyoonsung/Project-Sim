@@ -8,9 +8,14 @@ import { CLASS_DMG, deriveStats } from "../shared/stats.js";
 import { TICK_DT, SKILL_SLOTS } from "../shared/constants.js";
 import { moveCircle } from "../shared/move.js";
 import { dealDamage } from "../server/game/combat.js";
+import { validateClientMessage } from "../server/net.js";
 
 // 12칸 스킬바·기존 세이브 이전·패시브 자동 적용을 검증한다.
 assert.equal(SKILL_SLOTS, 12, "스킬바는 12칸이어야 한다.");
+assert.equal(validateClientMessage({ t: "cast", slot: 11, ax: 0, ay: 0 }), true, "12번 스킬칸 입력을 허용해야 한다.");
+assert.equal(validateClientMessage({ t: "cast", slot: 12, ax: 0, ay: 0 }), false, "13번 스킬칸 입력은 거부해야 한다.");
+assert.equal(validateClientMessage({ t: "skills", list: Array(SKILL_SLOTS).fill(null) }), true, "12칸 스킬 설정을 허용해야 한다.");
+assert.equal(validateClientMessage({ t: "skills", list: Array(8).fill(null) }), false, "구형 8칸 스킬 설정은 서버 입력으로 받지 않는다.");
 for (const cls of ["sword", "fist", "archer", "rogue", "mage", "priest", "smith"]) {
   const ch = newCharacter("LoadoutTest");
   ch.cls = cls;
