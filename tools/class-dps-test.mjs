@@ -17,10 +17,12 @@ const CRIT_POINTS = 180;
 const DAMAGE_POINTS = 447 - CRIT_POINTS;
 
 
-// 직업 내구도·전용 보너스: 검사 방어, 도적 체력·방어·회피, 마법사 체력·방어·마나·시전, 성직자 전투 내구도.
+// 직업 내구도·전용 보너스: 탱커(권투사·대장장이), 검사 방어, 도적 회피, 마법사·성직자 내구도.
 {
   const expected = {
     sword: { hpMul: 1.32, defMul: 1.35, hpAtLv10: 449, defAtLv10: 36 },
+    fist: { hpMul: 2.1875, defMul: 2.125, hpAtLv10: 744, defAtLv10: 57 },
+    smith: { hpMul: 1.875, defMul: 2.0, hpAtLv10: 701, defAtLv10: 59 },
     rogue: { hpMul: 1.08, defMul: 1.0, hpAtLv10: 367, defAtLv10: 27 },
     mage: { hpMul: 1.18, defMul: 1.05, hpAtLv10: 401, defAtLv10: 28 },
     priest: { hpMul: 1.24, defMul: 1.10, hpAtLv10: 422, defAtLv10: 30 },
@@ -39,7 +41,7 @@ const DAMAGE_POINTS = 447 - CRIT_POINTS;
     }
   }
 }
-console.log("✓ 검사 방어력 / 도적·마법사 전반 능력치 상향");
+console.log("✓ 권투사·대장장이 탱커 내구도 / 검사·도적·마법사·성직자 직업별 능력치 검증");
 
 const BUILDS = [
   {
