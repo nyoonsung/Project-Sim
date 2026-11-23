@@ -891,3 +891,123 @@ body:not(.touch) #skillbar .slot.empty::before { display: none; }
 .class-cards .cc.locked { opacity: 0.55; }
 .note.warn { color: #ffb070; }
 .grade-2차 { color: #5af0d0; text-shadow: 0 0 6px #5af0d044; }
+
+
+/* ── 12칸 스킬바 + 검식 안내 ── */
+body:not(.touch) #skillbar {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  width: max-content;
+  max-width: min(700px, calc(100vw - 20px));
+}
+#sword-seq {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
+  width: min(100%, 520px);
+  padding: 5px 8px;
+  border: 1px solid #5478a6;
+  border-radius: 7px;
+  background: linear-gradient(180deg, #14233bdf, #0b111fe8);
+  box-shadow: inset 0 1px 0 #cce5ff22, 0 2px 7px #0009;
+  color: #e5f1ff;
+  font-size: 10px;
+}
+#sword-seq .seq-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+#sword-seq .seq-head b { color: #a9d4ff; font-size: 11px; }
+#sword-seq .seq-status { color: #f4df9a; text-align: right; }
+#sword-seq .seq-steps { display: flex; gap: 5px; }
+#sword-seq .seq-step {
+  flex: 1;
+  padding: 3px 5px;
+  border: 1px solid #40516a;
+  border-radius: 4px;
+  background: #080d17a8;
+  color: #9aa9bd;
+  text-align: center;
+  white-space: nowrap;
+}
+#sword-seq .seq-step.current {
+  border-color: #ffe08a;
+  background: #493817;
+  color: #fff1c2;
+  box-shadow: 0 0 7px #ffd35a44;
+}
+#sword-seq .seq-step.done {
+  border-color: #68ce9b;
+  background: #123626;
+  color: #b9ffdb;
+}
+.skill-slots {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 6px;
+  width: min(100%, 520px);
+  margin: 6px 0 12px;
+}
+.skill-slots .slot {
+  width: 100%;
+  height: auto;
+  min-width: 0;
+  aspect-ratio: 1;
+}
+.sk.passive-auto {
+  border-style: dashed;
+  border-color: #6f91a0;
+  cursor: help;
+  box-shadow: inset 3px 0 0 #4c8590, inset 0 1px 0 #ffffff14, 0 2px 5px #0005;
+}
+.sk.passive-auto .meta { color: #9fd7d5; }
+.sword-guide {
+  margin: 2px 0 12px;
+  padding: 10px;
+  border: 1px solid #476c9d;
+  border-radius: 7px;
+  background: linear-gradient(145deg, #172a42, #101522 75%);
+  box-shadow: inset 0 1px 0 #ffffff12, 0 3px 10px #0006;
+}
+.sword-guide h3 {
+  margin: 0 0 8px;
+  color: #b9dcff;
+  font-size: 13px;
+}
+.sword-guide-steps { display: grid; gap: 4px; }
+.sword-guide-step {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border: 1px solid #3f5877;
+  border-radius: 5px;
+  background: #080f1c99;
+}
+.sword-guide-step b { min-width: 100px; color: #ffe2a0; }
+.sword-guide-step span { color: #d3e0f0; }
+.sword-guide-arrow { padding-left: 34px; color: #79b6f0; line-height: 1; }
+.sword-guide-note, .sword-guide-passive {
+  margin-top: 7px;
+  padding: 6px 8px;
+  border-left: 2px solid #e4b85f;
+  background: #090e18a8;
+  color: #d0d9e6;
+  font-size: 11px;
+  line-height: 1.45;
+}
+.sword-guide-passive { border-left-color: #74c7b2; }
+@media (max-width: 700px) {
+  .skill-slots { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  #sword-seq { width: min(100%, 420px); }
+  #sword-seq .seq-step { font-size: 9px; padding: 3px 2px; }
+  .sword-guide-step b { min-width: 88px; }
+}
+@media (max-width: 380px) {
+  #sword-seq .seq-head { align-items: flex-start; flex-direction: column; gap: 2px; }
+  #sword-seq .seq-status { text-align: left; }
+}
