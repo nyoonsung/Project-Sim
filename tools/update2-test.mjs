@@ -9,7 +9,7 @@ import { PATHS, TIER_LEVEL, CLASS2_LEVEL, pathsFor } from "../shared/classes2.js
 import { CLASS_INFO, xpToNext } from "../shared/classes.js";
 import { MAX_LEVEL, SKILL_SLOTS } from "../shared/constants.js";
 import { deriveStats, CLASS_DMG } from "../shared/stats.js";
-import { MONSTERS, BOSSES, zoneOf, floorKind, monsterStats, bossStats, DUNGEONS, VERDAN_ZONES, TOMB_ZONES, effLevel, TOMB_BALANCE } from "../shared/zones.js";
+import { MONSTERS, BOSSES, zoneOf, floorKind, monsterStats, bossStats, DUNGEONS, VERDAN_ZONES, TOMB_ZONES, effLevel, TOMB_BALANCE, erdenBossScale } from "../shared/zones.js";
 import { TOMB_BOSS_PATTERN } from "../server/game/ai.js";
 import { rollVerdanItem, VMODS, gearTotals, makeClassRelic, canEquip, craftVerdanItem, VMATS, RARITIES } from "../shared/items.js";
 import { simulate } from "./sim.js";
@@ -122,7 +122,9 @@ assert.ok(avgMob(3, 1) > avgMob(2, 29) * 1.15);
 assert.ok(avgMob(4, 30) < avgMob(3, 99) * 0.4, "왕릉 일반 몬스터 HP는 베르단 제1 던전 후반보다 낮음");
 assert.ok(bossStats("vb_rust_hunter", 5, 1, 3).hp > bossStats("rift_harbinger", 5, 1, 2).hp);
 assert.ok(bossStats("tb_memory_king", 30, 1, 4).hp < bossStats("vb_island_heart", 100, 1, 3).hp * 0.15, "왕릉 최종 보스 HP 대폭 하향");
-assert.ok(bossStats("tb_memory_king", 30, 1, 4).dmg < bossStats("vb_island_heart", 100, 1, 3).dmg * 0.05, "왕릉 최종 보스 공격력 대폭 하향");
+// 베르단 제1 던전 보스 피해 보정(VERDAN_BOSS_DMG) 이전 기준값과 비교
+assert.ok(bossStats("tb_memory_king", 30, 1, 4).dmg < (bossStats("vb_island_heart", 100, 1, 3).dmg / erdenBossScale(100, 3).dmg) * 0.05, "왕릉 최종 보스 공격력 대폭 하향");
+assert.ok(erdenBossScale(10, 3).dmg < 0.25 && erdenBossScale(100, 3).dmg < erdenBossScale(10, 3).dmg && erdenBossScale(50, 3).hp === 1, "베르단 제1 던전 보스 피해 보정");
 assert.equal(effLevel(1, 3), 151); assert.equal(effLevel(100, 3), 250);
 assert.equal(effLevel(1, 4), 191); assert.equal(effLevel(30, 4), 220);
 assert.equal(TOMB_BALANCE.monsterHp, 0.28);

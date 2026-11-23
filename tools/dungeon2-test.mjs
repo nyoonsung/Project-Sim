@@ -54,7 +54,7 @@ ok(true, "제2 던전 체력·공격력 기존 수치 대비 각각 정확히 10
   // 에르덴 보스 완화: 15층 이하는 그대로, 이후 층·제2 던전은 피해·체력이 줄고, 베르단에는 적용되지 않는다
   assert.deepEqual(E(10, 1), { hp: 1, dmg: 1 });
   assert.ok(E(20, 1).dmg < 0.6 && E(100, 1).dmg < E(50, 1).dmg && E(30, 2).dmg < E(1, 2).dmg);
-  assert.deepEqual(E(50, 3), { hp: 1, dmg: 1 }); assert.deepEqual(E(20, 4), { hp: 1, dmg: 1 });
+  assert.equal(E(50, 3).hp, 1); assert.ok(E(50, 3).dmg < 1); assert.deepEqual(E(20, 4), { hp: 1, dmg: 1 }); // 베르단 제1 던전은 피해만 별도 보정, 왕릉은 TOMB_BALANCE
   const d1Boss = bossStats("skeleton_lord", 10, 1, 1);
   assert.equal(d1Boss.hp, Math.round(E(10, 1).hp * avgHp * floorScale(10, 1).hp * 64 * soloHpBoost(10) * 11 * 0.9));
   assert.ok(Math.abs(d1Boss.dmg - E(10, 1).dmg * avgDmg * floorScale(10, 1).dmg * 1.7 * 10) < 1e-7);

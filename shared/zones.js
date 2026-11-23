@@ -289,8 +289,12 @@ const logLerp = (table, x) => {
   }
   return table[table.length - 1][1];
 };
-/** 에르덴 보스 체력·피해 완화 배율 (베르단 던전은 1) */
+// 베르단 제1 던전 보스 피해 보정: 2차 전직 + 신화 장비 기준 보스 한 대가 체력의 3~13배였던 것을
+//  체력의 약 40%(1~30층) → 50%(100층) 수준으로. 체력은 그대로(솔로 기준 처치 수 분).
+export const VERDAN_BOSS_DMG = Object.freeze([[1, 0.19], [30, 0.155], [60, 0.13], [100, 0.105]]);
+/** 에르덴 보스 체력·피해 완화 배율 + 베르단 제1 던전 보스 피해 보정 (왕릉은 TOMB_BALANCE가 따로 맡음) */
 export function erdenBossScale(floor, dungeon = 1) {
+  if (dungeon === 3) return { hp: 1, dmg: logLerp(VERDAN_BOSS_DMG, floor) };
   if (dungeon !== 1 && dungeon !== 2) return { hp: 1, dmg: 1 };
   return { hp: logLerp(ERDEN_BOSS_BALANCE.hp[dungeon], floor), dmg: logLerp(ERDEN_BOSS_BALANCE.dmg[dungeon], floor) };
 }
