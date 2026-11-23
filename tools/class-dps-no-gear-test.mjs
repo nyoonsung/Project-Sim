@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { makeFloor } from "../server/game/dungeon.js";
 import { Room } from "../server/game/room.js";
 import { availableSkills, makePlayerUnit, newCharacter } from "../server/game/player.js";
+import { castSkill } from "../server/game/skills.js";
 import { CLASS_INFO } from "../shared/classes.js";
 import { CLASS2_LEVEL, PATHS, pathsFor } from "../shared/classes2.js";
 import { MAX_LEVEL, SKILL_SLOTS } from "../shared/constants.js";
