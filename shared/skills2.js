@@ -54,7 +54,7 @@ path("swordmaster", "sword", [
   { id: "sg_whirl", name: "회전연참", kind: "active", cd: 5, aim: "self", anim: "spin", cost: { ki: 15 }, motif: "arc",
     desc: "주위를 넓게 두 번 베어 가까운 적에게 피해를 준다. 검식의 2형.", limit: "사거리 안에 적이 모였을 때 효과적이다.",
     fx: { swing: "melee/spin-slash", hit: "impacts/hit-spark", palette: SG_PAL }, steps: [{ do: "circle", radius: 92, pow: 1.7 }, { do: "custom", fn: "delayCircle", delay: 0.22, radius: 92, pow: 1.3 }] },
-  PAS({ id: "sg_parryflow", name: "검격 받아치기", motif: "shield", desc: "공격이 닿기 0.3초 안에 소드마스터 스킬을 썼다면 그 근접·범위 공격을 흘려 피해를 60% 줄이고 최대 HP 6%와 내력 15를 회복한다. (3초마다)", limit: "너무 빠르거나 늦으면 발동하지 않는다. 막기 성공 시에도 회복한다.", passive: { p2: { parryHeal: 0.06 } } }),
+  PAS({ id: "sg_parryflow", name: "검격 받아치기", motif: "shield", desc: "공격이 닿기 0.6초 안에(또는 일섬·검보로 돌진하는 동안) 소드마스터 스킬을 썼다면 그 근접·범위 공격을 흘려 피해를 60% 줄이고 최대 HP 6%와 내력 15를 회복한다. (3초마다)", limit: "너무 빠르거나 늦으면 발동하지 않는다. 막기 성공 시에도 회복한다.", passive: { p2: { parryHeal: 0.06 } } }),
   { id: "sg_rush", name: "쇄도검", kind: "active", cd: 6, aim: "dir", anim: "thrust", cost: { ki: 18 }, motif: "ray",
     desc: "지정한 적 하나를 향해 다섯 번 집중 찌르기를 한다. 일섬과 회전연참 다음에 적중시키면 세 형식의 검식이 완성된다.", limit: "좁은 공격선. 표적과 위치 선정이 중요하다.",
     fx: { swing: "melee/thrust", hit: "impacts/crit-hit", palette: SG_PAL }, steps: [{ do: "melee", range: 74, arc: 28, pow: 0.75, hits: 5, gap: 0.08, max: 1, pen: 0.15 }] },

@@ -934,10 +934,14 @@ function lifesteal(room, u, amount, now) {
   heal(room, u, u, v, now);
   const P2 = p2of(u);
   // 잔혈의 갑주: 채우지 못한 손실 일부를 검은 보호막으로
+  // (예전엔 체력이 가득 찬 채 흡혈해도 1.2초 대기가 소모돼, 정작 다쳤을 때 발동하지 않는 일이 잦았음)
   if (P2.drainShield && now >= (u.icd.get("p2_drainShield") ?? 0)) {
-    u.icd.set("p2_drainShield", now + 1.2);
     const miss = u.maxHp - u.hp;
-    if (miss > 0) giveShield(room, u, Math.min(u.maxHp * 0.2, miss * P2.drainShield), 3, now);
+    if (miss > u.maxHp * 0.01) {
+      u.icd.set("p2_drainShield", now + 1.2);
+      giveShield(room, u, Math.min(u.maxHp * 0.2, miss * P2.drainShield), 3, now);
+      room.ev({ e: "fx", fx: "shadow/dark-aura", x: u.x | 0, y: u.y | 0, s: 0.45, at: u.id });
+    }
   }
   // 황혼의 장막(워록): 흡혈하면 그림자 장막
   if (P2.drainVeil && now >= (u.icd.get("p2_drainVeil") ?? 0)) {
@@ -1192,7 +1196,8 @@ export function playerHurt(room, t, src, dmg, o, now) {
   if (t.buffs.has("kg_sense")) { t.buffs.delete("kg_sense"); dmg *= 1 - (P2.fieldSense ?? 0.4); }
   if (P2.breath && (t.r2 ?? 0) >= 25 && now >= (t.icd.get("p2_breathDr") ?? 0)) { t.icd.set("p2_breathDr", now + 1.2); t.r2 -= 25; dmg *= 1 - P2.breath; t.session.meDirty = true; }
   // 검격 받아치기: 공격이 닿기 직전(0.3초)에 소드마스터 기술을 썼다면 흘림
-  if (P2.parryHeal && src?.team === "m" && now - (t.lastPathCast ?? -9) < 0.3 && now >= (t.icd.get("p2_parryHeal") ?? 0)) {
+  // 0.3초는 너무 빡빡해서 사실상 발동하지 않았음 → 0.6초, 일섬·검보로 돌진하는 동안에도 흘림
+  if (P2.parryHeal && src?.team === "m" && (now - (t.lastPathCast ?? -9) < 0.6 || (t.dash && t.lastPathCast && now - t.lastPathCast < 1)) && now >= (t.icd.get("p2_parryHeal") ?? 0)) {
     t.icd.set("p2_parryHeal", now + 3);
     dmg *= 0.4;
     heal(room, t, t, t.maxHp * P2.parryHeal, now);
