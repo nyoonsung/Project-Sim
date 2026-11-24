@@ -719,7 +719,6 @@ export class Room {
       for (let i = initialLength; i < timers.length; i++) timers[kept++] = timers[i];
       timers.length = kept;
     }
-    if (now >= this.flowAt) { this.updateFlow(); this.flowAt = now + (this.units.size > 24 ? 0.65 : 0.5); }
     if (this.wave) this.tickWaves(now);
     if (this.dungeon === 4 && this.kind === "dungeon") this.tickTomb(now);
     if (this.astra) this.tickAstra(now);
@@ -1210,43 +1209,45 @@ export class Room {
     return out;
   }
   // ── 흐름장(길찾기): 플레이어 타일이 바뀐 경우에만 다시 계산
-  updateFlow() {
+  /** 플레이어까지의 흐름장(BFS 거리). 몬스터가 길을 찾을 때만 필요한 만큼 계산 —
+   *  플레이어가 다른 칸으로 옮겼고 마지막 계산 뒤 0.5초가 지났을 때만 다시 계산 (마을·결투장·몬스터 없는 방은 계산 0) */
+  /** 모든 플레이어의 흐름장을 칸이 바뀐 경우에만 다시 계산 (검사·도구용) */
+  updateFlow() { for (const p of this.players.values()) this.flowOf(p, true); }
+  flowOf(p, force = false) {
+    if (p.dead) return null;
     const { w, h } = this.map, size = w * h, doorsOpen = !!this.map.doorsOpen;
-    for (const p of this.players.values()) {
-      if (p.dead) { this.flow.delete(p.id); this.flowMeta.delete(p.id); continue; }
-      const sx = Math.floor(p.x / TILE), sy = Math.floor(p.y / TILE);
-      if (sx < 0 || sy < 0 || sx >= w || sy >= h) { this.flow.delete(p.id); this.flowMeta.delete(p.id); continue; }
-      const meta = this.flowMeta.get(p.id);
-      if (meta && meta.x === sx && meta.y === sy && meta.doorsOpen === doorsOpen && this.flow.has(p.id)) continue;
-      let buf = this.flowBuffers.get(p.id);
-      if (!buf || buf.dist.length !== size) { buf = { dist: new Int16Array(size), q: new Int32Array(size) }; this.flowBuffers.set(p.id, buf); }
-      const dist = buf.dist, q = buf.q;
-      dist.fill(-1);
-      let qh = 0, qt = 0;
-      if (sx < 0 || sy < 0 || sx >= w || sy >= h) continue;
-      dist[sy * w + sx] = 0;
-      q[qt++] = sy * w + sx;
-      while (qh < qt) {
-        const i = q[qh++], x = i % w, y = (i / w) | 0, d = dist[i];
-        if (d > 250) continue;
-        for (const [dx, dy] of FLOW_DIRS) {
-          const nx = x + dx, ny = y + dy;
-          if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
-          const j = ny * w + nx;
-          if (dist[j] !== -1) continue;
-          const t = tileAt(this.map, nx, ny);
-          if (t === 0 || t === 2 || t === 4 || t === 5 || (t === 3 && !this.map.doorsOpen)) continue;
-          dist[j] = d + 1;
-          q[qt++] = j;
-        }
+    const sx = Math.floor(p.x / TILE), sy = Math.floor(p.y / TILE);
+    if (sx < 0 || sy < 0 || sx >= w || sy >= h) return this.flow.get(p.id) ?? null;
+    const meta = this.flowMeta.get(p.id), have = this.flow.get(p.id);
+    if (have && meta && meta.doorsOpen === doorsOpen && ((meta.x === sx && meta.y === sy) || (!force && this.now < meta.at + 0.5))) return have;
+    let buf = this.flowBuffers.get(p.id);
+    if (!buf || buf.dist.length !== size) { buf = { dist: new Int16Array(size), q: new Int32Array(size) }; this.flowBuffers.set(p.id, buf); }
+    const dist = buf.dist, q = buf.q, tiles = this.map.tiles;
+    dist.fill(-1);
+    let qh = 0, qt = 0;
+    dist[sy * w + sx] = 0;
+    q[qt++] = sy * w + sx;
+    while (qh < qt) {
+      const i = q[qh++], x = i % w, y = (i / w) | 0, d = dist[i];
+      if (d > 250) continue;
+      for (let k = 0; k < 4; k++) {
+        const nx = x + FLOW_DIRS[k][0], ny = y + FLOW_DIRS[k][1];
+        if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
+        const j = ny * w + nx;
+        if (dist[j] !== -1) continue;
+        const t = tiles[j];
+        if (t === 0 || t === 2 || t === 4 || t === 5 || (t === 3 && !doorsOpen)) continue;
+        dist[j] = d + 1;
+        q[qt++] = j;
       }
-      this.flow.set(p.id, dist);
-      this.flowMeta.set(p.id, { x: sx, y: sy, doorsOpen });
     }
+    this.flow.set(p.id, dist);
+    this.flowMeta.set(p.id, { x: sx, y: sy, doorsOpen, at: this.now });
+    return dist;
   }
   /** 대상 플레이어 쪽으로 가는 방향 (흐름장) */
   pathDir(m, target) {
-    const f = this.flow.get(target.id);
+    const f = target.type === "p" ? this.flowOf(target) : null;
     // 몸통 양옆 두 줄 모두 뚫려 있을 때만 직진 (가운데만 보고 직진하다 모서리에 끼던 문제), 오래 못 움직였으면 무조건 길찾기
     // 한 번 끼이면 3초 동안은 길찾기 유지 (예전엔 직진↔길찾기를 왔다 갔다 하며 제자리에 멈춰 있었음)
     if (m.stuckFor > 0.6) m.pathUntil = this.now + 3;

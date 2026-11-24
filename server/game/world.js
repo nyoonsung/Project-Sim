@@ -102,7 +102,9 @@ export class World {
     const STEP = 1000 / TICK_RATE;
     let last = performance.now(), acc = 0, saveAt = Date.now() + 10_000;
     this.emptySince = 0;
-    const id = setInterval(() => {
+    const id = setInterval(() => { try { step(); } catch (e) { console.error("loop error", e); } }, STEP / 2);
+    // 한 틱에서 예외가 나도 루프·서버가 멈추지 않게 (Cloudflare는 처리 안 된 예외가 나면 서버를 통째로 재시작 → 모두 끊김)
+    const step = () => {
       const n = performance.now();
       acc += n - last; last = n;
       if (acc > STEP * 5) acc = STEP * 2; // 너무 밀리면(일시 정지 등) 버림
@@ -113,7 +115,7 @@ export class World {
       if (this.sessions.size) this.emptySince = 0;
       else if (!this.emptySince) this.emptySince = Date.now();
       else if (Date.now() - this.emptySince > 60_000) { clearInterval(id); this.loop = null; }
-    }, STEP / 2);
+    };
     id.unref?.();
     this.loop = id;
   }
@@ -135,8 +137,8 @@ export class World {
       try { r.tick(); r.flush(); } catch (e) { console.error("room tick", r.id, e); }
     }
     // 30초 넘게 다시 안 들어온 끊긴 플레이어는 정리
-    if (this.tickN = (this.tickN ?? 0) + 1, this.tickN % 20 === 0) for (const s of [...this.sessions.values()]) if (s.linkdead && Date.now() - s.linkdead > 30_000) this.finishClose(s);
-    if (this.tickN % 20 === 10 && this.pvpQueue.size >= 2) this.pvpMatchmake();
+    if (this.tickN = (this.tickN ?? 0) + 1, this.tickN % 20 === 0) for (const s of [...this.sessions.values()]) if (s.linkdead && Date.now() - s.linkdead > 30_000) { try { this.finishClose(s); } catch (e) { console.error("finishClose", e); this.sessions.delete(s.userId); } }
+    if (this.tickN % 20 === 10 && this.pvpQueue.size >= 2) { try { this.pvpMatchmake(); } catch (e) { console.error("matchmake", e); } }
     for (const r of [...this.rooms.values()]) if (!this.isTown(r) && r.players.size === 0 && Date.now() - r.createdAt > 5000) this.rooms.delete(r.id);
     const dt = performance.now() - t0;
     this.tickTimes.push(dt);
@@ -853,7 +855,7 @@ export class World {
 
   // ── 2차 업데이트: 섬 이동 · 2차 전직 · 베르단 공방 · 250 보상
   /** 뱃사공: 세 섬을 잇는 배.
-   *  베르단 첫 입도: 레벨 150 + 심연 등급 아이템 1개 공물(소모). 아스트라엘 첫 입도: 레벨 200 + 베르단 50층 돌파 (공물 없음).
+   *  베르단 첫 입도: 레벨 150 + 심연 등급 아이템 1개 공물(소모). 아스트라엘 첫 입도: 레벨 250 + 베르단 50층 돌파 (공물 없음).
    *  to: erden / verdan / astra / pay(공물 확인). 목적지가 없으면 갈 수 있는 곳을 물어봄 */
   travelBoat(s, to) {
     const c = s.char, room = s.unit.room;

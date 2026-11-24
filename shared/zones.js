@@ -18,7 +18,7 @@ const P = {
   royal: { armor: ["#ffd860", "#d0a030", "#a07018", "#60400a"], core: ["#5a0a1a", "#400612", "#28030a"], mark: "#ff2040" },
 };
 import { VERDAN_MONSTERS, VERDAN_BOSSES, VERDAN_ZONES, TOMB_ZONES } from "./verdan.js";
-import { ASTRA_ZONES, ASTRA_BOSSES, astraOf, astraVerdanZone } from "./astra.js";
+import { ASTRA_ZONES, ASTRA_BOSSES, astraOf, astraVerdanZone, astraRamp } from "./astra.js";
 const rig = (pal, weapon, head = null, headColor = null, scale = 1) => ({ rig: { ...pal, weapon, head, headColor }, scale });
 const critter = (fx, palette, scale = 1) => ({ critter: fx, palette, scale });
 const GREENS = ["#062010", "#0e4a1e", "#1f8a34", "#4fd060", "#b0ff9a", "#f0fff0"];
@@ -304,7 +304,7 @@ export function erdenBossScale(floor, dungeon = 1) {
 }
 export const d2Level = (floor) => 100 + Math.round((floor * 5) / 3);
 /** 그 층의 실제 레벨 (제1 던전은 층 = 레벨, 왕릉은 Lv.191~220) */
-export const effLevel = (floor, dungeon = 1) => (dungeon === 2 ? d2Level(floor) : dungeon === 3 ? 150 + floor : dungeon === 4 ? 190 + floor : dungeon === 5 ? 200 + 4 * astraOf(floor).c : floor);
+export const effLevel = (floor, dungeon = 1) => (dungeon === 2 ? d2Level(floor) : dungeon === 3 ? 150 + floor : dungeon === 4 ? 190 + floor : dungeon === 5 ? 240 + astraOf(floor).c : floor);
 /** 성좌의 시련 층 → 같은 난이도의 베르단 제1 던전 층 (성좌 1: 약 42~50층 → 성좌 12·13: 92~100층) */
 export const astraF3 = (floor) => { const { c, stage } = astraOf(floor); return c >= 13 ? 90 + stage * 2 : astraVerdanZone(c) * 10 + stage * 2; };
 // 베르단 섬 배율: 에르덴 제2 던전 30층을 기준으로 시작해 층마다 성장.
@@ -381,7 +381,7 @@ export const SOLO_HP = 3.5, PARTY_HP = 7.5;
 const hpBoost = (party, floor) => { const max = party > 1 ? PARTY_HP : SOLO_HP; return 1 + (max - 1) * Math.min(1, Math.max(0, (floor - 1) / 9)); };
 /** 층에 맞춘 실제 몬스터 능력치 */
 export function monsterStats(id, floor, party = 1, dungeon = 1) {
-  if (dungeon === 5) return { ...monsterStats(id, astraF3(floor), party, 3), level: effLevel(floor, 5) };
+  if (dungeon === 5) { const r = monsterStats(id, astraF3(floor), party, 3), k = astraRamp(astraOf(floor).c); return { ...r, hp: Math.round(r.hp * k), dmg: r.dmg * k, level: effLevel(floor, 5) }; }
   const def = MONSTERS[id];
   dungeon = normDungeon(dungeon);
   const list = DUNGEONS[dungeon].zones;
@@ -403,8 +403,8 @@ export function bossStats(id, floor, party = 1, dungeon = 1) {
   if (dungeon === 5) {
     const d = BOSSES[id];
     const r = bossStats(d?.astraSrc ?? id, astraF3(floor), party, 3);
-    const big = astraOf(floor).c >= 13 ? 1.3 : 1;
-    return { ...r, hp: Math.round(r.hp * big), level: effLevel(floor, 5) };
+    const c = astraOf(floor).c, big = (c >= 13 ? 1.3 : 1) * astraRamp(c);
+    return { ...r, hp: Math.round(r.hp * big), dmg: r.dmg * astraRamp(c), level: effLevel(floor, 5) };
   }
   const def = BOSSES[id];
   dungeon = normDungeon(dungeon);

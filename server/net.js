@@ -123,6 +123,7 @@ export function attachSocket(sock, user, ip) {
     }
     try { w.onMessage(conn, m); } catch (e) { console.error("message error", e); }
   });
-  sock.onClose(() => w.onClose(conn));
-  w.onOpen(conn);
+  // 접속·종료 처리에서 예외가 나도 서버(Cloudflare 게임 서버 전체)가 재시작되지 않게
+  sock.onClose(() => { try { w.onClose(conn); } catch (e) { console.error("close error", e); } });
+  try { w.onOpen(conn); } catch (e) { console.error("open error", e); conn.close(4500, "error"); }
 }

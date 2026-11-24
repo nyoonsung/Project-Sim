@@ -37,14 +37,14 @@ for (let c = 1; c <= 13; c++) {
     assert.equal(zoneOf(f, 5).astra, CONSTELLATIONS[c - 1].key);
     assert.equal(floorKind(f, 5), st === 5 ? "boss" : "normal");
   }
-  assert.equal(effLevel(trialFloor(c, 1), 5), 200 + 4 * c);
+  assert.equal(effLevel(trialFloor(c, 1), 5), 240 + c);
 }
 assert.equal(floorKind(5), "mid"); assert.equal(floorKind(10), "boss");
 assert.ok(todayConstellation() >= 1 && todayConstellation() <= 12);
 // 난이도: 별자리가 뒤로 갈수록 강해짐 (보스 체력·몬스터 체력)
 const bh = CONSTELLATIONS.map((k) => bossStats("ab_" + k.key, trialFloor(k.id, 5), 1, 5).hp);
-const fixedMid = zoneOf(1, 5).monsters[0];
-const mh = CONSTELLATIONS.map((k) => monsterStats(fixedMid, trialFloor(k.id, 1), 1, 5).hp);
+// 각 시련의 실제 몬스터 평균 (지역마다 몬스터 기준값으로 정규화되므로 그 지역 몬스터로 비교)
+const mh = CONSTELLATIONS.map((k) => { const f = trialFloor(k.id, 1), ms = zoneOf(f, 5).monsters; return ms.reduce((a, id) => a + monsterStats(id, f, 1, 5).hp, 0) / ms.length; });
 for (let i = 1; i < 12; i++) { assert.ok(bh[i] >= bh[i - 1] * 0.98, `보스 체력 순서 ${i}`); assert.ok(mh[i] >= mh[i - 1] * 0.98, `몬스터 체력 순서 ${i}`); }
 assert.ok(bh[12] > bh[11], "열세 번째 수호성이 가장 강함");
 ok("13성좌 데이터 · 5단계 층 구조 · 난이도 순서");
@@ -114,7 +114,7 @@ for (const id of ["boatman3", "observatory", "altar", "shop", "smithy", "enchant
 assert.ok(world.town3.map.objects.some((o) => o.kind === "starchart"));
 assert.ok(world.isTown(world.town3) && world.town3.island === "astra");
 
-const s = mk(7001, 190);
+const s = mk(7001, 240);
 stand(s, world.town, "boatman");
 world.travelBoat(s, "moon");
 const pick = s.packets.at(-1);
@@ -123,7 +123,7 @@ assert.deepEqual(pick.list.map((x) => x.k), ["verdan", "astra"]);
 assert.ok(pick.list.find((x) => x.k === "astra").why, "조건 미달 이유");
 world.travelBoat(s, "astra");
 assert.ok(s.unit.room === world.town, "레벨 부족");
-s.char.level = 205;
+s.char.level = 250;
 world.travelBoat(s, "astra");
 assert.ok(s.unit.room === world.town, "베르단 50층 미돌파");
 s.char.verdanPass = true; s.char.best3 = 50;
@@ -145,7 +145,7 @@ assert.ok(s.unit.room === world.town, "아스트라엘 → 에르덴");
 stand(s, world.town, "boatman");
 world.travelBoat(s, "astra");
 assert.ok(s.unit.room === world.town3);
-ok("뱃사공: 세 섬 왕래 · 아스트라엘 입도 조건 (Lv.200 · 베르단 50층)");
+ok("뱃사공: 세 섬 왕래 · 아스트라엘 입도 조건 (Lv.250 · 베르단 50층)");
 
 // 시련 입장
 world.enterTrial(s, 1);
@@ -353,7 +353,7 @@ ok("열세 번째 별자리: 열두 별 이후 개방 · 칭호 · 축복 4칸")
 
 // 파티 입장: 같은 마을 · 모두 입도
 {
-  const a = mk(7002, 210), b = mk(7003, 210);
+  const a = mk(7002, 250), b = mk(7003, 250);
   for (const x of [a, b]) { x.char.verdanPass = true; x.char.best3 = 60; stand(x, world.town, "boatman"); world.travelBoat(x, "astra"); }
   assert.ok(a.unit.room === world.town3 && b.unit.room === world.town3);
   world.partyOp(a, "invite", b.name); world.partyOp(b, "accept", a.name);
@@ -374,7 +374,7 @@ ok("파티 시련: 모두 입도 · 파티장만 · 함께 입장 · 패배 시 
 
 // 서버 업데이트로 끊긴 뒤 시련으로 복귀
 {
-  const x = mk(7020, 220);
+  const x = mk(7020, 250);
   x.char.verdanPass = true; x.char.best3 = 60; x.char.astra = { pass: true, stars: {}, bless: {}, equip: [], dust: 0, clears: {}, seen: [] };
   world.markResume([x], trialFloor(4, 3), "dungeon", 5);
   assert.ok(world.tryResume(x), "복귀");

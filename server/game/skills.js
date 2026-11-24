@@ -1,5 +1,5 @@
 // 스킬 실행 엔진: shared/skills.js 의 steps 를 서버에서 판정
-import { SKILLS, unlockStage, passivesOf } from "../../shared/skills.js";
+import { SKILLS, unlockStage, passivesOf, passiveIdSet } from "../../shared/skills.js";
 import { wearOnCast } from "./wear.js";
 import { profOf, profLevel, profGain, profPow, profCost, PROF_MAX, isUncapped } from "../../shared/prof.js";
 import { CLASS_INFO, stageOf } from "../../shared/classes.js";
@@ -202,7 +202,7 @@ function gainProf(room, u, sk, now) {
       room.ev({ e: "msg", text: `${u.name}님의 [${sk.name}] 숙련도 Lv.${after.lv}! ${after.lv === 5 ? "이펙트가 강화됐어요!" : unc ? "끝없는 수련!" : "최고 숙련 달성!"}`, kind: after.lv >= PROF_MAX ? "legend" : "info" });
   }
 }
-const hasPassive = (ch, id) => passivesOf(ch).some((sk) => sk.id === id);
+const hasPassive = (ch, id) => passiveIdSet(ch).has(id);
 
 function runSteps(room, u, ctx, steps, i, now) {
   for (; i < steps.length; i++) {

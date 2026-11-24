@@ -1062,6 +1062,16 @@ export class Renderer {
     const bx = icx - (((icx % 2) + 2) % 2), by = icy - (((icy % 2) + 2) % 2);
     const dx = cx - bx, dy = cy - by;
     const L = this.lctx, W = this.light.width, H = this.light.height;
+    // 렉 줄이기: 붐비거나 품질이 높음이 아니면 빛 지도는 두 프레임에 한 번만 새로 그림 (그 사이엔 화면 이동만큼 밀어서 재사용)
+    const crowded = (G.crowdN ?? 0) > 12, lite = preset().name !== "높음" || crowded;
+    this.lightFrame = (this.lightFrame ?? 0) + 1;
+    if (lite && this.lightFrame % 2 && this.lightAt && this.lightAt.kind === G.kind && Math.abs(this.lightAt.bx - bx) < 64 && Math.abs(this.lightAt.by - by) < 64) {
+      ctx.imageSmoothingEnabled = true;
+      ctx.drawImage(this.light, this.lightAt.bx - bx - dx, this.lightAt.by - by - dy, W * 2, H * 2);
+      ctx.imageSmoothingEnabled = false;
+      return;
+    }
+    this.lightAt = { bx, by, kind: G.kind };
     L.globalCompositeOperation = "source-over";
     L.globalAlpha = 1;
     L.clearRect(0, 0, W, H);
@@ -1083,10 +1093,14 @@ export class Renderer {
       L.drawImage(spr, x / 2 - r / 2, y / 2 - r / 2, r, r);
       return true;
     };
-    for (const e of G.ents.values()) {
-      if (holes >= this.maxHoles) break;
-      if (e.k === "p" && !e.dead) hole(e.rx - cx, e.ry - cy - 14, e.id === G.you ? z.light * 1.6 : z.light * 1.1);
-    }
+    // 플레이어 빛: 나 + 가까운 순서로 최대 10명 (사람이 많으면 빛이 겹쳐 차이가 안 나는데 그리기만 무거움)
+    const me = G.ents.get(G.you);
+    if (me && !me.dead) hole(me.rx - cx, me.ry - cy - 14, z.light * 1.6);
+    const ps = this.lightPs ?? (this.lightPs = []);
+    ps.length = 0;
+    for (const e of G.ents.values()) if (e.k === "p" && !e.dead && e !== me) { const x = e.rx - cx, y = e.ry - cy; if (x > -150 && y > -150 && x < VW + 150 && y < VH + 150) ps.push(e); }
+    if (ps.length > 10 && me) ps.sort((a, b) => Math.abs(a.rx - me.rx) + Math.abs(a.ry - me.ry) - Math.abs(b.rx - me.rx) - Math.abs(b.ry - me.ry));
+    for (let i = 0; i < ps.length && i < 10 && holes < this.maxHoles; i++) hole(ps[i].rx - cx, ps[i].ry - cy - 14, z.light * 1.1);
     if (holes < this.maxHoles) for (const o of G.objects) {
       if (o.kind !== "torch" && o.kind !== "campfire") continue;
       const x = o.x - cx, y = o.y - cy;

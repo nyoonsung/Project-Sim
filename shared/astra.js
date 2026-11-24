@@ -1,5 +1,5 @@
 // 3차 대형 업데이트: 세 번째 섬 「아스트라엘」 — 별이 떨어진 섬, 성좌의 시련
-//  · 베르단 섬 뱃사공(또는 에르덴 뱃사공)에게서 건너감: Lv.200 + 베르단 제1 던전 50층 돌파
+//  · 베르단 섬 뱃사공(또는 에르덴 뱃사공)에게서 건너감: Lv.250(만렙) + 베르단 제1 던전 50층 돌파
 //  · 별자리 관측소에서 13성좌 중 하나를 골라 5층짜리 시련(4개 층 + 성좌의 수호성)을 치름. 성좌마다 규칙이 다름
 //  · 처음 밝힌 별 → 그 성좌의 축복(장착 3칸, 별가루로 1~5단계 강화) + 「성좌의 서」 이야기 한 장
 //  · 열두 별을 모두 밝히면 열세 번째 「뱀주인자리」(별을 삼킨 자)가 열림 → 클리어 시 축복 칸 +1, 칭호
@@ -8,7 +8,7 @@ import { VERDAN_ZONES, VERDAN_BOSSES } from "./verdan.js";
 
 export const ASTRA = {
   island: "astra", name: "아스트라엘", town: "아스트라엘 · 별무덤 마을",
-  needLevel: 200, needBest3: 50, stages: 5, count: 13,
+  needLevel: 250, needBest3: 50, stages: 5, count: 13,
   blessSlots: 3, blessSlotsMax: 4, blessMax: 5,
   title: { text: "별을 되찾은 자", color: "#c8a0ff" },
 };
@@ -77,7 +77,10 @@ export const trialFloor = (c, stage = 1) => (c - 1) * 5 + stage;
 export const todayConstellation = (ms = Date.now()) => (Math.floor((ms + 9 * 3600_000) / 86400_000) % 12) + 1;
 
 // 시련 지역: 베르단 섬 후반 지역의 몬스터 구성을 빌려 쓰고(난이도: 베르단 45층 → 100층 상당), 이름·색은 성좌
-export const astraVerdanZone = (c) => Math.min(9, 4 + Math.floor(c / 2)); // 0-기반 베르단 지역 번호
+// 0-기반 베르단 지역 번호: 만렙(250) 입장에 맞춰 베르단 60층대부터 시작, 세 별자리마다 한 지역씩 (10~12번째는 90층대)
+export const astraVerdanZone = (c) => Math.min(9, 6 + Math.floor((c - 1) / 3));
+/** 같은 지역 안에서도 별자리가 뒤일수록 조금씩 더 강하게 (0 · 6 · 12%) */
+export const astraRamp = (c) => (c >= 13 ? 1.15 : 1 + 0.06 * ((c - 1) % 3));
 export const ASTRA_BOSSES = {};
 export const ASTRA_ZONES = CONSTELLATIONS.map((k) => {
   const base = VERDAN_ZONES[astraVerdanZone(k.id)];

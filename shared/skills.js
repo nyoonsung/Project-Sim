@@ -674,11 +674,29 @@ export function unlockStage(skill, stagesInClass) {
   return m.get(skill.id) ?? 1;
 }
 /** 현재 레벨·직업·2차 경로에서 해금된 패시브. 스킬칸 장착과 무관하게 자동 적용한다. */
+/** 직업·2차 직업·레벨이 같으면 결과도 같아서 기억해 둠 (매 틱 여러 번 불려서 무거웠음). 돌려받은 배열은 고치지 말 것 */
+const PASSIVE_CACHE = new Map();
 export function passivesOf(ch) {
   if (!ch || !CLASS_INFO[ch.cls]) return [];
   const level = Math.max(1, Number(ch.level) || 1);
-  const stage = stageOf(ch.cls, level);
-  const stagesInClass = CLASS_INFO[ch.cls].ranks.length;
+  const key = `${ch.cls}|${ch.cls2 ?? ""}|${level}`;
+  let hit = PASSIVE_CACHE.get(key);
+  if (!hit) {
+    if (PASSIVE_CACHE.size > 4000) PASSIVE_CACHE.clear();
+    hit = passivesOfRaw(ch.cls, ch.cls2, level);
+    PASSIVE_CACHE.set(key, hit);
+  }
+  return hit;
+}
+/** 패시브 id 집합 (hasPassive용) */
+export function passiveIdSet(ch) {
+  const list = passivesOf(ch);
+  return (list.ids ??= new Set(list.map((sk) => sk.id)));
+}
+function passivesOfRaw(cls, cls2, level) {
+  const ch = { cls, cls2 };
+  const stage = stageOf(cls, level);
+  const stagesInClass = CLASS_INFO[cls].ranks.length;
   return S.filter((sk) => {
     if (sk.kind !== "passive") return false;
     if (sk.path) return sk.path === ch.cls2 && level >= (TIER_LEVEL[sk.tier] ?? 999);
