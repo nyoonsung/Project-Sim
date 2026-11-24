@@ -7,6 +7,7 @@ import { CLASS_INFO } from "../shared/classes.js";
 import { MAX_LEVEL, ITEMS, TITLE_COLORS, TITLE_MAX } from "../shared/constants.js";
 import { MAX_ENH } from "../shared/items.js";
 import { PATHS, CLASS2_LEVEL } from "../shared/classes2.js";
+import { ASTRA, CONSTELLATIONS, CONST_BY_KEY, newAstraRecord } from "../shared/astra.js";
 import { secureRandom } from "./game/secure.js";
 import { hashPassword } from "./auth.js";
 import { makeMaxAbyssBundle, MAX_ABYSS_BUNDLE_COUNT } from "./gm-items.js";
@@ -173,6 +174,45 @@ export async function handleGm(req, res, path, { readJson, send, isAdmin, ip, ur
       if (why) return send(res, 400, { error: why });
       if (!ok) return send(res, 400, { error: "진행도 수정에 실패했어요." });
       audit("edit_progress", target, { ...patch, ...(b.island !== undefined ? { island: b.island } : {}), ...(b.cls2 !== undefined ? { cls2: b.cls2 } : {}) });
+      return send(res, 200, { ok: true });
+    }
+    // 3차: 아스트라엘 진행도 (입도·밝힌 별·축복 단계·장착·별가루·성좌의 시련 최고 층)
+    case "astra": {
+      const keys = new Set(CONSTELLATIONS.map((k) => k.key));
+      if (b.pass !== undefined && typeof b.pass !== "boolean") return send(res, 400, { error: "입도 값이 잘못됐어요." });
+      if (b.stars !== undefined && (!Array.isArray(b.stars) || b.stars.some((k) => !keys.has(k)))) return send(res, 400, { error: "별자리 값이 잘못됐어요." });
+      if (b.equip !== undefined && (!Array.isArray(b.equip) || b.equip.some((k) => !keys.has(k) || !CONST_BY_KEY[k].bless))) return send(res, 400, { error: "장착 축복 값이 잘못됐어요." });
+      if (b.bless !== undefined && (typeof b.bless !== "object" || Array.isArray(b.bless) || Object.entries(b.bless).some(([k, v]) => !keys.has(k) || !int(v, 1, ASTRA.blessMax)))) return send(res, 400, { error: `축복 단계는 1~${ASTRA.blessMax}이에요.` });
+      if (b.dust !== undefined && !int(b.dust, 0, 999999)) return send(res, 400, { error: "별가루는 0~999999개예요." });
+      if (b.best5 !== undefined && !int(b.best5, 0, 65)) return send(res, 400, { error: "시련 최고 층은 0~65예요." });
+      const ok = world.gmApplyChar(id, (c) => {
+        const a = (c.astra ??= newAstraRecord());
+        if (b.pass !== undefined) {
+          a.pass = b.pass;
+          if (a.pass) c.verdanPass = true;
+          if (!a.pass && c.island === "astra") c.island = c.verdanPass ? "verdan" : "erden";
+        }
+        if (b.stars) {
+          a.stars = Object.fromEntries(b.stars.map((k) => [k, true]));
+          for (const k of Object.keys(a.bless)) if (!a.stars[k]) delete a.bless[k];
+          for (const k of b.stars) if (CONST_BY_KEY[k].bless && !a.bless[k]) a.bless[k] = 1;
+          // 열세 번째 별: 칭호 (없으면 지급)
+          if (a.stars.ophiuchus && !(c.titles ?? []).some((t) => t.text === ASTRA.title.text) && (c.titles?.length ?? 0) < TITLE_MAX) {
+            c.titles ??= [];
+            c.titleSeq = Math.max(c.titleSeq ?? 0, 0, ...c.titles.map((t) => t.id)) + 1;
+            c.titles.push({ id: c.titleSeq, text: ASTRA.title.text, color: ASTRA.title.color, at: Date.now() });
+          }
+        }
+        if (b.bless) for (const [k, v] of Object.entries(b.bless)) if (a.stars[k] && CONST_BY_KEY[k].bless) a.bless[k] = v;
+        if (b.equip) a.equip = [...new Set(b.equip)];
+        a.equip = a.equip.filter((k) => a.stars[k] && CONST_BY_KEY[k].bless).slice(0, a.stars.ophiuchus ? ASTRA.blessSlotsMax : ASTRA.blessSlots);
+        if (b.dust !== undefined) a.dust = b.dust;
+        if (b.best5 !== undefined) c.best5 = b.best5;
+      });
+      if (!ok) return send(res, 400, { error: "아스트라엘 진행도 수정에 실패했어요." });
+      const live = world.sessions.get(id);
+      if (live && b.pass === false && live.unit?.room === world.town3) world.toTown(live, "아스트라엘 입도 권한이 해제돼 다른 섬으로 옮겨졌어요.");
+      audit("edit_astra", target, { pass: b.pass, stars: b.stars?.length, dust: b.dust, best5: b.best5 });
       return send(res, 200, { ok: true });
     }
     case "resources": {

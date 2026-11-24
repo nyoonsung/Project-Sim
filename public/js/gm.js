@@ -6,6 +6,7 @@ import { itemIcon } from "./ui/icons.js";
 import { CLASS_INFO, STATS } from "/shared/classes.js";
 import { MATERIALS, RARITIES, SLOT_NAME, SLOTS, WEAPON_TYPES, OFFHAND_TYPES, ARMOR_NAMES, VARIANT_TRAITS, RARITY_OPTS, OPTIONS, MYTHIC_EFFECTS, MYTHIC_TITLE_LIST, ENCHANTS, MAX_ENH, makeItem, optionMax, VMATS, SIGIL_NAMES } from "/shared/items.js";
 import { PATHS } from "/shared/classes2.js";
+import { ASTRA, CONSTELLATIONS } from "/shared/astra.js";
 import { ITEMS, TITLE_COLORS, INVENTORY_SLOTS } from "/shared/constants.js";
 
 const main = $("#gm-main");
@@ -153,6 +154,33 @@ async function openPlayer(id) {
       ...field("베르단 입도", pass), ...field("현재 섬", island), ...field("2차 전직", cls2)),
     h("div", { class: "note", text: "GM 전용 진행도 조정입니다. 베르단 입도를 완료로 바꾸면 베르단 섬을 이용할 수 있고, 2차 전직은 해당 1차 직업 및 Lv.170 이상이어야 설정할 수 있어요." }),
     h("button", { class: "btn small primary", onclick: act("progress", () => ({ best2: +best2.value, checkpoint2: +cp2.value, cleared2: clear2.value === "true", best3: +best3.value, checkpoint3: +cp3.value, cleared3: clear3.value === "true", best4: +best4.value, checkpoint4: +cp4.value, cleared4: clear4.value === "true", verdanPass: pass.value === "true", island: island.value, cls2: cls2.value })) }, "진행도 저장"));
+  // 3차: 아스트라엘 진행도 (입도 · 별 13개 · 축복 단계·장착 · 별가루 · 시련 최고 층)
+  const A = c?.astra ?? { pass: false, stars: {}, bless: {}, equip: [], dust: 0, clears: {} };
+  const aPass = mkSelect(String(!!A.pass), [["false", "미입도"], ["true", "입도 완료"]]);
+  const aDust = h("input", { type: "number", min: 0, max: 999999, value: A.dust ?? 0 });
+  const aBest = h("input", { type: "number", min: 0, max: 65, value: c?.best5 ?? 0 });
+  const aRows = CONSTELLATIONS.map((k) => {
+    const star = h("input", { type: "checkbox", checked: !!A.stars?.[k.key] });
+    const lvl = k.bless ? h("input", { type: "number", min: 1, max: ASTRA.blessMax, value: A.bless?.[k.key] ?? 1, style: { width: "52px" } }) : null;
+    const eq = k.bless ? h("input", { type: "checkbox", checked: !!A.equip?.includes(k.key) }) : null;
+    return { k, star, lvl, eq };
+  });
+  const aAllOn = (on) => () => { for (const r of aRows) if (!r.k.hidden || on) r.star.checked = on; };
+  const astraBox = h("div", { class: "box" }, h("h3", { text: "아스트라엘 진행도 관리 (3차)" }),
+    h("div", { class: "form" }, ...field("아스트라엘 입도", aPass), ...field("별가루", aDust), ...field("성좌의 시련 최고 층 (0~65)", aBest)),
+    h("table", { class: "gm-astra-table" },
+      h("tr", {}, h("th", { text: "별자리" }), h("th", { text: "별 밝힘" }), h("th", { text: `축복 단계 (1~${ASTRA.blessMax})` }), h("th", { text: "축복 장착" }), h("th", { text: "클리어" })),
+      ...aRows.map((r) => h("tr", {}, h("td", { text: `${r.k.sign} ${r.k.name}${r.k.hidden ? " (숨겨진 13번째)" : ""}` }), h("td", {}, r.star), h("td", {}, r.lvl ?? h("span", { class: "note", text: "축복 없음 · 칭호" })), h("td", {}, r.eq ?? ""), h("td", { text: `${A.clears?.[r.k.key] ?? 0}회` })))),
+    h("div", { class: "row" },
+      h("button", { class: "btn small", onclick: aAllOn(true) }, "13개 모두 밝힘"),
+      h("button", { class: "btn small", onclick: aAllOn(false) }, "모두 끔")),
+    h("div", { class: "note", text: `입도를 완료로 바꾸면 아스트라엘에 갈 수 있어요(레벨 ${ASTRA.needLevel}·베르단 50층 조건 무시). 축복 장착은 최대 ${ASTRA.blessSlots}개(열세 번째 별을 밝히면 ${ASTRA.blessSlotsMax}개)이고, 밝히지 않은 별의 축복은 자동으로 빠져요. 열세 번째 별을 밝히면 칭호 「${ASTRA.title.text}」도 지급돼요.` }),
+    h("button", { class: "btn small primary", onclick: act("astra", () => ({
+      pass: aPass.value === "true", dust: +aDust.value, best5: +aBest.value,
+      stars: aRows.filter((r) => r.star.checked).map((r) => r.k.key),
+      bless: Object.fromEntries(aRows.filter((r) => r.lvl && r.star.checked).map((r) => [r.k.key, Math.max(1, Math.min(ASTRA.blessMax, Math.round(+r.lvl.value) || 1))])),
+      equip: aRows.filter((r) => r.eq?.checked && r.star.checked).map((r) => r.k.key),
+    })) }, "아스트라엘 진행도 저장"));
   const matAdds = Object.fromEntries(VMATS.map((m) => [m.id, h("input", { type: "number", min: 0, max: 999999, value: 0 })]));
   const sigilAdds = Object.fromEntries(SIGIL_NAMES.map((name, i) => [String(i + 1), h("input", { type: "number", min: 0, max: 9999, value: 0 })]));
   const heartAdd = h("input", { type: "number", min: 0, max: 9999, value: 0 });
@@ -219,7 +247,7 @@ async function openPlayer(id) {
       ),
       h("div", {},
         c ? h("div", { class: "box" }, h("h3", { text: `${c.name} · Lv.${c.level} ${CLASS_INFO[c.cls]?.name}` }),
-          h("div", { class: "note", text: `경험치 ${c.xp} · 골드 ${c.gold.toLocaleString()} · 제1 던전 최고 ${c.best ?? 0}층 · 제2 던전 최고 ${c.best2 ?? 0}층 · 베르단 ${c.best3 ?? 0}층 · 지하왕릉 ${c.best4 ?? 0}층${c.cls2 ? " · 2차 " + PATHS[c.cls2]?.name : ""}${c.verdanPass ? " · ⛵입도" : ""} · 체크포인트 ${c.checkpoint}층 · 처치 ${c.kills} · 쓰러짐 ${c.deaths} · 플레이 ${fmtDur(c.playtime)}${c.cleared ? " · 🏆 정복" : ""}` }),
+          h("div", { class: "note", text: `경험치 ${c.xp} · 골드 ${c.gold.toLocaleString()} · 제1 던전 최고 ${c.best ?? 0}층 · 제2 던전 최고 ${c.best2 ?? 0}층 · 베르단 ${c.best3 ?? 0}층 · 지하왕릉 ${c.best4 ?? 0}층${c.astra?.pass ? ` · 🌌 아스트라엘 별 ${Object.keys(c.astra.stars ?? {}).length}/13 · 별가루 ${c.astra.dust ?? 0}` : ""}${c.cls2 ? " · 2차 " + PATHS[c.cls2]?.name : ""}${c.verdanPass ? " · ⛵입도" : ""} · 체크포인트 ${c.checkpoint}층 · 처치 ${c.kills} · 쓰러짐 ${c.deaths} · 플레이 ${fmtDur(c.playtime)}${c.cleared ? " · 🏆 정복" : ""}` }),
           h("div", { class: "note", text: "스탯: " + JSON.stringify(c.stats) + ` · 남은 ${c.unspent}` }),
           h("div", { class: "note", text: "스킬: " + c.skills.filter(Boolean).join(", ") }),
           h("h4", { text: "장착" }), h("div", { class: "items" }, ...Object.values(c.equip).filter(Boolean).map((it) => itemCell(it, "장착"))),
@@ -253,6 +281,7 @@ async function openPlayer(id) {
               h("div", { class: "note", text: "지역 각인: " + SIGIL_NAMES.map((name, i) => `${i + 1}.${c.sigils?.[i + 1] ?? 0}`).join(" · ") + ` · 섬 심장핵 ${c.hearts ?? 0}개` })));
         })() : null,
         c ? progressBox : null,
+        c ? astraBox : null,
         h("div", { class: "box" }, h("h3", { text: "계정" }), h("div", { class: "mono", text: `가입 ${fmtT(u.created_at)} · 최근 접속 ${fmtT(u.last_login)} · IP ${u.last_ip ?? "-"}` })),
         h("div", { class: "box" }, h("h3", { text: "아이템·강화 기록" }), h("table", { class: "tbl" }, ...d.items.map((x) => h("tr", {}, h("td", { text: fmtT(x.at) }), h("td", { text: x.kind }), h("td", { class: "mono", text: x.detail }))))),
         h("div", { class: "box" }, h("h3", { text: "보안 기록" }), h("table", { class: "tbl" }, ...d.security.map((x) => h("tr", {}, h("td", { text: fmtT(x.at) }), h("td", { text: x.kind }), h("td", { class: "mono", text: x.detail ?? "" }))))),

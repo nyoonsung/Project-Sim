@@ -65,3 +65,7 @@ body.gm { overflow: auto; user-select: text; }
 .gm-progress-meta { margin-top: 5px; color: var(--dim); font-size: 10px; }
 .gm-unlock-note { padding: 7px 9px; border-left: 2px solid var(--gold); background: var(--panel2); color: var(--dim); font-size: 11px; }
 .gm-resource-lines { display: grid; gap: 3px; margin-top: 9px; }
+.gm-astra-table { width: 100%; border-collapse: collapse; margin: 8px 0; font-size: 13px; }
+.gm-astra-table th, .gm-astra-table td { padding: 4px 6px; border-bottom: 1px solid #ffffff14; text-align: left; }
+.gm-astra-table th { color: #c8a0ff; font-weight: 600; }
+.gm-astra-table input[type=number] { padding: 3px 6px; background: #0e0c14; border: 1px solid var(--line2); color: var(--text); }
