@@ -91,6 +91,11 @@ export function castSkill(room, u, slot, ax, ay, tx, now, exp) {
   // 자원
   const cost = { ...(sk.cost ?? {}) };
   if (cost.mp && plv) cost.mp = Math.round(cost.mp * (1 - profCost(plv)) * 10) / 10;
+  // 결투장: 고유 자원(내력·성광·부품·틈·2차 자원) 제한 없음 — 필요한 자원을 쓰기 직전에 가득 채워서 언제든 최대 위력으로 사용
+  if (room.kind === "pvp") {
+    for (const k of Object.keys(cost)) if (k !== "mp") u[k] = k === "r2" ? r2Max(u) : RES_MAX[k] ?? u[k];
+    if (sk.steps.some((st) => st.cost != null && st.do === "custom")) u.r2 = Math.max(u.r2 ?? 0, r2Max(u));
+  }
   for (const [k, v] of Object.entries(cost)) {
     const have = u[k] ?? 0;
     if (have < v - 1e-6) {

@@ -360,6 +360,7 @@ export function effCost(sk) {
   const c = { ...(sk.cost ?? {}) };
   const lv = profOf(G.char, sk.id);
   if (c.mp && lv) c.mp = Math.round(c.mp * (1 - profCost(lv)) * 10) / 10;
+  if (G.kind === "pvp") for (const k of Object.keys(c)) if (k !== "mp") delete c[k]; // 결투장: 고유 자원 제한 없음
   return c;
 }
 export function cdLeft(id) {

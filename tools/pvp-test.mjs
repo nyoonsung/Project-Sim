@@ -10,6 +10,7 @@ import { makeItem, CLASS_GEAR } from "../shared/items.js";
 import { sanitizeChar, refreshStats } from "../server/game/player.js";
 import { dealDamage, applyStatus, heal, foe } from "../server/game/combat.js";
 import { pvpChar } from "../server/game/pvp.js";
+import { castSkill } from "../server/game/skills.js";
 import { validateClientMessage } from "../server/net.js";
 import { makeTown, makeVerdanTown, makeArena } from "../server/game/dungeon.js";
 
@@ -217,6 +218,26 @@ ok("상대 판정 · 기절 점감(→면역) · 한 대 상한 · 치유 감소
   }
 }
 ok("라운드 시작 고유 자원 가득");
+// ── 결투장: 고유 자원이 0이어도 스킬 사용 가능
+{
+  const sa = mkSession(world, "smith"), sb = mkSession(world, "sword");
+  const room = world.startPvp(sa, sb, false);
+  for (let i = 0; i < 80 && room.phase !== "fight"; i++) { world.clock += 0.05; room.tick(); room.events.length = 0; }
+  const u = sa.unit, id = "sm_mine";
+  const pc = u.session.char; if (!pc.skills.includes(id)) pc.skills[1] = id;
+  assert.ok(id, "부품을 쓰는 대장장이 스킬이 장착돼 있어야 검사 가능");
+  {
+    u.parts = 0; u.cds.clear(); u.lockUntil = 0;
+    const slot = pc.skills.indexOf(id);
+    castSkill(room, u, slot, u.x + 40, u.y, null, room.now);
+    room.events.length = 0;
+    assert.ok(u.cds.has(id), "부품 0개여도 결투장에서는 부품 스킬 사용");
+  }
+  room.forfeit(sa, "leave");
+  for (let i = 0; i < 100; i++) { world.clock += 0.05; room.tick(); room.events.length = 0; }
+  world.sessions.delete(sa.userId); world.sessions.delete(sb.userId);
+}
+ok("결투장 고유 자원 제한 없음");
 
 // ── 직업 밸런스: 7직업 봇 1대1 (각 조합 6판) — 극단적인 직업이 없어야 함
 {
