@@ -7,11 +7,25 @@ import { addGlow } from "./glow.js";
 
 const S = 2; // 원본 16px → 32px
 const img = (name) => frame("t:" + name);
+// 최적화: 확대한 그림을 미리 만들어 두고 1:1로 찍음 (매 프레임 100번 가까운 확대 그리기 → 단순 복사)
+const scaledCache = new Map();
+function scaledOf(name, c, scale) {
+  const key = name + "@" + scale;
+  let s = scaledCache.get(key);
+  if (s === undefined) {
+    const w = Math.round(c.width * scale), h = Math.round(c.height * scale);
+    if (w * h > 600_000) s = null;
+    else { s = new OffscreenCanvas(w, h); const g = s.getContext("2d"); g.imageSmoothingEnabled = false; g.drawImage(c, 0, 0, w, h); }
+    scaledCache.set(key, s);
+  }
+  return s;
+}
 const draw = (ctx, name, x, y, scale = S) => {
   const c = img(name);
   if (!c) return null;
-  const w = c.width * scale, h = c.height * scale;
-  ctx.drawImage(c, Math.round(x - w / 2), Math.round(y - h), w, h);
+  const sc = scaledOf(name, c, scale);
+  if (sc) ctx.drawImage(sc, Math.round(x - sc.width / 2), Math.round(y - sc.height));
+  else { const w = c.width * scale, h = c.height * scale; ctx.drawImage(c, Math.round(x - w / 2), Math.round(y - h), w, h); }
   return c;
 };
 function shadow(ctx, x, y, rx, ry = rx * 0.35, a = 0.28) {

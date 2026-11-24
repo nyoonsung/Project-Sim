@@ -232,3 +232,60 @@ export function elemOf(sk) {
   return best;
 }
 export const SFX_NAMES = Object.keys(SFX);
+
+// ── 효과음 녹음 재생 (CPU 절약)
+// 처음 몇 번은 실시간 합성, 그동안 뒤에서 같은 소리를 3가지로 녹음해 두고 이후엔 녹음을 재생.
+// 녹음은 [마른 소리, 잔향으로 보낼 소리] 두 채널 → 재생할 때 좌우 위치·잔향은 실시간으로 (공간감 유지)
+// 실시간 합성은 소리 하나에 노드 20~40개, 녹음 재생은 5개.
+const SC = new Map(); let scBytes = 0, scBusy = 0; const scJobs = [];
+const VARIANTS = 3, SFX_RATE = 32000;
+const SFX_LEN = { bosskill: 3.0, level: 2.0, wave: 1.4, item: 1.0, potion: 1.3, holy: 1.4 };
+function scPump() {
+  while (scBusy < 2 && scJobs.length) {
+    const j = scJobs.shift(); scBusy++;
+    let ctx;
+    try {
+      ctx = new OfflineAudioContext(2, Math.ceil(j.len * SFX_RATE), SFX_RATE);
+      const merge = ctx.createChannelMerger(2);
+      const mono = () => { const g = ctx.createGain(); g.channelCount = 1; g.channelCountMode = "explicit"; g.channelInterpretation = "speakers"; return g; };
+      const dry = mono(), wet = mono();
+      dry.connect(merge, 0, 0); wet.connect(merge, 0, 1); merge.connect(ctx.destination);
+      SFX[j.name]({ sfx: dry, sfxVerb: wet }, 0, { ...j.o, pan: 0 }, ...j.a);
+    } catch { scBusy--; j.e.busy = false; continue; }
+    ctx.startRendering().then((buf) => {
+      // 끝의 무음 잘라내기
+      const L = buf.getChannelData(0), R = buf.getChannelData(1);
+      let n = buf.length - 1; while (n > 0 && Math.abs(L[n]) < 2e-4 && Math.abs(R[n]) < 2e-4) n--;
+      n = Math.min(buf.length, n + 64);
+      const out = new AudioBuffer({ length: n, numberOfChannels: 2, sampleRate: SFX_RATE });
+      out.copyToChannel(L.subarray(0, n), 0); out.copyToChannel(R.subarray(0, n), 1);
+      j.e.bufs.push(out); scBytes += n * 8;
+    }).catch(() => {}).finally(() => { scBusy--; j.e.busy = false; scPump(); });
+  }
+}
+let active = 0;
+/** 효과음 재생: 녹음이 있으면 녹음, 없으면 실시간 합성 + 녹음 예약. 동시에 너무 많으면 가벼운 소리부터 생략 */
+export function playSfx(b, name, t, o, a, key) {
+  const light = name === "swing" || name === "hit" || name === "shoot" || name === "coin";
+  if (active > (light ? 14 : 24)) return;
+  let e = SC.get(key);
+  if (!e) { if (scBytes > 24e6 || SC.size > 400) { SC.clear(); scBytes = 0; } SC.set(key, (e = { bufs: [], busy: false })); }
+  if (e.bufs.length && (e.bufs.length >= VARIANTS || Math.random() < 0.7)) {
+    const c = b.sfx.context, buf = e.bufs[(Math.random() * e.bufs.length) | 0];
+    const s = c.createBufferSource(), sp = c.createChannelSplitter(2), g = gainN(c, o.vol ?? 1), p = panner(c, o.pan ?? 0), w = gainN(c, o.vol ?? 1);
+    s.buffer = buf; s.playbackRate.value = 0.97 + Math.random() * 0.06;
+    s.connect(sp); sp.connect(g, 0); sp.connect(w, 1); g.connect(p).connect(b.sfx); w.connect(b.sfxVerb);
+    s.start(t);
+    active++; s.onended = () => { active--; s.disconnect(); };
+  } else {
+    SFX[name](b, t, o, ...a);
+    active++; setTimeout(() => active--, 400);
+  }
+  if (!e.busy && e.bufs.length < VARIANTS && typeof OfflineAudioContext !== "undefined") {
+    e.busy = true;
+    scJobs.push({ e, name, o, a, len: (SFX_LEN[name] ?? SFX_LEN[a.find((x) => typeof x === "string")] ?? 0.9) + 0.1 });
+    scPump();
+  }
+}
+/** 검사용 */
+export const sfxCacheStats = () => ({ keys: SC.size, bytes: scBytes, busy: scBusy, jobs: scJobs.length, active });

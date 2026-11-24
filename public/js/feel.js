@@ -7,7 +7,7 @@ const now = () => performance.now() / 1000;
 // ── 효과음 ─────────────────────────────────────────────
 // 소리 엔진은 audio.js, 소리 설계는 sfx.js
 import { AU, unlockAudio, setSoundOn } from "./audio.js";
-import { SFX, elemOf } from "./sfx.js";
+import { SFX, elemOf, playSfx } from "./sfx.js";
 export { unlockAudio };
 export function soundOn() { return AU.on; }
 export function toggleSound() { setSoundOn(!AU.on); return AU.on; }
@@ -27,7 +27,7 @@ function play(name, pan, a) {
   if (!AU.ctx || !AU.on || AU.ctx.state !== "running" || !SFX[name]) return;
   if (!gate(name, GAPS[name] ?? 0.03)) return;
   const o = { pan, blade: G.char?.cls === "sword" || G.char?.cls === "rogue" };
-  try { SFX[name](AU.bus, AU.ctx.currentTime + 0.005, o, ...a); } catch {}
+  try { playSfx(AU.bus, name, AU.ctx.currentTime + 0.005, o, a, `${name}|${a.join(",")}|${o.blade ? 1 : 0}`); } catch {}
 }
 export function sfx(name, ...a) { play(name, 0, a); }
 /** 화면 위치(wx)에 따라 좌우로 들리게 */

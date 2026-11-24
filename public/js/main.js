@@ -5,7 +5,7 @@ import { slotForCode, potionForCode, slotForMouse } from "./keys.js";
 import { isTouchDevice, setupTouch, touchAimTick } from "./ui/touch.js";
 import { unlockAudio, toggleSound, soundOn, sfx, toggleShake, shakeEnabled, addTrauma } from "./feel.js";
 import { startMusic, setSceneFn, themeForZone } from "./music.js";
-import { preset } from "./quality.js";
+import { preset, Q } from "./quality.js";
 import { floorKind, dungeonMax } from "/shared/zones.js";
 import { loadDT2, frame } from "./render/dt2.js";
 import { dtLookFor, drawDT } from "./render/looks.js";
@@ -316,12 +316,25 @@ async function startGame() {
   // 전투 HUD는 애니메이션 프레임마다 갱신할 필요가 없으므로 초당 10회로 제한한다.
   setInterval(() => { HUD.updateSkillbar(); HUD.updateBoss(); }, 100);
   setInterval(() => { HUD.drawMinimap(); HUD.updateParty(); HUD.updateInteract(); }, 200);
-  const loop = () => {
-    if (G.touch) touchAimTick(); else updateMouseWorld();
-    G.renderer.frame();
+  // 프레임 제한: 120·144Hz 화면에서도 60프레임으로 (같은 화면을 두 배로 그려 휴대폰이 뜨거워지고 느려지던 문제)
+  //  그래도 버거우면(그래픽 자동·최저인데도 한 프레임 그리는 데 오래 걸림) 30프레임으로 고정 → 들쭉날쭉한 끊김 대신 고른 화면
+  let due = 0, cap = 60, slow = 0, fast = 0;
+  const loop = (ts = performance.now()) => {
     requestAnimationFrame(loop);
+    const step = 1000 / cap;
+    if (ts < due - 2) return;
+    due = Math.max(due + step, ts - step); // 밀렸으면 따라잡지 않고 지금부터
+    if (G.touch) touchAimTick(); else updateMouseWorld();
+    const t0 = performance.now();
+    G.renderer.frame();
+    const work = performance.now() - t0;
+    if (Q.mode === "auto" && Q.level === 0 && !document.hidden) {
+      if (cap === 60) { slow = work > 22 ? slow + 1 : Math.max(0, slow - 2); if (slow > 90) { cap = 30; slow = 0; fast = 0; } }
+      else { fast = work < 11 ? fast + 1 : 0; if (fast > 240) { cap = 60; fast = 0; } }
+    } else if (cap !== 60) cap = 60;
+    G.fpsCap = cap;
   };
-  loop();
+  requestAnimationFrame(loop);
 }
 
 function bindInput() {

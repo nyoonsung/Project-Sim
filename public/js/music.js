@@ -235,6 +235,7 @@ export const NOTE_INSTS = Object.keys(INST);
 function note(d, inst, t, f, dur, vel, o = {}) {
   const key = `${inst}|${f.toFixed(2)}|${dur.toFixed(2)}|${o.wave ?? ""}|${o.cutoff ?? ""}|${o.attack ?? ""}|${o.release ?? ""}|${o.vowel ?? ""}|${o.decay ?? ""}`;
   const e = CACHE.get(key);
+  if (M.dry) { if (!e && M.sample) remember(key, tail(inst, dur, o), LOW[inst] ?? M.rate, (g) => INST[inst](g, 0, f, dur, 1, o)); return; }
   if (e?.buf) { STATS.hit++; return playBuf(d, t, e.buf, vel); }
   STATS.miss++; STATS.live[inst] = (STATS.live[inst] ?? 0) + 1;
   INST[inst](d, t, f, dur, vel, o);
@@ -242,9 +243,10 @@ function note(d, inst, t, f, dur, vel, o = {}) {
 }
 function drum(d, name, t, vel, x) {
   const key = `d|${name}|${x ?? ""}`, e = CACHE.get(key);
+  const fn = name === "hato" ? (g, tt, v) => V.hat(g, tt, v, true) : (g, tt, v) => V[name](g, tt, v, x);
+  if (M.dry) { if (!e && M.sample) remember(key, DRUM_LEN[name] ?? 0.5, M.rate, (g) => fn(g, 0, 1)); return; }
   if (e?.buf) { STATS.hit++; return playBuf(d, t, e.buf, vel); }
   STATS.miss++; STATS.live[name] = (STATS.live[name] ?? 0) + 1;
-  const fn = name === "hato" ? (g, tt, v) => V.hat(g, tt, v, true) : (g, tt, v) => V[name](g, tt, v, x);
   fn(d, t, vel);
   if (!e && M.sample) remember(key, DRUM_LEN[name] ?? 0.5, M.rate, (g) => fn(g, 0, 1));
 }
@@ -319,7 +321,7 @@ function step(S, C, bar, s, t, spb) {
     }
   }
   // 환경음
-  if (th.amb && barStart && !M.lite && Math.random() < th.amb.p) amb(th.amb.kind, C.amb, t + Math.random() * spb * 3, S);
+  if (th.amb && barStart && !M.lite && !M.dry && Math.random() < th.amb.p) amb(th.amb.kind, C.amb, t + Math.random() * spb * 3, S);
 }
 
 function amb(kind, d, t, S) {
@@ -350,7 +352,12 @@ function start(key) {
   M.rate = Math.min(44100, ctx.sampleRate);
   C.main.gain.setValueAtTime(0, t0); C.main.gain.linearRampToValueAtTime(NORM[key] ?? 1, t0 + 2.2);
   b.musicDelay.set(Math.min(1.2, (60 / S.th.bpm) * 0.75));
-  M.cur = { key, S, C, n: 0, t: t0 };
+  // 미리 녹음: 곡 한 바퀴(구간 5개)를 소리 없이 훑어 필요한 음을 모두 녹음 대기열에 넣고, 다 될 때까지(최대 5초) 기다렸다 시작
+  //  → 처음부터 녹음 재생만으로 연주 (실시간 합성이 몰리는 첫 몇 마디의 부하 제거)
+  M.dry = true;
+  try { const spb = 60 / S.th.bpm; for (let n = 0; n < S.cycle * 5 * 16; n++) step(S, C, Math.floor(n / 16), n % 16, 0, spb); } catch {}
+  M.dry = false;
+  M.cur = { key, S, C, n: 0, t: t0, readyAt: performance.now() + 5000 };
 }
 function stop(fade = 1.4) {
   const c = M.cur; if (!c) return; M.cur = null;
@@ -365,6 +372,11 @@ function pump() {
   const c = M.cur; if (!c) return;
   try { M.lite = !!M.liteFn?.(); } catch {}
   const ctx = AU.ctx, spb = 60 / c.S.th.bpm, sd = spb / 4;
+  if (c.readyAt) {
+    if ((busy || jobs.length) && performance.now() < c.readyAt) { c.t = ctx.currentTime + 0.15; return; }
+    c.readyAt = 0; c.t = ctx.currentTime + 0.1;
+    c.C.main.gain.cancelScheduledValues(ctx.currentTime); c.C.main.gain.setValueAtTime(0, ctx.currentTime); c.C.main.gain.linearRampToValueAtTime(NORM[c.key] ?? 1, ctx.currentTime + 2);
+  }
   if (c.t < ctx.currentTime - 0.2) c.t = ctx.currentTime + 0.05; // 멈췄다 돌아오면 밀린 음을 한꺼번에 치지 않음
   while (c.t < ctx.currentTime + 0.3) {
     try { step(c.S, c.C, Math.floor(c.n / 16), c.n % 16, c.t, spb); } catch {}
