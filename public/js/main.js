@@ -4,6 +4,9 @@ import { pixImg } from "./ui/pix.js";
 import { slotForCode, potionForCode, slotForMouse } from "./keys.js";
 import { isTouchDevice, setupTouch, touchAimTick } from "./ui/touch.js";
 import { unlockAudio, toggleSound, soundOn, sfx, toggleShake, shakeEnabled, addTrauma } from "./feel.js";
+import { startMusic, setSceneFn, themeForZone } from "./music.js";
+import { preset } from "./quality.js";
+import { floorKind, dungeonMax } from "/shared/zones.js";
 import { loadDT2, frame } from "./render/dt2.js";
 import { dtLookFor, drawDT } from "./render/looks.js";
 if (isTouchDevice()) document.body.classList.add("touch");
@@ -56,7 +59,27 @@ function loginArt() {
   }).catch(() => {});
 }
 
+// 소리: 브라우저 정책상 처음 누를 때 켜짐 (로그인 화면부터 음악)
+function initAudio() {
+  const unlock = () => unlockAudio();
+  addEventListener("pointerdown", unlock); addEventListener("keydown", unlock); addEventListener("touchend", unlock);
+  // 배경음악: 지금 있는 곳에 맞는 곡
+  setSceneFn(() => {
+    if (!G.room) return "title";
+    if (G.kind === "town") return G.island === "verdan" ? "town_verdan" : G.island === "astra" ? "town_astra" : "town_erden";
+    if (G.kind === "pvp") return "pvp";
+    if (G.kind === "safe") return "safe";
+    if (!G.floor) return "town_erden";
+    const fk = floorKind(G.floor, G.dungeon);
+    if (fk === "boss") return G.dungeon === 5 ? "boss_astra" : G.floor >= dungeonMax(G.dungeon) ? "boss_final" : "boss";
+    if (fk === "mid") return "miniboss";
+    if (G.dungeon === 5) return "astra_trial";
+    return themeForZone(G.zone?.name);
+  }, () => preset().name === "낮음"); // 그래픽 '낮음'이면 음악도 가볍게
+  startMusic();
+}
 async function boot() {
+  initAudio();
   // 링크(데모) 버전: 서버 없이 브라우저 안에서 같은 게임 엔진을 돌림
   if (globalThis.__LOCAL_NET) {
     $("#login").classList.remove("hidden");
@@ -391,12 +414,9 @@ function bindInput() {
   document.addEventListener("focusout", (e) => { if (/^(INPUT|TEXTAREA)$/.test(e.target.tagName)) for (const d of [50, 300, 700]) setTimeout(() => { scrollTo(0, 0); resize(); }, d); });
   // 창의 버튼을 누른 뒤 포커스가 버튼에 남아 키 입력을 먹지 않게
   document.addEventListener("pointerup", (e) => { const b = e.target.closest?.(".win button, .invite button, #vote button"); if (b) setTimeout(() => b.blur(), 0); });
-  // 소리: 브라우저 정책상 처음 누를 때 켜짐
-  const unlock = () => unlockAudio();
-  addEventListener("pointerdown", unlock); addEventListener("keydown", unlock);
   const sb = $("#sound-btn");
   const paintSound = () => { sb.replaceChildren(pixImg(soundOn() ? "sound" : "mute"), ...(G.touch ? [] : [soundOn() ? "소리 켜짐" : "소리 꺼짐"])); sb.classList.toggle("off", !soundOn()); };
-  paintSound();
+  paintSound(); G.ui.paintSound = paintSound;
   sb.addEventListener("click", () => { unlockAudio(); toggleSound(); paintSound(); sfx("click"); });
   const kb = $("#shake-btn");
   const paintShake = () => { kb.replaceChildren(pixImg(shakeEnabled() ? "shake" : "still"), ...(G.touch ? [] : [shakeEnabled() ? "흔들림 켜짐" : "흔들림 꺼짐"])); kb.classList.toggle("off", !shakeEnabled()); };

@@ -5,7 +5,7 @@ import { KEYS } from "./keys.js";
 import { castFx, hitFx, profUpFx } from "./render/skillfx.js";
 import { profOf, profCost } from "/shared/prof.js";
 import { onTown } from "./update.js";
-import { sfx, onEnemyHit, onEnemyDie, onMeHurt } from "./feel.js";
+import { sfx, castSound, onEnemyHit, onEnemyDie, onMeHurt } from "./feel.js";
 import { SPECTACLE } from "./render/spectacle.js";
 import { TICK_DT, PLAYER_RADIUS, SLOT_KEYS, VIEW_W, VIEW_H, ITEMS } from "/shared/constants.js";
 import { SKILLS, skillReach } from "/shared/skills.js";
@@ -248,10 +248,10 @@ function onEvent(e) {
       break;
     }
     case "bpat": G.bossCall = { id: e.id, p: e.p, t0: now() }; break; // 보스 패턴 이름 표시
-    case "warn": if ((G.warns ??= []).length < 32) G.warns.push({ ...e, t0: now() - lag() }); if (e.k === "barrage" || e.k === "spiral") G.bossCall = { id: e.id, p: e.k, t0: now(), hold: e.d }; sfx("wave"); break;
+    case "warn": if ((G.warns ??= []).length < 32) G.warns.push({ ...e, t0: now() - lag() }); if (e.k === "barrage" || e.k === "spiral") G.bossCall = { id: e.id, p: e.k, t0: now(), hold: e.d }; sfx("warn"); break;
     case "bossdead": G.boss = null; G.ui.onBoss(); G.ui.center("보스 처치!"); break;
     case "exit": G.exitOpen = !!e.open; break;
-    case "vote": G.ui.showVote?.(e); if (!e.end && !e.yes.includes(G.you)) sfx("wave"); break;
+    case "vote": G.ui.showVote?.(e); if (!e.end && !e.yes.includes(G.you)) sfx("notice"); break;
     case "doors": if (G.map) G.map.doorsOpen = !!e.open; break;
     case "obj": G.objects.push(e.o); break;
     case "sarco": { const o = G.objects.find((x) => x.kind === "sarco" && Math.abs(x.x - e.x) < 2 && Math.abs(x.y - e.y) < 2); if (o) o.opened = true; sfx("item"); break; }
@@ -447,7 +447,7 @@ export function tryCast(slot, at) {
   const ent = G.ents.get(G.you);
   if (ent && left <= 0.06 && t >= (G.localLock ?? 0) && !sk.cast) {
     ent.anim = { name: sk.anim ?? "slash", t0: t, n: 1, local: true };
-    sfx(sk.moveSkill ? "dash" : sk.anim === "shoot" ? "shoot" : sk.anim === "cast" ? "magic" : "swing");
+    castSound(sk);
     G.localLock = t + 0.18;
     G.ui.flashSkill(id);
   }

@@ -5,6 +5,9 @@ import { BASIC_SPEED, CLASS_ASPD } from "/shared/constants.js";
 const basicGap = (sk) => +((sk.aspd * BASIC_SPEED) / (CLASS_ASPD[G.char?.cls] ?? 1)).toFixed(2);
 import { titleDesign } from "/shared/titles.js";
 import { Q, setMode, setLessOthers, preset } from "../quality.js";
+import { AU, unlockAudio, setSoundOn, setBgmOn, setSfxVol, setBgmVol } from "../audio.js";
+import { nowPlaying } from "../music.js";
+import { sfx } from "../feel.js";
 import { KEYS, keyLabel, bindKey, resetKeys, RESERVED } from "../keys.js";
 import { profLevel, profPow, profCost, isUncapped } from "/shared/prof.js";
 import { h, openWin, refreshWin, closeWin, isOpen, tipOn } from "./dom.js";
@@ -869,6 +872,7 @@ export function openKeys() {
     h("div", { class: "seg" }, ...modes.map(([m, n]) => h("button", { class: "btn small" + (Q.mode === m ? " primary" : ""), onclick: () => { setMode(m); refreshWin("keys"); } }, n))),
     h("div", { class: "note", text: Q.mode === "auto" ? `자동: 지금 ${preset().name} (느려지면 알아서 낮추고, 넉넉하면 다시 올려요)` : "낮을수록 빛 번짐·입자·날씨 효과가 줄어 가벼워져요." }),
     h("label", { class: "chk" }, h("input", { type: "checkbox", checked: Q.lessOthers, onchange: (e) => setLessOthers(e.target.checked) }), " 다른 사람 스킬 이펙트 줄이기 (파티 사냥 때 렉 줄이기)"),
+    ...soundSettings(),
     ...(G.touch ? [] : [
       h("h4", { text: "조작 키" }),
       h("div", { class: "note", text: "바꿀 칸을 누르고 원하는 키(또는 마우스 버튼)를 누르세요. 이미 쓰는 키면 서로 바뀌어요. Esc: 취소" }),
@@ -878,6 +882,26 @@ export function openKeys() {
       h("div", { class: "flexrow" }, h("button", { class: "btn small", onclick: () => { resetKeys(); G.ui.refreshKeys?.(); refreshWin("keys"); } }, "키 기본값으로")),
     ]),
   ], { w: 400 });
+}
+// 소리 설정: 전체 켜기, 효과음 볼륨, 배경음악 켜기·볼륨, 지금 흐르는 곡
+function volRow(label, value, set, preview) {
+  const lab = h("span", { class: "vol-v", text: `${Math.round(value * 100)}` });
+  return h("div", { class: "vol-row" }, h("span", { class: "vol-l", text: label }),
+    h("input", { type: "range", min: 0, max: 100, step: 1, value: Math.round(value * 100),
+      oninput: (e) => { unlockAudio(); set(+e.target.value / 100); lab.textContent = e.target.value; },
+      onchange: () => preview?.() }), lab);
+}
+function soundSettings() {
+  const np = nowPlaying();
+  return [
+    h("h4", { text: "소리" }),
+    h("label", { class: "chk" }, h("input", { type: "checkbox", checked: AU.on, onchange: (e) => { unlockAudio(); setSoundOn(e.target.checked); G.ui.paintSound?.(); refreshWin("keys"); } }), " 소리 켜기 (전체)"),
+    volRow("효과음", AU.sfxVol, setSfxVol, () => sfx("crit", "slash")),
+    h("label", { class: "chk" }, h("input", { type: "checkbox", checked: AU.bgmOn, onchange: (e) => { unlockAudio(); setBgmOn(e.target.checked); setTimeout(() => refreshWin("keys"), 300); } }), " 배경음악 켜기"),
+    volRow("배경음악", AU.bgmVol, setBgmVol),
+    h("div", { class: "note", text: !AU.on ? "소리가 꺼져 있어요." : !AU.bgmOn ? "배경음악이 꺼져 있어요." : np ? `♪ 지금 흐르는 곡: ${np}` : "♪ 화면을 한 번 누르면 음악이 시작돼요." }),
+    h("div", { class: "note", text: "섬·던전 구역·보스 방마다 곡이 달라요. 휴대폰에서 소리가 안 나면 무음 모드를 확인하세요." }),
+  ];
 }
 function captureKey(kind, i) {
   if (G.capturingKey) return;

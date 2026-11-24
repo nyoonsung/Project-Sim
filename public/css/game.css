@@ -1097,3 +1097,10 @@ body.touch.portrait #buffs { max-width: calc(100vw - 110px); }
 @media (max-height: 700px) {
   body:not(.touch) #menu-buttons button { padding-top: 1px; padding-bottom: 1px; }
 }
+
+/* 소리 설정 */
+.vol-row { display: flex; align-items: center; gap: 8px; margin: 6px 0; font-size: 12px; }
+.vol-row .vol-l { width: 58px; flex: 0 0 auto; }
+.vol-row input[type="range"] { flex: 1; min-width: 0; accent-color: #e6c27a; height: 22px; }
+.vol-row .vol-v { width: 26px; text-align: right; color: #c9bfa6; font-variant-numeric: tabular-nums; }
+body.touch .vol-row input[type="range"] { height: 30px; }
