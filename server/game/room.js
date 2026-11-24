@@ -779,6 +779,8 @@ export class Room {
     //  - 입력이 늦게 와서 빈 틱은 '빚'으로 쌓아 두고, 밀린 입력이 오면 한 틱에 하나 더 처리해 따라잡음
     //    (총 처리 수 ≤ 지난 틱 수라 속도 조작 불가, 밀린 입력 때문에 조작감이 계속 늦어지는 것 방지)
     //  - 빈 틱에 예전 입력으로 미리 움직이지 않음: 나중에 진짜 입력과 겹쳐 내 화면이 앞뒤로 튀는 원인
+    // 벽(닫힌 문·소품 등)과 겹친 채 갇히면 모든 방향 이동이 막힘 → 가장 가까운 빈 곳으로 꺼내 줌
+    if ((this.tickN + u.id) % 5 === 0 && !u.dash && circleHitsWall(this.map, u.x, u.y, u.r)) this.unstick(u);
     let inp = u.inputs.shift();
     if (inp) {
       if (u.owed > 0 && u.inputs.length >= 1 && !u.dash) {
@@ -823,6 +825,17 @@ export class Room {
     }
   }
 
+  unstick(u) {
+    for (let rad = 6; rad <= 160; rad += 6) {
+      const n = Math.max(8, Math.round(rad / 4));
+      for (let k = 0; k < n; k++) {
+        const a = (k / n) * Math.PI * 2, x = u.x + Math.cos(a) * rad, y = u.y + Math.sin(a) * rad;
+        if (!circleHitsWall(this.map, x, y, u.r)) { u.x = x; u.y = y; u.session?.send({ t: "tp", x, y }); return true; }
+      }
+    }
+    const [x, y] = this.map.start; u.x = x; u.y = y; u.session?.send({ t: "tp", x, y });
+    return false;
+  }
   tickDevice(d, now) {
     if (now >= d.until) {
       this.removeUnit(d);
@@ -1292,7 +1305,7 @@ export class Room {
       this.map.doorsOpen = false;
       this.ev({ e: "doors", open: 0 });
       const a = this.map.arena;
-      for (const p of this.players.values()) if (p.y >= a.y1 - 8) { p.x = (a.x0 + a.x1) / 2 + Math.random() * 30 - 15; p.y = a.y1 - 40; p.session.send({ t: "tp", x: p.x, y: p.y }); }
+      for (const p of this.players.values()) if (p.y + p.r >= a.y1 - 2) { p.x = (a.x0 + a.x1) / 2 + Math.random() * 30 - 15; p.y = a.y1 - 40; p.session.send({ t: "tp", x: p.x, y: p.y }); }
       this.ev({ e: "fx", fx: "spawn/spawn-portal", x: this.map.bossAt[0], y: this.map.bossAt[1] + 20 });
       this.schedule(1.2, () => this.spawnBoss(this.map.boss, this.map.bossAt[0], this.map.bossAt[1]));
     }
@@ -1354,7 +1367,9 @@ export class Room {
       if (this.players.size <= 1 || evParts.every((p) => p.x == null)) { evAll = evParts.map((p) => p.s).join(","); evParts = null; }
     }
     this.events.length = 0;
-    const parts = new Map();
+    // 유닛별 상태 문자열은 틱마다 한 번만 만들고, 받는 사람마다는 비교만 (배열로 들고 있어 순회가 가벼움)
+    const us = this._fu ?? (this._fu = []), strs = this._fs ?? (this._fs = []);
+    us.length = 0; strs.length = 0;
     for (const u of this.units.values()) {
       if (u.dead && u.type !== "p") continue;
       let flags = 0;
@@ -1366,7 +1381,7 @@ export class Room {
       if (u.status?.has("slow") || u.status?.has("root")) flags |= 32;
       if (u.parry && this.now <= u.parry.until) flags |= 64;
       const hp = u.maxHp ? Math.ceil((u.hp / u.maxHp) * 1000) : 1000;
-      parts.set(u, `[${u.id},${u.x | 0},${u.y | 0},${Math.round((u.facing ?? 0) * 100)},${hp},${flags}]`);
+      us.push(u); strs.push(`[${u.id},${u.x | 0},${u.y | 0},${Math.round((u.facing ?? 0) * 100)},${hp},${flags}]`);
     }
     const crowd = this.players.size > 8, busy = this.players.size > 30;
     for (const p of this.players.values()) {
@@ -1375,19 +1390,22 @@ export class Room {
       if (s.sentRoom !== this) { s.sentRoom = this; s.sent = new Map(); }
       const sent = s.sent, full = (this.tickN + p.id) % 40 === 0;
       const near = [];
-      for (const [u, str] of parts) {
+      const px = p.x, py = p.y, pid = p.id, tk = this.tickN, party = !!this.partyId;
+      for (let i = 0; i < us.length; i++) {
+        const u = us[i], isP = u.type === "p";
+        const ax = Math.abs(u.x - px), ay = Math.abs(u.y - py);
+        // 아주 붐비면 화면(가로 640·세로 모드 높이 포함) 밖의 다른 플레이어는 보내지 않음
+        const inView = u === p || u.type === "b" || (isP && party) || (busy && isP ? ax < 480 && ay < 520 : ax < VIEW + 100 && ay < VIEW);
+        if (!inView) { if (sent.has(u.id)) sent.delete(u.id); continue; }
         // 사람이 많으면(8명 초과) 다른 플레이어 위치는 0.1초마다(번갈아) — 화면에선 부드럽게 이어 그려서 티가 거의 안 남
         // 아주 붐비면(30명 초과) 멀리 있는 사람일수록 더 드물게 (가까이 0.1초 · 중간 0.15초 · 멀리 0.25초)
-        if (crowd && u.type === "p" && u !== p && !full) {
-          const far = Math.max(Math.abs(u.x - p.x), Math.abs(u.y - p.y));
+        if (crowd && isP && u !== p && !full) {
+          const far = ax > ay ? ax : ay;
           const every = !busy || far < 300 ? 2 : far < 600 ? 3 : 5;
-          if ((this.tickN + u.id + p.id) % every) continue;
+          if ((tk + u.id + pid) % every) continue;
         }
-        // 아주 붐비면 화면(가로 640·세로 모드 높이 포함) 밖의 다른 플레이어는 보내지 않음
-        const vx = busy && u.type === "p" ? 480 : VIEW + 100, vy = busy && u.type === "p" ? 520 : VIEW;
-        if (u === p || u.type === "b" || (u.type === "p" && this.partyId) || Math.abs(u.x - p.x) < vx && Math.abs(u.y - p.y) < vy) {
-          if (full || sent.get(u.id) !== str) { near.push(str); sent.set(u.id, str); }
-        } else if (sent.has(u.id)) sent.delete(u.id);
+        const str = strs[i];
+        if (full || sent.get(u.id) !== str) { near.push(str); sent.set(u.id, str); }
       }
       if (full) for (const id of sent.keys()) if (!this.units.has(id)) sent.delete(id);
       let evs = evAll;
