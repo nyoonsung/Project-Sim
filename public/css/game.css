@@ -398,7 +398,8 @@ body.touch #rotate-msg { display: none !important; }
 body.touch.portrait #view { top: calc(66px + env(safe-area-inset-top)); left: 0; transform: none; }
 body.touch.portrait #orbs { grid-template-columns: 1fr 1fr; right: calc(8px + env(safe-area-inset-right)); width: auto; }
 body.touch.portrait #menu-buttons { top: calc(34px + env(safe-area-inset-top)); left: calc(6px + env(safe-area-inset-left)); right: auto; flex-wrap: nowrap; }
-body.touch.portrait #menu-buttons button { width: calc((100vw - 40px) / 13); max-width: 40px; height: 28px; font-size: 14px; }
+body.touch.portrait #menu-buttons button { flex: 0 0 auto; min-width: 0; width: calc((100vw - 52px) / 13); max-width: 40px; height: 28px; font-size: 14px; }
+body.touch.portrait #menu-buttons button img.pi { width: min(20px, calc((100vw - 52px) / 13 - 6px)); height: auto; }
 body.touch.portrait #minimap { top: calc(70px + env(safe-area-inset-top)); right: 4px; width: 84px; height: 64px; opacity: 0.85; }
 body.touch.portrait #topbar { top: calc(70px + env(safe-area-inset-top)); }
 body.touch.portrait #buffs { top: calc(92px + env(safe-area-inset-top)); }
@@ -1060,3 +1061,39 @@ body:not(.touch) #skillbar {
 .story-line { opacity: 0; animation: storyIn 0.9s ease-out forwards; color: #e8e0ff; line-height: 1.65; margin: 8px 4px; }
 @keyframes storyIn { from { opacity: 0; transform: translateY(6px); filter: blur(2px); } to { opacity: 1; transform: none; filter: none; } }
 @keyframes storyGlow { 50% { text-shadow: 0 0 30px var(--sc); transform: scale(1.06); } }
+
+/* ───────── 모바일 정리: 위 메뉴·체력 막대·미니맵·스킬 원호가 서로 겹치지 않게 ───────── */
+body.touch.portrait #menu-buttons { top: calc(18px + env(safe-area-inset-top)); }
+body.touch.portrait #orbs { top: calc(54px + env(safe-area-inset-top)); }
+body.touch.portrait #buffs { max-width: calc(100vw - 110px); }
+/* 좁은 세로 화면(폭 380 이하): 스킬 원호를 조금 작게 → 물약과 안 겹침 */
+@media (max-width: 380px) {
+  body.touch.portrait .slot.tb { width: 48px; height: 48px; left: calc(var(--tx) * 0.86 - 24px); top: calc(var(--ty) * 0.86 - 24px); font-size: 8px; }
+  body.touch.portrait .slot.tb.big { width: 70px; height: 70px; left: calc(var(--tx) - 35px); top: calc(var(--ty) - 35px); }
+}
+/* 낮은 가로 화면(높이 420 이하): 스킬 원호가 미니맵·위 메뉴까지 올라가지 않게 */
+@media (max-height: 420px) and (orientation: landscape) {
+  body.touch .slot.tb { width: 48px; height: 48px; left: calc(var(--tx) * 0.8 - 24px); top: calc(var(--ty) * 0.8 - 24px); font-size: 8px; }
+  body.touch .slot.tb.big { width: 66px; height: 66px; left: calc(var(--tx) - 33px); top: calc(var(--ty) - 33px); }
+  body.touch #skillbar { bottom: calc(62px + env(safe-area-inset-bottom)); }
+  body.touch:not(.portrait) #dash-btn { top: calc(92px + env(safe-area-inset-top)); bottom: auto; right: calc(10px + env(safe-area-inset-right)); width: 50px; height: 50px; }
+}
+
+/* ───────── 노트북·작은 PC 화면: 아래 HUD와 오른쪽 메뉴·채팅이 겹치지 않게 ───────── */
+@media (max-width: 1540px) {
+  body:not(.touch) #menu-buttons { bottom: 122px; }
+}
+@media (max-width: 1740px) {
+  body:not(.touch) #chat { bottom: 140px; }
+}
+@media (max-width: 1100px) {
+  body:not(.touch) #hud { transform: translateX(-50%) scale(0.9); transform-origin: bottom center; }
+  body:not(.touch) #menu-buttons { bottom: 112px; }
+}
+@media (max-width: 980px) {
+  body:not(.touch) #hud { transform: translateX(-50%) scale(0.8); }
+  body:not(.touch) #menu-buttons { bottom: 100px; }
+}
+@media (max-height: 700px) {
+  body:not(.touch) #menu-buttons button { padding-top: 1px; padding-bottom: 1px; }
+}

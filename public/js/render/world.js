@@ -1116,7 +1116,8 @@ export class Renderer {
       return holes < this.maxHoles;
     });
     L.globalAlpha = 1;
-    ctx.imageSmoothingEnabled = true;
+    // 품질 '낮음'(저사양 폰·노트북)에선 부드럽게 늘리기를 꺼서 화면 전체 합성 비용을 줄임 (도트 게임이라 거의 티가 안 남)
+    ctx.imageSmoothingEnabled = preset().name !== "낮음";
     ctx.drawImage(this.light, -dx, -dy, W * 2, H * 2);
     ctx.imageSmoothingEnabled = false;
   }

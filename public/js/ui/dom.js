@@ -74,6 +74,8 @@ export function openWin(id, title, build, { x, y, w, onClose } = {}) {
     const ww = Math.min(w ?? 360, viewW - 16);
     win.style.left = Math.max(8, Math.min(viewW - ww - 8, x ?? viewW / 2 - ww / 2 + (touch ? 0 : (wins.size % 4) * 24))) + "px";
     win.style.top = (y ?? Math.max(touch ? 6 : 10, viewH * (touch ? 0.03 : 0.12) + (touch ? 0 : (wins.size % 4) * 24))) + "px";
+    // 창 아래가 화면 밖으로 잘리지 않게: 위치에서 화면 아래까지만 (내용은 창 안에서 스크롤)
+    win.style.maxHeight = Math.max(160, Math.min(viewH * (touch ? 1 : 0.84), viewH - parseFloat(win.style.top) - 8)) + "px";
     let drag = null;
     head.addEventListener("pointerdown", (e) => { if (e.target.classList.contains("x") || e.target.closest(".win-tab")) return; drag = [e.clientX - win.offsetLeft, e.clientY - win.offsetTop, e.pointerId]; head.setPointerCapture(e.pointerId); win.style.zIndex = bumpZ(); e.preventDefault(); });
     head.addEventListener("pointermove", (e) => {
