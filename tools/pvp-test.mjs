@@ -204,6 +204,20 @@ ok("결투 세팅 저장(직접 배분 검사 · 스킬칸 검사)");
 }
 ok("상대 판정 · 기절 점감(→면역) · 한 대 상한 · 치유 감소");
 
+// ── 라운드 시작: 고유 자원(내력·성광·부품·틈)이 가득 찬 상태
+{
+  const full = { sword: ["ki", 100], fist: ["ki", 100], priest: ["holy", 100], smith: ["parts", 3], rogue: ["gap", 3] };
+  for (const [A, B] of [["sword", "smith"], ["priest", "rogue"], ["fist", "mage"]]) {
+    const sa = mkSession(world, A), sb = mkSession(world, B);
+    const room = world.startPvp(sa, sb, false);
+    for (const s of [sa, sb]) { const f = full[s.char.cls]; if (f) assert.equal(s.unit[f[0]], f[1], `${s.char.cls} 시작 ${f[0]}`); }
+    room.forfeit(sa, "leave");
+    for (let i = 0; i < 100; i++) { world.clock += 0.05; room.tick(); room.events.length = 0; }
+    world.sessions.delete(sa.userId); world.sessions.delete(sb.userId);
+  }
+}
+ok("라운드 시작 고유 자원 가득");
+
 // ── 직업 밸런스: 7직업 봇 1대1 (각 조합 6판) — 극단적인 직업이 없어야 함
 {
   const wins = {}, games = {};

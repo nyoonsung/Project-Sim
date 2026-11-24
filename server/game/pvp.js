@@ -7,6 +7,7 @@ import { SKILLS } from "../../shared/skills.js";
 import { SKILL_SLOTS } from "../../shared/constants.js";
 import { PROF_TOTAL } from "../../shared/prof.js";
 import { PVP, presetStats, checkPvpStats } from "../../shared/pvp.js";
+import { PATHS } from "../../shared/classes2.js";
 
 /** 저장된 PvP 세팅 → 이번 경기에서 쓸 스킬칸 (해금 차이 없이 Lv.150 기준 1차 스킬 전부 사용 가능) */
 export function pvpLoadout(real) {
@@ -43,7 +44,8 @@ function sessionProxy(s, char) {
   });
 }
 
-const START_RES = { sword: { ki: 30 }, fist: { ki: 30 }, priest: { holy: 30 }, smith: { parts: 1 } };
+// 라운드 시작: 직업 고유 자원(내력·성광·부품·틈)과 2차 전직 자원을 가득 채운 상태로 시작
+const START_RES = { sword: { ki: 100 }, fist: { ki: 100 }, priest: { holy: 100 }, smith: { parts: 3 }, rogue: { gap: 3 } };
 
 export class PvpRoom extends Room {
   constructor(world, { id, a, b, ranked = true }) {
@@ -93,6 +95,8 @@ export class PvpRoom extends Room {
       u.casting = null; u.channel = null; u.dash = null; u.parry = null; u.castQ = []; u.inputs.length = 0;
       u.ki = 0; u.holy = 0; u.parts = 0; u.gap = 0; u.acupoint = 0;
       Object.assign(u, START_RES[u.cls] ?? {});
+      u.r2 = PATHS[u.session.char?.cls2]?.res2?.max ?? 0;
+      u.lastBeatHit = now + PVP.prepTime; // 바람의 박자: 시작하자마자 4초 무타격 초기화에 걸리지 않게
       u.pvpZone = 0; u.ccDr = null; u.lastHurt = 0; u.lockUntil = now + PVP.prepTime;
       refreshStats(u);
       u.hp = u.maxHp; u.mp = u.maxMp;
