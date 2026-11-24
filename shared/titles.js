@@ -6,5 +6,6 @@ export const TITLE_DESIGNS = {
   "신궁神弓": { src: "/assets/titles/shinryu_shingung.png", w: 62, ratio: 123 / 41 },
   "헤파이스토스": { src: "/assets/titles/hephaestus.png", w: 62, ratio: 124 / 41 },
   "쇼아라의 블라드": { src: "/assets/titles/shoara-vlad.png", w: 62, ratio: 192 / 108 },
+  "모험가의 왕": { src: "/assets/titles/adventurer_king.png", w: 68, ratio: 320 / 100 },
 };
 export const titleDesign = (text) => (text ? TITLE_DESIGNS[text] ?? null : null);
