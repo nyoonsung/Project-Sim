@@ -112,14 +112,8 @@ export function castSkill(room, u, slot, ax, ay, tx, now, exp) {
     const token = (u.seqCastToken ?? 0) + 1;
     u.seqCastToken = token;
     u.seqPending = { id, token };
-    room.schedule(1.25, (t2) => {
-      if (u.seqPending?.token !== token) return;
-      u.seqPending = null;
-      if ((u.seq?.n ?? 0) > 0) {
-        u.seq = { n: 0, at: t2, last: id, doneUntil: 0 };
-        u.session.meDirty = true;
-      }
-    });
+    // 빗나가도 검식은 끊지 않음 (예전엔 한 번 헛치면 처음부터 다시라 완성이 너무 어려웠음) — 형식 사이 8초 제한만 적용
+    room.schedule(1.25, () => { if (u.seqPending?.token === token) u.seqPending = null; });
   }
   u.lastAction = now;
   const aim = Math.atan2(ay - u.y, ax - u.x);
@@ -1116,7 +1110,12 @@ function shredHit(room, t) {
   t.def = (t.def ?? 0) * 0.97;
   if (t.shredN === 1 || t.shredN === max) room.ev({ e: "st", id: t.id, s: "weaken", d: 30 });
 }
-const SEQ = ["sg_ilseom", "sg_whirl", "sg_rush"];
+const SEQ = ["sg_ilseom", "sg_whirl", "sg_rush"], SEQ_WINDOW = 8;
+function nearestFoe(room, u, range) {
+  let best = null, bd = range;
+  for (const m of enemies(room, u)) { if (m.dead) continue; const d = Math.hypot(m.x - u.x, m.y - u.y); if (d < bd) { bd = d; best = m; } }
+  return best;
+}
 function swordSeq(room, u, t, sk, now) {
   const i = SEQ.indexOf(sk.id);
   if (u.seqPending?.id === sk.id) u.seqPending = null;
@@ -1125,23 +1124,27 @@ function swordSeq(room, u, t, sk, now) {
   // 검식 형식이 아닌 스킬(1차 연계기·검보·대시 등)은 흐름을 끊지 않는다 (예전엔 끊겨서 연계 뒤 검식이 발동하지 않았음)
   if (i < 0) return;
   if (sk.id === cur.last && now - cur.at < 0.6) return; // 다단히트 한 번의 시전은 한 단계로 계산
+  if (cur.n > 0 && now - cur.at > SEQ_WINDOW) cur.n = 0; // 형식 사이가 너무 길면 처음부터
   if (i === 0) cur.n = 1;
-  else if (i === cur.n && now - cur.at <= 6) cur.n++;
-  else cur.n = 0;
+  else if (i === cur.n) cur.n++;
+  else return; // 순서가 아닌 형식은 진행시키지 않을 뿐, 지금까지의 흐름은 지킴
   cur.at = now; cur.last = sk.id; cur.doneUntil = 0;
   u.seq = cur;
   u.session.meDirty = true;
-  if (P2.swordSeq && cur.n > 0) { u.buffs.set("sg_flow", { until: now + 6, mods: { dmg: P2.swordSeq * cur.n }, n: cur.n }); room.ev({ e: "buff", id: u.id, b: "sg_flow", d: 6 }); }
+  if (P2.swordSeq && cur.n > 0) { u.buffs.set("sg_flow", { until: now + 8, mods: { dmg: P2.swordSeq * cur.n }, n: cur.n }); room.ev({ e: "buff", id: u.id, b: "sg_flow", d: 8 }); }
   if (cur.n >= 3) {
     cur.n = 0;
     cur.doneUntil = now + 2.5;
     room.ev({ e: "msg", text: "검식 완성!", kind: "self", id: u.id });
-    if (P2.seqFinish) { u.buffs.set("sg_complete", { until: now + 6, mods: { dmg: P2.seqFinish, crit: 0.1 } }); room.ev({ e: "buff", id: u.id, b: "sg_complete", d: 6 }); }
-    if (P2.seqFinisher && now >= (u.icd.get("p2_mugeuk") ?? 0) && !t.dead) {
-      u.icd.set("p2_mugeuk", now + 4);
+    if (P2.seqFinish) { u.buffs.set("sg_complete", { until: now + 8, mods: { dmg: P2.seqFinish, crit: 0.15 } }); room.ev({ e: "buff", id: u.id, b: "sg_complete", d: 8 }); }
+    if (P2.seqFinisher && now >= (u.icd.get("p2_mugeuk") ?? 0)) {
+      u.icd.set("p2_mugeuk", now + 3);
+      room.ev({ e: "msg", text: "무극발도!", kind: "self", id: u.id });
       const F = P2.seqFinisher, a = Math.atan2(t.y - u.y, t.x - u.x);
       room.ev({ e: "fx", fx: "melee/heavy-cleave", x: t.x | 0, y: t.y | 0, a: Math.round(a * 1000), s: 1.2 });
       room.schedule(0.15, (t2) => {
+        // 쇄도검이 표적을 쓰러뜨렸으면 가까운 다른 적을 벰 (예전엔 표적이 죽으면 발도 피해가 사라졌음)
+        if (t.dead) t = nearestFoe(room, u, 260) ?? t;
         if (!t.dead) dealDamage(room, u, t, { p2: true, pow: F.pow, pen: F.pen, crit: "roll", noProcs: true }, t2);
         for (let k = 1; k <= 5; k++) room.ev({ e: "fx", fx: "arcane/arcane-missiles", x: (t.x + Math.cos(a) * 60 * k) | 0, y: (t.y + Math.sin(a) * 60 * k) | 0, s: 0.35 });
         for (const m of enemies(room, u)) {

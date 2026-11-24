@@ -325,7 +325,7 @@ export class World {
     for (const [id, x] of u.status) st.push([id, Math.round((x.until - now) * 10) / 10]);
     const swordSeq = s.char.cls2 === "swordmaster" ? u.seq : null;
     const seqDone = !!swordSeq && (swordSeq.doneUntil ?? 0) > now;
-    const seqLeft = swordSeq?.n ? Math.max(0, 6 - (now - (swordSeq.at ?? now))) : 0;
+    const seqLeft = swordSeq?.n ? Math.max(0, 8 - (now - (swordSeq.at ?? now))) : 0;
     const seq = s.char.cls2 === "swordmaster" ? {
       n: seqDone ? 3 : Math.max(0, Math.min(2, swordSeq?.n ?? 0)),
       left: seqDone ? Math.max(0, swordSeq.doneUntil - now) : seqLeft,

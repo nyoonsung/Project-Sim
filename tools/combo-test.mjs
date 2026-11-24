@@ -22,7 +22,7 @@ function setup() {
     castSkill(room, u, slot, d.x, d.y, null, room.now, room.now + 0.5);
     for (let i = 0; i < 16; i++) { world.clock += 0.05; room.tick(); for (const e of room.events) if (e.e === "msg") msgs.push(e.text); room.events.length = 0; u.x = d.x - 40; u.y = d.y; }
   };
-  return { u, cast, msgs };
+  return { u, cast, msgs, room };
 }
 {
   const { u, cast, msgs } = setup();
@@ -36,9 +36,16 @@ function setup() {
   assert.ok(u.buffs.has("sg_complete"), "검식 완성 버프");
 }
 {
-  const { u, cast } = setup();
-  cast(1); cast(3); assert.equal(u.seq?.n, 0, "순서가 틀리면 초기화");
+  const { u, cast, msgs } = setup();
+  cast(1); cast(3); assert.equal(u.seq?.n, 1, "순서가 아닌 형식은 진행시키지 않지만 흐름은 유지");
+  u.cds.clear(); cast(2); u.cds.clear(); cast(3); assert.ok(msgs.includes("검식 완성!"), "그대로 이어서 완성");
 }
-console.log("✓ 소드마스터 검식: 다른 스킬 사이에 써도 완성 · 순서 틀리면 초기화");
+{
+  const { u, cast, room } = setup();
+  cast(1);
+  u.seq.at -= 9; // 형식 사이 8초 초과
+  cast(2); assert.equal(u.seq?.n, 0, "8초가 지나면 처음부터");
+}
+console.log("✓ 소드마스터 검식: 다른 스킬·헛친 형식 사이에도 유지 · 8초 넘으면 초기화");
 console.log("COMBO TESTS: ALL PASS");
 process.exit(0);

@@ -50,7 +50,7 @@ path("swordmaster", "sword", [
   { id: "sg_ilseom", name: "일섬", kind: "active", cd: 2.2, aim: "dir", anim: "dash", motif: "dash",
     desc: "가장 가까운 지정 대상에게 돌진해 안정적인 검격을 가한다. 적중하면 검식 순서(1형)를 시작한다.", limit: "짧은 재사용 대기로 반복해 쓸 수 있다.",
     fx: { self: "melee/thrust", hit: "impacts/hit-spark", palette: SG_PAL }, steps: [{ do: "dash", dist: 110, speed: 640, stopOnHit: true, hit: { pow: 1.9 } }, { do: "melee", range: 56, arc: 60, pow: 1.3, max: 1, gainOnHit: { ki: 10 } }] },
-  PAS({ id: "sg_orthodox", name: "정통 검식", motif: "crest", desc: "일섬 → 회전연참 → 쇄도검을 순서대로 적중시키면 검식이 진행되고, 단계마다 6초간 주는 피해 +8% (최대 3중첩).", limit: "같은 형식을 반복하거나 순서가 깨지면 흐름이 끊긴다.", passive: { p2: { swordSeq: 0.08 } } }),
+  PAS({ id: "sg_orthodox", name: "정통 검식", motif: "crest", desc: "일섬 → 회전연참 → 쇄도검을 순서대로 적중시키면 검식이 진행되고, 단계마다 8초간 주는 피해 +12% (최대 3중첩). 빗나가거나 다른 스킬을 써도 흐름은 이어진다.", limit: "형식 사이가 8초를 넘으면 처음부터 다시.", passive: { p2: { swordSeq: 0.12 } } }),
   { id: "sg_whirl", name: "회전연참", kind: "active", cd: 5, aim: "self", anim: "spin", cost: { ki: 15 }, motif: "arc",
     desc: "주위를 넓게 두 번 베어 가까운 적에게 피해를 준다. 검식의 2형.", limit: "사거리 안에 적이 모였을 때 효과적이다.",
     fx: { swing: "melee/spin-slash", hit: "impacts/hit-spark", palette: SG_PAL }, steps: [{ do: "circle", radius: 92, pow: 1.7 }, { do: "custom", fn: "delayCircle", delay: 0.22, radius: 92, pow: 1.3 }] },
@@ -61,11 +61,11 @@ path("swordmaster", "sword", [
   { id: "sg_step", name: "검보", kind: "active", cd: 7, aim: "dir", anim: "dash", moveSkill: true, motif: "wind",
     desc: "지정 방향으로 짧게 이동하며 경로의 가장 가까운 적을 벤다. 예고된 공격 밖으로 빠져 다음 형식을 준비한다.", limit: "방향이나 타이밍이 나쁘면 피격될 수 있다.",
     fx: { self: "melee/sword-slash", hit: "impacts/hit-spark", palette: SG_PAL }, steps: [{ do: "dash", dist: 120, speed: 620, hit: { pow: 1.8 } }] },
-  PAS({ id: "sg_complete", name: "검식 완성", motif: "crest", desc: "세 형식을 순서대로 적중시켜 검식이 완성되면 6초간 주는 피해 +25%, 치명타 확률 +10%p.", limit: "빗나가거나 같은 형식을 반복하면 초기화된다.", passive: { p2: { seqFinish: 0.25 } } }),
+  PAS({ id: "sg_complete", name: "검식 완성", motif: "crest", desc: "세 형식을 순서대로 적중시켜 검식이 완성되면 8초간 주는 피해 +40%, 치명타 확률 +15%p.", limit: "형식 사이가 8초를 넘으면 처음부터 다시.", passive: { p2: { seqFinish: 0.4 } } }),
   { id: "sg_aura", name: "오러 파참", kind: "active", cd: 4, aim: "dir", anim: "slash", cost: { ki: 12 }, motif: "wave",
     desc: "지정한 선을 따라 검기를 날려 경로의 적에게 피해를 준다. 검식 사이에 멀리 있거나 일렬로 선 적을 압박하는 반복기.", limit: "검식 완성을 대신하지 않는다.",
     fx: { line: "arcane/arcane-missiles", hit: "impacts/hit-spark", palette: SG_PAL }, steps: [{ do: "line", length: 340, width: 40, pow: 2.3 }] },
-  PAS({ id: "sg_mugeuk", name: "검성 비전·무극발도", motif: "arc", desc: "검식이 완성되면 최종 표적을 가르는 방어 관통 발도(공격력 900%, 방어 관통 50%)를 자동으로 발동하고, 같은 선을 따라 검기 파동(400%)을 보내 뒤의 적도 공격한다.", limit: "순서를 완성해야 하며 한 기술만 반복해서는 발동하지 않는다. (내부 재사용 4초)", passive: { p2: { seqFinisher: { pow: 9, pen: 0.5, wave: 4 } } } }),
+  PAS({ id: "sg_mugeuk", name: "검성 비전·무극발도", motif: "arc", desc: "검식이 완성되면 최종 표적을 가르는 방어 관통 발도(공격력 1400%, 방어 관통 50%)를 자동으로 발동하고, 같은 선을 따라 검기 파동(600%)을 보내 뒤의 적도 공격한다. 표적이 이미 쓰러졌으면 가까운 적을 벤다.", limit: "순서를 완성해야 하며 한 기술만 반복해서는 발동하지 않는다. (내부 재사용 3초)", passive: { p2: { seqFinisher: { pow: 14, pen: 0.5, wave: 6 } } } }),
 ]);
 
 // ─────────────── 가디언 몽크 / 금강무사 ───────────────

@@ -266,7 +266,7 @@ export function openSkills() {
         h("div", { class: "sword-guide-step" }, h("b", { text: "2 · 회전연참" }), h("span", { text: "적 가까이에서 사용해 원형 공격을 적중" })),
         h("div", { class: "sword-guide-arrow", text: "↓" }),
         h("div", { class: "sword-guide-step" }, h("b", { text: "3 · 쇄도검" }), h("span", { text: "적을 향해 조준하고 좁은 직선 공격을 적중" }))),
-      h("div", { class: "sword-guide-note", text: "세 기술 모두 적중해야 진행돼요. 다음 단계는 6초 안에 이어야 하며, 빗나가거나 다른 액티브 스킬을 적중시키면 진행이 초기화돼요. 다음 기술을 시도했지만 적중하지 못해도 진행이 끊겨요." }),
+      h("div", { class: "sword-guide-note", text: "세 기술을 순서대로 적중시키면 진행돼요. 다음 단계는 8초 안에 이으면 되고, 빗나가거나 사이에 다른 스킬을 써도 흐름은 끊기지 않아요." }),
       h("div", { class: "sword-guide-passive", text: "정통 검식 · 검격 받아치기 · 검식 완성 · 무극발도는 해금된 뒤 스킬칸에 넣지 않아도 자동 적용돼요. 진행 상태는 전투 화면의 검식 표시에서 확인할 수 있어요." })) : null;
     return [
       swordGuide,

@@ -1062,16 +1062,6 @@ export class Renderer {
     const bx = icx - (((icx % 2) + 2) % 2), by = icy - (((icy % 2) + 2) % 2);
     const dx = cx - bx, dy = cy - by;
     const L = this.lctx, W = this.light.width, H = this.light.height;
-    // 렉 줄이기: 붐비거나 품질이 높음이 아니면 빛 지도는 두 프레임에 한 번만 새로 그림 (그 사이엔 화면 이동만큼 밀어서 재사용)
-    const crowded = (G.crowdN ?? 0) > 12, lite = preset().name !== "높음" || crowded;
-    this.lightFrame = (this.lightFrame ?? 0) + 1;
-    if (lite && this.lightFrame % 2 && this.lightAt && this.lightAt.kind === G.kind && Math.abs(this.lightAt.bx - bx) < 64 && Math.abs(this.lightAt.by - by) < 64) {
-      ctx.imageSmoothingEnabled = true;
-      ctx.drawImage(this.light, this.lightAt.bx - bx - dx, this.lightAt.by - by - dy, W * 2, H * 2);
-      ctx.imageSmoothingEnabled = false;
-      return;
-    }
-    this.lightAt = { bx, by, kind: G.kind };
     L.globalCompositeOperation = "source-over";
     L.globalAlpha = 1;
     L.clearRect(0, 0, W, H);

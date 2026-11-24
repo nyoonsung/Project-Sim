@@ -53,6 +53,20 @@ assert.deepEqual(p2of(setup("darkknight", 175, []).u), {});
   tick(1); assert.ok(msgs.includes("검격 받아치기!"));
 }
 
+// 쇄도검이 표적을 쓰러뜨려도 무극발도는 가까운 적에게 발동
+{
+  const { u, d, cast, tick, msgs } = setup("swordmaster", 250, ["sg_ilseom", "sg_whirl", "sg_rush"]);
+  const d2 = d.room ? null : null; void d2;
+  cast(0); tick(); cast(1); tick();
+  const other = u.room.spawnDummy(d.x - 40, d.y + 90); other.hp = other.maxHp = 1e12; // 발도 선(검기 파동) 밖, 가까운 곳
+  d.dummy = false; d.hp = 1; // 쇄도검 첫 타에 쓰러짐
+  const h0 = other.hp;
+  cast(2); tick(20);
+  assert.ok(d.dead, "표적이 쓰러짐");
+  assert.ok(msgs.includes("무극발도!"), "표적이 쓰러져도 무극발도");
+  assert.ok(h0 - other.hp > u.stats.atk * 10, "가까운 적이 발도를 맞음");
+}
+
 // 다크나이트: 검은 심장 · 잔혈의 갑주
 {
   const { u, d, cast, tick } = setup("darkknight", 250, ["dk_darkslash"]);
