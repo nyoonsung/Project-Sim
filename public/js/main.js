@@ -3,7 +3,7 @@ import { G, onMessage, inputTick, tryCast, updateMouseWorld, send, usePotion } f
 import { pixImg } from "./ui/pix.js";
 import { slotForCode, potionForCode, slotForMouse } from "./keys.js";
 import { isTouchDevice, setupTouch, touchAimTick } from "./ui/touch.js";
-import { unlockAudio, toggleSound, soundOn, sfx, toggleShake, shakeEnabled, addTrauma } from "./feel.js";
+import { unlockAudio, toggleSound, soundOn, sfx, toggleShake, shakeEnabled, addTrauma, warmSounds } from "./feel.js";
 import { startMusic, setSceneFn, themeForZone } from "./music.js";
 import { preset, Q } from "./quality.js";
 import { floorKind, dungeonMax } from "/shared/zones.js";
@@ -131,7 +131,7 @@ async function boot() {
 
 // ── UI 연결
 const ui = {
-  onChar() { HUD.updateSkillbar(); WIN.refreshAll(); },
+  onChar() { HUD.updateSkillbar(); WIN.refreshAll(); warmSounds(); },
   onMe() { HUD.updateBars(); },
   onProf() { if (isOpen("skills") && !(G._profRefresh > performance.now())) { G._profRefresh = performance.now() + 500; refreshWin("skills"); } },
   onMap() { closeWin("boss-retry"); HUD.updateZoneLabel(); WIN.refreshAll(); if (G.dungeon !== 5 || G.mapKind !== "dungeon") HUD.toast(G.mapKind === "town" ? (G.island === "astra" ? "아스트라엘 · 별무덤 마을" : G.island === "verdan" ? "베르단 섬 마을" : "에르덴 섬 · 모험가 마을") : G.mapKind === "safe" ? "안전 구역 — 전직소" : G.mapKind === "pvp" ? "결투장 — 1대1 결투" : `${DUNGEON_LABEL[G.dungeon] ?? ""}${G.floor}층 · ${G.zone.name}`, "floor"); },

@@ -10,7 +10,7 @@ import { nowPlaying } from "../music.js";
 import { sfx } from "../feel.js";
 import { KEYS, keyLabel, bindKey, resetKeys, RESERVED } from "../keys.js";
 import { profLevel, profPow, profCost, isUncapped } from "/shared/prof.js";
-import { h, openWin, refreshWin, closeWin, isOpen, tipOn } from "./dom.js";
+import { h, openWin, refreshWin, refreshWins, closeWin, isOpen, tipOn } from "./dom.js";
 import { itemIcon, skillIconURL, materialAccent } from "./icons.js";
 import { CLASS_INFO, STATS, stageOf, stageLevel, xpToNext } from "/shared/classes.js";
 import { SKILLS, skillsOf, skillsOfPath, unlockStage } from "/shared/skills.js";
@@ -56,11 +56,17 @@ function currentEffectiveHp(s, level) {
   return Math.round(s.maxHp / Math.max(0.01, expectedDamage));
 }
 
+// 아이템 아이콘: 칸마다 캔버스를 새로 만들지 않고, 아이콘 그림을 이미지 주소로 한 번 바꿔 두고 <img>로 재사용
+// (가방 100칸 × 창 여러 개를 강화·판매 때마다 다시 그리면서 캔버스 수백 개를 만들던 것이 큰 렉이었음)
+const iconUrl = new WeakMap();
 function iconEl(it) {
-  const c = document.createElement("canvas");
-  c.width = 18; c.height = 18;
-  c.getContext("2d").drawImage(itemIcon(it), 0, 0);
-  return c;
+  const cv = itemIcon(it);
+  let url = iconUrl.get(cv);
+  if (!url) { try { url = cv.toDataURL(); } catch { url = ""; } iconUrl.set(cv, url); }
+  const im = document.createElement("img");
+  im.className = "ico"; im.width = 18; im.height = 18; im.decoding = "sync"; im.draggable = false; im.alt = "";
+  im.src = url;
+  return im;
 }
 function accentItemCell(el, it) {
   if (!it) return el;
@@ -507,7 +513,7 @@ export function onSpecialReroll(m) {
 export function onEnhance(m) {
   lastEnh = m;
   if (m.result === "destroy") G.enhSel = null;
-  if (isOpen("smithy")) refreshWin("smithy");
+  refreshAll(); // 바로 뒤에 오는 캐릭터 정보와 묶어서 한 번만 다시 그림
 }
 
 export function openClass() {
@@ -846,8 +852,18 @@ export function openNpc(o) {
     shop: () => pair(openShop, 440), smithy: () => pair(openSmithy, 420), enchanter: () => pair(openEnchant, 440), trainer: openTrainer, board: openBoard, class_master: openClass, arena: () => openArena("duel"), pvpboard: () => openArena("rank") })[o.id]?.();
 }
 
+// 캐릭터 정보가 연달아 와도(강화 연타 등) 창은 다음 화면 그릴 때 한 번만 다시 그림
+//  (강화를 빠르게 연타해도 창은 최대 0.15초에 한 번만 → 가방 100칸짜리 창 여러 개를 매번 새로 만들던 렉 제거)
+let refreshQueued = false, lastRefresh = 0;
+const REFRESH_IDS = ["char", "skills", "inv", "party", "shop", "smithy", "enchant", "class", "gate", "gate2", "gate3", "gate4", "boat", "observatory", "altar", "class2", "forge", "abyss-vault", "trainer", "titles", "trade", "arena"];
 export function refreshAll() {
-  for (const id of ["char", "skills", "inv", "party", "shop", "smithy", "enchant", "class", "gate", "gate2", "gate3", "gate4", "boat", "observatory", "altar", "class2", "forge", "abyss-vault", "trainer", "titles", "trade", "arena"]) if (isOpen(id)) refreshWin(id);
+  if (refreshQueued) return;
+  refreshQueued = true;
+  const wait = Math.max(0, lastRefresh + 150 - performance.now());
+  setTimeout(() => requestAnimationFrame(() => {
+    refreshQueued = false; lastRefresh = performance.now();
+    refreshWins(REFRESH_IDS);
+  }), wait);
 }
 
 // ───────── 조작 키 설정 (O) ─────────

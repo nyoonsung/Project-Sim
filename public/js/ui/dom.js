@@ -115,6 +115,14 @@ export function refreshWin(id) {
   body.replaceChildren(...[].concat(win._build()).filter((x) => x != null && x !== false));
   body.scrollTop = st;
 }
+/** 여러 창을 한꺼번에: 스크롤 위치를 먼저 다 읽고 → 내용 교체 → 스크롤 복원 (화면 배치 계산을 창마다 두 번씩 하던 것을 한 번으로) */
+export function refreshWins(ids) {
+  const list = [];
+  for (const id of ids) { const win = wins.get(id); if (win) { const body = win.querySelector(".body"); list.push([win, body, body.scrollTop]); } }
+  const built = list.map(([win]) => [].concat(win._build()).filter((x) => x != null && x !== false));
+  list.forEach(([, body], i) => body.replaceChildren(...built[i]));
+  for (const [, body, st] of list) if (st) body.scrollTop = st;
+}
 export function closeWin(id) { const w = wins.get(id); if (w) { w.remove(); wins.delete(id); hideTip(); w._onClose?.(); } }
 export function isOpen(id) { return wins.has(id); }
 export function toggleWin(id, open) { if (wins.has(id)) closeWin(id); else open(); }

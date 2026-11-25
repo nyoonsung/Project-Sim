@@ -287,5 +287,18 @@ export function playSfx(b, name, t, o, a, key) {
     scPump();
   }
 }
+/** 미리 녹음: [이름, 인자들, 옵션, 열쇠] 목록 (재생 없이 녹음만, 한가할 때) */
+export function prewarmSfx(list) {
+  if (typeof OfflineAudioContext === "undefined") return;
+  for (const [name, a, o, key] of list) {
+    if (!SFX[name]) continue;
+    let e = SC.get(key);
+    if (!e) SC.set(key, (e = { bufs: [], busy: false }));
+    if (e.busy || e.bufs.length) continue;
+    e.busy = true;
+    scJobs.push({ e, name, o, a, len: (SFX_LEN[name] ?? SFX_LEN[a.find((x) => typeof x === "string")] ?? 0.9) + 0.1 });
+  }
+  scPump();
+}
 /** 검사용 */
 export const sfxCacheStats = () => ({ keys: SC.size, bytes: scBytes, busy: scBusy, jobs: scJobs.length, active });

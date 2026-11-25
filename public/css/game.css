@@ -128,7 +128,7 @@ kbd { font-family: "GalmuriMono11", "Galmuri11", monospace; font-size: 10px; pad
 .equip-slots { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; margin-bottom: 10px; }
 .inv-grid { display: grid; grid-template-columns: repeat(8, 44px); gap: 4px; }
 .cell { position: relative; width: 44px; height: 44px; background: #0e0c14; border: 2px solid var(--line); display: grid; place-items: center; font-size: 10px; text-align: center; line-height: 1.1; cursor: pointer; overflow: hidden; }
-.cell canvas { position: absolute; inset: 2px; width: 36px; height: 36px; image-rendering: pixelated; }
+.cell canvas, .cell img.ico { position: absolute; inset: 2px; width: 36px; height: 36px; image-rendering: pixelated; pointer-events: none; }
 .cell .enh { position: absolute; right: 2px; top: 1px; font-size: 10px; color: var(--gold); text-shadow: 1px 1px 0 #000; z-index: 2; }
 .cell .lock { position: absolute; left: 2px; bottom: 0; font-size: 9px; z-index: 2; }
 .cell .lbl { position: absolute; bottom: 1px; width: 100%; font-size: 9px; color: var(--dim); }

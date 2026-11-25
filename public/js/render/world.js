@@ -28,7 +28,7 @@ import { SKILLS } from "/shared/skills.js";
 import { CLASS_INFO } from "/shared/classes.js";
 import { RARITY_COLOR } from "/shared/items.js";
 import { sprite, playerLook, ANIM_TIME, POSES } from "./sprites.js";
-import { FxLayer, loadFx, preloadFx, baked_, bakedFrame, orient, prebake } from "./fx.js";
+import { FxLayer, loadFx, preloadFx, baked_, bakedFrame, orient, prebake, prebakePal } from "./fx.js";
 
 const now = () => performance.now() / 1000;
 const GROUND_FX = new Set(["holy/heal-aoe", "nature/toxic-puddle", "nature/poison-cloud", "arcane/rune-circle", "arcane/magic-circle-cast", "shadow/hex-sigil", "fire/fire-ring", "nature/quake", "impacts/ground-slam", "scifi/laser-grid", "nature/root-snare", "holy/sunburst", "shadow/black-hole", "arcane/portal", "fire/campfire", "shadow/shadow-flames"]);
@@ -46,6 +46,16 @@ const NPC_LOOK = {
 
 /** 스킬 정의 안의 모든 이펙트 이름 (fx 객체 + 단계별 fx) */
 const FXID = /^[a-z-]+\/[a-z0-9-]+$/;
+/** 직업들의 모든 스킬 이펙트 [id, 팔레트] (중복 제거) */
+export function skillFxPairs(clsSet) {
+  const seen = new Set(), out = [];
+  for (const s of Object.values(SKILLS)) {
+    if (!clsSet.has(s.cls)) continue;
+    const pal = s.fx?.palette ?? null;
+    for (const id of skillFxIds(s)) { const k = id + "|" + (pal ? pal.join(",") : ""); if (!seen.has(k)) { seen.add(k); out.push([id, pal]); } }
+  }
+  return out;
+}
 export function skillFxIds(sk) {
   const out = [];
   const walk = (v) => { if (typeof v === "string") { if (FXID.test(v)) out.push(v); } else if (Array.isArray(v)) v.forEach(walk); else if (v && typeof v === "object") Object.values(v).forEach(walk); };
@@ -240,10 +250,17 @@ export class Renderer {
       if (G.mapKind === "boss" || G.floor % 5 === 0) ids.push("impacts/ground-slam", "melee/spear-sweep", "lightning/zap-hit", "arcane/arcane-orb", "shadow/dark-explosion"); // 공용 고급 보스 패턴
       if (z.weather) ids.push(z.weather);
     }
-    // 내 직업의 모든 스킬 이펙트(장착 안 한 것 포함) + 흔한 타격 이펙트를 미리 구워 둠
-    for (const s of Object.values(SKILLS)) if (s.cls === G.char?.cls || s.cls === "common") ids.push(...skillFxIds(s));
-    preloadFx(ids).then(() => {
+    // 내 직업의 모든 스킬 이펙트(장착 안 한 것 포함)를 서버가 보내는 팔레트 그대로 미리 구워 둠
+    const pairs = skillFxPairs(new Set([G.char?.cls, "common"]));
+    preloadFx([...ids, ...pairs.map((p) => p[0])]).then(() => {
+      prebakePal(pairs);
       prebake(ids.filter((id) => id && !id.startsWith("weather/")));
+      // 함께 있는 다른 직업(결투 상대·파티원)의 스킬 이펙트도 곧이어 (결투 준비 시간 동안 구워져 경기 중 실시간 계산이 거의 없음)
+      setTimeout(() => {
+        const cls = new Set();
+        for (const e of G.ents.values()) if (e.k === "p" && e.info?.c && e.info.c !== G.char?.cls) cls.add(e.info.c);
+        if (cls.size) { const more = skillFxPairs(cls); preloadFx(more.map((p) => p[0])).then(() => prebakePal(more)); }
+      }, 400);
       if (G.kind !== "town" && z.weather) { const m = this.weather; m.clear(); loadFx(z.weather).then((mod) => mod && m.spawn(z.weather, mod.meta.origin[0], mod.meta.origin[1])); }
     });
   }

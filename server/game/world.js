@@ -1428,8 +1428,7 @@ export class World {
     itemLog(s.userId, "enhance", { name: it.name, rarity: it.rarity, from: result === "success" ? it.enh - 1 : it.enh, result, cost });
     if (result === "success" && it.enh >= 20) this.broadcastSys(`${s.name}님이 [${it.name}] +${it.enh} 강화에 성공했어요!`, "legend");
     s.send({ t: "enh", result, uid: it.uid, enh: it.enh, name: it.name, rarity: it.rarity, cost });
-    this.sendChar(s);
-    this.save(s);
+    this.sendChar(s); // 저장은 아이템 행동 공통 처리(saveSoon: 초당 2번까지 바로, 넘치면 0.6초 뒤 한 번)로 — 강화 연타 때 매번 통째 저장하던 부담 제거
   }
 
   // ── GM 도구

@@ -6,8 +6,9 @@ const now = () => performance.now() / 1000;
 
 // ── 효과음 ─────────────────────────────────────────────
 // 소리 엔진은 audio.js, 소리 설계는 sfx.js
-import { AU, unlockAudio, setSoundOn } from "./audio.js";
-import { SFX, elemOf, playSfx } from "./sfx.js";
+import { AU, unlockAudio, setSoundOn, onAudio } from "./audio.js";
+import { SFX, elemOf, playSfx, prewarmSfx } from "./sfx.js";
+import { SKILLS } from "/shared/skills.js";
 export { unlockAudio };
 export function soundOn() { return AU.on; }
 export function toggleSound() { setSoundOn(!AU.on); return AU.on; }
@@ -30,6 +31,23 @@ function play(name, pan, a) {
   try { playSfx(AU.bus, name, AU.ctx.currentTime + 0.005, o, a, `${name}|${a.join(",")}|${o.blade ? 1 : 0}`); } catch {}
 }
 export function sfx(name, ...a) { play(name, 0, a); }
+onAudio(() => setTimeout(warmSounds, 1500));
+/** 자주 나는 소리를 미리 녹음 (처음 몇 번의 실시간 합성 부하 제거): 내 직업 타격음·치명타·처치·스킬 시전음 */
+let warmedFor = null;
+export function warmSounds() {
+  if (!AU.ctx || !G.char || warmedFor === G.char.cls + (G.char.cls2 ?? "")) return;
+  warmedFor = G.char.cls + (G.char.cls2 ?? "");
+  const blade = G.char.cls === "sword" || G.char.cls === "rogue", o = { pan: 0, blade }, fl = flavor(), list = [];
+  const add = (name, ...a) => list.push([name, a, o, `${name}|${a.join(",")}|${blade ? 1 : 0}`]);
+  add("hit", 1, fl); add("hit", 1.3, fl); add("crit", fl); add("kill"); add("hurt"); add("coin"); add("item"); add("warn"); add("click");
+  const seen = new Set();
+  for (const id of G.char.skills ?? []) {
+    const sk = SKILLS[id]; if (!sk) continue;
+    const base = sk.moveSkill ? "dash" : sk.anim === "shoot" ? "shoot" : sk.anim === "cast" ? "magic" : "swing", el = elemOf(sk);
+    const k = base + el; if (seen.has(k)) continue; seen.add(k); add(base, el);
+  }
+  prewarmSfx(list);
+}
 /** 화면 위치(wx)에 따라 좌우로 들리게 */
 export function sfxAt(name, wx, ...a) {
   const me = G.ents.get(G.you);

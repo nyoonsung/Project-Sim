@@ -123,6 +123,15 @@ function pump() {
   });
 }
 export function prebake(ids) { for (const id of ids) if (id && mods.get(id)) scheduleBake(id, null, id + "|"); }
+/** [id, 팔레트] 쌍으로 미리 굽기 — 서버가 스킬 팔레트를 붙여 보내므로 같은 열쇠로 구워야 실제로 재사용됨 */
+export function prebakePal(pairs) {
+  for (const [id, pal] of pairs) {
+    if (!id || id.startsWith("weather/")) continue;
+    const key = id + "|" + (pal ? pal.join(",") : "");
+    if (bakedReady.has(key)) continue;
+    if (mods.get(id)) scheduleBake(id, pal ?? null, key); else loadFx(id).then((m) => m && scheduleBake(id, pal ?? null, key));
+  }
+}
 /** 아직 안 구운(매 프레임 픽셀 계산하는) 이펙트가 동시에 이만큼 넘으면 새로 띄우지 않음 → 최악의 경우에도 프레임 유지 */
 export const FX_LIMITS = { live: 8 };
 
@@ -320,18 +329,20 @@ export function weatherLoop(id) {
   const frame = createFrame(w, h), img = new ImageData(w, h), full = new OffscreenCanvas(w, h), fctx = full.getContext("2d");
   const L = { frames: [], n, fps, w, h, done: false };
   weatherLoops.set(id, L);
-  const step = () => {
-    for (let k = 0; k < 4 && L.frames.length < n; k++) {
+  // 한가한 시간만큼만 (예전엔 매번 4장씩 굽느라 전투 중 0.2초마다 수십 ms씩 멈칫)
+  const step = (dl) => {
+    const until = performance.now() + (dl && !dl.didTimeout ? Math.max(2, dl.timeRemaining() - 1) : 4);
+    for (let k = 0; k < 4 && L.frames.length < n && (k === 0 || performance.now() < until); k++) {
       clearFrame(frame); inst.draw(frame); composite(frame, img.data, null); fctx.putImageData(img, 0, 0);
       const c = new OffscreenCanvas(w / 2, h / 2), g = c.getContext("2d");
       g.imageSmoothingEnabled = true; g.drawImage(full, 0, 0, w / 2, h / 2);
       L.frames.push(c);
       inst.update(1 / fps);
     }
-    if (L.frames.length < n) (globalThis.requestIdleCallback ? requestIdleCallback(step, { timeout: 200 }) : setTimeout(step, 30));
+    if (L.frames.length < n) (globalThis.requestIdleCallback ? requestIdleCallback(step, { timeout: 400 }) : setTimeout(step, 30));
     else L.done = true;
   };
-  step();
+  globalThis.requestIdleCallback ? requestIdleCallback(step, { timeout: 400 }) : step();
   return L;
 }
 /** 디버그: 굽기 대기열 상태 */

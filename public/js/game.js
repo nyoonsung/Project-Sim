@@ -95,7 +95,8 @@ function onMap(m) {
   if (G.kind === "town") onTown((t) => G.ui?.center(t));
   G.mapKind = m.kind === "town" ? "town" : m.kind === "safe" ? "safe" : m.kind;
   // 결투장: 밝은 조명 (어두우면 상대 움직임을 읽기 어려움)
-  G.zone = m.floor ? zoneOf(m.floor, G.dungeon) : m.kind === "pvp" ? { ...(ZONES.find((z) => z.name === "타락한 성역") ?? ZONES[0]), ambient: 0.25, light: 320 } : ZONES[0];
+  // 결투장: 성역 분위기는 쓰되 화면 전체 빛줄기 날씨(god-rays)는 빼서 가볍게
+  G.zone = m.floor ? zoneOf(m.floor, G.dungeon) : m.kind === "pvp" ? { ...(ZONES.find((z) => z.name === "타락한 성역") ?? ZONES[0]), ambient: 0.25, light: 320, weather: null } : ZONES[0];
   G.map = new TileMap({ ...m, kind: m.kind === "town" ? "town" : m.kind }, G.zone);
   G.map.doorsOpen = m.doorsOpen;
   G.map.explored.fill(1); // 투기장 한 방이라 지도 전체를 바로 보여 줌
