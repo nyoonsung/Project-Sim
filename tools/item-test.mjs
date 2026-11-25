@@ -141,5 +141,6 @@ ok(evs9.some((e) => e.e === "dmg" && e.id === m9.id), "찌르기 조준이 50° 
   ok(Math.abs(r1 - r2) < 1e-9 && r1 > 1.015 && r1 < 1.017, "레벨마다 같은 비율(약 1.6%)로 증가");
   const it = { rarity: "전설", ilvl: 200, enh: 10 };
   ok(enhanceCost(it, MAX_LEVEL) === goldCost(enhanceCost(it), MAX_LEVEL) && enhanceCost(it, MAX_LEVEL) > enhanceCost(it) * 49, "강화 비용에 배율 적용");
+  ok(enhanceCost({ rarity: "심연", ilvl: 250, enh: 98 }, MAX_LEVEL) === 1_000_000, "강화 1회 비용 최대 100만 골드");
   console.log("GOLD COST SCALING: OK");
 }

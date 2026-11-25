@@ -500,9 +500,11 @@ export function enhanceOdds(n) {
   const destroy = 0.01;
   return { success, destroy, fail: Math.max(0, 1 - success - destroy) };
 }
+// 강화 한 단계(한 번 시도) 비용은 레벨 배율을 적용해도 최대 100만 골드
+export const ENH_COST_CAP = 1_000_000;
 export function enhanceCost(it, level = 1) {
   const ri = RARITIES.indexOf(it.rarity);
-  return goldCost(Math.round((15 + it.ilvl * 4) * (1 + it.enh * 0.18) * (1 + ri * 0.3)), level);
+  return Math.min(ENH_COST_CAP, goldCost(Math.round((15 + it.ilvl * 4) * (1 + it.enh * 0.18) * (1 + ri * 0.3)), level));
 }
 /** 강화 단계마다 기본 능력치 +2% */
 export function enhMul(enh) {
