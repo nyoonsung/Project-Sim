@@ -16,7 +16,7 @@ import { CLASS_INFO, STATS, stageOf, stageLevel, xpToNext } from "/shared/classe
 import { SKILLS, skillsOf, skillsOfPath, unlockStage } from "/shared/skills.js";
 import { PATHS, pathsFor, canClass2, TIER_LEVEL, CLASS2_LEVEL, CLASS2_MUL } from "/shared/classes2.js";
 import { deriveStats, defReduction } from "/shared/stats.js";
-import { SKILL_SLOTS, SLOT_KEYS, ITEMS, GRADE_COLOR, INVENTORY_SLOTS } from "/shared/constants.js";
+import { SKILL_SLOTS, SLOT_KEYS, ITEMS, GRADE_COLOR, INVENTORY_SLOTS, goldCost, goldMul } from "/shared/constants.js";
 import { optInfo, VMODS, VMATS, SIGIL_NAMES, CRAFT_TIERS, CRAFT_SLOTS, VERDAN_RARITY_WEIGHTS } from "/shared/items.js";
 import { RARITY_COLOR, SLOT_NAME, OPTIONS, MYTHIC_EFFECTS, ABYSS_EFFECTS, WEAPON_TYPES, OFFHAND_TYPES, VARIANT_TRAITS, RARITIES, RARITY_WEIGHTS, RARITY_MUL, MATERIALS, ARMOR_NAMES, repairCost, ENH_PCT, ENCHANTS, enchantOdds, enchantCost, specialRerollCost, enhanceOdds, enhanceCost, enhMul, sellPrice, canEquip, MAX_ENH } from "/shared/items.js";
 import { sprite, playerLook } from "../render/sprites.js";
@@ -145,7 +145,7 @@ export function itemTip(it, compare) {
   }
   const allowed = it.slot === "weapon" ? WEAPON_TYPES[it.type].cls : it.slot === "offhand" ? OFFHAND_TYPES[it.type].cls : null;
   if (allowed) els.push(h("div", { class: "tt-sub", text: "착용: " + allowed.map((c) => CLASS_INFO[c].name).join(", ") }));
-  if (it.enh < MAX_ENH) { const o = enhanceOdds(it.enh); els.push(h("div", { class: "tt-sub", text: `다음 강화: 성공 ${fmtPct(o.success)} · 파괴 1% · 비용 ${enhanceCost(it)}G` })); }
+  if (it.enh < MAX_ENH) { const o = enhanceOdds(it.enh); els.push(h("div", { class: "tt-sub", text: `다음 강화: 성공 ${fmtPct(o.success)} · 파괴 1% · 비용 ${enhanceCost(it, G.char?.level).toLocaleString()}G` })); }
   els.push(h("div", { class: "tt-sub", text: `판매가 ${sellPrice(it)}G${it.locked ? " · 🔒 잠김" : ""}` }));
   return [h("div", {}, ...els)];
 }
@@ -409,9 +409,10 @@ export function openShop(pos = {}) {
     const c = G.char;
     return [
       h("div", { class: "note", text: "물약을 사거나, 가방(I)에서 아이템을 오른쪽 클릭해 팔 수 있어요." }),
+      h("div", { class: "note", text: `레벨 ${c.level} 골드 비용 ×${goldMul(c.level).toFixed(1)} (레벨이 오를수록 상점·강화·인챈트·수선 등 모든 비용이 늘어나요, 최고 레벨 ×50)` }),
       ...Object.entries(ITEMS).map(([id, it]) => h("div", { class: "statrow" },
         h("span", { class: "sn", text: it.name }), h("span", { class: "sd", text: `${it.desc} (보유 ${c.cons[id] ?? 0}/${it.max})` }),
-        h("button", { class: "btn small", onclick: () => send({ t: "buy", item: id, n: 1 }) }, `${it.price}G`),
+        h("button", { class: "btn small", onclick: () => send({ t: "buy", item: id, n: 1 }) }, `${goldCost(it.price, c.level).toLocaleString()}G`),
         h("button", { class: "btn small", onclick: () => send({ t: "buy", item: id, n: 5 }) }, `×5`))),
       h("div", { class: "flexrow" }, h("span", { text: `💰 ${c.gold.toLocaleString()} G` }), h("button", { class: "btn small", onclick: () => openInv() }, "가방 열기")),
     ];
@@ -425,13 +426,13 @@ export function openSmithy(pos = {}) {
     const all = [...Object.values(c.equip).filter(Boolean), ...c.inv];
     // 수선: 닳은 무기 목록 + 비용
     const worn = all.filter((it) => it.dur != null && it.dur < it.maxDur);
-    const total = worn.reduce((a, it) => a + repairCost(it), 0);
+    const total = worn.reduce((a, it) => a + repairCost(it, c.level), 0);
     const repairBox = h("div", { class: "repair-box" },
       h("h4", { text: "장비 수선" }),
       worn.length ? h("div", {}, ...worn.map((it) => h("div", { class: "statrow" },
         h("span", { class: "sn", style: { color: RARITY_COLOR[it.rarity] }, text: it.name + (c.equip.weapon === it ? " (장착)" : "") }),
         h("span", { class: "sd" }, durBar(it), ` ${Math.floor(it.dur)}/${it.maxDur}`),
-        h("button", { class: "btn small", disabled: c.gold < repairCost(it), onclick: () => send({ t: "repair", uid: it.uid }) }, `${repairCost(it).toLocaleString()}G`))),
+        h("button", { class: "btn small", disabled: c.gold < repairCost(it, c.level), onclick: () => send({ t: "repair", uid: it.uid }) }, `${repairCost(it, c.level).toLocaleString()}G`))),
         h("button", { class: "btn primary", disabled: c.gold < total, onclick: () => send({ t: "repair" }) }, `모두 수선 (${total.toLocaleString()}G)`))
         : h("div", { class: "note", text: "모든 장비의 내구도가 가득해요. (무기·장신구는 스킬을 쓸 때, 갑옷·투구·방패는 맞을 때 닳고, 쓰러지면 10% 줄어요. 0이 되면 그 장비 능력치가 30%로 떨어져요.)" }));
     const sel = all.find((x) => x.uid === G.enhSel) ?? null;
@@ -442,7 +443,7 @@ export function openSmithy(pos = {}) {
     }));
     let box = h("div", { class: "note", text: "강화할 장비를 고르세요." });
     if (sel) {
-      const o = enhanceOdds(sel.enh), cost = enhanceCost(sel);
+      const o = enhanceOdds(sel.enh), cost = enhanceCost(sel, c.level);
       box = h("div", { class: "enh-box" },
         h("div", { style: { color: RARITY_COLOR[sel.rarity] }, text: `${sel.name} +${sel.enh}` }),
         sel.enh >= MAX_ENH ? h("div", { text: "최대 강화 +99" }) : h("div", { class: "enh-odds" }, h("span", { class: "s", text: `성공 ${fmtPct(o.success)}` }), h("span", { class: "f", text: `실패 ${fmtPct(o.fail)}` }), h("span", { class: "d", text: ["신화", "심연"].includes(sel.rarity) ? `폭발(+0) ${fmtPct(o.destroy)}` : `파괴 ${fmtPct(o.destroy)}` })),
@@ -470,12 +471,12 @@ export function openEnchant(pos = {}) {
     const odds = h("div", { class: "note" }, "확률: ", ...enchantOdds().map(([k, p], i) => h("span", { class: k === "mend" ? "ench-mend" : "", text: `${i ? " · " : ""}${ENCHANTS[k].name}(${ENCHANTS[k].desc}) ${(p * 100).toFixed(p < 0.01 ? 1 : 2)}%` })));
     let box = h("div", { class: "note", text: "인챈트할 장비를 고르세요. 장비 하나에 인챈트 하나, 다시 하면 새로 뽑아서 바뀌어요." });
     if (sel) {
-      const cost = enchantCost(sel), cur = sel.ench && ENCHANTS[sel.ench];
+      const cost = enchantCost(sel, c.level), cur = sel.ench && ENCHANTS[sel.ench];
       const isMythic = sel.rarity === "신화" && !!MYTHIC_EFFECTS[sel.mythic];
       const isAbyss = sel.rarity === "심연" && Array.isArray(sel.abyssEffects) && sel.abyssEffects.length === 2
         && sel.abyssEffects.every((key) => !!ABYSS_EFFECTS[key]);
       const canRerollSpecial = isMythic || isAbyss;
-      const rerollCost = canRerollSpecial ? specialRerollCost(sel) : 0;
+      const rerollCost = canRerollSpecial ? specialRerollCost(sel, c.level) : 0;
       const lastResult = lastSpecialReroll?.uid === sel.uid ? lastSpecialReroll : null;
       const specialEffects = isMythic
         ? [{ index: 0, effect: sel.mythic, data: MYTHIC_EFFECTS[sel.mythic] }]
@@ -801,7 +802,8 @@ export function openForge(pos = {}) {
     const c = G.char;
     const T = CRAFT_TIERS[forgeSel.tier], mat = VMATS[forgeSel.tier], zone = VMODS[forgeSel.vmod].zone;
     const have = c.mats?.[mat.id] ?? 0, sig = c.sigils?.[zone] ?? 0;
-    const ok = have >= T.mat && sig >= 1 && c.gold >= T.gold && (!forgeSel.heart || (c.hearts ?? 0) >= 1);
+    const tg = goldCost(T.gold, c.level);
+    const ok = have >= T.mat && sig >= 1 && c.gold >= tg && (!forgeSel.heart || (c.hearts ?? 0) >= 1);
     const pick = (k, v) => () => { forgeSel = { ...forgeSel, [k]: v }; refreshWin("forge"); };
     return [
       h("div", { class: "note", text: "재료 30개 + 지역 각인 1개 + 골드로 원하는 부위·수식어의 전설 장비를 벼려요. 섬 심장핵을 더하면 신화 등급(옵션 4 + 고유 효과)이 돼요. 아이템 레벨은 재료 단계와 캐릭터 레벨 중 낮은 쪽." }),
@@ -813,7 +815,7 @@ export function openForge(pos = {}) {
       h("div", { class: "forge-mods" }, ...Object.entries(VMODS).map(([k, v]) => h("button", { class: "btn small" + (forgeSel.vmod === k ? " primary" : ""), onclick: pick("vmod", k), title: v.desc(v.roll(() => 0.5)) }, `${v.name} · ${SIGIL_NAMES[v.zone - 1]} 각인 ${c.sigils?.[v.zone] ?? 0}`))),
       h("div", { class: "note", text: VMODS[forgeSel.vmod].desc(VMODS[forgeSel.vmod].roll(() => 0.5)) }),
       h("label", { class: "flexrow" }, h("input", { type: "checkbox", checked: forgeSel.heart, disabled: (c.hearts ?? 0) < 1, onchange: (e) => { forgeSel.heart = e.target.checked; refreshWin("forge"); } }), h("span", { text: `섬 심장핵 사용 → 신화 (보유 ${c.hearts ?? 0})` })),
-      h("div", { class: "note", text: `비용: ${mat.name} ${T.mat}개 (보유 ${have}) · 각인 1개 (보유 ${sig}) · ${T.gold.toLocaleString()}G (보유 ${c.gold.toLocaleString()}G)` }),
+      h("div", { class: "note", text: `비용: ${mat.name} ${T.mat}개 (보유 ${have}) · 각인 1개 (보유 ${sig}) · ${tg.toLocaleString()}G (보유 ${c.gold.toLocaleString()}G)` }),
       h("button", { class: "btn primary", disabled: !ok, onclick: () => send({ t: "craft", ...forgeSel }) }, "🔨 제작하기"),
     ];
   }, { w: 460, ...pos });
@@ -831,7 +833,7 @@ export async function openBoard() {
 export function openTrainer() {
   openWin("trainer", "훈련 교관", () => {
     const c = G.char;
-    const cost = 200 + c.level * 40;
+    const cost = goldCost(200 + c.level * 40, c.level);
     return [
       h("div", { class: "note", text: "옆의 허수아비를 때리면 5초 동안 공격이 멈출 때 받은 피해와 초당 피해량을 알려 줘요. (기획서의 '60초 단일 보스 연습전' 측정용)" }),
       h("h4", { text: "스탯 초기화" }),

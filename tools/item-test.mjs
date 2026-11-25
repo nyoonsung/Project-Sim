@@ -131,3 +131,15 @@ ok(evs9.some((e) => e.e === "dmg" && e.id === m9.id), "찌르기 조준이 50° 
   for (let k = 0; k < 3000 && res?.result !== "reset"; k++) { it.enh = 98; World.prototype.enhance.call(fakeW, se, 888); }
   ok(res?.result === "reset" && se.char.inv.includes(it) && it.enh === 0, `신화 강화 폭발 → 아이템 유지, +${it.enh}`);
 }
+
+// ── 골드 비용 배율: 레벨 1 = 1배, 최고 레벨 = 50배, 레벨마다 기하급수적으로(같은 비율로) 증가
+{
+  const { goldMul, goldCost, MAX_LEVEL } = await import("../shared/constants.js");
+  const { enhanceCost } = await import("../shared/items.js");
+  ok(Math.abs(goldMul(1) - 1) < 1e-9 && Math.abs(goldMul(MAX_LEVEL) - 50) < 1e-9 && goldMul(9999) === goldMul(MAX_LEVEL), "골드 배율 1~50배");
+  const r1 = goldMul(101) / goldMul(100), r2 = goldMul(201) / goldMul(200);
+  ok(Math.abs(r1 - r2) < 1e-9 && r1 > 1.015 && r1 < 1.017, "레벨마다 같은 비율(약 1.6%)로 증가");
+  const it = { rarity: "전설", ilvl: 200, enh: 10 };
+  ok(enhanceCost(it, MAX_LEVEL) === goldCost(enhanceCost(it), MAX_LEVEL) && enhanceCost(it, MAX_LEVEL) > enhanceCost(it) * 49, "강화 비용에 배율 적용");
+  console.log("GOLD COST SCALING: OK");
+}

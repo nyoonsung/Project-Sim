@@ -6,7 +6,7 @@ import { SKILLS, adventurerBasic } from "../../shared/skills.js";
 import { canEquip, enhanceOdds, enhanceCost, sellPrice, MAX_ENH, SLOTS, CLASS_GEAR, baseStats, itemName, ensureDur, repairCost, syncMythic, syncAbyss, enchantCost, rollEnchant, rollAbyssVaultItem, MYTHIC_EFFECTS, ABYSS_EFFECTS, specialRerollCost, rollMythicEffect, rollAbyssEffect, VMATS, VMODS, CRAFT_TIERS, CRAFT_SLOTS, craftVerdanItem, makeClassRelic, ensureAbyss } from "../../shared/items.js";
 import { floorKind, DUNGEON2_MAX_FLOOR, DUNGEONS, normDungeon, dungeonMax, dungeonIsland, progKeys } from "../../shared/zones.js";
 import { PATHS, canClass2, CLASS2_LEVEL } from "../../shared/classes2.js";
-import { MAX_LEVEL } from "../../shared/constants.js";
+import { MAX_LEVEL, goldCost } from "../../shared/constants.js";
 import { Room } from "./room.js";
 import { makeFloor, makeTown, makeVerdanTown, makeAstraTown, safeZone } from "./dungeon.js";
 import { ASTRA, CONSTELLATIONS, CONST_BY_KEY, STORY, trialFloor, todayConstellation, blessUpCost, blessSlots, newAstraRecord } from "../../shared/astra.js";
@@ -1044,13 +1044,14 @@ export class World {
     if ((c.mats?.[mat.id] ?? 0) < T.mat) return s.notice(`${mat.name}이(가) 부족해요. (${c.mats?.[mat.id] ?? 0}/${T.mat})`);
     if ((c.sigils?.[zone] ?? 0) < 1) return s.notice(`「${VMODS[vmod].name}」 수식어에는 해당 지역 각인이 필요해요.`);
     if (heart && (c.hearts ?? 0) < 1) return s.notice("섬 심장핵이 없어요.");
-    if (c.gold < T.gold) return s.notice(`골드가 부족해요. (${T.gold.toLocaleString()}G 필요)`);
+    const tg = goldCost(T.gold, c.level);
+    if (c.gold < tg) return s.notice(`골드가 부족해요. (${tg.toLocaleString()}G 필요)`);
     if (c.inv.length >= INV_SIZE) return s.notice("가방이 가득 찼어요.");
     const it = craftVerdanItem(secureRandom, { slot: m.slot, vmod, tier, cls: c.cls, level: c.level, heart });
     if (!it) return s.notice("제작에 실패했어요. 다시 시도해 주세요.");
-    c.mats[mat.id] -= T.mat; c.sigils[zone] -= 1; c.gold -= T.gold; if (heart) c.hearts -= 1;
+    c.mats[mat.id] -= T.mat; c.sigils[zone] -= 1; c.gold -= tg; if (heart) c.hearts -= 1;
     ensureDur(it);
-    if (!this.pickup(s.unit, it)) { c.mats[mat.id] += T.mat; c.sigils[zone] += 1; c.gold += T.gold; if (heart) c.hearts += 1; return s.notice("가방에 넣지 못했어요."); }
+    if (!this.pickup(s.unit, it)) { c.mats[mat.id] += T.mat; c.sigils[zone] += 1; c.gold += tg; if (heart) c.hearts += 1; return s.notice("가방에 넣지 못했어요."); }
     itemLog(s.userId, "verdan_craft", { item: it.name, rarity: it.rarity, vmod, tier });
     s.send({ t: "crafted", item: { name: it.name, rarity: it.rarity } });
     if (heart) this.broadcastSys(`🔨 ${s.name}님이 섬 심장핵으로 신화 장비 [${it.name}]을(를) 벼려 냈어요!`, "mythic");
@@ -1089,8 +1090,8 @@ export class World {
     const c = s.char;
     if (!this.isTown(s.unit.room)) return s.notice("스탯 초기화는 마을 훈련 교관에게서만 할 수 있어요.");
     if (!this.nearNpc(s, "trainer")) return s.notice("훈련 교관 근처에서 해 주세요.");
-    const cost = 200 + c.level * 40;
-    if (c.gold < cost) return s.notice(`골드가 부족해요. (${cost}G 필요)`);
+    const cost = goldCost(200 + c.level * 40, c.level);
+    if (c.gold < cost) return s.notice(`골드가 부족해요. (${cost.toLocaleString()}G 필요)`);
     c.gold -= cost;
     c.unspent += Object.values(c.stats).reduce((a, b) => a + b, 0);
     c.stats = {};
@@ -1206,7 +1207,7 @@ export class World {
     const have = s.char.cons[id] ?? 0;
     n = Math.min(n, it.max - have);
     if (n <= 0) return s.notice(`${it.name}은(는) 최대 ${it.max}개까지 가질 수 있어요.`);
-    const cost = it.price * n;
+    const cost = goldCost(it.price, s.char.level) * n;
     if (s.char.gold < cost) return s.notice("골드가 부족해요.");
     s.char.gold -= cost;
     s.char.cons[id] = have + n;
@@ -1329,7 +1330,7 @@ export class World {
     let where = "inv", it = key == null ? null : findItemByUid(c.inv, key);
     if (!it && key != null) { it = findItemByUid(Object.values(c.equip), key); where = "equip"; }
     if (!it) return s.notice("인챈트할 장비를 찾지 못했어요. 가방을 다시 열어 주세요.");
-    const cost = enchantCost(it);
+    const cost = enchantCost(it, c.level);
     if (c.gold < cost) return s.notice(`골드가 부족해요. (${cost.toLocaleString()}G 필요)`);
     c.gold -= cost;
     const before = it.ench ?? null;
@@ -1364,7 +1365,7 @@ export class World {
       return s.notice("신화 또는 심연 등급 장비의 고유 효과만 리롤할 수 있어요.");
     }
     if (!next || next === before) return s.notice("새 특수 효과를 뽑지 못했어요. 다시 시도해 주세요.");
-    const cost = specialRerollCost(it);
+    const cost = specialRerollCost(it, c.level);
     if (c.gold < cost) return s.notice(`골드가 부족해요. (${cost.toLocaleString()}G 필요)`);
     c.gold -= cost;
     if (it.rarity === "신화") it.mythic = next;
@@ -1384,7 +1385,7 @@ export class World {
     if (uid != null && key == null) return s.notice("수선할 장비를 찾지 못했어요. 가방을 다시 열어 주세요.");
     const list = [...Object.values(c.equip), ...c.inv].filter((it) => it && (key == null || uidToken(it.uid) === key)).map(ensureDur).filter((it) => it.dur < it.maxDur);
     if (!list.length) return s.notice("수선할 장비가 없어요. (내구도가 모두 가득)");
-    const cost = list.reduce((a, it) => a + repairCost(it), 0);
+    const cost = list.reduce((a, it) => a + repairCost(it, c.level), 0);
     if (c.gold < cost) return s.notice(`골드가 부족해요. (수선비 ${cost.toLocaleString()}G)`);
     c.gold -= cost;
     for (const it of list) it.dur = it.maxDur;
@@ -1403,8 +1404,8 @@ export class World {
     if (!it && key != null) { it = findItemByUid(Object.values(c.equip), key); where = "equip"; }
     if (!it) return s.notice("강화할 장비를 찾지 못했어요. 가방을 다시 열어 주세요.");
     if (it.enh >= MAX_ENH) return s.notice("이미 최대 강화(+99)예요.");
-    const cost = enhanceCost(it);
-    if (c.gold < cost) return s.notice(`골드가 부족해요. (${cost}G 필요)`);
+    const cost = enhanceCost(it, c.level);
+    if (c.gold < cost) return s.notice(`골드가 부족해요. (${cost.toLocaleString()}G 필요)`);
     c.gold -= cost;
     const odds = enhanceOdds(it.enh);
     const r = secureRandom();

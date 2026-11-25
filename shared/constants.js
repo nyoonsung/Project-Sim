@@ -7,6 +7,14 @@ export const VIEW_W = 640;            // 내부 렌더 해상도
 export const VIEW_H = 360;
 
 export const MAX_LEVEL = 250; // 2차 업데이트: 150 → 250
+// 골드 비용 배율: 캐릭터 레벨이 오를 때마다 기하급수적으로 (레벨 1 = 1배 → 최고 레벨 = 50배, 레벨당 약 1.6%씩 곱해짐)
+//  상점·강화·인챈트·리롤·수선·스탯 초기화·베르단 제작 등 골드를 쓰는 모든 곳에 적용
+export const GOLD_MUL_MAX = 50;
+export function goldMul(level) {
+  const lv = Math.max(1, Math.min(MAX_LEVEL, Math.floor(Number(level) || 1)));
+  return Math.pow(GOLD_MUL_MAX, (lv - 1) / (MAX_LEVEL - 1));
+}
+export const goldCost = (base, level) => (base > 0 ? Math.max(1, Math.round(base * goldMul(level))) : 0);
 export const MAX_FLOOR = 100;
 export const MAX_PARTY = 4;
 export const SKILL_SLOTS = 12;        // 전체 장착 칸 (패시브 제외, 종류 구분 없음)

@@ -1,4 +1,5 @@
 // 장비 아이템: 등급(일반~신화), 옵션, 강화(최대 +99). 쿨타임 감소 효과는 이 게임에 존재하지 않는다.
+import { goldCost } from "./constants.js";
 
 export const RARITIES = ["일반", "희귀", "영웅", "전설", "신화", "심연"];
 export const RARITY_COLOR = { 일반: "#c9d1d9", 희귀: "#58a6ff", 영웅: "#d2a8ff", 전설: "#ffb347", 신화: "#ff5a6e", 심연: "#70f4e8" };
@@ -471,10 +472,10 @@ export function ensureDur(it) {
   return it;
 }
 /** 수선 비용(골드): 닳은 만큼 × 아이템 레벨·등급 */
-export function repairCost(it) {
+export function repairCost(it, level = 1) {
   if (!it || it.dur == null) return 0;
   const miss = Math.max(0, (it.maxDur ?? 100) - (it.dur ?? it.maxDur ?? 100));
-  return Math.ceil(miss * (1 + it.ilvl * 0.12) * (1 + RARITIES.indexOf(it.rarity) * 0.3));
+  return goldCost(Math.ceil(miss * (1 + it.ilvl * 0.12) * (1 + RARITIES.indexOf(it.rarity) * 0.3)), level);
 }
 
 /** 모험가 시작 장비 */
@@ -499,9 +500,9 @@ export function enhanceOdds(n) {
   const destroy = 0.01;
   return { success, destroy, fail: Math.max(0, 1 - success - destroy) };
 }
-export function enhanceCost(it) {
+export function enhanceCost(it, level = 1) {
   const ri = RARITIES.indexOf(it.rarity);
-  return Math.round((15 + it.ilvl * 4) * (1 + it.enh * 0.18) * (1 + ri * 0.3));
+  return goldCost(Math.round((15 + it.ilvl * 4) * (1 + it.enh * 0.18) * (1 + ri * 0.3)), level);
 }
 /** 강화 단계마다 기본 능력치 +2% */
 export function enhMul(enh) {
@@ -528,14 +529,15 @@ export function rollEnchant(r) {
   for (const [k, p] of enchantOdds()) { acc += p; if (r < acc) return k; }
   return "dmg";
 }
-export function enchantCost(it) {
-  return Math.round((150 + it.ilvl * 20) * (1 + RARITIES.indexOf(it.rarity) * 0.45)); // 인하: 예전의 약 40~50%
+export function enchantCost(it, level = 1) {
+  return goldCost(Math.round((150 + it.ilvl * 20) * (1 + RARITIES.indexOf(it.rarity) * 0.45)), level); // 인하: 예전의 약 40~50%
 }
 /** 신화·심연 고유 효과 리롤 비용: 아이템 레벨에 따라 1만~5만 골드 */
-export function specialRerollCost(it) {
-  const maxLevel = it?.rarity === "심연" ? 150 : 100; // 레벨 150(신화 100)부터는 최대 비용 5만 골드로 고정
+export function specialRerollCost(it, charLevel = 1) {
+  const maxLevel = it?.rarity === "심연" ? 150 : 100; // 레벨 150(신화 100)부터는 기본 비용 5만 골드로 고정
   const level = Math.max(1, Math.min(maxLevel, Math.floor(Number(it?.ilvl) || 1)));
-  return Math.round((10_000 + ((level - 1) / (maxLevel - 1)) * 40_000) / 1_000) * 1_000;
+  const base = Math.round((10_000 + ((level - 1) / (maxLevel - 1)) * 40_000) / 1_000) * 1_000;
+  return charLevel > 1 ? Math.round(goldCost(base, charLevel) / 100) * 100 : base;
 }
 // 구버전 클라이언트·코드 호환용 별칭
 export const mythicRerollCost = specialRerollCost;
